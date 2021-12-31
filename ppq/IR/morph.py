@@ -5,6 +5,7 @@ import torch
 from ppq.core import (DataType, TargetPlatform,
                       convert_any_to_python_primary_type)
 from ppq.IR.quantize import DeviceSwitchOP
+from ppq.IR.search import SearchableGraph
 from ppq.scheduler import value_tracing_pattern
 
 from .base.command import (GraphCommand, GraphCommandType,
@@ -375,60 +376,80 @@ class GraphMerger(GraphCommandProcesser):
 
     def fuse_conv_bn(self):
         conv_bns = []
-        for operation in self.graph.operations.values():
-            downstream_ops = self.graph.get_downstream_operations(operation)
-            if len(downstream_ops) == 1 and downstream_ops[0].type == 'BatchNormalization':
-                conv_bns.append(operation, downstream_ops[0])
+        search_engine = SearchableGraph(graph=self.graph)
+        paths = search_engine.path_matching(
+            sp_expr=lambda x: x.type in {'Conv', 'Gemm'},
+            rp_expr=lambda x, y: False,
+            ep_expr=lambda x: x.type == 'BatchNormalization',
+            direction='down')
 
-        for conv, bn in conv_bns:
-            assert isinstance(conv, Operation) and isinstance(bn, Operation)
-            
-            if conv.num_of_parameters == 1:
-                conv_weight = conv.parameters[0].value
-                conv_bias   = np.zeros((conv_weight.shape[0]), dtype='f')
+        for path in paths:
+            path = path.tolist()
+            assert len(path) == 2, ('Oops seems we got something unexpected.')
+
+            computing_op, bn_op = path
+            assert isinstance(computing_op, Operation) and isinstance(bn_op, Operation)
+
+            assert len(bn_op.parameters) == 4, 'BatchNorm should have 4 parameters, namely alpha, beta, mean, var'
+            alpha = bn_op.parameters[0].value
+            beta  = bn_op.parameters[1].value
+            mean  = bn_op.parameters[2].value
+            var   = bn_op.parameters[3].value
+            epsilon = bn_op.attributes.get('epislon', 1e-5)
+
+            if computing_op.num_of_parameters == 1:
+                w = computing_op.parameters[0].value  # no bias.
+                b = torch.zeros(size=w.shape[0], dtype=torch.float, device=w.device)
             else:
-                conv_weight, conv_bias = conv.parameters[: 2]
+                w, b = [var.value for var in computing_op.parameters[: 2]]  # has bias.
 
-            assert len(bn.parameters) == 4, 'BatchNorm should have 4 parameters, namely alpha, beta, mean, var'
-            alpha = bn.parameters[0].value
-            beta  = bn.parameters[1].value
-            mean  = bn.parameters[2].value
-            var   = bn.parameters[3].value
-            epsilon = bn.attributes.get('epislon', 1e-5)
+            if computing_op.type == 'Conv':
 
-            # calculate new weight and bias
-            new_scale = alpha / np.sqrt(var + epsilon)
-            new_weight = conv_weight.transpose(*range(1, len(conv_weight.shape)), 0) * new_scale
-            new_weight = new_weight.transpose(len(conv_weight.shape)-1, *range(len(conv_weight.shape)-1))
-            new_bias = alpha * (conv_bias - mean) / np.sqrt(var + epsilon) + beta
+                # calculate new weight and bias
+                scale = alpha / np.sqrt(var + epsilon)
+                w = w * scale.reshape([-1, 1, 1, 1])
+                b = alpha * (b - mean) / np.sqrt(var + epsilon) + beta
+
+            elif computing_op.type == 'Gemm':
+
+                # calculate new weight and bias
+                scale = alpha / np.sqrt(var + epsilon)
+                w = w * scale.reshape([-1, 1])
+                b = alpha * (b - mean) / np.sqrt(var + epsilon) + beta
+
+            else:
+                raise TypeError(
+                    f'Unexpected op type {computing_op.type}. '
+                    f'Can not merge {computing_op.name} with {bn_op.name}')
+
             # create new op and variable
-            new_conv_op = Operation(conv.name, 'Conv', attributes=conv.attributes.copy())
-            new_weight = Variable(conv.name + '_weight_', new_weight, True, [new_conv_op])
-            new_bias = Variable(conv.name + '_bias_', new_bias, True, [new_conv_op])
-            # replace
-            new_conv_op.inputs.extend([conv.inputs[0], new_weight, new_bias])
-            conv.inputs[0].dest_ops[conv.inputs[0].dest_ops.index(conv)] = new_conv_op
-            new_conv_op.outputs.extend(bn.outputs[:1])
-            new_conv_op.outputs[0].source_op = new_conv_op
+            merged_op  = Operation(computing_op.name, op_type=computing_op.type,
+                                   attributes=computing_op.attributes.copy())
+            weight_var = Variable(computing_op.name + '_weight', w, True, [merged_op])
+            bias_var   = Variable(computing_op.name + '_bias', b, True, [merged_op])
 
-            for var in conv.inputs[1:]:
-                var.dest_ops.pop(var.dest_ops.index(conv))
-                if len(var.dest_ops) <= 0 and not (var.name in self.graph.outputs or var.name in self.graph.inputs):
-                    if not var.source_op is None:
-                        var.source_op.outputs.pop(var.source_op.outputs.index(var))
-                    self.graph.variables.pop(var.name)
-            for var in bn.inputs:
-                var.dest_ops.pop(var.dest_ops.index(bn))
-                if len(var.dest_ops) <= 0 and not (var.name in self.graph.outputs or var.name in self.graph.inputs):
-                    if not var.source_op is None:
-                        var.source_op.outputs.pop(var.source_op.outputs.index(var))
-                    self.graph.variables.pop(var.name)
-            # remove old ops and insert new conv
-            self.graph.operations.pop(conv.name)
-            self.graph.operations.pop(bn.name)
-            self.graph.variables[new_weight.name] = new_weight
-            self.graph.variables[new_bias.name] = new_bias
-            self.graph.operations[new_conv_op.name] = new_conv_op
+            # replace & dirty work
+            input_var  = computing_op.inputs[0]
+            output_var = bn_op.outputs[0]
+
+            input_var.dest_ops.remove(computing_op)
+            input_var.dest_ops.append(merged_op)
+
+            output_var.source_op = merged_op
+
+            # delete old operations
+            computing_op.inputs.pop(0)
+            bn_op.outputs.clear()
+            self.graph.delete_operation(computing_op.name, cascade=True)
+
+            # insert new
+            self.graph.append_operation(merged_op)
+            merged_op.inputs.extend([input_var, weight_var, bias_var])
+            merged_op.outputs.extend([output_var])
+
+            self.graph.append_variable(weight_var)
+            self.graph.append_variable(bias_var)
+
 
 class GraphDeviceSwitcher(GraphCommandProcesser):
     """
