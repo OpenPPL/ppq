@@ -32,8 +32,8 @@ python setup.py install
 
 * Install from wheel:
 
-1. Download compiled python wheel from follwoing links: [PPL Quantization Tool](https://github.com/openppl-public/ppq.git)
-2. Run following command with your terminal or command line(windows): "pip install ppq.wheel", and pray for bug free.
+1. Download compiled Python wheel from following links: [PPL Quantization Tool](https://github.com/openppl-public/ppq.git)
+2. Run following command with your terminal or command line(windows): "python3 -m pip install ppq.wheel --user", and pray for bug free.
 
 # Tutorials and Examples
 
