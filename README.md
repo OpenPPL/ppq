@@ -1,11 +1,11 @@
 # PPL Quantization Tool(PPL 量化工具)
 
-PPL Quantization Tool (PPQ) is an powerful offline neural network quantization tool with custimized IR, executor, dispacher and optimization passes.
+PPL Quantization Tool (PPQ) is a powerful offline neural network quantization tool with custimized IR, executor, dispacher and optimization passes.
 
 # Features
 
 * Quantable graph, an quantization-oriented network representation.
-* Quantize with Cuda, quantization simulating are 3x ~ 50x faster than pytorch.
+* Quantize with Cuda, quantization simulating are 3x ~ 50x faster than PyTorch.
 * Hardware-friendly, simulating calculations are mostly identical with hardware.
 * Multi-platform support.
 
@@ -14,7 +14,7 @@ PPL Quantization Tool (PPQ) is an powerful offline neural network quantization t
 To release the power of this advanced quantization tool, at least one CUDA computing device is required.
 Install CUDA from [CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit-archive), PPL Quantization Tool will use CUDA compiler to compile cuda kernels at runtime.
 
-ATTENTION: For users of pytorch, pytorch might bring you a minimized CUDA libraries, which will not satisfy the requirement of this tool, you have to install CUDA from Nvidia manually.
+ATTENTION: For users of pytorch, pytorch might bring you a minimized CUDA libraries, which will not satisfy the requirement of this tool, you have to install CUDA from NVIDIA manually.
 
 ATTENTION: Make sure your python version is >= 3.6.0. PPL Quantization Tool is written with dialects that only by python >= 3.6.0.
 
