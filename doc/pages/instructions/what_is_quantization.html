@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta name="description" content="">
+    <meta name="keywords" content="">
+
+    <title>PPQ - 子图切分与异构调度</title>
+
+    <!-- Styles -->
+    <link href="../../assets/css/page.min.css" rel="stylesheet">
+    <link href="../../assets/css/style.css" rel="stylesheet">
+
+    <!-- Favicons -->
+    <link rel="apple-touch-icon" href="../../assets/img/apple-touch-icon.png">
+    <link rel="icon" href="../../assets/img/favicon.png">
+  </head>
+
+  <body>
+
+
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-light navbar-stick-dark">
+      <div class="container">
+
+        <div class="navbar-left">
+          <button class="navbar-toggler" type="button">&#9776;</button>
+
+          <a class="navbar-brand" href="../../index.html" style="color:white; font-size:24px">
+            PPL Quantization Tool
+          </a>
+        </div>
+
+        <a class="btn btn-sm btn-success" href="#">Online Document</a>
+
+      </div>
+    </nav><!-- /.navbar -->
+
+
+    <!-- Header -->
+    <header class="header text-white bg-dark pt-7 pb-5" style="background-image: linear-gradient(-20deg, #2b5876 0%, #4e4376 100%);">
+
+    </header><!-- /.header -->
+
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <div class="container">
+        <div class="row">
+
+          <!--
+          |‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
+          | Sidebar
+          |‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
+          !-->
+          <div class="col-md-4 col-xl-3 order-last order-md-first">
+            <hr class="d-md-none">
+            <aside class="sidebar sidebar-sticky sidebar-stick-shadow pr-md-5 br-1">
+              <ul class="nav nav-sidebar nav-sidebar-hero" data-accordion="true">
+                <li class="nav-item">
+                  <a class="nav-link" href="#">动手量化我的网络 <i class="nav-angle"></i></a>
+                  <div class="nav">
+                    <a class="nav-link" href="quantize_my_first_network.html">量化我的第一个网络</a>
+                    <a class="nav-link" href="quantize_with_pytorch.html">量化一个 Pytorch 网络</a>
+                    <a class="nav-link" href="quantize_with_onnx.html">量化一个 Onnx 网络</a>
+                    <a class="nav-link" href="quantize_with_caffe.html">量化一个 Caffe 网络</a>
+                  </div>
+                </li>
+
+                <li class="nav-item">
+                  <a class="nav-link active" href="#">了解量化 <i class="nav-angle"></i></a>
+                  <div class="nav">
+                    <a class="nav-link" href="why_quantization_matters_1.html">量化如何加速我的网络(1)</a>
+                    <a class="nav-link" href="why_quantization_matters_2.html">量化如何加速我的网络(2)</a>
+                    <a class="nav-link active" href="what_is_quantization.html">量化是如何计算的</a>
+                    <a class="nav-link" href="ppq_quant_1.html">深入了解PPQ量化(1)</a>
+                    <a class="nav-link" href="ppq_quant_2.html">深入了解PPQ量化(2)</a>
+                    <a class="nav-link" href="graph_cut.html">子图分割与调度</a>
+                  </div>
+                </li>
+              </ul>
+            </aside>
+          </div>
+
+
+
+          <!--
+          |‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
+          | Content
+          |‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
+          !-->
+          <div class="col-md-7 col-xl-8 ml-md-auto py-8">
+            <article>
+              <h1>量化计算是如何完成的？</h1>
+              <p class="lead">What is quantization does exactly?</p>
+
+              <hr class="my-8">
+
+              <h2 id="headings">量化究竟做了些什么？</h2>
+              <p>哦，回答这个问题其实很简单，我甚至可以通过一个十分简单的例子告诉你：</p>
+              <p>量化前：</p>
+              <pre class="line-numbers code-dark"><code class="language-markup">int main() {
+  float a = 53.5, b = 24.2, c = -10.5;
+  float ret = a * b + c; // ret = 1284.2
+}
+</code></pre>
+              <p>量化后：</p>
+              <pre class="line-numbers code-dark"><code class="language-markup">int main() {
+  float a = 53.5, b = 24.2, c = -10.5;
+  char ret = char(a) * char(b) + char(c);
+}
+</code></pre>
+              <p>你可能已经注意到了，我给出的样例量化方案似乎无法提升程序的运行效率，虽然在前一章中我们向你展示过整数运算可能会比浮点运算快一些，但额外引入的三次强制类型转换显然显著影响了程序的运行效率，同时我还需要告诉你的是char(a) * char(b)的结果已经溢出了char类型所能够表示的数据范围，也就是说这个运算本身是错误的（存在符号位溢出）。</p>
+              <p>但我将一步步地引导你走向正确的道路，现在你需要注意到，所谓量化就是将神经网络中的<strong>乘法</strong>与<strong>加法</strong>操作数的数据类型转换为 int8(char)，这样硬件设备就可以使用整数指令与专用的整数运算器来完成这些运算，从而使得计算性能获得提升。从逻辑上来说它就是如此简单。</p>
+
+              <p>为了解决我们样例中的诸多问题，我们首先引入一个缩放因子scale，使得int8的表示范围可以等比扩大，从而使得计算结果能够在 int8 的表示范围之内：</p>
+              <pre class="line-numbers code-dark"><code class="language-markup">int main() {
+  float a = 53.5, b = 24.2, c = -10.5;
+
+  // 输入量化
+  char int8_a = char(a), int8_b = char(b), int32_c = int(c);
+
+  // 运算
+  int accmulator = a * b + c;
+  
+  //输出量化
+  float scale = 16.0;
+  int raw_ret = accmulator / scale;
+  if (raw_ret >= 127) raw_ret = 127;
+  if (raw_ret <= -128) raw_ret = 128;
+  char ret = char(raw_ret);
+}
+</code></pre>
+              <p>首先，为了避免char(a) * char(b)的结果发生溢出，我们使用int32存储它们的乘积，同时为了防止与c相加的结果发生溢出，我们同样使用int32存储它们的和，此时运算a * b + c的结果是32位精度的，我们不能直接返回这个值，因为后续的运算将需要Int8的结果作为输入，因此我们必须将结果保存到int8中，为了避免数值发生溢出，我们将结果缩小16倍，并将缩小后的结果保存至ret。为了防止数值溢出，我们将ret的结果约束在127~-128之间，由于有scale的存在，ret的实际表示范围为2032~-2048，这正好覆盖了浮点的结果范围，因此计算是近似正确的。</p>
+              <p>添加了 scale 的同时，我们的计算逻辑也发生了变化，请你注意在执行计算过程的前后两侧，我们分别添加了对于输入的量化以及对于输出的量化，这段程序反应了后端执行的真实情况。</p>
+              
+              <hr />
+              <h2 id="headings">能不能更快一点？</h2>
+              <p>哦，看看我们都做了些什么，我们额外引入了4次类型转换，一次除法，两个条件判断与一些赋值，你可能已经开始怀疑这样的量化计算是否真的可以加速程序运行的效率。为了解答这一问题，我们需要更加深入到神经网络中去：</p>
+              <div class="text-center">
+                <figure class="figure img-thumbnail bg-lighter">
+                    <img src="../../assets/pic/NetworkArc1.png" class="figure-img img-fluid" alt="Image">
+                </figure>
+              </div>
+
+              <p>我们展示了一个简单神经网络的结构：一个由三个卷积层，两个Relu激活函数，和一个加法层组成的简单神经网络，我们在每一层的前后分别添加了QI, QO两个子模块用来表示对于输入的量化操作，以及对于输出的量化操作。那么可以很敏锐的发现，<strong>并不是所有量化操作都是必要的。</strong></p>
+              <p>事实上，就上述结构而言，其绝大部分的量化操作都是可以省略的，同时PPQ与PPLNN已经做好了这些准备。以图中灰色块为例，这些地方的量化操作都是可以省略的，因为这些层接收到的输入已经是量化后的输入，无需再次进行量化。与此同时黄色块内的量化操作也是可以省略的，这是因为硬件执行时会将Conv - Relu进行合并，它们将形成一个新的算子，其中间包含的所有量化都可以省略。除此以外，对于maxpooling, slice, reshape, gather...这些算子而言，其不改变原有tensor的值，因此在这些算子前后的量化操作也是可省的。</p>
+              <p>在省略了这些不必要的量化后，网络结构可以变为：</p>
+              <div class="text-center">
+                <figure class="figure img-thumbnail bg-lighter">
+                    <img src="../../assets/pic/NetworkArc2.png" class="figure-img img-fluid" alt="Image">
+                </figure>
+              </div>
+              <p>我想向你传达这样一个信息：在神经网络当中，大约有<strong> 70% </strong>以上的定点是可以省略的，PPQ已经为了你做好了这些，因此从宏观上来看，你总是以较少的量化操作，换取了计算的更高性能，从而使得系统的性能有了提高。同时我也必须告诉你，如果你在神经网络中单独量化某一个算子，那么由于数据转换的存在，单独量化这个算子并不会带来任何性能提升。</p>
+              <p>就好像一开始展示的那样，所谓量化操作就是将你的计算从float转换为char(int 8)，单独就计算本身而言，这的确可以使得你的程序运行效率得以提升，但会带来许多额外的数据类型转换开销。作为量化工具与后台Runtime，我们已经为你尽可能的删除了所有不必要的数据类型转换，尽可能地优化了网络执行效率，同时你也在PPQ中可以手动删除那些孤立量化的层从而进一步优化量化结果，请参考PPQ的子图切分、PPQ量化器的相关章节。</p>
+            </article>
+          </div>
+        </div>
+      </div>
+    </main><!-- /.main-content -->
+
+
+    <!-- Footer -->
+    <footer class="footer">
+      <div class="container">
+        <div class="row gap-y align-items-center">
+
+          <div class="col-md-9">
+
+          </div>
+
+          <div class="col-md-3 text-center text-md-right">
+            <a href="#">© Sensetime 2021</a>
+          </div>
+        </div>
+      </div>
+    </footer><!-- /.footer -->
+
+
+    <!-- Scripts -->
+    <script src="../../assets/js/page.min.js"></script>
+    <script src="../../assets/js/script.js"></script>
+
+  </body>
+</html>

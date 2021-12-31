@@ -1,0 +1,3 @@
+include ppq/parser/caffe/*
+include ppq/csrc/cuda/*
+include ppq/csrc/build/readme.md

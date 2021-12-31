@@ -1,0 +1,10 @@
+**/*.pyc
+**/*.pth
+**/*.onnx
+**/*.out
+**/*.csv
+**/*.model
+__pycache__/
+/build
+/dist
+/ppq.egg-info

@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta name="description" content="">
+    <meta name="keywords" content="">
+
+    <title>PPQ - 子图切分与异构调度</title>
+
+    <!-- Styles -->
+    <link href="../../assets/css/page.min.css" rel="stylesheet">
+    <link href="../../assets/css/style.css" rel="stylesheet">
+
+    <!-- Favicons -->
+    <link rel="apple-touch-icon" href="../../assets/img/apple-touch-icon.png">
+    <link rel="icon" href="../../assets/img/favicon.png">
+  </head>
+
+  <body>
+
+
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-light navbar-stick-dark">
+      <div class="container">
+
+        <div class="navbar-left">
+          <button class="navbar-toggler" type="button">&#9776;</button>
+
+          <a class="navbar-brand" href="../../index.html" style="color:white; font-size:24px">
+            PPL Quantization Tool
+          </a>
+        </div>
+
+        <a class="btn btn-sm btn-success" href="#">Online Document</a>
+
+      </div>
+    </nav><!-- /.navbar -->
+
+
+    <!-- Header -->
+    <header class="header text-white bg-dark pt-7 pb-5" style="background-image: linear-gradient(-20deg, #2b5876 0%, #4e4376 100%);">
+
+    </header><!-- /.header -->
+
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <div class="container">
+        <div class="row">
+
+          <!--
+          |‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
+          | Sidebar
+          |‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
+          !-->
+          <div class="col-md-4 col-xl-3 order-last order-md-first">
+            <hr class="d-md-none">
+            <aside class="sidebar sidebar-sticky sidebar-stick-shadow pr-md-5 br-1">
+              <ul class="nav nav-sidebar nav-sidebar-hero" data-accordion="true">
+                <li class="nav-item">
+                  <a class="nav-link" href="#">动手量化我的网络 <i class="nav-angle"></i></a>
+                  <div class="nav">
+                    <a class="nav-link" href="quantize_my_first_network.html">量化我的第一个网络</a>
+                    <a class="nav-link" href="quantize_with_pytorch.html">量化一个 Pytorch 网络</a>
+                    <a class="nav-link" href="quantize_with_onnx.html">量化一个 Onnx 网络</a>
+                    <a class="nav-link" href="quantize_with_caffe.html">量化一个 Caffe 网络</a>
+                  </div>
+                </li>
+
+                <li class="nav-item">
+                  <a class="nav-link active" href="#">了解量化 <i class="nav-angle"></i></a>
+                  <div class="nav">
+                    <a class="nav-link active" href="why_quantization_matters_1.html">量化如何加速我的网络(1)</a>
+                    <a class="nav-link" href="why_quantization_matters_2.html">量化如何加速我的网络(2)</a>
+                    <a class="nav-link" href="what_is_quantization.html">量化是如何计算的</a>
+                    <a class="nav-link" href="ppq_quant_1.html">深入了解PPQ量化(1)</a>
+                    <a class="nav-link" href="ppq_quant_2.html">深入了解PPQ量化(2)</a>
+                    <a class="nav-link" href="graph_cut.html">子图分割与调度</a>
+                  </div>
+                </li>
+              </ul>
+            </aside>
+          </div>
+
+
+
+          <!--
+          |‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
+          | Content
+          |‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
+          !-->
+          <div class="col-md-7 col-xl-8 ml-md-auto py-8">
+            <article>
+              <h1>为什么量化可以使我的网络加速？</h1>
+              <p class="lead">Why quantization matters for AI system?</p>
+
+              <hr class="my-8">
+
+              <h2 id="headings">引子</h2>
+              <p>量化为什么可以加速你的计算？它的答案可能并不像你想象中的那么简单，在回答这个问题之前，先让我们看看下面这一组数据：</p>
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>NETWORK(batchsize=128)</th>
+                    <th>TOP1 Accuracy on ImageNet</th>
+                    <th>Inference Speed(Img/Sec)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <th scope="row">1</th>
+                    <td>Resnet-50(FP32)</td>
+                    <td>73.23%</td>
+                    <td>1156</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">2</th>
+                    <td>Resnet-50(INT8)</td>
+                    <td>73.10%</td>
+                    <td>3787 (3.28x)</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">3</th>
+                    <td>VGG-19(FP32)</td>
+                    <td>68.41%</td>
+                    <td>339</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">4</th>
+                    <td>VGG-19(INT8)</td>
+                    <td>68.38%</td>
+                    <td>946 (2.79x)</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">5</th>
+                    <td>Googlenet(FP32)</td>
+                    <td>68.57%</td>
+                    <td>2499</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">6</th>
+                    <td>Googlenet(INT8)</td>
+                    <td>68.12%</td>
+                    <td>7282 (2.91x)</td>
+                  </tr>
+                </tbody>
+              </table>
+              <p><code>数据来源：TensorRT 量化数据。</code></p>
+              <p>在GPU上，对于常见的神经网络而言，将计算从 FP32 精度转换为 INT8，通常能够在保证网络精度的情况下使得推理速度提升2 ~ 3倍。这是我们对于网络量化的一般性认识，然而在这里我们希望向你展示量化的另一面，下面的数据展示了Batchsize=1时量化对于网络速度的影响：</p>
+
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>NETWORK(batchsize=1)</th>
+                    <th>TOP1 Accuracy on ImageNet</th>
+                    <th>Inference Speed(Img/Sec)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <th scope="row">1</th>
+                    <td>Resnet-50(FP32)</td>
+                    <td>73.23%</td>
+                    <td>415</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">2</th>
+                    <td>Resnet-50(INT8)</td>
+                    <td>73.10%</td>
+                    <td>562 (1.35x)</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">3</th>
+                    <td>VGG-19(FP32)</td>
+                    <td>68.41%</td>
+                    <td>211</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">4</th>
+                    <td>VGG-19(INT8)</td>
+                    <td>68.38%</td>
+                    <td>345 (1.56x)</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">5</th>
+                    <td>Googlenet(FP32)</td>
+                    <td>68.57%</td>
+                    <td>913</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">6</th>
+                    <td>Googlenet(INT8)</td>
+                    <td>68.12%</td>
+                    <td>945 (1.04x)</td>
+                  </tr>
+                </tbody>
+              </table>
+              <p><code>数据来源：TensorRT 量化数据。</code></p>
+              <p>同样是在GPU上，当我们的Batchsize缩小到1，我们发现网络的量化性能急剧下降，甚至变得和FP32速度几乎一致，是什么样的原因导致了这一现象？量化是否能够真的加速你的应用？</p>
+
+              <hr>
+
+              <h2 id="lead">定义</h2>
+              <p>为了展开我们接下来的讨论，我们首先给出一些有用的 <strong>定义：</strong></p>
+
+              <div class="code-preview">
+                <p class="lead">网络吞吐量 (Throughput)</p>
+              </div>
+              <pre><code>也就是在一段时间内，网络所能够处理的数据总量，但是值得注意的是，对于GPU这样强大的硬件而言，你总是可以通过提高网络的Batchsize来获取更大的吞吐量。</code></pre>
+
+              <div class="code-preview">
+                <p class="lead">网络延迟 (Network Latency)</p>
+              </div>
+              <pre><code>也就是网络完成一次前向计算所需要花费的时间，通常它与吞吐量和Batchsize是成反比的。</code></pre>
+
+              <div class="code-preview">
+                <p class="lead">硬件延迟 (Hardware Latency)</p>
+              </div>
+              <pre><code>这指的是在网络完成一次前向计算过程中真正用于计算的时间，除此以外在一次典型的前向传播当中还需要考虑数据读写与内存拷贝所耗费的时间。</code></pre>
+
+              <p>在上述定义的基础上，我们将深入网络的执行过程，深入探寻网络量化的完整流程。以GPU为例，我将向你粗略展示在一次网络前向传播中，究竟包含了那些必要环节：</p>
+              
+              <div class="text-center">
+                <figure class="figure img-thumbnail bg-lighter">
+                    <img src="../../assets/pic/NetworkExecuting.png" class="figure-img img-fluid" alt="Image">
+                    <figcaption class="figure-caption text-center">Network Executing.</figcaption>
+                </figure>
+              </div>
+
+              <p>正如上图中所展示的那样，对于神经网络的执行而言我们总是要在计算之外耗费一些时间，事实上对于小型网络而言耗费在执行之外的时间是不可忽视的。同时我们也要注意到GPU这样强大的硬件提供了<strong> 设备间流水线 </strong>这样的技术，这一技术在连续大批量计算过程中能够有效掩蔽读写数据的延迟，然而在要求实时性的场景中（Batchsize=1），我们仍然难以克服读写数据所带来的严重损耗。</p>
+            
+              <p>我在这里向你澄清两个事实：
+                <ul>
+                    <li>硬件的吞吐量与硬件的延时往往需要采用不同的方法进行优化。</li>
+                    <li>对于小型网络而言，它们的网络延时可能并不是硬件延时主导的。</li>
+                </ul>
+              </p>
+
+              <hr>
+
+              <h2 id="lead">量化怎样加速我的计算？</h2>
+              <p>为了解答这个问题，我们需要更进一步地探索硬件计算的真实面目，不妨先看看下面这个简单的求和程序：</p>
+              <pre class="line-numbers code-dark"><code class="language-markup">int main(){
+    int a[1000], sum;
+    for(int i = 0; i &lt 1000; i++) 
+        sum += a[i];
+}</code></pre>
+              <p>哦，我知道数组 a 似乎没有正确的初始化，但这不是我们此时需要担心的事。只需要注意到这是一个整数数组的求和程序，那么就可以对它进行简单修改，从而得到一个浮点数组的求和程序：</p>
+              <pre class="line-numbers code-dark"><code class="language-markup">int main(){
+    float a[1000], sum;
+    for(int i = 0; i &lt 1000; i++) 
+        sum += a[i];
+}</code></pre>
+              <p>现在，你一定正在思考这样的一个问题：以上两个求和程序谁更快？为什么？我将在下一章中为你解答这个问题，现在我希望你能够仔细思考一下这个问题的答案。</p>
+
+            </article>
+          </div>
+        </div>
+      </div>
+    </main><!-- /.main-content -->
+
+
+    <!-- Footer -->
+    <footer class="footer">
+      <div class="container">
+        <div class="row gap-y align-items-center">
+
+          <div class="col-md-9">
+
+          </div>
+
+          <div class="col-md-3 text-center text-md-right">
+            <a href="#">© Sensetime 2021</a>
+          </div>
+        </div>
+      </div>
+    </footer><!-- /.footer -->
+
+
+    <!-- Scripts -->
+    <script src="../../assets/js/page.min.js"></script>
+    <script src="../../assets/js/script.js"></script>
+
+  </body>
+</html>
