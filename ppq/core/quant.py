@@ -287,7 +287,7 @@ class QuantizationStates(Enum):
     OVERLAPPED  = 3   # 只针对activation量化，表示数据流的量化由其他 config 管理，当前 config 不生效
     DEACTIVATED = 4   # 表示当前 config 不生效
     ACTIVATED   = 5   # 表示当前 config 生效
-    DEQUANTIZED = 6   # 表示当前 config 处于解量化状态，解量化是 PPQ 种的一个系统操作
+    DEQUANTIZED = 6   # 表示当前 config 处于解量化状态，解量化是 PPQ 中的一个系统操作
     SOI         = 7   # 表示这一路输入与 Shape or index 相关，不量化
     PASSIVE     = 8   # 表示这一路输入被动量化，如 bias, clip value 等
     PASSIVE_INIT = 9  # 表示这一路输入被动量化，并且刚刚初始化不能被使用
