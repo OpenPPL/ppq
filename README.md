@@ -30,10 +30,13 @@ python setup.py install
 
 2. Wait for python finish its installation and pray for bug free.
 
-* Install from wheel:
+* Install from Pip:
 
-1. Download compiled python wheel from follwoing links: [PPL Quantization Tool](https://github.com/openppl-public/ppq.git)
-2. Run following command with your terminal or command line(windows): "pip install ppq.wheel", and pray for bug free.
+1. pre-built wheels are maintained in [PPQ](https://pypi.org/project/ppq/0.5.2/#files), you could simply install ppq with the following command
+
+```bash
+python3 -m pip install ppq
+```
 
 # Tutorials and Examples
 
@@ -84,6 +87,7 @@ If you plan to contribute new features, utility functions, or extensions to the 
 # Benchmark
 
 PPQ is tested with models from mmlab-classification, mmlab-detection, mmlab-segamentation, mmlab-editing, here we listed part of out testing result.
+
 * No quantization optimization procedure is applied with following models.
 
 | Model | Type | Calibration | Dispatcher | Metric | PPQ(sim) | PPLCUDA | FP32 |
