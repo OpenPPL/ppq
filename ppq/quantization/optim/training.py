@@ -293,7 +293,7 @@ class AdaRoundPass(QuantizationOptimizationPass):
                     st = idx * self.batch_size
                     ed = min(st + self.batch_size, data_len)
 
-                    # soft ada quant weight
+                    # soft AdaRound quant weight
                     params[0] = self.adaround_quant_weight(fp_weight, weight_scale, weight_offset, weight_quantization_config, continuous_v)
                     in_snap = [ quant_inputs_concat[index[st:ed,]] ]
                     [quant_output] = executor.operation_forward(target_op, inputs=in_snap + params)
