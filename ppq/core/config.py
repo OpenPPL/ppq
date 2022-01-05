@@ -1,13 +1,13 @@
 USING_CUDA_KERNEL = True
 if USING_CUDA_KERNEL:
     import os
-    os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
+    os.environ['CUDA_LAUNCH_BLOCKING'] = '0'
 
 PPQ_DEBUG = False
 
 PPQ_NAME = 'PPL Quantization Tool'
 
-PPQ_VERSION = '0.5.2'
+PPQ_VERSION = '0.5.3'
 
 DUMP_VALUE = True
 

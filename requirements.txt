@@ -3,3 +3,4 @@ tqdm
 torch >= 1.6.0
 onnx >= 1.8.1
 coloredlogs
+protobuf

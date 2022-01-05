@@ -193,7 +193,7 @@ class CaffeOpBuilder(object):
         # BUG FIX 12162021, Format graph when loading caffe model.
         formatter = GraphFormatter(GraphMerger(temp_graph))
         formatter(GraphCommand(GraphCommandType.FORMAT_CONSTANT_INPUT))
-        formatter(GraphCommand(GraphCommandType.FUSE_CONV_BN))
+        formatter(GraphCommand(GraphCommandType.FUSE_BN))
         formatter(GraphCommand(GraphCommandType.FORMAT_PARAMETERS))
         formatter(GraphCommand(GraphCommandType.FORMAT_CAST))
         formatter(GraphCommand(GraphCommandType.DELETE_ISOLATED))
