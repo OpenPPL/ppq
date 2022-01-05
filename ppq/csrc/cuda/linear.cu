@@ -81,12 +81,6 @@ __global__ static void _tensor_histogram(
     const bool abs,
     const int rounding
 ){
-    extern __shared__ int histogram[];
-    for (int i = threadIdx.x; i < num_of_bins; i += CUDA_NUM_THREADS){
-        histogram[i] = 0;
-    }
-    __syncthreads();
-
     for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < num_of_elements; i += blockDim.x * gridDim.x)
     {
         int selected_bin;
@@ -95,12 +89,7 @@ __global__ static void _tensor_histogram(
 
         selected_bin = selected_bin >= 0 ? selected_bin : 0;
         selected_bin = selected_bin < num_of_bins ? selected_bin : num_of_bins - 1;
-        atomicAdd(&histogram[selected_bin], 1);
-    }
-    __syncthreads();
-
-    for (int i = threadIdx.x; i < num_of_bins; i += CUDA_NUM_THREADS){
-        atomicAdd(&dest[i], histogram[i]);
+        atomicAdd(&dest[selected_bin], 1);
     }
 }
 
@@ -204,8 +193,8 @@ void cuda_tensor_histogram(
     if (abs && offset != 0) throw "offset is invalid when abs mode is activated, please set it to 0.";
     if (source.dtype() == at::kFloat){
         float *source_data = source.data_ptr<float>();
-        int *dest_data   = dest.data_ptr<int>();
-        _tensor_histogram<float> <<<num_of_blocks, num_of_threads, sizeof(int) * num_of_bins>>>(
+        int *dest_data     = dest.data_ptr<int>();
+        _tensor_histogram<float> <<<num_of_blocks, num_of_threads>>>(
             num_of_elements, num_of_bins, source_data, dest_data, scale, offset, abs, rounding
         );
     }

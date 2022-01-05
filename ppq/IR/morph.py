@@ -3,7 +3,7 @@ from typing import Any, List
 import numpy as np
 import torch
 from ppq.core import (DataType, TargetPlatform,
-                      convert_any_to_python_primary_type)
+                      convert_any_to_python_primary_type, ppq_warning)
 from ppq.IR.quantize import DeviceSwitchOP
 from ppq.IR.search import SearchableGraph
 from ppq.scheduler import value_tracing_pattern
@@ -367,18 +367,17 @@ class GraphMerger(GraphCommandProcesser):
     def _acceptable_command_types(self) -> List[GraphCommandType]:
         return [
             # add more extensions in the future 
-            GraphCommandType.FUSE_CONV_BN
+            GraphCommandType.FUSE_BN
         ]
 
     def process(self, command: GraphCommand) -> Any:
-        if command.command_type == GraphCommandType.FUSE_CONV_BN:
-            return self.fuse_conv_bn()
+        if command.command_type == GraphCommandType.FUSE_BN:
+            return self.fuse_bn()
 
-    def fuse_conv_bn(self):
-        conv_bns = []
+    def fuse_bn(self):
         search_engine = SearchableGraph(graph=self.graph)
         paths = search_engine.path_matching(
-            sp_expr=lambda x: x.type in {'Conv', 'Gemm'},
+            sp_expr=lambda x: x.type in {'Conv', 'Gemm', 'ConvTranspose'},
             rp_expr=lambda x, y: False,
             ep_expr=lambda x: x.type == 'BatchNormalization',
             direction='down')
@@ -389,6 +388,12 @@ class GraphMerger(GraphCommandProcesser):
 
             computing_op, bn_op = path
             assert isinstance(computing_op, Operation) and isinstance(bn_op, Operation)
+
+            if (len(self.graph.get_downstream_operations(computing_op)) != 1 or
+                len(self.graph.get_upstream_operations(bn_op)) != 1):
+                ppq_warning(f'PPQ can not merge operation {computing_op.name} and {bn_op.name}, '
+                            'this is not suppose to happen with your network, '
+                            'network with batchnorm inside might not be able to quantize and depoly.')
 
             assert len(bn_op.parameters) == 4, 'BatchNorm should have 4 parameters, namely alpha, beta, mean, var'
             alpha = bn_op.parameters[0].value

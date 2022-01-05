@@ -16,9 +16,9 @@ Install CUDA from [CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit-archi
 
 ATTENTION: For users of pytorch, pytorch might bring you a minimized CUDA libraries, which will not satisfy the requirement of this tool, you have to install CUDA from NVIDIA manually.
 
-ATTENTION: Make sure your python version is >= 3.6.0. PPL Quantization Tool is written with dialects that only by python >= 3.6.0.
+ATTENTION: Make sure your python version is >= 3.6.0. PPL Quantization Tool is written with dialects that only supported by python >= 3.6.0.
 
-* Install from source:
+* Install PPQ from source:
 
 1. Run following code with your terminal(For windows user, use command line instead).
 
@@ -30,13 +30,25 @@ python setup.py install
 
 2. Wait for python finish its installation and pray for bug free.
 
-* Install from Pip:
+* Install PPQ from Pip:
 
 1. pre-built wheels are maintained in [PPQ](https://pypi.org/project/ppq/0.5.2/#files), you could simply install ppq with the following command
 
 ```bash
 python3 -m pip install ppq
 ```
+
+* Install dependencies:
+    * For Linux User, use following command to install ninja:
+    ```bash
+    sudo apt install ninja-build
+    ```
+
+    * For Windows User:
+        * Download ninja.exe from [https://github.com/ninja-build/ninja/releases](https://github.com/ninja-build/ninja/releases), add it to Windows PATH Environment
+        * Download Visual Studio from [https://visualstudio.microsoft.com](https://visualstudio.microsoft.com/zh-hans/), if you already got a c++ compiler, you can skip this step.
+        * Add your c++ compiler to Windows PATH Environment, if you are using Visual Studio, it should be something like "C:\Program Files\Microsoft Visual Studio\2017\Community\VC\Tools\MSVC\14.16.27023\bin\Hostx86\x86"
+    
 
 # Tutorials and Examples
 

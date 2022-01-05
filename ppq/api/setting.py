@@ -92,6 +92,25 @@ class EqualizationSetting():
         self.self_check           = False
 
 
+class ChannelSplitSetting():
+    def __init__(self) -> None:
+        # 所有需要分裂的层的名字，Channel Split 会降低网络执行的性能，你必须手动指定那些层要被分裂
+        # interested layer names on which channel split is desired
+        self.interested_layers = []
+        # 分裂方向 - 可以是向上分裂或者向下分裂，每个层都要给一个哦
+        # search direactions of layers in interested_layers, can be 'down' or 'up', each layer has one.
+        self.search_directions = []
+        # 要分裂多少 channel，数值越高则越多 channel 会被分裂
+        # ratio of newly added channels
+        self.expand_ratio      =  0.1
+        # 还没看，我也不知道是什么
+        # value split ratio 
+        self.split_ratio       =  0.5
+        # 是否添加一个小偏移项用来使得量化后的结果尽可能与浮点对齐。
+        # cancel out round effect
+        self.grid_aware        =  True
+
+
 class AdvancedOptimizationSetting():
     def __init__(self) -> None:
         # 中间结果保存位置，可以选择 executor 或 cpu
@@ -133,7 +152,7 @@ class AdvancedOptimizationSetting():
 
 class ActivationQuantizationSetting():
     def __init__(self) -> None:
-        # 激活值校准算法，不区分大小写，可以选择 minmax, kl, percentile
+        # 激活值校准算法，不区分大小写，可以选择 minmax, kl, percentile, MSE
         # activation calibration method
         self.calib_algorithm = 'percentile'
 
@@ -149,7 +168,7 @@ class ActivationQuantizationSetting():
 
 class ParameterQuantizationSetting():
     def __init__(self) -> None:
-        # 参数校准算法，不区分大小写，可以选择 minmax, percentile(per-layer), kl(per-layer sym)
+        # 参数校准算法，不区分大小写，可以选择 minmax, percentile(per-layer), kl(per-layer sym), MSE
         # parameter calibration method
         self.calib_algorithm = 'minmax'
         
@@ -261,6 +280,10 @@ class QuantizationSetting():
         # layer wise equalizition 与相关配置
         self.equalization                    = True
         self.equalization_setting            = EqualizationSetting()
+        
+        # OCS channel split configuration
+        self.channel_split                   = False
+        self.channel_split_setting           = ChannelSplitSetting()
 
         # activation 量化与相关配置
         self.quantize_activation             = True

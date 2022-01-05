@@ -1,6 +1,5 @@
 from abc import ABCMeta, abstractmethod, abstractproperty
 from typing import Iterable, Union
-
 import torch
 from ppq.api.setting import *
 from ppq.core import (OperationMeta, OperationQuantizationConfig,
@@ -240,6 +239,15 @@ class BaseQuantizer(metaclass = ABCMeta):
                 loss_threshold       = equalization_setting.loss_threshold,
                 layer_norm           = equalization_setting.layer_norm,
                 iteration            = equalization_setting.iteration
+            ))
+        if setting.channel_split:
+            channel_split_setting = setting.channel_split_setting
+            list_of_passes.append(ChannelSplitPass(
+            interested_layers = channel_split_setting.interested_layers,
+            search_directions = channel_split_setting.search_directions,
+            expand_ratio      = channel_split_setting.expand_ratio,
+            split_ratio       = channel_split_setting.split_ratio,
+            grid_aware        = channel_split_setting.grid_aware
             ))
 
         if setting.fusion:
