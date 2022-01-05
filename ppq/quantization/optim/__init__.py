@@ -3,7 +3,7 @@ from .base import (QuantizationOptimizationPass,
                    QuantizationOptimizationPipeline)
 from .calibration import RuntimeCalibrationPass, RuntimePerlayerCalibrationPass
 from .equalization import LayerwiseEqualizationPass
-from .morph import NXPResizeModeChangePass
+from .morph import NXPResizeModeChangePass, ChannelSplitPass
 from .parameters import PassiveParameterQuantizePass, ParameterQuantizePass
 from .refine import (NxpInputRoundingRefinePass, NxpQuantizeFusionPass,
                      QuantizeFusionPass, QuantizeReducePass,

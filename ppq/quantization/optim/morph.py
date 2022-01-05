@@ -1,11 +1,17 @@
 from typing import Iterable, List
-from ppq.core.defs import ppq_warning
-
+from math import ceil
+from ppq.IR.base.graph import BaseGraph, Operation
+from ppq.IR.quantize import QuantableOperation
+from ppq.core.quant import QuantizationProperty, QuantizationStates
+from ppq.core.data import TensorMeta
 from ppq.executor import BaseGraphExecutor
 from ppq.IR import GraphCommandProcesser
-from ppq.IR.search import SearchableGraph
-
+from ppq.IR.search import Path, SearchableGraph
+from ppq.quantization.observer import TensorObserverFactroy
+import torch
 from .base import QuantizationOptimizationPass
+import logging
+logger = logging.getLogger('PPQ')
 
 
 class NXPResizeModeChangePass(QuantizationOptimizationPass):
@@ -25,51 +31,221 @@ class NXPResizeModeChangePass(QuantizationOptimizationPass):
 
 class ChannelSplitPass(QuantizationOptimizationPass):
     """
-    This Pass split Conv or Gemm layer into some sub layers.
-    
-        Split Sturcture like Conv - Conv into:
+    ChannelSplitPass is designed for per-tenser quantization only, this implementation
+    is based on the original paper:
 
-               - - Conv - -
-        Conv - +          + - Concat
-               - - Conv - - 
-    
-    This Pass will significantly increase the accuracy of quantized network(per layer quantized),
-        however at the sarifice of executing effiecncy.
-    
-    Use this pass as the last resort when other optimization pass doesn't work.
-    
-    ATTENTION: We don't check your input layer, some time split your layer is not safe.
-    You should choose your interested_layers carefully.
-    
-    Inspired by following code:
-    
-    import torch
+    "zhao, Ritchie et al., Improving Neural Network Quantization without Retraining using Outlier Channel Splitting"
 
-    A = torch.rand(size=[1024, 8])
-    B = torch.rand(size=[8, 1024])
-    C = torch.matmul(A, B)
-
-    reorder = [7, 1, 2, 3, 4, 5, 6, 0]
-    A = A.permute(dims=[1, 0])
-    A = A[reorder]
-    A = A.permute(dims=[1, 0])
-
-    B = B[reorder]
-    B_1 = B[:, 0: 512]
-    B_2 = B[:, 512: ]
-    C_2 = torch.cat(
-        [torch.matmul(A, B_1), torch.matmul(A, B_2)], dim=-1)
+    Basically this pass shrinks ranges of outlier channels by first half-down the channel value then duplicate the whole channel,
+    making it more friendly for per-tensor quantization while preserving the fp output same
     
-    where C_2 == C, which means we can split tensor B into B_1 and B_2,
-        to construct a better quantization of tensor B
-        (if B_1 and B_2 are delicately solved.)
+    In this implementation, to avoid bringing in supplemental ops, for each user-given op, we find its counterpart op, 
+    split input/output channel of the user-given op and duplicate output/input channel of its counterpart
 
-    Args:
-        QuantizationOptimizationPass ([type]): [description]
+            split Conv1                                          split Conv2
+
+    Conv1  --  Relu  --  Conv2                               Conv1  --  Relu  --  Conv2
+  (C2,C1,H1,W1)      (C3,C2,H2,W2)                        (C2,C1,H1,W1)      (C3,C2,H2,W2)
+        || split          || duplicate                          || duplicate       || split
+        \/ duplicate      \/                                    \/                 \/ duplicate
+  (C2+C,C1,H1,W1)    (C3,C2+C,H2,W2)                      (C2+C,C1,H1,W1)    (C3,C2+C,H2,W2)
+
     """
-    def __init__(self, interested_layers: List[str]) -> None:
+    def __init__(self, 
+                interested_layers: List[str],
+                search_directions: List[str],
+                expand_ratio: float=0.1,
+                split_ratio: float=0.5,
+                grid_aware: bool=True
+    ) -> None:
+        """ChannelSplitPass, try this when other algorithms fail to improve your per-tensor quantization
+        accuracy, interested_layers and corresponding search_directions should decided by user, user should
+        make sure every split operation in interested_layers has a counterpart along the corresponding 
+        search direction
+
+        Args:
+            interested_layers (List[str]): a list of strings representing ops you want to apply channel split.
+            search_directions (List[str]): a list of strings representing search directions(up or down) of ops given in
+                                           interested_layers by user.
+            expand_ratio (float, optional): ratio of duplicate channels. Defaults to 0.1.
+            split_ratio (float, optional): ratio of values in outlier channel which will half-down. Defaults to 0.5.
+            grid_aware (bool, optional): whether to apply quantization aware split. Defaults to True.
+        """
         self.interested_layers = interested_layers
+        self.search_directions = search_directions
+        self.expand_ratio = expand_ratio
+        self.grid_aware = grid_aware
+        self.split_ratio = split_ratio
+        self.current_search_direction = None
         super().__init__(name='Channel Split Pass')
+
+    def calculate_scale(self, split_op: Operation) -> float:
+        config = split_op.config.input_quantization_config[1]
+        observer = TensorObserverFactroy.build_observer(split_op.parameters[0], config)
+        observer.observe(split_op.parameters[0].value)
+        observer.render_quantization_config()
+        w_scale = config.scale
+        return w_scale
+
+    def flip(self, op: Operation) -> bool:
+        return (self.current_search_direction == 'down') ^ (op.type == 'ConvTranspose' or (op.type == 'Gemm'\
+            and op.attributes.get('transB', 0) == 0))
+
+    def OCS_forward(self, split_op: Operation) -> List[int]:
+        weight = split_op.parameters[0].value
+        axes = list(range(weight.ndim))
+
+        # update bias when the out dimension needs half-down and duplicate
+        update_bias = (self.current_search_direction == 'down' and len(split_op.parameters) > 1)
+        if update_bias:
+            bias = split_op.parameters[1].value
+
+        # permute weight so that we can always operate on the second axis
+        if self.flip(split_op):
+            weight = weight.permute(1, 0, *axes[2:]).contiguous()
+
+        num_channels = weight.shape[1]
+        ocs_channels = ceil(num_channels * self.expand_ratio)
+        in_channels_to_copy = []
+        orig_idx_dict = {}
+        if self.grid_aware:
+            w_scale = self.calculate_scale(split_op)
+
+        for c in range(ocs_channels):
+            flatten_weight = weight.permute(1, 0, *axes[2:]).contiguous()
+            flatten_weight = flatten_weight.reshape(flatten_weight.shape[0], -1)
+            max_per_channel = torch.max(flatten_weight.abs(), 1)[0]
+            idxs = torch.argsort(max_per_channel, descending=True)
+            split_idx = idxs[0].item()
+            ch_slice = weight[:, split_idx:(split_idx + 1)].clone()
+            ch_slice_half = ch_slice / 2
+            ch_slice_zero = torch.zeros_like(ch_slice)
+
+            # for a top-down search, we need to directly half-down the weight and bias
+            if self.current_search_direction == 'up':
+                split_value = ch_slice.max() * self.split_ratio
+            else:
+                split_value = 0
+
+            if (not self.grid_aware) or self.current_search_direction == 'down':
+                ch_slice_1 = torch.where(torch.abs(ch_slice) > split_value, ch_slice_half, ch_slice)
+                ch_slice_2 = torch.where(torch.abs(ch_slice) > split_value, ch_slice_half, ch_slice_zero)
+            else:
+                # assert per-tensor
+                ch_slice_half /= w_scale
+                ch_slice_1 = torch.where(torch.abs(ch_slice) > split_value, ch_slice_half-0.25, ch_slice / w_scale) * w_scale
+                ch_slice_2 = torch.where(torch.abs(ch_slice) > split_value, ch_slice_half+0.25, ch_slice_zero) * w_scale
+            weight[:, split_idx:(split_idx+1)] = ch_slice_1
+            weight = torch.cat([weight, ch_slice_2], dim=1)
+            
+            if update_bias:
+                bias_slice_half = bias[split_idx:(split_idx+1)] / 2
+                bias[split_idx] = bias_slice_half
+                bias = torch.cat([bias, bias_slice_half], dim=0)
+
+            if split_idx < num_channels:
+                in_channels_to_copy.append(split_idx)
+                orig_idx_dict[num_channels+c] = split_idx
+            else:
+                in_channels_to_copy.append(orig_idx_dict[split_idx])
+                orig_idx_dict[num_channels+c] = orig_idx_dict[split_idx]
+
+        # permute back
+        if self.flip(split_op):
+            weight = weight.permute(1, 0, *axes[2:]).contiguous()
+
+        # update param
+        split_op.parameters[0].value = weight
+        if update_bias:
+            split_op.parameters[1].value = bias
+        return in_channels_to_copy
+
+    def update_counterpart(self, counterpart_op: Operation, in_channels_to_copy: List[int]) -> None:
+        weight = counterpart_op.parameters[0].value
+        axes = list(range(weight.ndim))
+
+        # permute weight so that we can always operate on the first axis
+        if self.flip(counterpart_op):
+            weight = weight.permute(1, 0, *axes[2:]).contiguous()
+        
+        weight_split = torch.index_select(weight, dim=0, index=torch.tensor(in_channels_to_copy, dtype=torch.int64, device=weight.device))
+        weight = torch.cat([weight, weight_split], dim=0)
+        
+        # update bias when the output dimension needs duplicate
+        update_bias = (self.current_search_direction == 'up' and len(counterpart_op.parameters) > 1)
+        if update_bias:
+            bias = counterpart_op.parameters[1].value
+            bias_split = torch.index_select(bias, dim=0, index=torch.tensor(in_channels_to_copy, dtype=torch.int64, device=bias.device))
+            bias = torch.cat([bias, bias_split], dim=0)
+
+        # flip back
+        if self.flip(counterpart_op):
+            weight = weight.permute(1, 0, *axes[2:]).contiguous()
+
+        # update param
+        counterpart_op.parameters[0].value = weight
+        if update_bias:
+            counterpart_op.parameters[1].value = bias
+
+    def check(self, graph: BaseGraph, path:Path) -> bool:
+        if self.current_search_direction == 'up':
+            for op in path.tolist()[1:]:
+                if len(graph.get_downstream_operations(op)) != 1:
+                    return False
+            upstream_op, downstream_op = path[-1], path[0]
+        else:
+            for op in path.tolist()[:-1]:
+                if len(graph.get_downstream_operations(op)) != 1:
+                    return False
+            upstream_op, downstream_op = path[0], path[-1]
+        # not support group conv yet
+        if upstream_op.attributes.get('group', 1) != 1 or downstream_op.attributes.get('group', 1) != 1:
+            return False
+        # should have as least one weight parameter 
+        if upstream_op.type == 'Gemm' and len(upstream_op.parameters) < 1 or\
+            downstream_op.type == 'Gemm' and len(downstream_op.parameters) < 1:
+            return False
+
+        # check if weight shapes of upstream and downstream computing ops match
+        up_axis, down_axis = 0, 1
+        if upstream_op.type == 'ConvTranspose' or (upstream_op.type == 'Gemm' and upstream_op.attributes.get('transB', 0) == 0):
+            up_axis = 1
+        if downstream_op.type == 'ConvTranspose' or (downstream_op.type == 'Gemm' and downstream_op.attributes.get('transB', 0) == 0):
+            down_axis = 0
+
+        if upstream_op.parameters[0].meta.shape[up_axis] != downstream_op.parameters[0].meta.shape[down_axis]:
+            return False
+
+        return True
+
+    def modify_meta(self, path:Path, num_channels:int) -> None:
+        # all the activations along the path and changed params
+        # needs modifying their meta info, i.e., add up the 
+        # duplicated channels to the second dimension
+        for op in path.tolist():
+            for var in op.inputs:
+                if var.is_parameter:
+                    op.meta_data.input_metas[op.inputs.index(var)] = TensorMeta.parsing_from_torch_tensor(var.value)
+        path_ = path.tolist()[1:] if self.current_search_direction == 'up' else path.tolist()[:-1]
+        for op in path_:
+            output_meta = op.meta_data.output_metas[0]
+            shape = output_meta.shape
+            shape[1] += num_channels
+
+    def store_parameter(self, path: Path) -> None:
+        for op in path:
+            if isinstance(op, QuantableOperation):
+                op.store_parameter_value()
+
+    def initiate_path_state(self, path: Path) -> None:
+        for op in path:
+            if isinstance(op, QuantableOperation):
+                for quant_config in op.config.input_quantization_config + op.config.output_quantization_config:
+                    if quant_config.state == QuantizationStates.ACTIVATED:
+                        quant_config.state = QuantizationStates.INITIAL
+                    elif quant_config.state == QuantizationStates.PASSIVE:
+                        quant_config.state = QuantizationStates.PASSIVE_INIT
+
 
     def optimize(self, processer: GraphCommandProcesser, 
                  dataloader: Iterable, executor: BaseGraphExecutor, 
@@ -77,18 +253,46 @@ class ChannelSplitPass(QuantizationOptimizationPass):
 
         graph = processer.graph
         search_engine = SearchableGraph(processer)
-        
-        for name in self.interested_layers:
-            if name not in graph.operations: continue
+
+        for name, search_direction in zip(self.interested_layers, self.search_directions):
+            self.current_search_direction = search_direction
+            if name not in graph.operations or not graph.operations[name].is_computing_op:
+                logger.warning(f'Check op {name}, it might not be in graph and only Conv,\
+                    Gemm, ConvTranspose is supported')
+                continue
             matching = search_engine.path_matching(
                 sp_expr=lambda x: x.name == name,
-                rp_expr=lambda x, y: True, # We don't check whether it is a resonable path.
+                rp_expr=lambda x, y: True, # be careful when choosing interested_layers, we assume a reasonable path
                 ep_expr=lambda x: x.is_computing_op,
-                direction='up'
+                direction=search_direction
             )
 
             if len(matching) != 1:
-                ppq_warning(f'Can not find a proper upstream operation for {name}.')
+                logger.warning(f'Can not find a proper counterpart operation for {name}.')
                 continue
 
-            counterpart, me = matching[-1], matching[0]
+            path = matching[0]
+            if not self.check(graph, path):
+                logger.warning(f'Not support such path due to op constraints for now')
+                continue
+
+            if search_direction == 'up':
+                logger.info(f"Now processing path {'--'.join(reversed([op.name for op in path]))}")
+            else:
+                logger.info(f"Now processing path {'--'.join([op.name for op in path])}")
+
+            split_op, counterpart_op = path[0], path[-1]
+
+            assert(isinstance(split_op, QuantableOperation), f"op {split_op.name} should be quantable, \
+            please whether your dispatcher send the op to quantable platform")
+
+            config = split_op.config.input_quantization_config[1]
+            if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
+                logger.warning(f'Channel split is designed for per tensor only, skip {name}')
+                continue
+
+            copy_channels = self.OCS_forward(split_op)
+            self.update_counterpart(counterpart_op, copy_channels)
+            self.modify_meta(path, len(copy_channels))
+            self.store_parameter(path)
+            self.initiate_path_state(path)

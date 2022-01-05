@@ -2,11 +2,11 @@ from math import ceil
 from typing import Callable, Dict, Iterable, List
 
 from ppq.core import empty_ppq_cache
-from ppq.core.quant import QuantizationStates, TensorQuantizationConfig
+from ppq.core.quant import QuantizationStates
 from ppq.executor import BaseGraphExecutor, RuntimeHook
 from ppq.IR import GraphCommandProcesser, QuantableOperation
-from ppq.quantization.analyise.graphwise import OutputRecorder
 from ppq.quantization.observer import OperationObserver, TorchHistObserver
+from ppq.quantization.observer.range import TorchMSEObserver
 from tqdm import tqdm
 
 from .base import QuantizationOptimizationPass
@@ -127,7 +127,7 @@ class RuntimeCalibrationPass(QuantizationOptimizationPass):
         pop_list = []
         for op_name, observer in self._observers.items():
             assert isinstance(observer, OperationObserver)
-            if all([type(var_observer) not in {TorchHistObserver} 
+            if all([type(var_observer) not in {TorchHistObserver, TorchMSEObserver} 
                 for var_observer in observer._hook._observer_table.values()]):
                     pop_list.append(op_name)
         

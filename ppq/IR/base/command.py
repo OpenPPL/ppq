@@ -86,9 +86,9 @@ class GraphCommandType(Enum):
     # remove switcher
     REMOVE_SWITCHER = 26
     
-    # 融合图中的 Conv 与 BN
-    # fuse Conv and BN
-    FUSE_CONV_BN = 27
+    # 融合图中的 计算层 与 BN
+    # fuse Computing layer and BN
+    FUSE_BN = 27
     # 删除图中的 Constant Input
     # remove constant input
     FORMAT_CONSTANT_INPUT = 28

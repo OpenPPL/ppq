@@ -5,16 +5,16 @@ from ppq.core import (QuantizationStates, TensorQuantizationConfig,
                       ppq_debug_function)
 from ppq.executor import QuantOPRuntimeHook
 from ppq.IR import QuantableOperation, Variable
-from ppq.executor.base import RuntimeHook
 
 from .base import BaseTensorObserver
-from .range import TorchMinMaxObserver, TorchHistObserver, TorchPercentileObserver
-
+from .range import (TorchHistObserver, TorchMinMaxObserver, TorchMSEObserver,
+                    TorchPercentileObserver)
 
 PPQ_OBSERVER_TABLE = {
     'minmax': TorchMinMaxObserver,
     'kl': TorchHistObserver,
-    'percentile': TorchPercentileObserver
+    'percentile': TorchPercentileObserver,
+    'mse': TorchMSEObserver
 }
 
 

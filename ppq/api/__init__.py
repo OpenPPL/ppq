@@ -412,11 +412,17 @@ def export_ppq_graph(
 
 def format_graph(graph: BaseGraph, setting: QuantizationSetting) -> BaseGraph:
     """
+
     这个函数将对读入的计算图进行预处理 this func will preprocess the loaded computational graph
     
     所有的算子将被规范化，将符合 PPQ 的定义标准 all operators will be regularized 
 
     计算图将被切分并调度到不同设备 operators will be dispatched to different devices
+    
+    这不是一个可重入函数，如果你需要手动调用这个函数，则不能够使用 ppq.api.load_from_onnx 等函数加载模型！
+    This is not an reenterable function, do not invoke this twice.
+    if you are using functions like ppq.api.load_from_onnx, notice they will invoke this function automatically.
+
     """
 
     # do graph level optimization
@@ -426,7 +432,7 @@ def format_graph(graph: BaseGraph, setting: QuantizationSetting) -> BaseGraph:
     dispatcher = DISPATCHER_TABLE[str(setting.dispatcher).lower()]
 
     formatter(GraphCommand(GraphCommandType.FORMAT_CONSTANT_INPUT))
-    formatter(GraphCommand(GraphCommandType.FUSE_CONV_BN))
+    formatter(GraphCommand(GraphCommandType.FUSE_BN))
     formatter(GraphCommand(GraphCommandType.FORMAT_PARAMETERS))
     formatter(GraphCommand(GraphCommandType.FORMAT_CAST))
     formatter(GraphCommand(GraphCommandType.DELETE_ISOLATED))
