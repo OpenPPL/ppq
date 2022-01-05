@@ -211,7 +211,7 @@ class AdaRoundPass(QuantizationOptimizationPass):
                  collecting_device: str = 'cpu',
                  epoch: int = 512,
                  batch_size: int = 32) -> None:
-        super().__init__(name='PPQ Adaquant Pass')
+        super().__init__(name='PPQ AdaRound Pass')
         self._collecting_device = collecting_device
         self.epoch = epoch
         self.batch_size = batch_size
@@ -293,8 +293,8 @@ class AdaRoundPass(QuantizationOptimizationPass):
                     st = idx * self.batch_size
                     ed = min(st + self.batch_size, data_len)
 
-                    # soft ada quant weight
-                    params[0] = self.ada_quant_weight(fp_weight, weight_scale, weight_offset, weight_quantization_config, continuous_v)
+                    # soft AdaRound quant weight
+                    params[0] = self.adaround_quant_weight(fp_weight, weight_scale, weight_offset, weight_quantization_config, continuous_v)
                     in_snap = [ quant_inputs_concat[index[st:ed,]] ]
                     [quant_output] = executor.operation_forward(target_op, inputs=in_snap + params)
                     fp32_output = fp_outputs_concat[index[st:ed],]
@@ -314,7 +314,7 @@ class AdaRoundPass(QuantizationOptimizationPass):
                 (h_v[h_v + 1e-4 >= 1.0].numel() + h_v[h_v <= 1e-4].numel()) / torch.numel(h_v)))
 
             # update weight
-            rounded_weight = self.ada_quant_weight(fp_weight, weight_scale, weight_offset, weight_quantization_config, continuous_v, soft=False)
+            rounded_weight = self.adaround_quant_weight(fp_weight, weight_scale, weight_offset, weight_quantization_config, continuous_v, soft=False)
             target_op.parameters[0].value.copy_(rounded_weight)
             del fp_outputs_concat
             del quant_inputs_concat
@@ -323,7 +323,7 @@ class AdaRoundPass(QuantizationOptimizationPass):
                 target_op.parameters[1].value.copy_(bias)
                 target_op.config.input_quantization_config[-1].state = QuantizationStates.PASSIVE
 
-    def ada_quant_weight(self, weight, scale, offset, weight_quantization_config, round_var, soft=True):
+    def adaround_quant_weight(self, weight, scale, offset, weight_quantization_config, round_var, soft=True):
         quant_max = weight_quantization_config.quant_max
         quant_min = weight_quantization_config.quant_min
         if soft:
