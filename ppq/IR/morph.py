@@ -404,7 +404,7 @@ class GraphMerger(GraphCommandProcesser):
 
             if computing_op.num_of_parameters == 1:
                 w = computing_op.parameters[0].value  # no bias.
-                b = torch.zeros(size=w.shape[0], dtype=torch.float, device=w.device)
+                b = np.zeros(shape=w.shape[0], dtype=w.dtype)
             else:
                 w, b = [var.value for var in computing_op.parameters[: 2]]  # has bias.
 
