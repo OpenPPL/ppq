@@ -86,7 +86,9 @@ class RuntimeCalibrationPass(QuantizationOptimizationPass):
                 if not isinstance(operation, QuantableOperation): continue
                
                 for config, var in operation.config_with_variable:
-                    if not var.is_parameter and config.state == QuantizationStates.ACTIVATED:
+                    if (not var.is_parameter and 
+                        config.state == QuantizationStates.ACTIVATED and 
+                        config.dominated_by == config):
                         config.state = QuantizationStates.INITIAL
 
         # build observer and hook for each quantable operation

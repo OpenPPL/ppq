@@ -2,11 +2,13 @@ from typing import Union
 
 import torch
 from ppq.api.setting import *
-from ppq.core import (ChannelwiseTensorQuantizationConfig, OperationMeta,
+from ppq.core import (ChannelwiseTensorQuantizationConfig,
                       OperationQuantizationConfig, QuantizationPolicy,
                       QuantizationProperty, QuantizationStates, RoundingPolicy,
                       TargetPlatform)
+from ppq.executor.base import BaseGraphExecutor
 from ppq.IR import BaseGraph, GraphCommandProcesser
+from ppq.IR.base.graph import Operation
 from ppq.quantization.optim import (NxpInputRoundingRefinePass,
                                     NXPResizeModeChangePass,
                                     QuantizationOptimizationPipeline)
@@ -27,30 +29,27 @@ class NXP_Quantizer(BaseQuantizer):
         super().__init__(graph=graph)
 
     def create_optim_pipeline_from_setting(
-        self, setting: QuantizationSetting) -> QuantizationOptimizationPipeline:
-        pipeline = super().create_optim_pipeline_from_setting(setting)
+        self, setting: QuantizationSetting, executor: BaseGraphExecutor) -> QuantizationOptimizationPipeline:
+        pipeline = super().build_quant_pipeline(setting, executor)
         pipeline.append_optimization_to_pipeline(NXPResizeModeChangePass(), at_front=True)
         pipeline.append_optimization_to_pipeline(NxpInputRoundingRefinePass(), at_front=True)
         return pipeline
     
-    def init_quantize_config(
-        self, operation_meta: OperationMeta,
-        operation_type: str
-    ) -> OperationQuantizationConfig:
+    def init_quantize_config(self, operation: Operation) -> OperationQuantizationConfig:
 
         base_quant_config = self.create_default_quant_config(
             policy=self.quantize_policy, rounding=self.rounding_policy,
-            operation_meta=operation_meta, num_of_bits=self._num_of_bits, 
+            operation_meta=operation.meta_data, num_of_bits=self._num_of_bits, 
             quant_max=self._quant_max, quant_min=self._quant_min,
             observer_algorithm='percentile')
 
-        if operation_type in {'Conv', 'ConvTranspose', 'Gemm'}:
+        if operation.type in {'Conv', 'ConvTranspose', 'Gemm'}:
             # set all parameters within Conv, ConvTranspose, Gemm to per-channel quant-config.
-            assert operation_meta.num_of_input > 0, 'Seems you got a Conv layer with no parameters.'
+            assert operation.num_of_input > 0, 'Seems you got a Conv layer with no parameters.'
 
             # first parameter must exits, for conv layer it will be conv_weight
             # layout: [out_channel, in_channel, kernel_size, kernel_size]
-            if operation_type in {'Conv', 'ConvTranspose'}:
+            if operation.type in {'Conv', 'ConvTranspose'}:
                 conv_weight_config = base_quant_config.input_quantization_config[1]
                 conv_weight_config.policy = QuantizationPolicy(
                     QuantizationProperty.SYMMETRICAL +
@@ -67,7 +66,7 @@ class NXP_Quantizer(BaseQuantizer):
                 base_quant_config.input_quantization_config[1].observer_algorithm = 'Minmax'
             # first parameter must exits, for gemm layer it will be gemm_weight
             # layout: [in_dim, out_dim]
-            elif operation_type in {'Gemm'}:
+            elif operation.type in {'Gemm'}:
                 gemm_weight_config = base_quant_config.input_quantization_config[1]
                 gemm_weight_config.policy = QuantizationPolicy(
                     QuantizationProperty.SYMMETRICAL +
@@ -83,10 +82,8 @@ class NXP_Quantizer(BaseQuantizer):
                     )
                 base_quant_config.input_quantization_config[1].observer_algorithm = 'Minmax'
             # if operation has bias
-            if operation_meta.num_of_input > 2:
-                bias_meta   = operation_meta.input_metas[-1]
+            if operation.num_of_input > 2:
                 bias_config = base_quant_config.input_quantization_config[-1]
-                [out_dim] = bias_meta.shape
                 bias_config.policy = QuantizationPolicy(
                     QuantizationProperty.SYMMETRICAL +
                     QuantizationProperty.LINEAR +
@@ -103,10 +100,7 @@ class NXP_Quantizer(BaseQuantizer):
                         scales = None, channel_axis = 0)
                 base_quant_config.input_quantization_config[-1].observer_algorithm = 'Minmax'
 
-        if operation_type in {
-            'Resize', 'MaxPool', 'GlobalMaxPool', 
-            'Slice', 'Pad', 'Split'
-        }:
+        if operation.type in PASSIVE_OPERATIONS:
             # Those op are not active op.
             base_quant_config.is_active_quant_op = False
         

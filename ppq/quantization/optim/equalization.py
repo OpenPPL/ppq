@@ -176,7 +176,7 @@ class LayerwiseEqualizationPass(QuantizationOptimizationPass):
 
         output_names = []
         for operation in operations:
-            assert operation.meta_data.num_of_output == 1, (
+            assert operation.num_of_output == 1, (
                 f'Num of output of layer {operation.name} is supposed to be 1')
             output_names.append(operation.outputs[0].name)
 

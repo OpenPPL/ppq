@@ -136,7 +136,8 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
         """
         return self.__forward(
             inputs=inputs, 
-            output_names=output_names, 
+            output_names=output_names,
+            executing_order=self._executing_order,
             hooks=hooks
         )
 
@@ -181,24 +182,35 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
         """
         return self.__forward(
             inputs=inputs, 
-            output_names=output_names, 
+            output_names=output_names,
+            executing_order=self._executing_order,
             hooks=hooks
         )
 
     def __forward(
         self, 
-        inputs: Union[dict, list, torch.Tensor], 
+        inputs: Union[dict, list, torch.Tensor],
+        executing_order: List[Operation],
         output_names:List[str] = None,
         hooks: Dict[str, RuntimeHook] = None,
     ) -> List[torch.Tensor]:
     
         # processing with different input format
-        inputs = self.prepare_input(inputs=inputs)
-        for key, value in inputs.items():
-            assert isinstance(value, torch.Tensor), \
-                f'TorchExecutor can only accept tensor as its input, while {type(value)} was given'
-            # input is acceptable, feed input value
-            self._graph_input_dictionary[key].value = value
+        if isinstance(inputs, dict):
+            # directly feed value into variables
+            for name, value in inputs.items():
+                if name not in self._graph.variables:
+                    raise KeyError(f'Can not find variable {name} in your graph.')
+                else: 
+                    var = self._graph.variables[name]
+                    var.value = value
+        else:
+            inputs = self.prepare_input(inputs=inputs)
+            for key, value in inputs.items():
+                assert isinstance(value, torch.Tensor), \
+                    f'TorchExecutor can only accept tensor as its input, while {type(value)} was given'
+                # input is acceptable, feed input value
+                self._graph_input_dictionary[key].value = value
 
         # processing with output
         last_idx = 0 # record last variable
@@ -210,7 +222,7 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
                     'however it is not a valid variable of current graph.')
             source_op = self._graph.variables[name].source_op
             if source_op is not None:
-                last_idx = max(last_idx, self._executing_order.index(source_op) + 1)
+                last_idx = max(last_idx, executing_order.index(source_op) + 1)
 
         visited_op, result_collector = [], [None for _ in output_names]
         # output name can be the same as input name, collect them directly.
@@ -218,7 +230,7 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
             if name in inputs: 
                 result_collector[output_names.index(name)] = inputs[name]
 
-        for operation in self._executing_order[: last_idx]:
+        for operation in executing_order[: last_idx]:
             try:
                 assert isinstance(operation, Operation), 'Oops, seems you got something weird in your graph'
                 assert isinstance(operation.platform, TargetPlatform), (
@@ -300,6 +312,14 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
         inputs: Union[dict, list, torch.Tensor], 
         output_names: List[str] = None,
     ) -> None:
+        """
+        Tracing meta data for each operation, if there are some already created meta data with your operation,
+            They will be override without warrning.
+
+        Args:
+            inputs (Union[dict, list, torch.Tensor]): [description]
+            output_names (List[str], optional): [description]. Defaults to None.
+        """
         hooks = {}
         for op_name, operation in self._graph.operations.items():
             hooks[op_name] = TorchMetaDataTracingHook(operation=operation)
@@ -307,15 +327,16 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
         self.__forward(
             inputs=inputs, 
             output_names=output_names,
+            executing_order=self._executing_order,
             hooks=hooks)
 
         for op_name, operation in self._graph.operations.items():
             operation.meta_data = OperationMeta(
-                input_metas  = hooks[op_name].input_metas,
-                output_metas = hooks[op_name].output_metas,
-                operation_name = operation.name,
-                operation_type = operation.type,
-                executing_order= self._executing_order.index(operation)
+                input_metas     = hooks[op_name].input_metas,
+                output_metas    = hooks[op_name].output_metas,
+                operation_name  = operation.name,
+                operation_type  = operation.type,
+                executing_order = self._executing_order.index(operation)
             )
 
     def load_graph(self, graph: BaseGraph) -> dict:
@@ -428,3 +449,33 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
             outputs = [self._quant_function(output, config) for output, config in zip(outputs, output_configs)]
 
         return outputs
+
+    def partial_graph_forward(
+        self, operations: List[Operation], 
+        feed_dict: Dict[str, torch.Tensor], 
+        output_names:List[str]) -> List[torch.Tensor]:
+        """
+        This forward function allows you to execute a series operations in your graph.
+            (only operations list in your params will be executed with this function)
+        Which serves as a great feature for quantization aware training.
+
+        Args:
+            operations (List[Operation]): 
+                operations that you want to execute, 
+                notice that executing will strictly follow your operation order.
+            
+            feed_dict (Dict[str, torch.Tensor]): 
+                an dictionary contains {variable name: value}, as an input to this execution.
+            
+            output_names (List[str]): 
+                output variable names.
+
+        Returns:
+            List[torch.Tensor]: [description]
+        """
+
+        return self.__forward(
+            inputs=feed_dict, 
+            output_names=output_names,
+            executing_order=operations
+        )

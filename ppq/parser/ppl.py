@@ -34,13 +34,12 @@ class PPLBackendExporter(OnnxExporter):
                     raise PermissionError(
                         'Can not export quant config cause not all quantization configurations '
                         'have been correctly initialized(or some of them has been deactivated). '
-                        f'Operation {operation.name} has an invalid quantization config({config.state}) '
+                        f'Operation {operation.name} has an invalid quantization state({config.state}) '
                         f'at variable {var.name}.')
 
                 # PATCH 2021.11.25
                 # REMOVE BIAS FROM CONFIGURATION
-                if config.num_of_bits > 8:
-                        continue
+                if config.num_of_bits > 8: continue
 
                 if config.state in {
                     QuantizationStates.SOI, 
@@ -51,6 +50,8 @@ class PPLBackendExporter(OnnxExporter):
                 # Simply override recorder is acceptable here, 
                 # we do not support mix presicion quantization for CUDA backend now.
                 # All configurations for this variable should keep identical towards each other.
+                
+                if config.state == QuantizationStates.JOINT and var.name in var_quant_info_recorder: continue
                 var_quant_info_recorder[var.name] = config
 
         # ready to render config to json.

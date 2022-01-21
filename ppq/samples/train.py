@@ -31,8 +31,7 @@ quant_setting.equalization = True # use layerwise equalization algorithm.
 quant_setting.dispatcher   = 'conservative' # dispatch this network in conservertive way.
 
 quant_setting.advanced_optimization = True # train your network for better quantization
-quant_setting.advanced_optimization_setting.lr = 1e-4 # change this for better performance
-quant_setting.advanced_optimization_setting.step = 0.07 # change this for better performance
+quant_setting.advanced_optimization_setting.lr = 1e-3 # change this for better performance
 
 # Load training data for creating a calibration dataloader.
 calibration_dataset = load_calibration_dataset()

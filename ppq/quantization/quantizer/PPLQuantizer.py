@@ -1,11 +1,13 @@
 from typing import Union
 
 import torch
-from ppq.core import (ChannelwiseTensorQuantizationConfig, OperationMeta,
+from ppq.core import (PASSIVE_OPERATIONS, ChannelwiseTensorQuantizationConfig,
                       OperationQuantizationConfig, QuantizationPolicy,
                       QuantizationProperty, QuantizationStates, RoundingPolicy,
                       TargetPlatform)
 from ppq.IR import BaseGraph, GraphCommandProcesser
+from ppq.IR.base.graph import Operation, Variable
+from ppq.core.quant import TensorQuantizationConfig
 
 from .base import BaseQuantizer
 
@@ -21,24 +23,21 @@ class PPLCUDAQuantizer(BaseQuantizer):
 
         super().__init__(graph=graph)
 
-    def init_quantize_config(
-        self, operation_meta: OperationMeta, operation_type: str
-    ) -> OperationQuantizationConfig:
+    def init_quantize_config(self, operation: Operation) -> OperationQuantizationConfig:
         base_quant_config = self.create_default_quant_config(
             policy=self.quantize_policy, rounding=self.rounding_policy,
-            operation_meta=operation_meta, num_of_bits=self._num_of_bits,
+            operation_meta=operation.meta_data, num_of_bits=self._num_of_bits,
             quant_max=self._quant_max, quant_min=self._quant_min,
             observer_algorithm='percentile'
         )
-
-        #import ipdb;ipdb.set_trace()
-        if operation_type in {'Conv', 'ConvTranspose', 'Gemm'}:
+        
+        if operation.type in {'Conv', 'ConvTranspose', 'Gemm'}:
             # set all parameters within Conv, ConvTranspose, Gemm to per-channel quant-config.
-            assert operation_meta.num_of_input > 0, 'Seems you got a Conv layer with no parameters.'
+            assert operation.num_of_input > 0, 'Seems you got a Conv layer with no parameters.'
 
             # first parameter must exits, for conv layer it will be conv_weight
             # layout: [out_channel, in_channel, kernel_size, kernel_size]
-            if operation_type in {'Conv', 'ConvTranspose'}:
+            if operation.type in {'Conv', 'ConvTranspose'}:
                 conv_weight_config = base_quant_config.input_quantization_config[1]
                 conv_weight_config.policy = QuantizationPolicy(
                     QuantizationProperty.SYMMETRICAL +
@@ -53,7 +52,7 @@ class PPLCUDAQuantizer(BaseQuantizer):
                 base_quant_config.input_quantization_config[1].observer_algorithm = 'Minmax'
             # first parameter must exits, for gemm layer it will be gemm_weight
             # layout: [in_dim, out_dim]
-            elif operation_type in {'Gemm'}:
+            elif operation.type in {'Gemm'}:
                 gemm_weight_config = base_quant_config.input_quantization_config[1]
                 gemm_weight_config.policy = QuantizationPolicy(
                     QuantizationProperty.SYMMETRICAL +
@@ -67,10 +66,8 @@ class PPLCUDAQuantizer(BaseQuantizer):
                     )
                 base_quant_config.input_quantization_config[1].observer_algorithm = 'Minmax'
             # if operation has bias
-            if operation_meta.num_of_input > 2:
-                bias_meta   = operation_meta.input_metas[-1]
+            if operation.num_of_input > 2:
                 bias_config = base_quant_config.input_quantization_config[-1]
-                [out_dim] = bias_meta.shape
                 bias_config.policy = QuantizationPolicy(
                     QuantizationProperty.SYMMETRICAL +
                     QuantizationProperty.LINEAR +
@@ -87,10 +84,7 @@ class PPLCUDAQuantizer(BaseQuantizer):
                     )
                 base_quant_config.input_quantization_config[-1].observer_algorithm = 'Minmax'
 
-        if operation_type in {
-            'Resize', 'MaxPool', 'GlobalMaxPool', 'Reshape',
-            'Slice', 'Pad', 'Split', 'Transpose', 'Clip'
-        }:
+        if operation.type in PASSIVE_OPERATIONS:
             # Those op are not active op.
             base_quant_config.is_active_quant_op = False
         return base_quant_config
@@ -110,7 +104,7 @@ class PPLCUDAQuantizer(BaseQuantizer):
             'Resize', 'MaxPool', 'AveragePool', 
             'GlobalMaxPool', 'GlobalAveragePool',
             'Mul', 'Add', 'LeakyRelu', 'Split', 'Concat',
-            'Transpose', 'Slice', 'Reshape'
+            'Transpose', 'Slice', 'Reshape', 'Flatten'
         }
 
     @ property
@@ -124,3 +118,40 @@ class PPLCUDAQuantizer(BaseQuantizer):
     @ property
     def rounding_policy(self) -> RoundingPolicy:
         return RoundingPolicy.ROUND_HALF_EVEN
+
+
+class PPLCUDAMixPrecisionQuantizer(PPLCUDAQuantizer):
+    def __init__(
+        self, graph: Union[BaseGraph, GraphCommandProcesser]
+    ) -> Union[torch.Tensor, list, dict]:
+        super().__init__(graph=graph)
+
+    def init_quantize_config(self, operation: Operation) -> OperationQuantizationConfig:
+        config = super().init_quantize_config(operation=operation)
+        if operation.platform == TargetPlatform.PPL_CUDA_INT4:
+            for cfg, var in zip(config.input_quantization_config, operation.inputs):
+                assert isinstance(cfg, TensorQuantizationConfig)
+                assert isinstance(var, Variable)
+                if cfg.state == QuantizationStates.INITIAL:
+                    cfg.num_of_bits, cfg.quant_max, cfg.quant_min = 4, 7, -8
+        return config
+
+
+class PPLCUDA_INT4_Quantizer(PPLCUDAQuantizer):
+    def __init__(
+        self, graph: Union[BaseGraph, GraphCommandProcesser]
+    ) -> Union[torch.Tensor, list, dict]:
+        super().__init__(graph=graph)
+
+    def __init__(
+        self, graph: Union[BaseGraph, GraphCommandProcesser]
+    ) -> Union[torch.Tensor, list, dict]:
+
+        super().__init__(graph=graph)
+        self._num_of_bits = 4
+        self._quant_min = - int(pow(2, self._num_of_bits - 1))
+        self._quant_max = int(pow(2, self._num_of_bits - 1) - 1)
+
+    @ property
+    def target_platform(self) -> TargetPlatform:
+        return TargetPlatform.PPL_CUDA_INT8

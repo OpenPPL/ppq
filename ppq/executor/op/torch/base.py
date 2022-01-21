@@ -103,6 +103,7 @@ def ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op: Operation, values: List[torch.Tensor],
                 f'a {type(tensor)} was gievn here instead, which is not supposed to happen in PPQ execution system. '
                 'Is there any parsing failure with your graph?')
         devices.append(str(tensor.device))
+        if devices[-1] == 'cuda:0': devices[-1] = 'cuda'
         if device is not None and devices[-1] != device:
             raise ValueError(
                 f'Found input tensor with unexpected device, input tensor({idx}) of operation {op.name} is expected '

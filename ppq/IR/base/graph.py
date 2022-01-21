@@ -2,7 +2,8 @@ from abc import ABCMeta, abstractmethod, abstractproperty
 from collections import deque
 from typing import Any, Dict, List
 
-from ppq.core import (NetworkFramework, OperationMeta, Serializable,
+from ppq.core import (COMPUTING_OP, LINEAR_ACTIVATIONS, SOI_OP,
+                      NetworkFramework, OperationMeta, Serializable,
                       SingletonMeta, TargetPlatform, TensorMeta)
 
 
@@ -168,11 +169,11 @@ class Operation(OperationBase, Serializable):
 
     @ property
     def is_computing_op(self) -> bool:
-        return self.type in {'Conv', 'Gemm', 'ConvTranspose'}
+        return self.type in COMPUTING_OP
 
     @ property
     def is_soi_generator(self) -> bool:
-        return self.type in {'TopK', 'Shape', 'NonMaxSuppression'}
+        return self.type in SOI_OP
 
     @ property
     def is_boundary(self) -> bool:
@@ -185,9 +186,19 @@ class Operation(OperationBase, Serializable):
 
     @ property
     def is_linear_activation(self) -> bool:
-        return self.type in {
-            'Relu', 'PRelu', 'HardSwish', 'HardSigmoid',
-            'Clip', 'LeakyRelu'}
+        return self.type in LINEAR_ACTIVATIONS
+    
+    @ property
+    def num_of_input(self) -> int:
+        return len(self.inputs)
+
+    @ property
+    def num_of_output(self) -> int:
+        return len(self.outputs)
+    
+    @ property
+    def num_of_parameter(self) -> int:
+        return len([var for var in self.inputs if var.is_parameter])
 
     def __hash__(self) -> int:
         return self._name.__hash__()
@@ -233,6 +244,7 @@ class BaseGraph(Serializable):
         self._name = name
         self._built_from = built_from
         self._detail        = {}
+
 
     @ property
     def operations(self) -> Dict[str, Operation]:
