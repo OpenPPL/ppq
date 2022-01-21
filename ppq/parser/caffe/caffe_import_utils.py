@@ -172,22 +172,22 @@ class CaffeOpBuilder(object):
 
     @empty_ppq_cache
     def infer_shape(self):
-        input_names = []
-        if len(set(self.layer.bottom)) != len(self.layer.bottom):
-            # There are same variable in bottom, need to de_inplace
-            visited_var = {}
-            for var in self.layer.bottom:
-                if var in visited_var.keys():
-                    input_names.append(var + '_' + str(visited_var[var]))
-                    visited_var[var] += 1
-                else:
-                    input_names.append(var)
-                    visited_var[var] = 1
-        else:
-            input_names = self.layer.bottom
-
+        input_names = self.layer.bottom
+        # if len(set(self.layer.bottom)) != len(self.layer.bottom):
+        #     # There are same variable in bottom, need to de_inplace
+        #     visited_var = {}
+        #     for var in self.layer.bottom:
+        #         if var in visited_var.keys():
+        #             input_names.append(var + '_' + str(visited_var[var]))
+        #             visited_var[var] += 1
+        #         else:
+        #             input_names.append(var)
+        #             visited_var[var] = 1
+        # else:
+        #     input_names = self.layer.bottom
         input_value = [np.random.rand(*i).astype('f') for i in self.input_shape]
         input_value = [torch.from_numpy(tensor).to(self.device) for tensor in input_value]
+        input_value = dict([(x, y) for x, y in zip(input_names, input_value)])
         temp_graph = build_temp_graph(self.initializer, self.nodes, input_names, list(self.layer.top))
 
         # BUG FIX 12162021, Format graph when loading caffe model.
@@ -548,6 +548,8 @@ class InnerProduct(CaffeOpBuilder):
         ip_param = self.layer.inner_product_param
         assert ip_param.num_output == self.layer.blobs[0].shape.dim[0], 'Given num_output is not same with weight shape'
         input_var_list = list(self.layer.bottom)
+
+        '''
         if not (len(self.input_shape[0]) == 2 and ip_param.axis == 1):
             # Insert an reshape op whether needed or not due to no shape information
             flatten_shape = [0, -1]
@@ -558,6 +560,7 @@ class InnerProduct(CaffeOpBuilder):
             self.nodes.append({'name': self.layer.name + '_flatten', 'inputs': input_var_list + [reshape_name],
                                'outputs': [output_name], 'op_type': 'Reshape', 'attribute': {}})
             input_var_list = [output_name]
+        '''
 
         # process the shape of bias, let [num_output, 1] to [num_output]
         if len(self.layer.blobs) == 2:

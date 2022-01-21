@@ -1,6 +1,13 @@
-# PPL Quantization Tool(PPL 量化工具)
+# PPL Quantization Tool 0.6(PPL 量化工具)
 
 PPL Quantization Tool (PPQ) is a powerful offline neural network quantization tool with custimized IR, executor, dispacher and optimization passes.
+
+# What's New with PPQ 0.6
+
+* Fully redesigned network analysis tools and functions
+* Blockwise(Subgraph level) Optimization Methods
+* 4 & 8 mix precision quantization (exprimental)
+* Matrix Factorization Pass (exprimental)
 
 # Features
 
@@ -32,7 +39,7 @@ python setup.py install
 
 * Install PPQ from Pip:
 
-1. pre-built wheels are maintained in [PPQ](https://pypi.org/project/ppq/0.5.2/#files), you could simply install ppq with the following command
+1. pre-built wheels are maintained in [PPQ](https://pypi.org/project/ppq/0.5.2/#files), you could simply install ppq with the following command(You should notice that install from pypi might get a outdated version ...)
 
 ```bash
 python3 -m pip install ppq
@@ -48,7 +55,7 @@ python3 -m pip install ppq
         * Download ninja.exe from [https://github.com/ninja-build/ninja/releases](https://github.com/ninja-build/ninja/releases), add it to Windows PATH Environment
         * Download Visual Studio from [https://visualstudio.microsoft.com](https://visualstudio.microsoft.com/zh-hans/), if you already got a c++ compiler, you can skip this step.
         * Add your c++ compiler to Windows PATH Environment, if you are using Visual Studio, it should be something like "C:\Program Files\Microsoft Visual Studio\2017\Community\VC\Tools\MSVC\14.16.27023\bin\Hostx86\x86"
-
+    
 
 # Tutorials and Examples
 
@@ -86,8 +93,9 @@ Email: openppl.ai@hotmail.com
 
 # Other Resources
 
-* [PPLNN](https://github.com/openppl-public/ppl.nn)
-* [OpenMMLab](https://github.com/open-mmlab)
+* [Sensetime Parrots](https://www.sensetime.com/cn)
+* [Sensetime Parrots Primitive Libraries](https://github.com/openppl-public/ppl.nn)
+* [Sensetime mmlab](https://github.com/open-mmlab)
 
 # Contributions
 

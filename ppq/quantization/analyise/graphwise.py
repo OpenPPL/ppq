@@ -1,23 +1,25 @@
-from functools import partial
-from typing import Callable, Dict, Iterator, List, Set
+
+from typing import Callable, Dict, Iterator
 
 import torch
-from ppq.core import OperationMeta, TensorQuantizationConfig
-from ppq.executor import TorchExecutor, RuntimeHook
+from ppq.core import OperationMeta
+from ppq.core.quant import QuantizationStates
+from ppq.executor import RuntimeHook, TorchExecutor
 from ppq.IR import BaseGraph, Operation
 from ppq.IR.quantize import QuantableOperation
-from ppq.executor.base import BaseGraphExecutor
-from ppq.quantization.measure import (torch_cosine_similarity,
-                                      torch_mean_square_error, torch_snr_error)
+from ppq.utils.fetch import batch_random_fetch
 from tqdm import tqdm
+
+from .util import MeasurePrinter, MeasureRecorder
 
 
 class OutputRecorder(RuntimeHook):
     def __init__(self, operation: Operation, 
-        operation_meta: OperationMeta = None) -> None:
-        self.last_output = None
+        operation_meta: OperationMeta = None, fetchs: int = 4096) -> None:
+        self.fetched     = None
+        self.fetchs      = fetchs
         super().__init__(operation, operation_meta=operation_meta)
-    
+
     def pre_forward_hook(self, inputs: list, **kwargs) -> list:
         return super().pre_forward_hook(inputs, **kwargs)
 
@@ -27,26 +29,29 @@ class OutputRecorder(RuntimeHook):
         output_tensor = outputs[0]
         assert isinstance(output_tensor, torch.Tensor), (
             'Output of monitoring operation is not a torch.Tensor')
-        self.last_output = output_tensor.to('cpu')
+        self.fetched = batch_random_fetch(
+            output_tensor, seed=10086, fetchs_per_batch=self.fetchs
+        ).to('cpu')
         return super().post_forward_hook(outputs, **kwargs)
 
-    def pop_output(self) -> torch.Tensor:
-        last_output = self.last_output
-        self.last_output = None
-        return last_output
+    def pop(self) -> torch.Tensor:
+        fetched = self.fetched
+        self.fetched = None
+        return fetched
 
 
-def graph_similarity_analyse(
-    quant_graph: BaseGraph, running_device: str, interested_op_type: Set[str],
-    dataloader: Iterator,  quant_op_only: bool = True, interested_op_names: List[str] = None,
-    collate_fn: Callable = None, measurement: str = 'cosine', max_steps: int = None,
-    executor: BaseGraphExecutor = None) -> Dict[str, float]:
+def graphwise_error_analyse(
+    graph: BaseGraph, running_device: str,
+    dataloader: Iterator, collate_fn: Callable = None, method: str = 'snr', 
+    steps: int = 8, verbose: bool = True, fetchs: int = 4096) -> Dict[str, float]:
     """
-    Calcuate the difference between a quantized graph and underlying float graph.
+    Measure the difference from a quantized graph to its dequantized graph.
 
     A dictionary contains output differences for all operation will be returned as a result.
 
         Result is like: {'operation name 1': 0.933, 'operation name 2': 0.926}
+
+    if verbose is set as True, this function will display error report at last.
     
     The key of the dictionary is an opeartion name while the value of corresponding key 
         is the difference between quantized output and float output of this operation.
@@ -58,123 +63,98 @@ def graph_similarity_analyse(
         very beginning operation along to the target operation.
 
     Args:
-        quant_graph (BaseGraph): 
+        graph (BaseGraph): 
             A fully quantized graph instance.
         
         running_device (str): 
             A device string used to initilize a graph executor for the graph execution.
                 if a executor was given, this parameter will be skipped.
 
-        interested_op_type (Set[str]): 
-            A list or set of string, contains operation types that you want to monitor with.
-            ['Conv', 'Gemm'] for example.
-
         dataloader (Iterator): 
             Test dataloader, this function will measure the output difference based on given data.
-
-        quant_op_only (Bool): 
-            whether to monitor quantizable operation only
-
-        interested_op_names (List[str]): 
-            A list or set of string, contains operation names that you want to monitor with.
-            operations listed in interested_op_names will always in surveillance, 
-                ignoring the setting of interested_op_type and quant_op_only.
 
         collate_fn (Callable, optional):
             An data preprocessing function provided by user to convert data from dataloader towards
                 executable format. If set as None, then no action will be taken during preprocessing.
 
-        measurement (str, optional): 
+        method (str, optional): 
             A string indicates a measurement to calculate the difference of quantized output and fp32 one.
-                'Cosine', 'snr', and 'mse' is supported in PPQ for now.
+                'cosine', 'snr', and 'mse' is supported in PPQ for now.
         
-        executor (BaseExecutor, optional):
-            An executor instance for graph execution. If no executor was given, this function will create one.
-            
-        max_steps (Int, optional)
-            max computation steps.
+        steps (Int, optional)
+            computation steps.
 
     Returns:
         A dictionary contains output differences for all operation will be returned from this function.
     
         Result is like: {'operation name 1': 0.933, 'operation name 2': 0.926}
     """
-    if str(measurement).lower() == 'cosine':
-        measure_fn = partial(torch_cosine_similarity, reduction='mean')
-    elif str(measurement).lower() == 'mse':
-        measure_fn = partial(torch_mean_square_error, reduction='mean')
-    elif str(measurement).lower() == 'snr':
-        measure_fn = partial(torch_snr_error, reduction='mean')
-    else:
-        raise ValueError('Unsupported measurement detected. '
-            f'PPQ only support mse, snr and consine now, while {measurement} was given.')
+    executor = TorchExecutor(graph=graph, device=running_device)
 
-    interested_op_list, measure_recorder, samples_counter = [], {}, {}
-    for op in quant_graph.operations.values():
-        if op.type in interested_op_type:
-            if quant_op_only and not isinstance(op, QuantableOperation): continue
-            interested_op_list.append(op.name)
-            measure_recorder[op.name] = 0
-            samples_counter[op.name] = 0
+    # find all quantable operations.
+    interested_op = []
+    for operation in graph.operations.values():
+        if isinstance(operation, QuantableOperation):
+            # we only need reports from operation that has a valid output quant
+            if operation.config.output_quantization_config[0].state == QuantizationStates.ACTIVATED:
+                interested_op.append(operation)
 
-    if interested_op_names is not None:
-        for name in set(interested_op_names):
-            if name in quant_graph.operations and name not in interested_op_list:
-                interested_op_list.append(name)
-                measure_recorder[name] = 0
-                samples_counter[name] = 0            
+    # set up all hooks.
+    recorders, hooks, caches = {}, {}, {}
+    for operation in interested_op:
+        if isinstance(operation, QuantableOperation):
+            recorders[operation.name] = MeasureRecorder(measurement=method)
+            hooks[operation.name] = OutputRecorder(
+                operation=operation, operation_meta=operation.meta_data, fetchs=fetchs)
+            caches[operation.name] = []
 
-    # initialize all hooks
-    dequant_hooks, quant_hooks = {}, {}
-    for op_name in interested_op_list:
-        quant_op = quant_graph.operations[op_name]
-        dequant_hooks[op_name] = OutputRecorder(quant_op)
-        quant_hooks[op_name]   = OutputRecorder(quant_op)
+    # dequantize all
+    for operation in graph.operations.values():
+        if isinstance(operation, QuantableOperation):
+            operation.dequantize()
 
-    # execute graph
-    if executor is None:
-        executor = TorchExecutor(graph=quant_graph, device=running_device)
-        
-    if max_steps is None: max_steps = len(dataloader)
-    for step, batch in tqdm(enumerate(dataloader), 
-                            desc='Measure Similarity...', 
-                            total=min(len(dataloader), max_steps)):
-        if step >= max_steps: break
-        
+    # run for each quantable opeartions:
+    for idx, batch in tqdm(enumerate(dataloader), 
+                           desc='Analysing Graphwise Quantization Error(Phrase 1):', 
+                           total=(min(len(dataloader), steps))):
         if collate_fn is not None: batch = collate_fn(batch)
+        executor.forward(inputs=batch, hooks=hooks)
 
-        for op in quant_graph.operations.values():
-            if isinstance(op, QuantableOperation): op.dequantize()
-        executor.forward(batch, hooks=dequant_hooks)
-
-        for op in quant_graph.operations.values():
-            if isinstance(op, QuantableOperation): op.restore_quantize_state()
-        executor.forward(batch, hooks=quant_hooks)
-
-        for op_name in interested_op_list:
-            dequant_output = dequant_hooks[op_name].pop_output()
-            quant_output   = quant_hooks[op_name].pop_output()
-            assert (isinstance(dequant_output, torch.Tensor) and 
-                isinstance(quant_output, torch.Tensor))
-
-            # for some case output value are flattened, unsqueeze it.
-            while dequant_output.ndim <= 1: dequant_output = dequant_output.unsqueeze(0)
-            while quant_output.ndim <= 1: quant_output = dequant_output.unsqueeze(0)
+        for operation in interested_op:
+            hook = hooks[operation.name]
+            caches[operation.name].append(hook.pop())
             
-            num_of_samples = dequant_output.shape[0]
-            local_measurement = measure_fn(
-                dequant_output.flatten(start_dim=1), 
-                quant_output.flatten(start_dim=1))
+        if idx >= steps: break
 
-            recorded_samples = samples_counter[op_name]
-            recorded_measurement = measure_recorder[op_name]
+    # restore all
+    for operation in graph.operations.values():
+        if isinstance(operation, QuantableOperation):
+            operation.restore_quantize_state()
 
-            recorded_measurement = (recorded_measurement * recorded_samples + 
-                local_measurement.item() * num_of_samples)
-            recorded_measurement = recorded_measurement / (num_of_samples + recorded_samples)
-            recorded_samples = recorded_samples + num_of_samples
+    # run for each quantable opeartions:
+    for idx, batch in tqdm(enumerate(dataloader), 
+                           desc='Analysing Graphwise Quantization Error(Phrase 2):',
+                           total=(min(len(dataloader), steps))):
+        if collate_fn is not None: batch = collate_fn(batch)
+        executor.forward(inputs=batch, hooks=hooks)
 
-            measure_recorder[op_name] = recorded_measurement
-            samples_counter[op_name] = recorded_samples
+        for operation in interested_op:
+            recorder = recorders[operation.name]
+            hook     = hooks[operation.name]
+            cache    = caches[operation.name]
+            recorder.update(y_real = cache[idx], y_pred = hook.pop())
+        
+        if idx >= steps: break
 
-    return measure_recorder
+    results = {}
+    for operation in interested_op:
+        assert isinstance(operation, QuantableOperation)
+        results[operation.name] = recorders[operation.name].measure
+    
+    if verbose: 
+        method_str = 'MEASUREMENT'
+        if method == 'snr': method_str = 'NOISE:SIGNAL POWER RATIO'
+        if method == 'cosine': method_str = 'COSINE SIMILARITY'
+        if method == 'mse': method_str = 'MSE LOSS(UNSCALED)'
+        MeasurePrinter(results, order='large_to_small', measure=method_str).print()
+    return results

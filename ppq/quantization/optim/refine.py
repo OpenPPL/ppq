@@ -1,12 +1,12 @@
-from typing import Iterable
 from collections import defaultdict
-from ppq.IR.base.graph import Operation
+from typing import Iterable, List
 
-from ppq.core import PPLCUDA_ACTIVATIONS
-from ppq.core import QuantizationStates, RoundingPolicy, empty_ppq_cache
-from ppq.core.quant import TargetPlatform
+from ppq.core import (COMPELING_OP_TYPES, PPLCUDA_ACTIVATIONS,
+                      QuantizationStates, RoundingPolicy, TargetPlatform,
+                      empty_ppq_cache)
 from ppq.executor import BaseGraphExecutor
 from ppq.IR import GraphCommandProcesser, QuantableOperation, Variable
+from ppq.IR.base.graph import Operation
 from ppq.IR.quantize import QuantableVariable
 from ppq.IR.search import SearchableGraph, TraversalCommand
 
@@ -74,23 +74,16 @@ class QuantizeReducePass(QuantizationOptimizationPass):
 
             if source_op is None: continue # input variables in network, they do not have a source
             if not isinstance(source_op, QuantableOperation): continue
-            upstream_configs = source_op.config.output_quantization_config
-            upstream_config = upstream_configs[varaible.src_idx]
-            upstream_bits = upstream_config.num_of_bits
+            source_config = source_op.config.output_quantization_config[source_op.outputs.index(varaible)]
 
             for downstream_op, dest_idx in zip(varaible.dest_ops, varaible.dest_idx):
                 if downstream_op is None: continue # output variables in network, they do not have a destination
                 if not isinstance(downstream_op, QuantableOperation): continue
-                downstream_config = downstream_op.config.input_quantization_config[dest_idx]
-                downstream_bits = downstream_config.num_of_bits
-
-                if downstream_bits >= upstream_bits:
-                    downstream_config.state = QuantizationStates.OVERLAPPED
-                    downstream_config.dominated_by = upstream_config
-                if downstream_bits < upstream_bits and len(varaible.dest_ops) == 1:
-                    # when there is no branch for upstream operation, set its config as OVERLAPPED
-                    upstream_config.state = QuantizationStates.OVERLAPPED
-                    upstream_config.dominated_by = downstream_config
+                
+                input_config = downstream_op.config.input_quantization_config[dest_idx]
+                if source_op.platform == downstream_op.platform:
+                    if input_config.state == QuantizationStates.INITIAL:
+                        input_config.dominated_by = source_config
 
 
 class QuantizeRefinePass(QuantizationOptimizationPass):
@@ -330,7 +323,7 @@ class NxpQuantizeFusionPass(QuantizationOptimizationPass):
 
 class QuantizeFusionPass(QuantizationOptimizationPass):
     def __init__(self, platform: TargetPlatform,
-                 fuse_concat: bool = True, 
+                 fuse_concat: bool = False, 
                  fuse_activation: bool = True,
                  fuse_passive_op: bool = True,
                  ) -> None:
@@ -339,6 +332,10 @@ class QuantizeFusionPass(QuantizationOptimizationPass):
         self.fuse_activation = fuse_activation
         self.fuse_passive_op = fuse_passive_op
         super().__init__(name='PPQ Quantization Fusion Pass')
+
+    def is_same_platform(self, operations: List[Operation]):
+        platforms = [operation.platform for operation in operations]
+        return all([platform == platforms[0] for platform in platforms])
 
     @ empty_ppq_cache
     def optimize(
@@ -377,38 +374,45 @@ class QuantizeFusionPass(QuantizationOptimizationPass):
 
             # fusion
             for computing_op, act_ops in computing_op_group_by.items():
-                if not isinstance(computing_op, QuantableOperation): continue
-                if len(act_ops) == 1:
-                    activation = act_ops[0]
-                    if not isinstance(activation, QuantableOperation): continue
-                    activation_cfg = activation.config.output_quantization_config[0]
+                if len(act_ops) != 1: continue # operation that has more than one activations.
+                act_op = act_ops[0]
+
+                if (isinstance(computing_op, QuantableOperation) and
+                    isinstance(act_op, QuantableOperation) and
+                    computing_op.platform == act_op.platform):
+                    activation_cfg = act_op.config.output_quantization_config[0]
                     conv_cfg = computing_op.config.output_quantization_config[0]
                     conv_cfg.dominated_by = activation_cfg
-                    conv_cfg.state = QuantizationStates.OVERLAPPED
 
         if self.fuse_concat:
             # concat layer's inputs should share a same scale with output.
             for op in graph.operations.values():
-                if isinstance(op, QuantableOperation) and op.type == 'Concat':
+                if (op.type == 'Concat' and 
+                    isinstance(op, QuantableOperation)):
                     out_config = op.config.output_quantization_config[0]
-                    
+
                     # overlap all concat's input config
                     for config in op.config.input_quantization_config:
                         config.dominated_by = out_config
-                    
+
                     # overlap all upstream layers output config
                     upstream_layers = graph.get_upstream_operations(op)
-                    for layer in upstream_layers:
-                        if not isinstance(layer, QuantableOperation): continue
-                        for cfg, var in layer.config_with_variable:
-                            if var in op.inputs:
-                                cfg.dominated_by = out_config
+                    if self.is_same_platform(upstream_layers + [op]):
+                        for layer in upstream_layers:
+                            if not isinstance(layer, QuantableOperation): continue
+                            for cfg, var in layer.config_with_variable:
+                                if var in op.inputs:
+                                    cfg.dominated_by = out_config
 
         if self.fuse_passive_op:
             # all passive operations should never changes quantization configuration of its input
             # so to say their input and output share a same scale.
             for op in graph.operations.values():
-                if isinstance(op, QuantableOperation) and not op.config.is_active_quant_op:
+                upstream_layers = graph.get_upstream_operations(op)
+                if len(upstream_layers) == 0: continue # begining op, can not merge.
+                if (isinstance(op, QuantableOperation) and 
+                    not op.config.is_active_quant_op and
+                    self.is_same_platform(upstream_layers + [op])):
                     # There are many types of passive operations.
                     # 'Resize', 'MaxPool', 'GlobalMaxPool', 
                     # 'Slice', 'Pad', 'Split'
@@ -428,18 +432,18 @@ class InplaceQuantizationSettingPass(QuantizationOptimizationPass):
         for op in processer.graph.operations.values():
             if isinstance(op, QuantableOperation):
                 # set all tensor to be inplace quantized for memory saving.
-                for quant_config in op.config.output_quantization_config + op.config.input_quantization_config:
-                    quant_config.inplace = True
-
-                # all parameters can not be inplace quantized, otherwise their value will be changed during quantization.
-                for input_var, input_config in zip(op.inputs, op.config.input_quantization_config):
-                    if input_var.is_parameter:
-                        input_config.inplace = False
-
+                for cfg, var in op.config_with_variable:
+                    if not var.is_parameter:
+                        cfg.inplace = True
+                
 
 class PPLCudaAddConvReluMerge(QuantizationOptimizationPass):
     def __init__(self) -> None:
         super().__init__(name='PPL CUDA Conv(Relu) - Add - Relu Merge')
+    
+    def is_same_platform(self, operations: List[Operation]):
+        platforms = [operation.platform for operation in operations]
+        return all([platform == platforms[0] for platform in platforms])
     
     def optimize(self, 
                  processer: GraphCommandProcesser, 
@@ -467,7 +471,10 @@ class PPLCudaAddConvReluMerge(QuantizationOptimizationPass):
 
         def merge_fn(operation: QuantableOperation):
             assert isinstance(operation, QuantableOperation) and operation.type == 'Add'
-
+            # check if upstream ops can be merged
+            up_ops = graph.get_upstream_operations(operation)
+            if not self.is_same_platform(up_ops + [operation]): return
+            
             # Conv - Add - Relu Merge
             config = operation.config.output_quantization_config[0]
 
@@ -475,7 +482,8 @@ class PPLCudaAddConvReluMerge(QuantizationOptimizationPass):
             down_ops = graph.get_downstream_operations(operation)
             if (len(down_ops) == 1 and 
                 down_ops[0].type in PPLCUDA_ACTIVATIONS and 
-                isinstance(down_ops[0], QuantableOperation)):
+                isinstance(down_ops[0], QuantableOperation) and
+                down_ops[0].platform == operation.platform):
                 config.dominated_by = down_ops[0].config.output_quantization_config[0]
 
             # Step - 2: disable input conv's quantization(only one).
@@ -520,3 +528,44 @@ class PPLCudaAddConvReluMerge(QuantizationOptimizationPass):
                     merge_fn(operation)
                     merged.add(operation)
                     unchanged = False
+
+
+class CompelQuantPass(QuantizationOptimizationPass):
+    """
+    对 add, sub, concat 算子执行强制定点覆盖，确保计算过程与硬件一致
+        确保 add, sub, concat 算子的输入与输出定点信息一致
+        确保 add, sub, concat 算子对输入进行定点
+    Args:
+        QuantizationOptimizationPass ([type]): [description]
+    """
+    def __init__(self) -> None:
+        super().__init__(name='PPQ Compel Quant Pass(For Add, Sub)')
+
+    def optimize(
+        self,
+        processer: GraphCommandProcesser,
+        dataloader: Iterable,
+        executor: BaseGraphExecutor,
+        **kwargs
+    ) -> None:
+        
+        graph = processer.graph
+        for operation in graph.operations.values():
+            if isinstance(operation, QuantableOperation) and operation.type in COMPELING_OP_TYPES:
+                assert operation.config.output_quantization_config[0].state != QuantizationStates.INITIAL, (
+                    f'Can not modify quantization state of opeartion {operation.name}, '
+                    'cause it has not been correctly quantized.')
+                out_config = operation.config.output_quantization_config[0]
+
+                for config in operation.config.input_quantization_config:
+                    config._father_config = config
+                    config.dominated_by   = out_config
+                    config.state = QuantizationStates.JOINT
+                
+                # override up stream layer's config if possible
+                for up_op in graph.get_upstream_operations(operation):
+                    if len(graph.get_downstream_operations(up_op)) == 1 and isinstance(up_op, QuantableOperation):
+                        for cfg, var in up_op.config_with_variable:
+                            if operation in var.dest_ops and cfg.state == QuantizationStates.ACTIVATED:
+                                cfg.dominated_by = out_config
+                                cfg.state = QuantizationStates.JOINT

@@ -1,74 +1,67 @@
+import json
+from typing import Union
+
 import numpy as np
-import onnx
 import torch
-from onnx import helper, numpy_helper
-from ppq.core import (PPQ_NAME, DataType, convert_any_to_numpy,
-                      convert_any_to_string)
+from ppq.core import PPQ_NAME, DataType, convert_any_to_numpy
 from ppq.core.config import EXPORT_DEVICE_SWITCHER, EXPORT_PPQ_INTERNAL_INFO
-from ppq.IR import (BaseGraph, GraphExporter, Operation, QuantableVariable,
-                    Variable)
+from ppq.IR import BaseGraph, GraphExporter, Operation, Variable
 from ppq.IR.morph import GraphDeviceSwitcher
+from ppq.IR.quantize import QuantableOperation
 
-QUANTIZATION_CONFIG_FORMAT = \
-"""
-{name}:(
-    num_of_bits:\t{num_of_bits},
-    scale:\t{scale},
-    offset:\t{offset},
-    quant_min:\t{quant_min},
-    quant_max:\t{quant_max},
-    state:\t{state},
-    policy:\t{policy},
-    detail:\t{detail},
-    observer:\t{observer},
-    dominator:\t{dominated_by}
-)
-"""
+import onnx
+from onnx import helper, numpy_helper
 
-OPEARTION_PLATFROM_FORMAT = \
-"""
-{name}:(
-    platform:\t{platform},
-)
-"""
+
+def convert_value(value: Union[int, float, np.ndarray, torch.Tensor]) -> str:
+    if type(value) in {int, float}: return value
+    else:
+        value = convert_any_to_numpy(value, accepet_none=True)
+        if value is None: return value # SOI config has Nona as its scale and
+        return value.tolist()
+
 
 class OnnxExporter(GraphExporter):
     def __init__(self) -> None:
         super().__init__()
 
     def export_quantization_config(
-        self,
-        config_path: str, graph: BaseGraph):
-        file_handler = open(config_path, mode='w', encoding='utf-8')
-        quantable_vars = [var for var in graph.variables.values() if isinstance(var, QuantableVariable)]
-        quantable_vars = sorted(quantable_vars, key=lambda x: x.name)
-        for var in quantable_vars:
-            related_configs = var.dest_op_configs + [var.source_op_config]
-            related_op      = var.dest_ops + [var.source_op]
-            for op, config in zip(related_op, related_configs):
-                if config is not None:
-                    file_handler.write(QUANTIZATION_CONFIG_FORMAT.format(
-                        name = op.name + ': ' + var.name + '(' + str(config.__hash__()) + ')',
-                        num_of_bits = config.num_of_bits,
-                        scale = convert_any_to_string(config.scale), 
-                        offset = convert_any_to_string(config.offset),
-                        quant_min = config.quant_min,
-                        quant_max = config.quant_max,
-                        state = str(config.state.name),
-                        policy = config.policy._policy,
-                        detail = config.detail,
-                        observer = config.observer_algorithm,
-                        dominated_by = config.dominated_by.__hash__()
-                    ))
+        self, config_path: str, graph: BaseGraph):
+        
+        render_buffer = {
+            'configs': {},
+            'dispatchings' : {},
+            'values': {}
+        }
+        
+        # Render quantization config.
+        for operation in graph.operations.values():
+            if isinstance(operation, QuantableOperation):
+                op_dict = {
+                    var.name: {
+                        'bit_width'  : config.num_of_bits,
+                        'policy'     : config.policy.to_dict(),
+                        'state'      : config.state.name,
+                        'quant_min'  : config.quant_min,
+                        'quant_max'  : config.quant_max,
+                        'hash'       : config.__hash__(),
+                        'dominator'  : config.dominated_by.__hash__()
+                    }
+                    for config, var in operation.config_with_variable
+                }
+                
+                for config, _ in operation.config_with_variable:
+                    if config.dominated_by == config:
+                        render_buffer['values'][config.__hash__()] = {
+                            'scale'      : convert_value(config.scale),
+                            'zero_point' : convert_value(config.offset),
+                        }
 
-        ops = [op for op in graph.operations.values()]
-        ops = sorted(ops, key=lambda x: x.name)
-        for op in ops:
-            file_handler.write(OPEARTION_PLATFROM_FORMAT.format(
-                name = op.name,
-                platform = str(op.platform.name)
-            ))
-        file_handler.close()
+                render_buffer['configs'][operation.name] = op_dict
+                render_buffer['dispatchings'][operation.name] = operation.platform.name
+        
+        with open(file=config_path, mode='w') as file:
+            json.dump(render_buffer, file, indent=4)
 
     def export_operation(self, operation: Operation) -> onnx.OperatorProto:
         attributes = operation.attributes.copy()

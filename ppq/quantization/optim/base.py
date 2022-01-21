@@ -71,7 +71,7 @@ class QuantizationOptimizationPipeline(Container, Iterable):
     def append_optimization_to_pipeline(self, optimization_pass: QuantizationOptimizationPass, at_front:bool = False):
         assert isinstance(optimization_pass, QuantizationOptimizationPass), \
             f'Quantization Optimization Pipeline object only suppose to contain optimization passes, '\
-            f'while you require to check a/an {type(optimization_pass)} whether in the optimization list'
+            f'while we got a/an {type(optimization_pass)} in the optimization list'
         if not at_front:
             self._optimization_passes.append(optimization_pass)
         else:
