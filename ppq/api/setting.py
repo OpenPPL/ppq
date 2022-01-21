@@ -109,6 +109,15 @@ class ChannelSplitSetting():
         # 是否添加一个小偏移项用来使得量化后的结果尽可能与浮点对齐。
         # cancel out round effect
         self.grid_aware        =  True
+    
+
+class MatrixFactorizationSetting():
+    def __init__(self) -> None:
+        # 所有需要分裂的层的名字，Matrix Factorization 会降低网络执行的性能，你必须手动指定那些层要被分裂
+        # interested layer names on which channel split is desired
+        self.interested_layers = []
+        
+        self.method = 'svd'
 
 
 class AdvancedOptimizationSetting():
@@ -123,31 +132,28 @@ class AdvancedOptimizationSetting():
         
         # 每一轮迭代后是否校验优化结果，建议开启，延长执行时间，提升精度
         # whether to check optimization result after each iteration.
-        self.check                = True
+        self.auto_check           = True
         
         # 偏移量限制，试试1, 2, 4
         # offset limitation used in this optimziation, try 1, 2, 4
-        self.offset_limit         = 2.0
+        self.limit                = 2.0
+
+        # 学习率
+        # learning rate.
+        self.lr                   = 1e-3
         
-        # 对那些算子进行优化
-        # optimizing operation types
-        self.interested_types     = ['Gemm', 'Conv', 'ConvTranspose']
+        # 对那些层进行训练，默认为 空数组 则训练全部层
+        # layers that need to be finetuned via this method.
+        # Empty list means all layers need to be finetuned.
+        self.interested_layers = []
         
-        # 迭代步长，必须控制在 0 ~ 0.5 之间
-        # iteration step, must between 0 ~ 0.5
-        self.step                 = 0.1
+        # 一个 variable 列表，指明需要针对那些 variable 进行优化
+        # a list of variable(name), all variable listed will be
+        # optimized via this pass. by default, all output variables
+        # will be listed here.(if empty list was passed)
+        self.interested_outputs = []
         
-        # 是否执行 bias correction，推荐开启，延长执行时间，提升精度
-        # whether to invoke bias correction procedure at the end of iteration
-        self.correct_bias         = True
-        
-        # 最大尝试次数，延长执行时间，提升精度
-        # max optmization trys.
-        self.max_trys             = 8
-        
-        # 学习率，试试 3e-4, 1e-4, 5e-5, 1e-5
-        # learning rate. try 3e-4, 1e-4, 5e-5, 1e-5
-        self.lr                   = 1e-4
+        self.verbose            = True
 
 
 class ActivationQuantizationSetting():
@@ -200,10 +206,6 @@ class QuantizationFusionSetting():
         # only gpu platform support this joint quantization optimization.
         self.fuse_conv_add = False
         
-        # concat 联合定点
-        # joint quantization with all concat inputs.
-        self.fuse_concat   = False
-        
         # computing operation - activation operation 联合定点
         # joint quantization with computing operations and following activations.
         self.fuse_activation = True
@@ -211,6 +213,10 @@ class QuantizationFusionSetting():
         # 省略被动算子的定点，保持算子前后定点信息一致
         # skip passive opeartion's input and output quantization, keep them with a same quantization scale and offset.
         self.fuse_passive_op = True
+        
+        # 执行 add, sub, concat 强制联合定点
+        # compel input variable of concat, add and sub share a common scale and offset
+        self.compel_joint_quant = True
 
 
 class TemplateSetting():
@@ -229,6 +235,23 @@ class TemplateSetting():
     """
     def __init__(self) -> None:
         self.my_first_parameter = 'This Parameter just shows you how to create your own parameter.'
+
+
+class BiasCorrectionSetting():
+    def __init__(self) -> None:
+        # 一个 variable 列表，指明需要针对那些 variable 进行优化
+        # a list of variable(name), all variable listed will be
+        # optimized via this pass. by default, all output variables
+        # will be listed here.(if empty list was passed)
+        self.interested_outputs = None
+        
+        # 每一轮迭代后是否校验优化结果，建议开启，延长执行时间，提升精度
+        # whether to check optimization result after each iteration.
+        self.auto_check         = True
+        
+        self.max_steps          = 8
+        
+        self.verbose            = True
 
 
 class Dispatching():
@@ -278,12 +301,16 @@ class QuantizationSetting():
         self.ssd_setting                     = SSDEqualizationSetting()
 
         # layer wise equalizition 与相关配置
-        self.equalization                    = True
+        self.equalization                    = False
         self.equalization_setting            = EqualizationSetting()
         
         # OCS channel split configuration
         self.channel_split                   = False
         self.channel_split_setting           = ChannelSplitSetting()
+        
+        # Matrix Factorization Split. (Experimental method)
+        self.matrix_factorization            = False
+        self.matrix_factorization_setting    = MatrixFactorizationSetting()
 
         # activation 量化与相关配置
         self.quantize_activation             = True
@@ -293,9 +320,13 @@ class QuantizationSetting():
         self.quantize_parameter              = True
         self.quantize_parameter_setting      = ParameterQuantizationSetting()
 
-        # 是否启动 advanced_optim 优化算法，该算法整合了 adaround 和 bias correction 算法的功能，
+        # 是否启动优化算法降低量化误差
         self.advanced_optimization           = False
         self.advanced_optimization_setting   = AdvancedOptimizationSetting()
+        
+        # 是否启动 bias correction pass
+        self.bias_correct                    = False
+        self.bias_correct_setting            = BiasCorrectionSetting()
 
         # 量化融合相关配置
         self.fusion                          = True
@@ -335,6 +366,10 @@ class QuantizationSettingFactory:
     def dsp_setting() -> QuantizationSetting:
         default_setting = QuantizationSetting()
         default_setting.equalization = True
+        default_setting.equalization_setting.opt_level = 1
+        default_setting.equalization_setting.value_threshold = .5
+        default_setting.equalization_setting.iterations = 3
+        
         default_setting.fusion_setting.fuse_conv_add = False
         return default_setting
     

@@ -285,7 +285,7 @@ class SSDEqualizationPass(QuantizationOptimizationPass):
         for op in pair:
             if not isinstance(op, QuantableOperation): continue
             if op.type in {'Conv', 'ConvTranspose', 'Gemm'}:
-                if op.meta_data.num_of_input == 3:
+                if op.num_of_input == 3:
                     weight_config = op.config.input_quantization_config[1]
                     input_config = op.config.input_quantization_config[0]
                     weight_config = weight_config.dominated_by

@@ -11,6 +11,8 @@ from ppq.IR.morph import GraphDeviceSwitcher
 from ppq.parser import dump_graph_to_file, load_graph
 from ppq.quantization.quantizer import (BaseQuantizer, ExtQuantizer,
                                         NXP_Quantizer, PPL_DSP_Quantizer,
+                                        PPLCUDA_INT4_Quantizer,
+                                        PPLCUDAMixPrecisionQuantizer,
                                         PPLCUDAQuantizer, TensorRTQuantizer)
 from ppq.scheduler import DISPATCHER_TABLE
 from torch.utils.data import DataLoader
@@ -22,7 +24,9 @@ QUANTIZER_COLLECTION = {
     TargetPlatform.TRT_INT8: TensorRTQuantizer,
     TargetPlatform.NXP_INT8: NXP_Quantizer,
     TargetPlatform.PPL_CUDA_INT8: PPLCUDAQuantizer,
-    TargetPlatform.EXTENSION: ExtQuantizer
+    TargetPlatform.EXTENSION: ExtQuantizer,
+    TargetPlatform.PPL_CUDA_MIX: PPLCUDAMixPrecisionQuantizer,
+    TargetPlatform.PPL_CUDA_INT4: PPLCUDA_INT4_Quantizer
 }
 
 def load_onnx_graph(onnx_import_file: str, setting: QuantizationSetting) -> BaseGraph:

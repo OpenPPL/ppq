@@ -1,127 +1,208 @@
-from typing import Callable, Dict, Iterable, List, Tuple
+from collections import defaultdict
+from typing import Callable, Dict, Iterable, List, Union
 
 import torch
-from ppq.core import (OperationMeta, QuantizationStates,
-                      TensorQuantizationConfig, convert_any_to_torch_tensor)
-from ppq.executor import BaseGraphExecutor, QuantOPRuntimeHook
-from ppq.executor.torch import TorchExecutor
+from ppq.core import QuantizationStates
+from ppq.core.data import convert_any_to_numpy
+from ppq.executor import TorchExecutor
 from ppq.IR import BaseGraph, QuantableOperation
-from ppq.quantization.measure.cosine import torch_cosine_similarity
+from ppq.IR.quantize import QuantableGraph
+from ppq.utils.fetch import tensor_random_fetch
+from tqdm import tqdm
 
-INTERESTED_OP_TYPE = {'Conv', 'Gemm', 'ConvTranspose', 'Relu', 'Sigmoid', 'Softmax'}
-
-
-class AnalyseHook(QuantOPRuntimeHook):
-    def __init__(self,
-        executor: TorchExecutor,
-        operation: QuantableOperation, 
-        operation_meta: OperationMeta
-    ) -> None:
-        if operation.type not in INTERESTED_OP_TYPE:
-            raise TypeError('AnalyseHook can only apply to ' + INTERESTED_OP_TYPE + 'operations')
-        self._input_sims = []
-        self._output_sims = []
-        self._op_sims = []
-        self._output_cache = None
-        self._executor = executor
-        super().__init__(operation, operation_meta=operation_meta)
-
-    @ torch.no_grad()
-    def pre_forward_hook(self, inputs: list, quant_inputs: list, 
-        quant_configs: List[TensorQuantizationConfig]) -> list:
-        # for all CONSINE_INTERESTED_OP_TYPE, input value should be the first value of inputs.
-        # other value of inputs might be parameters
-        tensor, quant_tensor, quant_config = inputs[0], quant_inputs[0], quant_configs[0]
-        assert isinstance(tensor, torch.Tensor) and isinstance(quant_tensor, torch.Tensor) 
-        if quant_config.state == QuantizationStates.ACTIVATED:
-            self._input_sims.append(torch_cosine_similarity(
-                y_real=tensor.flatten(start_dim=1), 
-                y_pred=quant_tensor.flatten(start_dim=1), 
-                reduction='mean').unsqueeze(0))
-
-        # dequantize operation, calculate diff
-        assert isinstance(self._hook_to, QuantableOperation)
-        self._hook_to.dequantize()
-        dequantized_inputs = [var.value for var in self._hook_to.inputs]
-        # all INTERESTED_OP_TYPE operation have exact 1 output.
-        [self._output_cache] = self._executor.operation_forward(operation=self._hook_to, inputs=dequantized_inputs)
-        # restore quantization state
-        self._hook_to.restore_quantize_state()
-        return super().pre_forward_hook(inputs, quant_inputs, quant_configs)
-
-    @ torch.no_grad()
-    def post_forward_hook(self, outputs: list, quant_outputs: list, 
-        quant_configs: List[TensorQuantizationConfig]) -> list:
-        assert len(outputs) == 1, 'Oops seems input operation should not have more than 1 output.'
-        tensor, quant_tensor, quant_config = outputs[0], quant_outputs[0], quant_configs[0]
-        assert isinstance(tensor, torch.Tensor) and isinstance(quant_tensor, torch.Tensor) 
-        if quant_config.state == QuantizationStates.ACTIVATED:
-            self._output_sims.append(torch_cosine_similarity(
-                y_real=tensor.flatten(start_dim=1), 
-                y_pred=quant_tensor.flatten(start_dim=1), 
-                reduction='mean').unsqueeze(0))
-        # calculate op sim
-        assert isinstance(self._output_cache, torch.Tensor), f'{type(self._output_cache)}'
-        self._op_sims.append(torch_cosine_similarity(
-            y_real=self._output_cache.flatten(start_dim=1), 
-            y_pred=quant_tensor.flatten(start_dim=1), 
-            reduction='mean').unsqueeze(0))
-        self._output_cache = None
-        return super().post_forward_hook(outputs, quant_outputs, quant_configs)
-
-    @ torch.no_grad()
-    def finialize(self) -> Tuple[float]:
-        input_sim, output_sim = None, None
-        try:
-            if len(self._input_sims) > 0:
-                input_sim = torch.mean(torch.cat(self._input_sims, dim=0))
-                input_sim = input_sim.cpu().item()
-            if len(self._output_sims) > 0:
-                output_sim = torch.mean(torch.cat(self._output_sims, dim=0))
-                output_sim = output_sim.cpu().item()
-            op_sim = torch.mean(torch.cat(self._op_sims, dim=0))
-            op_sim = op_sim.cpu().item()
-        except RuntimeError as e:
-            # RuntimeError: zero-dimensional tensor (at position 0) cannot be concatenated
-            raise e
-        self._input_sims.clear()
-        self._output_sims.clear()
-        return input_sim, output_sim, op_sim
+from .util import MeasurePrinter, MeasureRecorder
 
 
-def layerwise_min_max(graph: BaseGraph) -> dict:
-    reports = {}
-    for operation in graph.operations.values():
-        if not len(operation.parameters) > 0: continue
-        stats = []
-        for param in operation.parameters:
-            if param.value is None: continue
-            tensor_param = convert_any_to_torch_tensor(param.value, device='cpu', accepet_none=False)
-            _min, _max = torch.min(tensor_param).item(), torch.max(tensor_param).item()
-            stats.append((param.name, _min, _max))
-        reports[operation.name] = stats
-    return reports
-
-
-def tracing_cosine_similarity(
-    graph: BaseGraph, 
-    executor: BaseGraphExecutor, 
+def layerwise_error_analyse(
+    graph: BaseGraph,
     dataloader: Iterable,
-    collate_fn: Callable = None
+    interested_outputs: Union[str, List[str]] = None,
+    collate_fn: Callable = None,
+    running_device='cuda',
+    method: str = 'snr',
+    steps: int = 8,
+    verbose: bool = True,
     ) -> Dict[str, tuple]:
-    # build hooks:
-    hooks = {}
-    for op_name, operation in graph.operations.items():
-        if isinstance(operation, QuantableOperation) and operation.type in INTERESTED_OP_TYPE:
-            hooks[op_name] = AnalyseHook(operation=operation, operation_meta=operation.meta_data, executor=executor)
-
-    for batch in dataloader:
-        if collate_fn is not None: batch = collate_fn(batch)
-        executor.forward(inputs=batch, hooks=hooks)
     
-    reports = {}
-    for op_name in hooks:
-        hook = hooks[op_name]
-        assert isinstance(hook, AnalyseHook)
-        reports[op_name] = hook.finialize()
-    return reports
+    """
+    Measure the quantization error of each operation
+    A dictionary contains output differences for all operation will be returned as a result.
+
+        Result is like: {'operation name 1': 0.933, 'operation name 2': 0.926}
+
+    if verbose is set as True, this function will display error report at last.
+    
+    The key of the dictionary is an opeartion name while the value of corresponding key 
+        is the difference between quantized output and float output of this operation.
+    
+    Result {'operation name 1': 0.933} means quantizing operation 1 
+        will generates 0.933 quantization error to output variable
+    
+    ATTENTION: Output difference is measured at operation-level.
+
+    Args:
+        graph (BaseGraph): 
+            A fully quantized graph instance.
+        
+        running_device (str): 
+            A device string used to initilize a graph executor for the graph execution.
+                if a executor was given, this parameter will be skipped.
+
+        dataloader (Iterator): 
+            Test dataloader, this function will measure quantization error based on given data.
+
+        collate_fn (Callable, optional):
+            An data preprocessing function provided by user to convert data from dataloader towards
+                executable format. If set as None, then no action will be taken during preprocessing.
+
+        method (str, optional): 
+            A string indicates a measurement to calculate the difference of quantized output and fp32 one.
+                'cosine', 'snr', and 'mse' is supported in PPQ for now.
+        
+        steps (Int, optional)
+            computation steps.
+            
+        interested_outputs (Union[str, List[str]] = None)
+            a list contains your interested output variables.
+                if set as None, all graph output variables will be measured via this function.
+
+    Returns:
+        A dictionary contains output differences for all operation will be returned from this function.
+    
+        Result is like: {'operation name 1': 0.933, 'operation name 2': 0.926}
+    """
+
+    if interested_outputs is None:
+        interested_outputs = [name for name in graph.outputs]
+
+    if isinstance(interested_outputs, str):
+        interested_outputs = [interested_outputs] 
+
+    executor = TorchExecutor(graph=graph, device=running_device)
+    
+    # find all quantable operations.
+    quantable_operations = []
+    for operation in graph.operations.values():
+        if isinstance(operation, QuantableOperation):
+            operation.dequantize()
+            
+            # we only need reports from computing op.
+            if operation.is_computing_op:
+                quantable_operations.append(operation)
+
+    # dequantize all operations, create recorder for each operation
+    recorders = {}
+    for operation in quantable_operations:
+        if isinstance(operation, QuantableOperation):
+            recorders[operation.name] = MeasureRecorder(measurement=method)
+
+    # run for each quantable opeartions:
+    for operation in tqdm(quantable_operations, desc='Analysing Layerwise quantization error:'):
+        assert isinstance(operation, QuantableOperation)
+        recorder = recorders[operation.name]
+        assert isinstance(recorder, MeasureRecorder)
+        
+        for idx, batch in enumerate(dataloader):
+            if collate_fn is not None: batch = collate_fn(batch)
+            fp_outputs = executor.forward(inputs=batch, output_names=interested_outputs)
+            
+            # manually override quantization state
+            for cfg, _ in operation.config_with_variable:
+                cfg.state = QuantizationStates.ACTIVATED
+            qt_outputs = executor.forward(inputs=batch, output_names=interested_outputs)
+
+            for fp_output, qt_output in zip(fp_outputs, qt_outputs):
+                recorder.update(y_pred = qt_output, y_real = fp_output)
+
+            # manually override quantization state
+            for cfg, _ in operation.config_with_variable:
+                cfg.state = QuantizationStates.DEQUANTIZED
+
+            if idx >= steps: break
+
+    # restore quantization states
+    for operation in graph.operations.values():
+        if isinstance(operation, QuantableOperation):
+            operation.restore_quantize_state()
+    
+    results = {}
+    for operation in quantable_operations:
+        assert isinstance(operation, QuantableOperation)
+        results[operation.name] = recorders[operation.name].measure
+
+    if verbose: 
+        method_str = 'MEASUREMENT'
+        if method == 'snr': method_str = 'NOISE:SIGNAL POWER RATIO'
+        if method == 'cosine': method_str = 'COSINE SIMILARITY'
+        if method == 'mse': method_str = 'MSE LOSS(UNSCALED)'
+        MeasurePrinter(results, order='large_to_small', measure=method_str).print()
+    return results
+
+
+def variable_analyse(
+    graph: BaseGraph,
+    dataloader: Iterable,
+    interested_outputs: Union[str, List[str]],
+    collate_fn: Callable = None,
+    running_device = 'cuda',
+    samples_per_step: int = 65536,
+    steps: int = 8,
+    dequantize: bool = False):
+    
+    quant_graph = QuantableGraph(graph)
+
+    executor = TorchExecutor(graph=graph, device=running_device)
+    if dequantize: quant_graph.dequantize_graph()
+    
+    data_collector = defaultdict(list)
+    for idx, batch in enumerate(dataloader):
+        if collate_fn is not None: batch = collate_fn(batch)
+        fp_outputs = executor.forward(inputs=batch, output_names=interested_outputs)
+        for output, output_name in zip(fp_outputs, interested_outputs):
+            data_collector[output_name].append(
+                tensor_random_fetch(tensor=output, num_of_fetches=samples_per_step).unsqueeze(0)
+            )
+        if idx >= steps: break
+    
+    for name in interested_outputs:
+        tensor = torch.cat(data_collector[name]).flatten()
+        tensor = convert_any_to_numpy(tensor)
+        
+        try:
+            from matplotlib import pyplot as plt
+        except ImportError as e:
+            raise Exception('Install matplotlib before using this function.')
+
+        plt.figure(figsize=[12, 8])
+        plt.title(f'Histogram Result of Variable {name}:')
+        plt.hist(tensor, bins=64)
+        plt.show()
+
+    if dequantize: quant_graph.restore_quantize_state()
+
+
+def parameter_analyse(graph: BaseGraph):
+    ranges, stds, means = {}, {}, {}
+    for operation in graph.operations.values():
+        for var in operation.parameters:
+            value = var.value
+            assert isinstance(value, torch.Tensor), (
+                f'Invaild parameter value type, expect torch.Tensor, however {type(value)} was given.')
+            if value.numel() <= 1: continue
+
+            _min, _max, _std, _mean = 0, 0, 0, 0
+            try:
+                _min = value.min().item()
+                _max = value.max().item()
+                _std = value.std().item()
+                _mean = value.mean().item()
+            except: pass
+            
+            
+            ranges[f'{var.name}[{operation.name}]'] = _max - _min
+            stds[f'{var.name}[{operation.name}]'] = _std
+            means[f'{var.name}[{operation.name}]'] = abs(_mean)
+    
+    MeasurePrinter(ranges, order='large_to_small', measure='Value Range').print()
+    MeasurePrinter(stds, order='large_to_small', measure='Value Std').print()
+    MeasurePrinter(means, order='large_to_small', measure='Value Mean(Abs)').print()

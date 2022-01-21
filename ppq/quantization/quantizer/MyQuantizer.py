@@ -5,10 +5,12 @@
 from typing import Union
 
 import torch
+from ppq.IR.base.graph import Operation
 from ppq.core import (OperationMeta, OperationQuantizationConfig,
                       QuantizationPolicy, QuantizationProperty,
                       QuantizationStates, RoundingPolicy, TargetPlatform)
 from ppq.IR import BaseGraph, GraphCommandProcesser
+from ppq.core.common import PASSIVE_OPERATIONS
 
 from .base import BaseQuantizer
 
@@ -41,9 +43,7 @@ class ExtQuantizer(BaseQuantizer):
 
         super().__init__(graph=graph) # do not forget to initialize super class.
 
-    def init_quantize_config(
-        self, operation_meta: OperationMeta, operation_type: str
-        ) -> OperationQuantizationConfig:
+    def init_quantize_config(self, operation: Operation) -> OperationQuantizationConfig:
         """
         使用这个函数来初始化算子的量化配置，该函数会被父类作为接口调用。
         
@@ -64,8 +64,7 @@ class ExtQuantizer(BaseQuantizer):
             manually initialized configuration is demended.
 
         Args:
-            operation_meta (OperationMeta): [description]
-            operation_type (str): [description]
+            operation (Opeartion): [description]
 
         Returns:
             OperationQuantizationConfig: [description]
@@ -73,17 +72,17 @@ class ExtQuantizer(BaseQuantizer):
 
         # create a basic quantization configration.
         config = self.create_default_quant_config(
-            operation_meta=operation_meta, num_of_bits=self._num_of_bits,
+            operation_meta=operation.meta_data, num_of_bits=self._num_of_bits,
             quant_max=self._quant_max, quant_min=self._quant_min,
             observer_algorithm='percentile', policy=self.quantize_policy,
             rounding=self.rounding_policy,
         )
         
         # initialze configuration for conv manually
-        if operation_type == 'Conv':
+        if operation.type == 'Conv':
             # override initialized config
             
-            if operation_meta.num_of_input == 3:
+            if operation.num_of_input == 3:
                 bias_config = config.input_quantization_config[-1]
                 # bias should be quantized with 32 bits
                 # in python3, int indicates long long in C++
@@ -103,10 +102,7 @@ class ExtQuantizer(BaseQuantizer):
 
         # mark some operation as passive op.
         # all quantizations of a passive op will be overlapped during graph merge pass.
-        if operation_type in {
-            'Resize', 'MaxPool', 'GlobalMaxPool',
-            'Slice', 'Pad', 'Split'
-        }:
+        if operation.type in PASSIVE_OPERATIONS:
             # Those op are not active op.
             config.is_active_quant_op = False
         return config

@@ -16,3 +16,5 @@ using at::Tensor;
 # define ROUND_TO_NEAR_INT   5
 # define ROUND_UP            6
 # define ROUND_DOWN          7
+
+# define VALUE_CLIP(v, max, min) (v > max ? max: (v > min ? v : min))

@@ -67,6 +67,8 @@ class CaffeExporter(GraphExporter):
                 # Simply override recorder is acceptable here, 
                 # we do not support mix presicion quantization for CUDA backend now.
                 # All configurations for this variable should keep identical towards each other.
+                
+                if config.state == QuantizationStates.JOINT and var.name in var_quant_info_recorder: continue
                 var_quant_info_recorder[var.name] = config
 
         # ready to render config to json.
