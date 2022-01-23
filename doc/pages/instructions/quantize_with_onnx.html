@@ -218,7 +218,7 @@ quantized = quantize_torch_model(
               <hr>
               <h2 id="headings">确定执行设备</h2>
               <p>作为量化模拟器而言，PPQ 需要通过计算来确定一些量化参数，因此你需要为 PPQ 指定一个执行设备。很巧 PPQ 使用 Pytorch 框架完成所有量化中的计算，因此在PPQ中执行设备的定义方式与Pytorch是完全相同的。常用的计算设备包括 'cpu', 'cuda', 'cuda:1' 等等。</p>
-              <p>很不巧的是为了加速软件运行效率，我们手工编写了一些 cuda kernel 辅助 PPQ 量化模拟器的运行，在开源版本中默认它们是启用的状态，你可以通过修改 ppq.core.config.USING_CUDA_KERNELS = False 来取消使用这些自定义 kernel。</p>
+              <p>很不巧的是为了加速软件运行效率，我们手工编写了一些 cuda kernel 辅助 PPQ 量化模拟器的运行，在开源版本中默认它们是启用的状态，你可以通过修改 ppq.core.config.USING_CUDA_KERNEL = False 来取消使用这些自定义 kernel。</p>
               <p>我们强烈推荐你使用 GPU 完成 PPQ 的量化计算，虽然理论上 PPQ 能够使用 CPU 完成量化，但是相关功能并未经过完善测试，显然存在不可预期的 bug，同时也无法使用 cuda kernel 加速量化计算。</p>
               <p>量化代码中第 12 行确定了量化计算执行设备为 'cuda'，在第 37 行执行量化逻辑时，我们传入了该字符串到 device 参数用来确定执行设备。一切都有条不紊地进行。</p>
 
