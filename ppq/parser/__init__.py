@@ -7,6 +7,7 @@ from .native import NativeExporter, NativeImporter
 from .nxp_exporter import NxpExporter
 from .onnx_exporter import OnnxExporter
 from .onnx_parser import OnnxParser
+from .onnxruntime_exporter import ONNXRUNTIMExporter
 from .extension import ExtensionExporter
 from .ppl import PPLBackendExporter
 
@@ -21,6 +22,7 @@ EXPORTERS = {
     TargetPlatform.PPL_CUDA_INT8: PPLBackendExporter,
     TargetPlatform.NXP_INT8:      NxpExporter,
     TargetPlatform.ONNX:          OnnxExporter,
+    TargetPlatform.ONNXRUNTIME:   ONNXRUNTIMExporter,
     TargetPlatform.CAFFE:         CaffeExporter,
     TargetPlatform.NATIVE:        NativeExporter,
     TargetPlatform.EXTENSION:     ExtensionExporter

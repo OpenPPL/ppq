@@ -78,7 +78,7 @@ class TargetPlatform(Enum):
     ONNX          = -4
     CAFFE         = -5
     NATIVE        = -6
-    
+    ONNXRUNTIME   = -7
     # THIS IS A DUUMY PLATFORM JUST FOR CREATING YOUR OWN EXTENSTION.
     EXTENSION     = -10086
     

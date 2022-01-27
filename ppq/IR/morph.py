@@ -281,8 +281,8 @@ class GraphFormatter(GraphCommandProcesser):
 
             for op in blacklist:
                 for var in op.outputs:
-                    self.graph.delete_variable(var, force_delete=True)
-                self.graph.delete_operation(op, force_delete=True)
+                    self.graph.delete_variable(var.name, force_delete=True)
+                self.graph.delete_operation(op.name, force_delete=True)
 
     def format_parameter_variables(self) -> None:
         vars = []
