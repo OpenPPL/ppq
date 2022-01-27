@@ -1,10 +1,12 @@
-from .caffe import ppl_caffe_pb2
-from .caffe.caffe_import_utils import caffe_import_map,get_input_shape
-from .caffe.caffe_graph_optim import de_inplace,merge_batchnorm_scale
+import logging
+
 from google.protobuf import text_format
 from ppq.core import NetworkFramework, is_file_exist
 from ppq.IR import BaseGraph, GraphBuilder
-import logging
+
+from .caffe import ppl_caffe_pb2
+from .caffe.caffe_graph_optim import de_inplace, merge_batchnorm_scale
+from .caffe.caffe_import_utils import caffe_import_map, get_input_shape
 
 logger = logging.getLogger('PPQ')
 

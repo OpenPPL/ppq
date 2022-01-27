@@ -30,7 +30,7 @@ def generate_torch_indexer(
 
 
 def tensor_random_fetch(
-    tensor: torch.Tensor, 
+    tensor: torch.Tensor, seed: int = None,
     num_of_fetches: int = 1024) -> torch.Tensor:
     """
     Fetch some elements from tensor randomly.
@@ -43,16 +43,19 @@ def tensor_random_fetch(
     num_of_elements = tensor.numel()
     assert num_of_elements > 0, ('Can not fetch data from tensor with less than 1 elements.')
 
-    indexer = generate_torch_indexer(num_of_fetches=num_of_fetches, num_of_elements=num_of_elements)
+    if seed is None:
+        indexer = generate_torch_indexer(num_of_fetches=num_of_fetches, num_of_elements=num_of_elements)
+    else: indexer = generate_indexer(num_of_fetches=num_of_fetches, num_of_elements=num_of_elements, seed=seed)
     return tensor.index_select(dim=0, index=indexer.to(tensor.device))
 
 
 def channel_random_fetch(
     tensor: torch.Tensor, 
-    fetchs_per_channel: int = 1024, 
+    fetchs_per_channel: int = 1024,
+    seed: int = None,
     channel_axis: int = 0) -> torch.Tensor:
     """
-    Fetch some elements for tensor randomly by each channel.
+    Fetch some elements from tensor randomly by each channel.
 
     Args:
         tensor (torch.Tensor): [description]
@@ -67,5 +70,32 @@ def channel_random_fetch(
     num_of_elements = tensor.shape[-1]
     assert num_of_elements > 0, ('Can not fetch data from tensor with less than 1 elements.')
 
-    indexer = generate_torch_indexer(num_of_fetches=fetchs_per_channel, num_of_elements=num_of_elements)
+    if seed is None:
+        indexer = generate_torch_indexer(num_of_fetches=fetchs_per_channel, num_of_elements=num_of_elements)
+    else: indexer = generate_indexer(num_of_fetches=fetchs_per_channel, num_of_elements=num_of_elements, seed=seed)
+    return tensor.index_select(dim=-1, index=indexer.to(tensor.device))
+
+
+def batch_random_fetch(
+    tensor: torch.Tensor, 
+    fetchs_per_batch: int = 1024,
+    seed: int = None
+    ) -> torch.Tensor:
+    """
+    Fetch some elements from each sample in a batched tensor.
+
+    Args:
+        tensor (torch.Tensor): [description]
+        fetchs_per_channel (int, optional): [description]. Defaults to 1024.
+
+    Returns:
+        torch.Tensor: [description]
+    """
+    tensor = tensor.flatten(start_dim=1)
+    num_of_elements = tensor.shape[-1]
+    assert num_of_elements > 0, ('Can not fetch data from tensor with less than 1 elements.')
+
+    if seed is None:
+        indexer = generate_torch_indexer(num_of_fetches=fetchs_per_batch, num_of_elements=num_of_elements)
+    else: indexer = generate_indexer(num_of_fetches=fetchs_per_batch, num_of_elements=num_of_elements, seed=seed)
     return tensor.index_select(dim=-1, index=indexer.to(tensor.device))

@@ -1296,7 +1296,13 @@ def Split_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCo
 
 
 def Gemm_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
+    ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
+    ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=2, max_num_of_input=3)
+    
     A, B = values[:2]
+    if len(A.shape) != 2:
+        # reshape A from [n, c, h, w] to [n, chw]
+        A = A.reshape(A.shape[0], -1)
     C = values[2] if len(values) > 2 else 0
     alpha = op.attributes.get('alpha', 1.0)
     beta = op.attributes.get('beta', 1.0)

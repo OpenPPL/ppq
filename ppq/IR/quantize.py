@@ -90,7 +90,7 @@ class QuantableOperation(Operation):
             self.config.input_quantization_config + self.config.output_quantization_config):
             if parameter_only and not var.is_parameter: continue
             quant_config.detail['Stored State'] = quant_config.state
-            assert isinstance(var, QuantableVariable), 'Unexpected error.'
+            assert isinstance(var, QuantableVariable), f'Unexpected error with variable {var.name}.'
             if var.is_parameter:
                 # convert var.value to torch.Tensor
                 # notice here we set device = None, this conversion will not change var.value.device anyway.
@@ -145,8 +145,10 @@ class QuantableVariable(Variable):
             dest_ops  = convert_from.dest_ops.copy(),
             source_op = convert_from.source_op,
             value     = convert_from.value,
-            is_parameter = convert_from.is_parameter
-        )
+            is_parameter = convert_from.is_parameter)
+        self._fp32_value = None
+        if convert_from.value is not None:
+            self._fp32_value = convert_any_to_torch_tensor(convert_from.value, device='cpu')
 
     @ property
     def stored_value(self) -> Any:
@@ -268,3 +270,19 @@ class QuantableGraph(GraphCommandProcesser):
         operation = self._graph.operations[operation_name]
         if not isinstance(operation, QuantableOperation): return operation
         else: return operation.dequantize()
+
+    def dequantize_graph(self):
+        """
+            一个方便懒人的函数
+        """
+        for operation in self.graph.operations.values():
+            if isinstance(operation, QuantableOperation):
+                operation.dequantize()
+    
+    def restore_quantize_state(self):
+        """
+            一个方便懒人的函数
+        """
+        for operation in self.graph.operations.values():
+            if isinstance(operation, QuantableOperation):
+                operation.restore_quantize_state()

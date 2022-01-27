@@ -41,7 +41,7 @@ class PassiveParameterQuantizePass(QuantizationOptimizationPass):
             if not isinstance(op, QuantableOperation): continue
             if op.type in {'Conv', 'ConvTranspose', 'Gemm'}:
                 # inputs are [input value, weight, bias(optional)]
-                if op.meta_data.num_of_input == 3:
+                if op.num_of_input == 3:
                     weight_config = op.config.input_quantization_config[1]
                     input_config = op.config.input_quantization_config[0]
                     if not check_state(weight_config.state):
@@ -76,7 +76,7 @@ class PassiveParameterQuantizePass(QuantizationOptimizationPass):
 
             if op.type in {'Pad'}:
                 # inputs are [input value, pad[shape-related], pad value[optional]]
-                if op.meta_data.num_of_input != 3: continue
+                if op.num_of_input != 3: continue
                 input_config = op.config.input_quantization_config[0]
                 if not check_state(input_config.state):
                     raise PermissionError(f'Can not quantize pad value of layer {op.name}, '
@@ -99,9 +99,6 @@ class ParameterQuantizePass(QuantizationOptimizationPass):
 
     This pass needs no data, however it uses fake data to finish a dummy forward process.
     see aslo: TorchExecutor.dummy_forward function
-
-    ATTENTION: you have to collect metadata for all operations before invoking this process.
-        (metadata will be figured out by IR.BaseGraph)
     """
     def __init__(self, method: str = None):
         self._method = method
@@ -143,13 +140,9 @@ class ParameterQuantizePass(QuantizationOptimizationPass):
         for op_name, operation in processer.graph.operations.items():
             if not isinstance(operation, QuantableOperation): continue
 
-            for var, config in zip(
-                operation.inputs + operation.outputs, 
-                operation.config.input_quantization_config + operation.config.output_quantization_config
-            ):
-                # restore non-parameter variable quantization state
-                if var not in operation.parameters:
-                    config.state = state_records[config]
+            for cfg, var in operation.config_with_variable:
+                if not var.is_parameter:
+                    cfg.state = state_records[cfg]
 
             observer = observers[op_name]
             assert isinstance(observer, OperationObserver)

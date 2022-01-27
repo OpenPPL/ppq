@@ -33,7 +33,7 @@ __global__ static void _linear_tensor_quant_sieve(
     Dtype* tensor,
     Dtype* fp_offsets,
     Dtype* quantized,
-    Dtype* mask,
+    Dtype* masks,
     const float scale,
     const int offset,
     const int minimum,
@@ -44,16 +44,14 @@ __global__ static void _linear_tensor_quant_sieve(
 ){
     for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < num_of_elements; i += blockDim.x * gridDim.x)
     {
-        if(fp_offsets[i] > offset_limit) fp_offsets[i] = offset_limit;
-        if(fp_offsets[i] < -offset_limit) fp_offsets[i] = -offset_limit;
+        float fp_offset = VALUE_CLIP(fp_offsets[i], offset_limit, -offset_limit);
+        float value = _round2int(tensor[i] / scale + fp_offset, rounding) + offset;
+        value = VALUE_CLIP(value, maximum, minimum);
 
-        float value = _round2int(tensor[i] / scale + fp_offsets[i], rounding) + offset;
-        if(value > maximum) value = maximum;
-        if(value < minimum) value = minimum;
+        float diff = abs(tensor[i] - quantized[i]);
+        
         quantized[i] = (value - offset) * scale;
-
-        float diff = abs(tensor[i] - quantized[i]) / scale;
-        mask[i] = diff < 1 - threshold;
+        masks[i] = diff < (1 - threshold) * scale;
     }
 }
 
@@ -63,7 +61,7 @@ __global__ static void _linear_channel_quant_sieve(
     Dtype* tensor,
     Dtype* fp_offsets,
     Dtype* quantized,
-    Dtype* mask,
+    Dtype* masks,
     float* scales,
     int* offsets,
     const int element_per_channel,
@@ -76,17 +74,15 @@ __global__ static void _linear_channel_quant_sieve(
 ){
     for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < num_of_elements; i += blockDim.x * gridDim.x)
     {
-        if(fp_offsets[i] > offset_limit) fp_offsets[i] = offset_limit;
-        if(fp_offsets[i] < -offset_limit) fp_offsets[i] = -offset_limit;
-        
+        float fp_offset = VALUE_CLIP(fp_offsets[i], offset_limit, -offset_limit);
         int channel = (i / element_per_channel) % num_of_channel;
-        float value = _round2int(tensor[i] / scales[channel] + fp_offsets[i], rounding) + offsets[channel];
-        if(value > maximum) value = maximum;
-        if(value < minimum) value = minimum;
-        quantized[i] = (value - offsets[channel]) * scales[channel];
+
+        float value = _round2int(tensor[i] / scales[channel] + fp_offset, rounding) + offsets[channel];
+        value = VALUE_CLIP(value, maximum, minimum);
         
-        float diff = abs(tensor[i] - quantized[i]) / scales[channel];
-        mask[i] = diff < 1 - threshold;
+        float diff = abs(tensor[i] - quantized[i]);
+        quantized[i] = (value - offsets[channel]) * scales[channel];
+        masks[i] = diff < (1 - threshold) * scales[channel];
     }
 }
 

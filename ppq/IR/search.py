@@ -45,7 +45,7 @@ class Path(Iterable):
     def __str__(self) -> str:
         return ''.join([str(_) for _ in self._container.__str__()])
     
-    def tolist(self) -> list:
+    def tolist(self) -> List[Operation]:
         return list(self._container)
 
 

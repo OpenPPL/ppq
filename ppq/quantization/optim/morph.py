@@ -1,16 +1,19 @@
-from typing import Iterable, List
+import logging
 from math import ceil
-from ppq.IR.base.graph import BaseGraph, Operation
-from ppq.IR.quantize import QuantableOperation
-from ppq.core.quant import QuantizationProperty, QuantizationStates
-from ppq.core.data import TensorMeta
+from typing import Iterable, List
+
+import torch
+from ppq.core import (QuantizationProperty, QuantizationStates, TensorMeta,
+                      empty_ppq_cache, ppq_warning)
 from ppq.executor import BaseGraphExecutor
-from ppq.IR import GraphCommandProcesser
+from ppq.IR import BaseGraph, GraphCommandProcesser, Operation, Variable
+from ppq.IR.quantize import QuantableOperation
 from ppq.IR.search import Path, SearchableGraph
 from ppq.quantization.observer import TensorObserverFactroy
-import torch
+from tqdm import tqdm
+
 from .base import QuantizationOptimizationPass
-import logging
+
 logger = logging.getLogger('PPQ')
 
 
@@ -29,6 +32,163 @@ class NXPResizeModeChangePass(QuantizationOptimizationPass):
                 op.attributes['coordinate_transformation_mode'] = 'half_pixel'
 
 
+class MatrixFactorizationPass(QuantizationOptimizationPass):
+    """
+    Use Matrix Farctorization to minimize quantization error.
+        This pass will split a computing layer with 2 sub layers.
+        
+        before split:  WX + b = Y
+        after split:   B(AX) + b = Y
+
+        Where W = BA
+
+    However i do not konw how to minimize quant loss until now.
+
+    Args:
+        QuantizationOptimizationPass ([type]): [description]
+
+    Returns:
+        [type]: [description]
+    """
+    def __init__(self, interested_layers: List[str], method: str = 'training',
+                 name: str = 'SVD Split Pass') -> None:
+        self.interested_layers = interested_layers
+        self.method = method
+        super().__init__(name=name)
+    
+    @ empty_ppq_cache
+    def train_for_factorization(
+        self, w: torch.Tensor, penalty = 0.1,
+        executing_device: str = 'cuda', max_iter: int = 100000):
+        assert w.ndim == 2
+        
+        a, b = torch.rand(size=[w.shape[0], w.shape[1]]), torch.rand(size=[w.shape[1], w.shape[1]])
+        
+        a = a.to(executing_device)
+        b = b.to(executing_device)
+        w = w.to(executing_device)
+        
+        a.requires_grad = True
+        b.requires_grad = True
+        w.requires_grad = True
+        
+        optimizer = torch.optim.Adam(params=[a, b], lr=1e-3)
+        loss_fn = torch.nn.MSELoss()
+        
+        last_loss = 1e9
+        for _ in tqdm(range(max_iter), 'Training for factorization ...'):
+            penalty_loss = (torch.mean(torch.square(a)) + torch.mean(torch.square(b))) * penalty
+            loss = loss_fn(w, torch.matmul(a, b)) + penalty_loss
+            loss.backward()
+            optimizer.step()
+            optimizer.zero_grad()
+            
+            loss = loss.item()
+            if abs(loss - last_loss) < 1e-7: break
+            else: last_loss = loss
+
+        a.requires_grad = False
+        b.requires_grad = False
+        a._grad = None
+        b._grad = None
+
+        return a, b
+
+    def svd_for_factorization(self, w: torch.Tensor):
+        assert w.ndim == 2
+        u, s, v = torch.svd(w)
+        a = torch.matmul(u, torch.diag(torch.sqrt(s)))
+        b = torch.matmul(torch.diag(torch.sqrt(s)), v.transpose(0, 1))
+        print(a.max(), b.max(), w.max())
+        return a, b
+
+    def optimize(self, processer: GraphCommandProcesser, 
+                 dataloader: Iterable, executor: BaseGraphExecutor, **kwargs) -> None:
+        graph = processer.graph
+        spliting_layers = []
+        for name in self.interested_layers:
+            if name not in graph.operations:
+                raise ValueError(f'Can not Split layer {name}, can not find it in current graph.')
+        
+        for operation in graph.operations.values():
+            if operation.name in self.interested_layers:
+                assert operation.type in {'Conv', 'Gemm'}, (
+                    f'Can not split layer, cause layer type is not support')
+                spliting_layers.append(operation)
+        
+        for operation in spliting_layers:
+            assert isinstance(operation, Operation)
+            if operation.type == 'Gemm':
+                w = operation.parameters[0].value
+                w = w.transpose(0, 1)
+                if self.method == 'svd':
+                    a, b = self.svd_for_factorization(w)
+                elif self.method == 'training':
+                    a, b = self.train_for_factorization(w)
+                else: raise ValueError(f'Invalid method {self.method}, only support training and svd now.')
+                a = a.transpose(0, 1)
+                b = b.transpose(0, 1)
+            elif operation.type == 'Conv':
+                if operation.attributes['kernel_shape'] != [1, 1]:
+                    raise PermissionError(f'Can not split layer {operation.name}, cause it kernel shape is not [1, 1]')
+                w = operation.parameters[0].value
+                assert isinstance(w, torch.Tensor)
+                w = w.squeeze(-1).squeeze(-1).transpose(0, 1)
+                print(w.shape)
+                if self.method == 'svd':
+                    a, b = self.svd_for_factorization(w)
+                elif self.method == 'training':
+                    a, b = self.train_for_factorization(w)
+                else: raise ValueError(f'Invalid method {self.method}, only support training and svd now.')
+                a = a.transpose(0, 1).unsqueeze(-1).unsqueeze(-1)
+                b = b.transpose(0, 1).unsqueeze(-1).unsqueeze(-1)
+            else: raise TypeError(f'Unsupported opeartion type {operation.type}.')
+            operation.parameters[0].value = a
+
+            # create new operation & dirty work
+            attributes = {}
+            if operation.type == 'Conv':
+                attributes['kernel_shape'] = [1, 1]
+                attributes['pads']         = [0, 0, 0, 0]
+                attributes['strides']      = [1, 1]
+                attributes['dilations']    = [1, 1]
+                attributes['group']        = 1
+
+            if operation.type == 'Gemm':
+                attributes['alpha']        = 1
+                attributes['beta']         = 1
+                attributes['transB']       = 1
+
+            splited = Operation(
+                name=operation.name + '_splited', 
+                op_type=operation.type, 
+                attributes=attributes,
+                platform=operation.platform
+            )
+            
+            graph.insert_operation_on_var(
+                inserting_op=splited, var=operation.outputs[0].name)
+            if operation.outputs[0].name in graph.outputs:
+                graph.outputs.pop(operation.outputs[0].name)
+                graph.outputs[splited.outputs[0].name] = splited.outputs[0]
+            
+            # add weight link
+            spilted_w = Variable(name=splited.name + '_weight', 
+                                 value=b, is_parameter=True)
+            graph.append_variable(spilted_w)
+            
+            splited.inputs.append(spilted_w)
+            spilted_w.dest_ops.append(splited)
+            
+            # if has bias, relink bias
+            if len(operation.parameters) > 1:
+                bias_var = operation.parameters[-1]
+                bias_var.dest_ops.remove(operation)
+                bias_var.dest_ops.append(splited)
+                splited.inputs.append(bias_var)
+                operation.inputs.remove(bias_var)
+
+
 class ChannelSplitPass(QuantizationOptimizationPass):
     """
     ChannelSplitPass is designed for per-tenser quantization only, this implementation
@@ -36,10 +196,11 @@ class ChannelSplitPass(QuantizationOptimizationPass):
 
     "zhao, Ritchie et al., Improving Neural Network Quantization without Retraining using Outlier Channel Splitting"
 
-    Basically this pass shrinks ranges of outlier channels by first half-down the channel value then duplicate the whole channel,
-    making it more friendly for per-tensor quantization while preserving the fp output same
+    Basically this pass shrinks ranges of outlier channels by first half-down the channel value 
+        then duplicate the whole channel, making it more friendly for per-tensor quantization
+        while preserving the fp output same
     
-    In this implementation, to avoid bringing in supplemental ops, for each user-given op, we find its counterpart op, 
+    In this implementation, to avoid bringing in supplemental ops, for each user-given op, we find its counterpart op,
     split input/output channel of the user-given op and duplicate output/input channel of its counterpart
 
             split Conv1                                          split Conv2
@@ -53,7 +214,7 @@ class ChannelSplitPass(QuantizationOptimizationPass):
     """
     def __init__(self, 
                 interested_layers: List[str],
-                search_directions: List[str],
+                search_directions: List[str] = None,
                 expand_ratio: float=0.1,
                 split_ratio: float=0.5,
                 grid_aware: bool=True
@@ -73,13 +234,19 @@ class ChannelSplitPass(QuantizationOptimizationPass):
         """
         self.interested_layers = interested_layers
         self.search_directions = search_directions
+        
+        if not self.search_directions or len(search_directions) != len(interested_layers):
+            ppq_warning('You do not provide a valid search direction. '
+                        'All layer will split with its upstream layers by default.')
+            self.search_directions = ['up' for _ in self.interested_layers]
+        
         self.expand_ratio = expand_ratio
         self.grid_aware = grid_aware
         self.split_ratio = split_ratio
         self.current_search_direction = None
         super().__init__(name='Channel Split Pass')
 
-    def calculate_scale(self, split_op: Operation) -> float:
+    def calculate_scale(self, split_op: QuantableOperation) -> float:
         config = split_op.config.input_quantization_config[1]
         observer = TensorObserverFactroy.build_observer(split_op.parameters[0], config)
         observer.observe(split_op.parameters[0].value)
@@ -88,7 +255,7 @@ class ChannelSplitPass(QuantizationOptimizationPass):
         return w_scale
 
     def flip(self, op: Operation) -> bool:
-        return (self.current_search_direction == 'down') ^ (op.type == 'ConvTranspose' or (op.type == 'Gemm'\
+        return (self.current_search_direction == 'down') != (op.type == 'ConvTranspose' or (op.type == 'Gemm'\
             and op.attributes.get('transB', 0) == 0))
 
     def OCS_forward(self, split_op: Operation) -> List[int]:
@@ -109,6 +276,8 @@ class ChannelSplitPass(QuantizationOptimizationPass):
         in_channels_to_copy = []
         orig_idx_dict = {}
         if self.grid_aware:
+            assert isinstance(split_op, QuantableOperation), (
+                f'Operation {split_op.name} is not quantable, can not be splited via this function.')
             w_scale = self.calculate_scale(split_op)
 
         for c in range(ocs_channels):
@@ -283,13 +452,15 @@ class ChannelSplitPass(QuantizationOptimizationPass):
 
             split_op, counterpart_op = path[0], path[-1]
 
-            assert(isinstance(split_op, QuantableOperation), f"op {split_op.name} should be quantable, \
-            please whether your dispatcher send the op to quantable platform")
+            assert isinstance(split_op, QuantableOperation), (
+                f"op {split_op.name} should be quantable, "
+                "please whether your dispatcher send the op to quantable platform")
 
             config = split_op.config.input_quantization_config[1]
-            if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
-                logger.warning(f'Channel split is designed for per tensor only, skip {name}')
-                continue
+            
+            # if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
+            #     logger.warning(f'Channel split is designed for per tensor only, skip {name}')
+            #     continue
 
             copy_channels = self.OCS_forward(split_op)
             self.update_counterpart(counterpart_op, copy_channels)

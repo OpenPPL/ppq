@@ -1,10 +1,11 @@
 from typing import Union
 
 import torch
-from ppq.core import (OperationMeta, OperationQuantizationConfig,
+from ppq.core import (PASSIVE_OPERATIONS, OperationQuantizationConfig,
                       QuantizationPolicy, QuantizationProperty,
                       QuantizationStates, RoundingPolicy, TargetPlatform)
 from ppq.IR import BaseGraph, GraphCommandProcesser
+from ppq.IR.base.graph import Operation
 
 from .base import BaseQuantizer
 
@@ -21,20 +22,18 @@ class PPL_DSP_Quantizer(BaseQuantizer):
 
         super().__init__(graph=graph)
 
-    def init_quantize_config(
-        self, operation_meta: OperationMeta, operation_type: str
-    ) -> OperationQuantizationConfig:
+    def init_quantize_config(self, operation: Operation) -> OperationQuantizationConfig:
 
         base_quant_config = self.create_default_quant_config(
-            operation_meta=operation_meta, num_of_bits=self._num_of_bits,
+            operation_meta=operation.meta_data, num_of_bits=self._num_of_bits,
             quant_max=self._quant_max, quant_min=self._quant_min,
             observer_algorithm='percentile', policy=self.quantize_policy,
             rounding=self.rounding_policy,
         )
 
-        if operation_type in {'Conv', 'ConvTranspose', 'Gemm'}:
+        if operation.type in {'Conv', 'ConvTranspose', 'Gemm'}:
             # if operation has bias
-            if operation_meta.num_of_input == 3:
+            if operation.num_of_input == 3:
                 bias_config = base_quant_config.input_quantization_config[-1]
                 # bias should be quantized with 32 bits
                 # in python3, int indicates long long in C++
@@ -52,10 +51,7 @@ class PPL_DSP_Quantizer(BaseQuantizer):
             for config in base_quant_config.input_quantization_config[1: ]:
                 config.observer_algorithm = 'minmax'
 
-        if operation_type in {
-            'Resize', 'MaxPool', 'GlobalMaxPool',
-            'Slice', 'Pad', 'Split'
-        }:
+        if operation.type in PASSIVE_OPERATIONS:
             # Those op are not active op.
             base_quant_config.is_active_quant_op = False
         return base_quant_config

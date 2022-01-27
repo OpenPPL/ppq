@@ -11,6 +11,8 @@ from abc import abstractmethod
 from enum import Enum
 from typing import Any, Iterable, List
 
+import torch
+
 from .storage import Serializable
 
 
@@ -57,6 +59,7 @@ class TargetPlatform(Enum):
     PPL_CUDA_INT8 = 201
     PPL_CUDA_INT4 = 202
     PPL_CUDA_FP16 = 203
+    PPL_CUDA_MIX  = 204
 
     DSP_INT8  = 301
 
@@ -82,8 +85,9 @@ class TargetPlatform(Enum):
 
     @ classmethod
     def is_quantized_platform(cls, platform) -> bool:
-        return platform in {cls.DSP_INT8, cls.TRT_INT4, cls.TRT_INT8, cls.NXP_INT8, 
-                            cls.PPL_CUDA_INT8, cls.PPL_CUDA_INT4, cls.EXTENSION}
+        return platform in {
+            cls.DSP_INT8, cls.TRT_INT4, cls.TRT_INT8, cls.NXP_INT8, 
+            cls.PPL_CUDA_INT8, cls.PPL_CUDA_INT4, cls.EXTENSION, cls.PPL_CUDA_MIX}
 
 
 class RoundingPolicy(Enum):
@@ -214,7 +218,7 @@ class QuantizationPolicy:
             )
         self._policy = policy
 
-    def has_property(self, property: QuantizationProperty):
+    def has_property(self, property: QuantizationProperty) -> bool:
         return (self._policy & property.value) != 0
 
     @ classmethod
@@ -232,6 +236,16 @@ class QuantizationPolicy:
             QuantizationProperty.SYMMETRICAL | QuantizationProperty.LINEAR | QuantizationProperty.PER_TENSOR | QuantizationProperty.POWER_OF_2,
             QuantizationProperty.ASYMMETRICAL | QuantizationProperty.LINEAR | QuantizationProperty.PER_CHANNEL | QuantizationProperty.POWER_OF_2,
             QuantizationProperty.SYMMETRICAL | QuantizationProperty.LINEAR | QuantizationProperty.PER_CHANNEL | QuantizationProperty.POWER_OF_2,
+        }
+    
+    def to_dict(self) -> dict:
+        """
+        return a dictionary to describe this policy.
+            nothing funny.
+        """
+        return {
+            property.name: self.has_property(property)
+            for property in QuantizationProperty
         }
 
 
@@ -285,18 +299,19 @@ class QuantizationStates(Enum):
     INITIAL     = 1   # 量化参数刚刚被初始化，当前 config 不生效，数据不能被使用
     BAKED       = 2   # 只针对参数量化，表示参数已经被静态量化，当前 config 不生效，数据可以直接使用
     OVERLAPPED  = 3   # 只针对activation量化，表示数据流的量化由其他 config 管理，当前 config 不生效
-    DEACTIVATED = 4   # 表示当前 config 不生效
-    ACTIVATED   = 5   # 表示当前 config 生效
-    DEQUANTIZED = 6   # 表示当前 config 处于解量化状态，解量化是 PPQ 种的一个系统操作
-    SOI         = 7   # 表示这一路输入与 Shape or index 相关，不量化
-    PASSIVE     = 8   # 表示这一路输入被动量化，如 bias, clip value 等
-    PASSIVE_INIT = 9  # 表示这一路输入被动量化，并且刚刚初始化不能被使用
-    PASSIVE_BAKED = 10 # 被动量化且静态量化，当前config不生效，数据可以直接使用
-    FP32        = 11   # 表示这一路输入直接为FP32浮点数
+    JOINT       = 4   # 只针对activation量化，表示当前数据流处于强制联合定点，当前 config 生效
+    DEACTIVATED = 5   # 表示当前 config 不生效
+    ACTIVATED   = 6   # 表示当前 config 生效
+    DEQUANTIZED = 7   # 表示当前 config 处于解量化状态，解量化是 PPQ 的一个系统操作
+    SOI         = 8   # 表示这一路输入与 Shape or index 相关，不量化
+    PASSIVE     = 9   # 表示这一路输入被动量化，如 bias, clip value 等
+    PASSIVE_INIT = 10  # 表示这一路输入被动量化，并且刚刚初始化不能被使用
+    PASSIVE_BAKED = 11 # 被动量化且静态量化，当前config不生效，数据可以直接使用
+    FP32        = 12   # 表示这一路输入直接为FP32浮点数
 
     @ classmethod
     def is_activated(cls, state)->bool:
-        return state in {QuantizationStates.ACTIVATED, QuantizationStates.PASSIVE}
+        return state in {QuantizationStates.ACTIVATED, QuantizationStates.PASSIVE, QuantizationStates.JOINT}
 
     @ classmethod
     def can_export(cls, state)->bool:
@@ -563,6 +578,36 @@ class TensorQuantizationConfig(Serializable):
                 'Cause being overlapped, any change of this configuration is not allowed.')
         else:
             self._quant_max = max
+    
+    def copy(self):
+        """
+            Create a tensor config from this one, keep policy and state unchanged.
+            if there is an non-empty scale and offset, they will be cloned too.
+        """
+        scale, offset = None, None
+        if self.scale is not None:
+            if isinstance(self.scale, torch.Tensor):
+                scale = self.scale.clone()
+            else: scale = self.scale
+        if self.offset is not None:
+            if isinstance(self.offset, torch.Tensor):
+                offset = self.scale.clone()
+            else: offset = self.offset
+        config = TensorQuantizationConfig(
+            policy=self.policy,
+            rounding=self.rounding,
+            num_of_bits=self.num_of_bits,
+            quant_min=self.quant_min,
+            quant_max=self.quant_max,
+            scale=scale, offset=offset,
+            observer_algorithm=self.observer_algorithm,
+            detail=self.detail,
+            inplace=self.inplace,
+            state=self.state
+        )
+        if self.state == QuantizationStates.OVERLAPPED:
+            config._father_config = self._father_config
+        return config
 
 
 class ChannelwiseTensorQuantizationConfig(TensorQuantizationConfig):
@@ -615,6 +660,12 @@ class ChannelwiseTensorQuantizationConfig(TensorQuantizationConfig):
             rounding=convert_from.rounding
         )
         return this
+    
+    def copy(self):
+        config = super().copy()
+        return self.convert_from_tensor_config(
+            config, scales=config.scale, offsets=config.offset,
+            channel_axis=self.channel_axis)
 
 
 class OperationQuantizationConfig(Iterable):
@@ -668,3 +719,14 @@ class OperationQuantizationConfig(Iterable):
 
     def __iter__(self) -> TensorQuantizationConfig:
         return (self.input_quantization_config + self.output_quantization_config).__iter__()
+
+    def copy(self):
+        """
+            Create an operation config from this one, keep policy and state unchanged.
+            if this one has an non-empty scale or offset, they will be cloned too.
+        """
+        return OperationQuantizationConfig(
+            input_quantization_configs=[_.copy() for _ in self.input_quantization_config],
+            output_quantization_configs=[_.copy() for _ in self.output_quantization_config],
+            is_positive_quant_op=self.is_active_quant_op
+        )

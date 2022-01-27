@@ -1,6 +1,13 @@
-# PPL Quantization Tool(PPL 量化工具)
+# PPL Quantization Tool 0.6(PPL 量化工具)
 
 PPL Quantization Tool (PPQ) is a powerful offline neural network quantization tool with custimized IR, executor, dispacher and optimization passes.
+
+# What's New with PPQ 0.6
+
+* Fully redesigned network analysis tools and functions
+* Blockwise(Subgraph level) Optimization Methods
+* 4 & 8 mix precision quantization (exprimental)
+* Matrix Factorization Pass (exprimental)
 
 # Features
 
@@ -32,7 +39,7 @@ python setup.py install
 
 * Install PPQ from Pip:
 
-1. pre-built wheels are maintained in [PPQ](https://pypi.org/project/ppq/0.5.2/#files), you could simply install ppq with the following command
+1. pre-built wheels are maintained in [PPQ](https://pypi.org/project/ppq/0.5.2/#files), you could simply install ppq with the following command(You should notice that install from pypi might get a outdated version ...)
 
 ```bash
 python3 -m pip install ppq

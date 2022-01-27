@@ -6,9 +6,11 @@ from typing import Iterable
 import torch
 import torchvision
 from ppq import (QuantizationSettingFactory, TargetPlatform,
-                 graph_similarity_analyse)
+                 graphwise_error_analyse)
 from ppq.api import quantize_torch_model
 from torch.utils.data import DataLoader
+
+from ppq.quantization.analyise.layerwise import layerwise_error_analyse, parameter_analyse
 
 BATCHSIZE = 32
 INPUT_SHAPE = [3, 224, 224]
@@ -44,9 +46,14 @@ quantized = quantize_torch_model(
     onnx_export_file='Output/onnx.model', device=DEVICE, verbose=0)
 
 # invoke graph_similarity_analyse function to anaylse your network
-reports = graph_similarity_analyse(
-    quant_graph=quantized, running_device=DEVICE, collate_fn=collate_fn,
-    dataloader=calibration_dataloader, interested_op_type=['Conv'])
+reports = graphwise_error_analyse(
+    graph=quantized, running_device=DEVICE, collate_fn=collate_fn,
+    dataloader=calibration_dataloader)
 
-for opeartion_name, cosine_similarity in reports.items():
-    print(f'Cosine Similarity of {opeartion_name}: {cosine_similarity*100:.2f}%')
+# WITH PPQ 0.6 or newer, you can invoke layerwise_error_analyse to get a more detailed report.
+reports = layerwise_error_analyse(
+    graph=quantized, running_device=DEVICE, collate_fn=collate_fn,
+    dataloader=calibration_dataloader, interested_outputs='NETWORK OUTPUT VARIABLE NAME')
+
+# WITH PPQ 0.6 or newer, you can invoke parameter_analyse to get a more detailed report.
+parameter_analyse(graph=quantized)
