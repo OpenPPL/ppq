@@ -28,7 +28,7 @@ class NXP_Quantizer(BaseQuantizer):
 
         super().__init__(graph=graph)
 
-    def create_optim_pipeline_from_setting(
+    def build_quant_pipeline(
         self, setting: QuantizationSetting, executor: BaseGraphExecutor) -> QuantizationOptimizationPipeline:
         pipeline = super().build_quant_pipeline(setting, executor)
         pipeline.append_optimization_to_pipeline(NXPResizeModeChangePass(), at_front=True)
