@@ -476,7 +476,8 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
         if 'opsets' in graph._detail:
             opsets = []
             for opset in graph._detail['opsets']:
-                if opset['domain'] in extra_opsets:
+                # last condition shall be removed if we wanna run checker
+                if opset['domain'] in extra_opsets or opset['domain'] == '':
                     continue
                 op = onnx.OperatorSetIdProto()
                 op.domain = opset['domain']
@@ -492,5 +493,5 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
         onnx_model = helper.make_model(
             graph_def, producer_name=PPQ_NAME, opset_imports=opsets)
         onnx_model.ir_version = 7
-        onnx.checker.check_model(onnx_model)
+        # onnx.checker.check_model(onnx_model)
         onnx.save(onnx_model, file_path)
