@@ -10,8 +10,9 @@ from ppq.IR import (BaseGraph, GraphCommand, GraphCommandType, GraphFormatter,
 from ppq.IR.morph import GraphDeviceSwitcher
 from ppq.parser import dump_graph_to_file, load_graph
 from ppq.quantization.quantizer import (BaseQuantizer, ExtQuantizer,
-                                        NXP_Quantizer, PPL_DSP_Quantizer,
-                                        PPLCUDA_INT4_Quantizer,
+                                        NXP_Quantizer,
+                                        ORT_PerTensorQuantizer, ORT_PerChannelQuantizer,
+                                        PPL_DSP_Quantizer, PPLCUDA_INT4_Quantizer,
                                         PPLCUDAMixPrecisionQuantizer,
                                         PPLCUDAQuantizer, TensorRTQuantizer)
 from ppq.scheduler import DISPATCHER_TABLE
@@ -23,6 +24,8 @@ QUANTIZER_COLLECTION = {
     TargetPlatform.DSP_INT8: PPL_DSP_Quantizer,
     TargetPlatform.TRT_INT8: TensorRTQuantizer,
     TargetPlatform.NXP_INT8: NXP_Quantizer,
+    TargetPlatform.ORT_OOS_INT8: ORT_PerTensorQuantizer,
+    # TargetPlatform.ORT_OOS_INT8: ORT_PerChannelQuantizer,
     TargetPlatform.PPL_CUDA_INT8: PPLCUDAQuantizer,
     TargetPlatform.EXTENSION: ExtQuantizer,
     TargetPlatform.PPL_CUDA_MIX: PPLCUDAMixPrecisionQuantizer,
@@ -173,6 +176,7 @@ def quantize_onnx_model(
 
     if setting is None:
         setting = QuantizationSettingFactory.default_setting()
+    setting.equalization = False
 
     ppq_ir = load_onnx_graph(onnx_import_file=onnx_import_file, setting=setting)
 

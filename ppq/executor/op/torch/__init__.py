@@ -17,3 +17,4 @@ from .cuda import PPL_GPU_BACKEND_TABLE
 from .nxp import NXP_BACKEND_TABLE
 from .extension import EXTENSION_BACKEND_TABLE
 from .base import TorchBackendContext
+from .onnx import ONNX_BACKEND_TABLE

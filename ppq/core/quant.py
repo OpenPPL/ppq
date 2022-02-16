@@ -67,6 +67,8 @@ class TargetPlatform(Enum):
 
     NXP_INT8  = 501
     
+    ORT_OOS_INT8 = 601
+
     FP32 = 0
     # SHAPE-OR-INDEX related operation
     SHAPE_OR_INDEX = -1
@@ -87,7 +89,7 @@ class TargetPlatform(Enum):
     def is_quantized_platform(cls, platform) -> bool:
         return platform in {
             cls.DSP_INT8, cls.TRT_INT4, cls.TRT_INT8, cls.NXP_INT8, 
-            cls.PPL_CUDA_INT8, cls.PPL_CUDA_INT4, cls.EXTENSION, cls.PPL_CUDA_MIX}
+            cls.PPL_CUDA_INT8, cls.PPL_CUDA_INT4, cls.EXTENSION, cls.PPL_CUDA_MIX, cls.ORT_OOS_INT8}
 
 
 class RoundingPolicy(Enum):
