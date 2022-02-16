@@ -69,7 +69,7 @@ class ORT_PerTensorQuantizer(BaseQuantizer):
     def quant_operation_types(self) -> set:
         return {
             'Conv', 'GlobalAveragePool', 'AveragePool',
-            'Relu', 'Add', 'Clip',
+            'Relu', 'Add', 'Mul', 'Clip',
             'MatMul'
         }
 
@@ -181,7 +181,7 @@ class ORT_PerChannelQuantizer(BaseQuantizer):
     def quant_operation_types(self) -> set:
         return {
             'Conv', 'GlobalAveragePool', 'AveragePool',
-            'Relu', 'Add', 'Clip',
+            'Relu', 'Add', 'Mul', 'Clip',
             'MatMul'
         }
 
