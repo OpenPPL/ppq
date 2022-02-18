@@ -55,6 +55,21 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
     def get_qlinear_op_type(self, op_type: str) -> str:
         return self.qlinear_op_map.get(op_type, op_type)
 
+    def get_qlinear_op_dominant_dtype(self, op: Operation) -> np.dtype:
+        if op.type in [
+            "QLinearConv",
+            "QLinearAveragePool",
+            "QLinearGlobalAveragePool",
+            "QLinearMatMul",
+            "QLinearAdd",
+            "QLinearMul",
+        ]:
+            # align with zp dtype
+            return op.inputs[2].meta.dtype
+        raise NotImplementedError(
+            f"Please implement dominant dtype extraction for {op.type}"
+        )
+
     @classmethod
     def get_dtype_on_symmetricity(cls, is_asymmetrical: bool) -> np.dtype:
         return (
@@ -578,7 +593,10 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
                 input_var = op.inputs[0]
                 op.meta_data.input_metas[0] = input_var.meta
                 op.meta_data.output_metas[0].shape = input_var.meta.shape
-                op.meta_data.output_metas[0].dtype = input_var.meta.dtype
+                op.meta_data.output_metas[0].dtype = op.meta_data.input_metas[1].dtype
+            elif op.type in self.qlinear_ops:
+                for output_meta in op.meta_data.output_metas:
+                    output_meta.dtype = self.get_qlinear_op_dominant_dtype(op)
 
     def export(self, file_path: str, graph: BaseGraph, config_path: str = None) -> None:
         # remove switchers.
@@ -699,7 +717,7 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
             name = "PPL Quantization Tool - Onnx Export"
 
         # Ready to export onnx graph defination.
-        _inputs, _outputs, _initilizers, _nodes = [], [], [], []
+        _inputs, _outputs, _initilizers, _nodes, _value_infos = [], [], [], [], []
         for operation in graph.topological_sort():
             _nodes.append(self.export_operation(operation))
 
@@ -711,6 +729,8 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
                 _outputs.append(tensor_proto)
             if variable.is_parameter:
                 _initilizers.append(tensor_proto)
+            else:
+                _value_infos.append(tensor_proto)
 
         graph_def = helper.make_graph(
             name=name,
@@ -718,6 +738,7 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
             inputs=_inputs,
             outputs=_outputs,
             initializer=_initilizers,
+            value_info=_value_infos,
         )
 
         extra_opsets = self.required_opsets()
