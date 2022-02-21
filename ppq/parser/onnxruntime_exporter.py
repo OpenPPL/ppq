@@ -146,6 +146,10 @@ class ONNXRUNTIMExporter(OnnxExporter):
         graph.append_variable(x_scale)
         graph.append_variable(x_zero_point)
 
+        if var.name in graph.outputs:
+            graph.outputs.pop(var.name)
+            graph.outputs[intermediate_var_2.name] = intermediate_var_2
+
 
     def insert_dequant_param(self, graph: BaseGraph, var: Variable, is_bias: bool) -> None:
         # apply inplace quantization for parameters and only insert dequant op
@@ -278,7 +282,7 @@ class ONNXRUNTIMExporter(OnnxExporter):
                     compel_pairs.append((var, op, op.config.input_quantization_config[0]))
         return compel_pairs
 
-    def export(self, file_path: str, graph: BaseGraph, config_path: str = None) -> None:
+    def export(self, file_path: str, graph: BaseGraph, config_path: str = None, compel_joint_var = True) -> None:
         # remove switchers.
         if not EXPORT_DEVICE_SWITCHER:
             processer = GraphDeviceSwitcher(graph)
@@ -320,14 +324,15 @@ class ONNXRUNTIMExporter(OnnxExporter):
                 removed_activations.extend(var.dest_ops)
 
         self.remove_activation(graph, removed_activations)
-
-        # insert another pair of quant and dequant ops for compel pairs
-        for (var, op, cfg) in compel_pairs:
-            # skip newly added ops
-            while op not in var.dest_ops:
-                assert var.dest_ops[0].type in {'QuantizeLinear', 'DequantizeLinear'}
-                var = var.dest_ops[0].outputs[0]
-            self.insert_quant_dequant_var(graph, var, cfg, True, op)
+        
+        if compel_joint_var:
+            # insert another pair of quant and dequant ops for compel pairs
+            for (var, op, cfg) in compel_pairs:
+                # skip newly added ops
+                while op not in var.dest_ops:
+                    assert var.dest_ops[0].type in {'QuantizeLinear', 'DequantizeLinear'}
+                    var = var.dest_ops[0].outputs[0]
+                self.insert_quant_dequant_var(graph, var, cfg, True, op)
 
         # collect meta info for parameters and newly-added variables
         self.correct_param_meta(graph)
