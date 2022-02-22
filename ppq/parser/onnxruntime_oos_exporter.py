@@ -123,17 +123,24 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
             )
             return (
                 ((weight / unsqueezed_scale).round() + unsqueezed_zp)
+                .cpu()
                 .numpy()
                 .astype(weight_dtype)
             )
         else:
-            return ((weight / scale).round() + zero_point).numpy().astype(weight_dtype)
+            return (
+                ((weight / scale).round() + zero_point)
+                .cpu()
+                .numpy()
+                .astype(weight_dtype)
+            )
 
     def quantize_bias(
         self, bias: torch.Tensor, scale: torch.Tensor, zero_point: torch.Tensor
     ) -> np.ndarray:
         return (
             ((bias / scale).round() + zero_point)
+            .cpu()
             .numpy()
             .astype(ORTOOSExporter.BIAS_NP_TYPE)
         )
