@@ -121,10 +121,6 @@ class OnnxExporter(GraphExporter):
                     value = convert_any_to_numpy(variable.value).flatten()
                 elif value.ndim == 0:
                     value = [value.item(), ] # it is fine for onnx, cause shape for this value will be []
-            elif isinstance(value, np.ndarray): # value is numpy.ndarray
-                value = value.flatten()
-                if not value.shape:
-                    shape = []
             else: value = value # value is python primary type.
             tensor_proto = helper.make_tensor(
                 name=variable.name, data_type=dtype,

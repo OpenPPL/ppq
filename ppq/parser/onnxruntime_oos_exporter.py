@@ -9,6 +9,7 @@ from ppq.core import (
     OperationMeta,
     QuantizationProperty,
     TensorQuantizationConfig,
+    convert_any_to_torch_tensor,
 )
 from ppq.core.common import ORT_OOS_FUSE_START_OPS, ORT_MICROSOFT_CONTRIB_LINEAR_OPS
 from ppq.IR import BaseGraph, Operation, Variable, QuantableVariable
@@ -23,10 +24,10 @@ import torch
 
 
 class ORTOOSExporter(ONNXRUNTIMExporter):
-    ASYMMETRICAL_ZP_NP_TYPE = np.uint8
-    SYMMETRICAL_ZP_NP_TYPE = np.int8
-    BIAS_NP_TYPE = np.int32
-    SCALE_NP_TYPE = np.float32
+    ASYMMETRICAL_ZP_NP_TYPE = torch.uint8
+    SYMMETRICAL_ZP_NP_TYPE = torch.int8
+    BIAS_NP_TYPE = torch.int32
+    SCALE_NP_TYPE = torch.float32
 
     SCALE_PARAMETER_SUFFIX = "_scale"
     ZP_PARAMETER_SUFFIX = "_zero_point"
@@ -71,7 +72,7 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
         )
 
     @classmethod
-    def get_dtype_on_symmetricity(cls, is_asymmetrical: bool) -> np.dtype:
+    def get_dtype_on_symmetricity(cls, is_asymmetrical: bool) -> torch.dtype:
         return (
             cls.ASYMMETRICAL_ZP_NP_TYPE
             if is_asymmetrical
@@ -112,7 +113,7 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
         zero_point: torch.Tensor,
         is_asymmetrical: bool,
         is_per_channel: bool,
-    ) -> np.ndarray:
+    ) -> torch.Tensor:
         weight_dtype = self.get_dtype_on_symmetricity(is_asymmetrical)
         if is_per_channel is True:
             unsqueezed_scale = self.build_per_channel_param_broadcast_shape(
@@ -124,25 +125,16 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
             return (
                 ((weight / unsqueezed_scale).round() + unsqueezed_zp)
                 .cpu()
-                .numpy()
-                .astype(weight_dtype)
+                .to(weight_dtype)
             )
         else:
-            return (
-                ((weight / scale).round() + zero_point)
-                .cpu()
-                .numpy()
-                .astype(weight_dtype)
-            )
+            return ((weight / scale).round() + zero_point).cpu().to(weight_dtype)
 
     def quantize_bias(
         self, bias: torch.Tensor, scale: torch.Tensor, zero_point: torch.Tensor
-    ) -> np.ndarray:
+    ) -> torch.Tensor:
         return (
-            ((bias / scale).round() + zero_point)
-            .cpu()
-            .numpy()
-            .astype(ORTOOSExporter.BIAS_NP_TYPE)
+            ((bias / scale).round() + zero_point).cpu().to(ORTOOSExporter.BIAS_NP_TYPE)
         )
 
     def add_scale_and_zp_parameter(
@@ -172,13 +164,15 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
             )
             scale = Variable(
                 name=var.name + ORTOOSExporter.SCALE_PARAMETER_SUFFIX,
-                value=np.array(scale, dtype=ORTOOSExporter.SCALE_NP_TYPE),
+                value=convert_any_to_torch_tensor(
+                    scale, dtype=ORTOOSExporter.SCALE_NP_TYPE
+                ),
                 is_parameter=True,
                 dest_ops=dest_ops,
             )
             offset = Variable(
                 name=var.name + ORTOOSExporter.ZP_PARAMETER_SUFFIX,
-                value=np.array(offset, dtype=offset_dtype),
+                value=convert_any_to_torch_tensor(offset, dtype=offset_dtype),
                 is_parameter=True,
                 dest_ops=dest_ops,
             )
