@@ -176,7 +176,6 @@ def quantize_onnx_model(
 
     if setting is None:
         setting = QuantizationSettingFactory.default_setting()
-    setting.equalization = True
 
     ppq_ir = load_onnx_graph(onnx_import_file=onnx_import_file, setting=setting)
 

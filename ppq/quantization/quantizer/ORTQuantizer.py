@@ -153,7 +153,7 @@ class ORT_PerChannelQuantizer(BaseQuantizer):
                     QuantizationProperty.LINEAR +
                     QuantizationProperty.PER_CHANNEL
                 )
-                bias_config.num_of_bits = 32
+                bias_config.num_of_bits = 30
                 bias_config.quant_max = int(pow(2, bias_config.num_of_bits - 1)) - 1
                 bias_config.quant_min = - int(pow(2, bias_config.num_of_bits - 1)) + 1
                 bias_config.state = QuantizationStates.PASSIVE_INIT

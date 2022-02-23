@@ -1315,7 +1315,7 @@ def Gemm_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
 
     return output
 
-def MatMul_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
+def MatMul_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
     ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=2, max_num_of_input=2)
 
