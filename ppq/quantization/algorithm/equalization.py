@@ -103,7 +103,7 @@ class EqualizationPair:
                 num_of_groups = downstream_layer.attributes.get('group', 1)
 
                 weight = torch.reshape(weight, (num_of_groups, weight.shape[0] // num_of_groups) + weight.shape[1: ])
-                weight = torch.permute(weight, (2, 0, 1, 3, 4))
+                weight = weight.permute(2, 0, 1, 3, 4)
                 weight = torch.reshape(weight, (weight.shape[0] * weight.shape[1], -1))
 
                 downstream_params.append(weight)
@@ -111,7 +111,7 @@ class EqualizationPair:
             elif downstream_layer.type == 'Gemm':
                 # weight shape is: [output channel, input channel]
                 weight, bias = self.get_linear_params(downstream_layer, False)
-                downstream_params.append(torch.permute(weight, (1, 0)))
+                downstream_params.append(weight.permute(1, 0))
 
         # format all params
         upstream_key_values   = self.reduce_by_axis(upstream_params, method=self.method, aggerate_axis=1)
