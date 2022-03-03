@@ -283,6 +283,20 @@ class GraphFormatter(GraphCommandProcesser):
                 for var in op.outputs:
                     self.graph.delete_variable(var.name, force_delete=True)
                 self.graph.delete_operation(op.name, force_delete=True)
+        
+        var_blacklist = [None]
+        while len(var_blacklist) > 0:
+            var_blacklist = set()
+            # delete all variables that links to invalid operations:
+            for var in self.graph.variables.values():
+                if var.source_op is not None and var.source_op.name not in self.graph.operations:
+                    var_blacklist.add(var.name)
+                for op in var.dest_ops:
+                    if op.name not in self.graph.operations:
+                        var_blacklist.add(var.name)
+    
+            for var in var_blacklist:
+                self.graph.delete_variable(var, force_delete=True)
 
     def format_parameter_variables(self) -> None:
         vars = []

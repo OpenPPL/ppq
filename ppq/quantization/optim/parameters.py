@@ -56,9 +56,7 @@ class PassiveParameterQuantizePass(QuantizationOptimizationPass):
                     bias_config = op.config.input_quantization_config[-1]
                     bias_config.scale  = weight_config.scale * input_config.scale * self.scale_multiplier
                     bias_config.state  = QuantizationStates.PASSIVE
-                    bias_config.offset = 0
-                    if isinstance(bias_config, ChannelwiseTensorQuantizationConfig):
-                        bias_config.offset = torch.zeros_like(bias_config.scale, dtype=torch.int)
+                    bias_config.offset = torch.zeros_like(bias_config.scale)
                     assert not bias_config.policy.has_property(QuantizationProperty.ASYMMETRICAL), (
                         'Passive parameter does not support ASYMMETRICAL quantization')
 

@@ -1,4 +1,4 @@
-from abc import ABCMeta, abstractmethod, abstractproperty
+from abc import ABCMeta, abstractmethod
 from typing import Callable, Dict, List, Union
 
 from ppq.core import OperationMeta, TargetPlatform, TensorQuantizationConfig
@@ -150,10 +150,6 @@ class BaseGraphExecutor(Callable, metaclass=ABCMeta):
         else:
             raise Exception('Oops, you can never reach here.')
 
-    @ abstractproperty
-    def quantize_function(self):
-        raise NotImplementedError('Please implement this property first.') 
-
     @ abstractmethod
     def forward(
         self, 
@@ -169,10 +165,6 @@ class BaseGraphExecutor(Callable, metaclass=ABCMeta):
         inputs: Union[dict, list, torch.Tensor], 
         output_names:List[str] = None
     ) -> None:
-        raise NotImplementedError('Please implement this function first.')
-
-    @ abstractmethod
-    def operation_forward(self, opeartion: Operation, inputs: list, **kwargs) -> list:
         raise NotImplementedError('Please implement this function first.')
 
     def __call__(

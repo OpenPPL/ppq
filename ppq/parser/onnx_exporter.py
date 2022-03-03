@@ -3,8 +3,9 @@ from typing import Union
 
 import numpy as np
 import torch
-from ppq.core import PPQ_NAME, DataType, convert_any_to_numpy
-from ppq.core.config import EXPORT_DEVICE_SWITCHER, EXPORT_PPQ_INTERNAL_INFO
+from ppq.core import (EXPORT_DEVICE_SWITCHER, EXPORT_PPQ_INTERNAL_INFO,
+                      ONNX_EXPORT_NAME, ONNX_EXPORT_OPSET, ONNX_VERSION,
+                      PPQ_NAME, DataType, convert_any_to_numpy)
 from ppq.IR import BaseGraph, GraphExporter, Operation, Variable
 from ppq.IR.morph import GraphDeviceSwitcher
 from ppq.IR.quantize import QuantableOperation
@@ -138,7 +139,7 @@ class OnnxExporter(GraphExporter):
             processer.remove_switcher()
 
         name = graph._name
-        if not name: name = 'PPL Quantization Tool - Onnx Export'
+        if not name: name = ONNX_EXPORT_NAME
 
         # if a valid config path is given, export quantization config to there.
         if config_path is not None:
@@ -169,7 +170,7 @@ class OnnxExporter(GraphExporter):
         # force opset to 11
         if 'opsets' not in graph._detail:
             op = onnx.OperatorSetIdProto()
-            op.version = 11
+            op.version = ONNX_EXPORT_OPSET
             opsets = [op]
         else:
             opsets = []
@@ -181,6 +182,6 @@ class OnnxExporter(GraphExporter):
 
         onnx_model = helper.make_model(
             graph_def, producer_name=PPQ_NAME, opset_imports=opsets)
-        onnx_model.ir_version = 6
+        onnx_model.ir_version = ONNX_VERSION
         # onnx.checker.check_model(onnx_model)
         onnx.save(onnx_model, file_path)

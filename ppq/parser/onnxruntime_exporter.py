@@ -10,6 +10,7 @@ from ppq.IR import (BaseGraph, Operation, QuantableOperation,
                     QuantableVariable, Variable)
 from ppq.IR.base.command import GraphCommand, GraphCommandType
 from ppq.IR.morph import GraphDeviceSwitcher, GraphFormatter
+from ppq.core.quant import ChannelwiseTensorQuantizationConfig
 from ppq.utils.round import ppq_tensor_round
 
 from .onnx_exporter import OnnxExporter
@@ -49,8 +50,9 @@ class ONNXRUNTIMExporter(OnnxExporter):
         super().__init__()
         self.removed_activation_types = removed_activation_types
 
-    def inplace_quantization(self, var: Variable, is_bias: bool) -> Tuple[torch.Tensor, torch.Tensor, int]:
+    def inplace_quantization(self, var: QuantableVariable, is_bias: bool) -> Tuple[torch.Tensor, torch.Tensor, int]:
         config = var.dest_op_configs[0]
+        assert isinstance(config, TensorQuantizationConfig)
         tensor = var.value
         scale, offset = config.scale, config.offset
         axis = 1
@@ -58,6 +60,7 @@ class ONNXRUNTIMExporter(OnnxExporter):
             tensor = ppq_tensor_round((tensor / scale), config.rounding) + offset
             tensor = torch.clamp(tensor, config.quant_min, config.quant_max)
         else:
+            assert isinstance(config, ChannelwiseTensorQuantizationConfig)
             shape = [1 if axis != config.channel_axis else -1 for axis in range(tensor.ndim)]
             scale, offset = scale.view(shape), offset.view(shape)
             tensor = ppq_tensor_round((tensor / scale), config.rounding) + offset
@@ -69,12 +72,12 @@ class ONNXRUNTIMExporter(OnnxExporter):
             var.value = tensor.type(torch.uint8)
         else:
             var.value = tensor.type(torch.int8)
-        return convert_any_to_torch_tensor(config.scale, dtype=torch.float32), \
-            convert_any_to_torch_tensor(config.offset, dtype=var.value.dtype), axis
+        return (convert_any_to_torch_tensor(config.scale, dtype=torch.float32), 
+            convert_any_to_torch_tensor(config.offset, dtype=var.value.dtype), axis)
 
     def insert_quant_dequant_var(self, 
                                 graph: BaseGraph,
-                                var: Variable,
+                                var: QuantableVariable,
                                 config: TensorQuantizationConfig=None,
                                 single_branch: bool=False,
                                 dest_op: Operation=None
@@ -145,6 +148,11 @@ class ONNXRUNTIMExporter(OnnxExporter):
 
         graph.append_variable(x_scale)
         graph.append_variable(x_zero_point)
+        
+        # PATCH 2022.02.18 FIX BUGS WITH GRAPH OUTPUT EXPORT
+        if var.name in graph.outputs:
+            graph.outputs.pop(var.name)
+            graph.outputs[intermediate_var_2.name] = intermediate_var_2 
 
 
     def insert_dequant_param(self, graph: BaseGraph, var: Variable, is_bias: bool) -> None:
@@ -196,6 +204,7 @@ class ONNXRUNTIMExporter(OnnxExporter):
                 # meta can't be None itself because we have built TensorMeta 
                 # for every input when we correct param meta
                 while meta.shape is None or meta.dtype is None:
+                    assert isinstance(dest_op, Operation)
                     var = dest_op.outputs[0]
                     dest_op = var.dest_ops[0]
                     dest_idx = var.dest_idx[0]
@@ -272,7 +281,9 @@ class ONNXRUNTIMExporter(OnnxExporter):
             if op.type in COMPELING_OP_TYPES and isinstance(op, QuantableOperation):
                 compel_ops.append(op)
         for op in compel_ops:
+            assert isinstance(op, QuantableOperation)
             for var in op.inputs:
+                assert isinstance(var, QuantableVariable)
                 if var.source_op_config is not None and \
                     var.source_op_config.dominated_by != op.config.input_quantization_config[0].dominated_by:
                     compel_pairs.append((var, op, op.config.input_quantization_config[0]))
@@ -307,6 +318,7 @@ class ONNXRUNTIMExporter(OnnxExporter):
                         break
 
         for var in quantable_vars:
+            assert isinstance(var, QuantableVariable)
             # assume parameter var is used by only one op
             if var.is_parameter:
                 if var.dest_ops[0].is_computing_op and var.dest_idx[0] > 1:
@@ -323,6 +335,7 @@ class ONNXRUNTIMExporter(OnnxExporter):
 
         # insert another pair of quant and dequant ops for compel pairs
         for (var, op, cfg) in compel_pairs:
+            assert isinstance(var, Variable)
             # skip newly added ops
             while op not in var.dest_ops:
                 assert var.dest_ops[0].type in {'QuantizeLinear', 'DequantizeLinear'}

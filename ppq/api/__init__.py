@@ -467,4 +467,4 @@ def format_graph(graph: BaseGraph, setting: QuantizationSetting) -> BaseGraph:
     return graph
 
 __all__ = ['load_onnx_graph', 'load_caffe_graph', 'dump_torch_to_onnx', 'quantize_onnx_model', 
-           'quantize_torch_model', 'export_ppq_graph', 'format_graph']
+           'quantize_torch_model', 'quantize_caffe_model', 'export_ppq_graph', 'format_graph']

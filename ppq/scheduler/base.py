@@ -56,7 +56,7 @@ class GraphDispatcher:
 
 def value_tracing_pattern(from_where: Operation, to_where: Operation) -> bool:
     if to_where.type in {'Reshape', 'Slice', 'Gather', 'Pad', 'Resize', 
-                            'Split', 'TopK', 'Tile', 'Expand', 'RoiAlign', 'MMCVRoiAlign'}:
+                         'Split', 'TopK', 'Tile', 'Expand', 'RoiAlign', 'MMCVRoiAlign'}:
         # shape can go through above operations as a input, under this circumstance, their output should still be a tensor of shape.
         # however if shape was feed as a parameter for those operations, then their outputs are irrelavent with shape flow.
         return to_where.inputs[0].source_op == from_where

@@ -108,3 +108,7 @@ def ppq_file_io(func: Callable):
 
 def ppq_warning(info: str):
     print(f'\033[31m{info}\033[0m')
+
+
+def ppq_info(info: str):
+    print(f'\033[33m{info}\033[0m')

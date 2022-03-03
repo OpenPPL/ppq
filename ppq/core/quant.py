@@ -299,7 +299,7 @@ class QuantizationStates(Enum):
     INITIAL     = 1   # 量化参数刚刚被初始化，当前 config 不生效，数据不能被使用
     BAKED       = 2   # 只针对参数量化，表示参数已经被静态量化，当前 config 不生效，数据可以直接使用
     OVERLAPPED  = 3   # 只针对activation量化，表示数据流的量化由其他 config 管理，当前 config 不生效
-    JOINT       = 4   # 只针对activation量化，表示当前数据流处于强制联合定点，当前 config 生效
+    SLAVE       = 4   # 只针对activation量化，表示当前数据流处于强制联合定点，当前 config 生效
     DEACTIVATED = 5   # 表示当前 config 不生效
     ACTIVATED   = 6   # 表示当前 config 生效
     DEQUANTIZED = 7   # 表示当前 config 处于解量化状态，解量化是 PPQ 的一个系统操作
@@ -311,7 +311,7 @@ class QuantizationStates(Enum):
 
     @ classmethod
     def is_activated(cls, state)->bool:
-        return state in {QuantizationStates.ACTIVATED, QuantizationStates.PASSIVE, QuantizationStates.JOINT}
+        return state in {QuantizationStates.ACTIVATED, QuantizationStates.PASSIVE, QuantizationStates.SLAVE}
 
     @ classmethod
     def can_export(cls, state)->bool:
@@ -474,6 +474,29 @@ class TensorQuantizationConfig(Serializable):
             root.state = QuantizationStates.OVERLAPPED
             self.state = QuantizationStates.OVERLAPPED
 
+    def set_master(self, master, recursive: bool = False):
+        assert isinstance(master, TensorQuantizationConfig), (
+            'Can only set this attribute with another tensor config.')
+        assert master.state in {QuantizationStates.ACTIVATED, QuantizationStates.SLAVE}, (
+            f'Quantization State of master must be ACTIVATED or SLAVE, however {master.state.name} was given.')
+        if recursive:
+            root = self.dominated_by
+            root.state = QuantizationStates.SLAVE
+            root._father_config = master
+        else:
+            self._father_config = master
+            self.state = QuantizationStates.SLAVE
+
+    def __is_revisable(self):
+        return (self.dominated_by == self and self.state in {
+            QuantizationStates.ACTIVATED,
+            QuantizationStates.DEQUANTIZED,
+            QuantizationStates.DEACTIVATED,
+            QuantizationStates.INITIAL,
+            QuantizationStates.PASSIVE_INIT,
+            QuantizationStates.PASSIVE
+        })
+
     @ property
     def scale(self) -> Any:
         if self.dominated_by == self: return self._scale
@@ -509,73 +532,85 @@ class TensorQuantizationConfig(Serializable):
         if self.dominated_by == self: return self._quant_max
         else: return self.dominated_by.quant_max
 
+    @ property
+    def delegate(self) -> int:
+        if self.dominated_by == self: return self._quant_max
+        else: return self.dominated_by.quant_max
+
     @ scale.setter
     def scale(self, value: Any):
-        if self.dominated_by != self:
+        if not self.__is_revisable():
             raise PermissionError(
-                f'You are trying to edit property of a tensor quantization configuration({self}). '
-                f'While this configuration has been dominated by {self.dominated_by}. '
-                'Cause being overlapped, any change of this configuration is not allowed.')
+                'Can not change scale of this tensor quantization configuration now. '
+                'It has been overlapped or has an inactive state. '
+                'Due to it is not a active config, any change of this configuration is not allowed.'
+            )
         else:
             self._scale = value
     
     @ offset.setter
     def offset(self, value: Any):
-        if self.dominated_by != self:
+        if not self.__is_revisable():
             raise PermissionError(
-                f'You are trying to edit property of a tensor quantization configuration({self}). '
-                f'While this configuration has been dominated by {self.dominated_by}. '
-                'Cause being overlapped, any change of this configuration is not allowed.')
+                'Can not change offset of this tensor quantization configuration now. '
+                'It has been overlapped or has an inactive state. '
+                'Due to it is not a active config, any change of this configuration is not allowed.'
+            )
         else:
             self._offset = value
     
     @ policy.setter
     def policy(self, policy: QuantizationPolicy):
-        if self.dominated_by != self:
+        if not self.__is_revisable():
             raise PermissionError(
-                f'You are trying to edit property of a tensor quantization configuration({self}). '
-                f'While this configuration has been dominated by {self.dominated_by}. '
-                'Cause being overlapped, any change of this configuration is not allowed.')
+                'Can not change policy of this tensor quantization configuration now. '
+                'It has been overlapped or has an inactive state. '
+                'Due to it is not a active config, any change of this configuration is not allowed.'
+            )
         else:
             self._policy = policy
 
     @ num_of_bits.setter
     def num_of_bits(self, bits: int):
-        if self.dominated_by != self:
+        if not self.__is_revisable():
             raise PermissionError(
-                f'You are trying to edit property of a tensor quantization configuration({self}). '
-                f'While this configuration has been dominated by {self.dominated_by}. '
-                'Cause being overlapped, any change of this configuration is not allowed.')
+                'Can not change num_of_bits of this tensor quantization configuration now. '
+                'It has been overlapped or has an inactive state. '
+                'Due to it is not a active config, any change of this configuration is not allowed.'
+            )
         else:
             self._num_of_bits = bits
 
     @ rounding.setter
     def rounding(self, policy: RoundingPolicy):
-        if self.dominated_by != self:
+        if not self.__is_revisable():
             raise PermissionError(
-                f'You are trying to edit property of a tensor quantization configuration({self}). '
-                f'While this configuration has been dominated by {self.dominated_by}. '
-                'Cause being overlapped, any change of this configuration is not allowed.')
+                'Can not change rounding of this tensor quantization configuration now. '
+                'It has been overlapped or has an inactive state. '
+                'Due to it is not a active config, any change of this configuration is not allowed.'
+            )
         else:
             self._rounding = policy
 
     @ quant_min.setter
     def quant_min(self, min: int):
-        if self.dominated_by != self:
+        if not self.__is_revisable():
             raise PermissionError(
-                f'You are trying to edit property of a tensor quantization configuration({self}). '
-                f'While this configuration has been dominated by {self.dominated_by}. '
-                'Cause being overlapped, any change of this configuration is not allowed.')
+                'Can not change quant_min of this tensor quantization configuration now. '
+                'It has been overlapped or has an inactive state. '
+                'Due to it is not a active config, any change of this configuration is not allowed.'
+            )
         else:
             self._quant_min = min
 
     @ quant_max.setter
     def quant_max(self, max: int):
-        if self.dominated_by != self:
+        if not self.__is_revisable():
             raise PermissionError(
-                f'You are trying to edit property of a tensor quantization configuration({self}). '
-                f'While this configuration has been dominated by {self.dominated_by}. '
-                'Cause being overlapped, any change of this configuration is not allowed.')
+                'Can not change quant_max of this tensor quantization configuration now. '
+                'It has been overlapped or has an inactive state. '
+                'Due to it is not a active config, any change of this configuration is not allowed.'
+            )
         else:
             self._quant_max = max
     
