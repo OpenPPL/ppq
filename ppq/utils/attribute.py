@@ -40,10 +40,11 @@ def checker(attr, input_shape, kernel_shape=None, op_type=None):
     if pad_needed is not None:
         pads = []
         for item in pad_needed:
-            start = (item + 1) // 2 if auto_pad == 'SAME_LOWER' else item // 2
-            end = item - start
-            pads.extend([start, end])
-        attr['pads'] = pads
+            pads.append((item + 1) // 2)
+        # onnx pads format should be as follow [x1_begin, x2_begin...x1_end, x2_end,...]
+        attr['pads'] = pads * 2
+        # onnx pads attribute cannot be used simultaneously with auto_pad attribute
+        attr.pop('auto_pad')
 
 
 def preprocess_attr(attr, op_type=None):

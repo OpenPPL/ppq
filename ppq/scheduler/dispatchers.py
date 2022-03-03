@@ -187,7 +187,7 @@ class ConservativeDispatcher(GraphDispatcher):
             'Conv', 'ConvTranspose', 'Gemm', 'Relu', 'PRelu', 'Clip', 'Pad',
             'Resize', 'MaxPool', 'AveragePool', 'GlobalMaxPool', 'GlobalAveragePool',
             'Mul', 'Add', 'Max', 'Sub', 'Div', 'LeakyRelu', 'Split', 'Concat',
-            'Reshape', 'Transpose', 'Slice', 'Flatten'}
+            'Reshape', 'Transpose', 'Slice', 'Flatten', 'MatMul'}
 
         recivers, generators = SOI_receivers(graph), SOI_generators(graph)
         search_engine, SOI_opeartions = SearchableGraph(graph), set(recivers)

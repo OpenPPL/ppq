@@ -7,7 +7,7 @@ PPQ_DEBUG = False
 
 PPQ_NAME = 'PPL Quantization Tool'
 
-PPQ_VERSION = '0.6.0'
+PPQ_VERSION = '0.6.1'
 
 DUMP_VALUE = True
 

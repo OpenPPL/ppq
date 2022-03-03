@@ -1,5 +1,6 @@
 from ppq.core import NetworkFramework, TargetPlatform, ppq_warning
 from ppq.IR import BaseGraph, GraphBuilder, GraphExporter
+from ppq.quantization.quantizer.ORTQuantizer import ORT_PerTensorQuantizer
 
 from .caffe_exporter import CaffeExporter
 from .caffe_parser import CaffeParser
@@ -7,6 +8,8 @@ from .native import NativeExporter, NativeImporter
 from .nxp_exporter import NxpExporter
 from .onnx_exporter import OnnxExporter
 from .onnx_parser import OnnxParser
+from .onnxruntime_exporter import ONNXRUNTIMExporter
+from .onnxruntime_oos_exporter import ORTOOSExporter
 from .extension import ExtensionExporter
 from .ppl import PPLBackendExporter
 
@@ -21,9 +24,12 @@ EXPORTERS = {
     TargetPlatform.PPL_CUDA_INT8: PPLBackendExporter,
     TargetPlatform.NXP_INT8:      NxpExporter,
     TargetPlatform.ONNX:          OnnxExporter,
+    TargetPlatform.ONNXRUNTIME:   ONNXRUNTIMExporter,
     TargetPlatform.CAFFE:         CaffeExporter,
     TargetPlatform.NATIVE:        NativeExporter,
-    TargetPlatform.EXTENSION:     ExtensionExporter
+    TargetPlatform.EXTENSION:     ExtensionExporter,
+    # TargetPlatform.ORT_OOS_INT8:  ONNXRUNTIMExporter,
+    TargetPlatform.ORT_OOS_INT8:  ORTOOSExporter,
 }
 try:
     from .tensorRT import TensorRTExporter

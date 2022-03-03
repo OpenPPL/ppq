@@ -23,8 +23,8 @@ __all__ = [
     'BatchNormalization_forward', 'Cast_forward', 'Clip_forward', 'Concat_forward',
     'Constant_forward', 'ConstantOfShape_forward', 'Conv_forward', 'Eltwise_forward', 'Equal_forward',
     'UnaryEltwise_forward', 'Expand_forward', 'Flatten_forward', 'Gather_forward', 'GatherND_forward', 'Gemm_forward',
-    'Grid_sampler_forward', 'AveragePool_forward', 'Greater_forward', 'Less_forward', 'MaxPool_forward', '_NMS_forward',
-    'NonZero_forward', 'Not_forward', 'Range_forward',
+    'Grid_sampler_forward', 'AveragePool_forward', 'Greater_forward', 'Less_forward', 'MatMul_forward',
+    'MaxPool_forward', '_NMS_forward', 'NonZero_forward', 'Not_forward', 'Range_forward',
     'ReduceL2_forward', 'ReduceMax_forward', 'Reshape_forward', 'Resize_forward', 'ScatterElements_forward',
     'ScatterND_forward', 'Shape_forward', 'Slice_forward', 'Softmax_forward', 'Squeeze_forward', 'Tile_forward',
     'TopK_forward', 'Transpose_forward', 'Unsqueeze_forward', 'Where_forward', 'ReduceSum_forward', 'ArgMax_forward',
@@ -1315,6 +1315,13 @@ def Gemm_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
 
     return output
 
+def MatMul_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
+    ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
+    ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=2, max_num_of_input=2)
+
+    output = torch.matmul(values[0], values[1])
+
+    return output
 
 def Softmax_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
     """
@@ -1757,6 +1764,7 @@ DEFAULT_BACKEND_TABLE = {
     'Greater': Greater_forward,
     'LeakyRelu': LeakyRelu_forward,
     'Less': Less_forward,
+    'MatMul': MatMul_forward,
     'Max': Eltwise_forward,
     'MaxPool': MaxPool_forward,
     'Min': Eltwise_forward,

@@ -1,4 +1,4 @@
-# PPL Quantization Tool 0.6(PPL 量化工具)
+# PPL Quantization Tool 0.6.1(PPL 量化工具)
 
 PPL Quantization Tool (PPQ) is a powerful offline neural network quantization tool with custimized IR, executor, dispacher and optimization passes.
 
@@ -6,6 +6,7 @@ PPL Quantization Tool (PPQ) is a powerful offline neural network quantization to
 
 * Fully redesigned network analysis tools and functions
 * Blockwise(Subgraph level) Optimization Methods
+* OnnxRuntime Quant&Dequant Format Export
 * 4 & 8 mix precision quantization (exprimental)
 * Matrix Factorization Pass (exprimental)
 
@@ -25,6 +26,17 @@ ATTENTION: For users of pytorch, pytorch might bring you a minimized CUDA librar
 
 ATTENTION: Make sure your python version is >= 3.6.0. PPL Quantization Tool is written with dialects that only supported by python >= 3.6.0.
 
+* Install dependencies:
+    * For Linux User, use following command to install ninja:
+    ```bash
+    sudo apt install ninja-build
+    ```
+
+    * For Windows User:
+        * Download ninja.exe from [https://github.com/ninja-build/ninja/releases](https://github.com/ninja-build/ninja/releases), add it to Windows PATH Environment
+        * Download Visual Studio from [https://visualstudio.microsoft.com](https://visualstudio.microsoft.com/zh-hans/), if you already got a c++ compiler, you can skip this step.
+        * Add your c++ compiler to Windows PATH Environment, if you are using Visual Studio, it should be something like "C:\Program Files\Microsoft Visual Studio\2017\Community\VC\Tools\MSVC\14.16.27023\bin\Hostx86\x86"
+
 * Install PPQ from source:
 
 1. Run following code with your terminal(For windows user, use command line instead).
@@ -32,6 +44,7 @@ ATTENTION: Make sure your python version is >= 3.6.0. PPL Quantization Tool is w
 ```bash
 git clone https://github.com/openppl-public/ppq.git
 cd ppq
+pip install -r requirements.txt
 python setup.py install
 ```
 
@@ -43,19 +56,7 @@ python setup.py install
 
 ```bash
 python3 -m pip install ppq
-```
-
-* Install dependencies:
-    * For Linux User, use following command to install ninja:
-    ```bash
-    sudo apt install ninja-build
-    ```
-
-    * For Windows User:
-        * Download ninja.exe from [https://github.com/ninja-build/ninja/releases](https://github.com/ninja-build/ninja/releases), add it to Windows PATH Environment
-        * Download Visual Studio from [https://visualstudio.microsoft.com](https://visualstudio.microsoft.com/zh-hans/), if you already got a c++ compiler, you can skip this step.
-        * Add your c++ compiler to Windows PATH Environment, if you are using Visual Studio, it should be something like "C:\Program Files\Microsoft Visual Studio\2017\Community\VC\Tools\MSVC\14.16.27023\bin\Hostx86\x86"
-    
+``` 
 
 # Tutorials and Examples
 
