@@ -280,13 +280,13 @@ class BaseGraph(Serializable):
             input_var.dest_ops.pop(dest_idx)
             # once variable is isolated, delete it.
             if len(input_var.dest_ops) == 0 and input_var.name not in self.outputs:
-                self.delete_variable(input_var.name)
+                self.delete_variable(input_var.name, force_delete=force_delete)
         self.operations.pop(operation.name)
 
         if cascade:
             for output_var in operation.outputs:
                 for cascade_op in output_var.dest_ops:
-                    self.delete_operation(cascade_op.name, cascade=True)
+                    self.delete_operation(cascade_op.name, cascade=True, force_delete=force_delete)
 
     def delete_variable(self, var_name: str, force_delete: bool = False):
         if not isinstance(var_name, str): 

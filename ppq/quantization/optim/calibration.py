@@ -1,12 +1,11 @@
 from math import ceil
 from typing import Callable, Dict, Iterable, List
 
-from ppq.core import empty_ppq_cache
-from ppq.core.quant import QuantizationStates
+from ppq.core import QuantizationStates, empty_ppq_cache
 from ppq.executor import BaseGraphExecutor, RuntimeHook
 from ppq.IR import GraphCommandProcesser, QuantableOperation
-from ppq.quantization.observer import OperationObserver, TorchHistObserver
-from ppq.quantization.observer.range import TorchMSEObserver
+from ppq.quantization.observer import (OperationObserver, TorchHistObserver,
+                                       TorchMSEObserver)
 from tqdm import tqdm
 
 from .base import QuantizationOptimizationPass
@@ -210,4 +209,3 @@ class RuntimePerlayerCalibrationPass(RuntimeCalibrationPass):
             
             observer.render_quantization_config()
             observer.report()
-            

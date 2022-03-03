@@ -246,13 +246,12 @@ class ChannelSplitPass(QuantizationOptimizationPass):
         self.current_search_direction = None
         super().__init__(name='Channel Split Pass')
 
-    def calculate_scale(self, split_op: QuantableOperation) -> float:
+    def calculate_scale(self, split_op: QuantableOperation) -> torch.Tensor:
         config = split_op.config.input_quantization_config[1]
         observer = TensorObserverFactroy.build_observer(split_op.parameters[0], config)
         observer.observe(split_op.parameters[0].value)
         observer.render_quantization_config()
-        w_scale = config.scale
-        return w_scale
+        return config.scale
 
     def flip(self, op: Operation) -> bool:
         return (self.current_search_direction == 'down') != (op.type == 'ConvTranspose' or (op.type == 'Gemm'\

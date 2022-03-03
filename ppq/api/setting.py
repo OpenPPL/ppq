@@ -134,13 +134,17 @@ class AdvancedOptimizationSetting():
         # whether to check optimization result after each iteration.
         self.auto_check           = True
         
-        # 偏移量限制，试试1, 2, 4
-        # offset limitation used in this optimziation, try 1, 2, 4
-        self.limit                = 2.0
+        # 偏移量限制，试试 2, 4, 10
+        # offset limitation used in this optimziation, try 2, 4, 10
+        self.limit                = 4.0
 
         # 学习率
         # learning rate.
-        self.lr                   = 1e-3
+        self.lr                   = 3e-4
+        
+        # 训练步数
+        # training steps
+        self.steps                = 5000
         
         # 对那些层进行训练，默认为 空数组 则训练全部层
         # layers that need to be finetuned via this method.
@@ -169,7 +173,7 @@ class ActivationQuantizationSetting():
         # 激活值原地量化，设置为 True 且 USING_CUDA_KERNEL = True，则所有激活值原地量化，不产生额外显存
         # inplace quantization, if USING_CUDA_KERNEL = True, 
         # quantize all activations inplace, do not require extra memory.
-        self.inplace_act_quantization = True
+        self.inplace_act_quantization = False
 
 
 class ParameterQuantizationSetting():
@@ -214,9 +218,24 @@ class QuantizationFusionSetting():
         # skip passive opeartion's input and output quantization, keep them with a same quantization scale and offset.
         self.fuse_passive_op = True
         
-        # 执行 add, sub, concat 强制联合定点
-        # compel input variable of concat, add and sub share a common scale and offset
-        self.compel_joint_quant = True
+        # 对多输入算子执行定点对齐
+        # 对于 Add, Concat 这类具有多个输入的算子，硬件执行时必须要求所有输入位宽相同且量化信息一致
+        # 在 8 bit 网络中，我们不讨论位宽的问题，只讨论量化信息
+        # 选择对齐方式 - Align to Large, 则所有输入量化信息将合并成一个更大范围的量化信息, 
+        #   保证其能表示所有输入的最小值与所有输入的最大值。
+        # 选择对齐方式 - Align to Output, 则所有输入量化信息将全部等同于算子输出的量化信息
+        # 设置 force_alignment_overlap 为 True, 则强制覆盖算子的上游量化信息，对于特殊结构的网络，这可能导致大范围的合并。
+        
+        # For Operations like Add, Concat, hardware requires their inputs share a same quantization config.
+        # So that we implements 2 alignment method here for simulating hardware behaviour:
+        # Align to Large: all input variables will merge their quantization range to a larger one.
+        # Align to Output: all input quantization config will be replaced by output quantization config.
+        # force_alignment_overlap: if set to true, ppq will overlap upstream quantization config, for some networks
+        #   it will incurs configuration coalesce among the whole graph.
+        self.align_quantization   = True
+        self.align_elementwise_to = 'Align to Large'
+        self.align_concat_to      = 'Align to Output'
+        self.force_alignment_overlap = False
 
 
 class TemplateSetting():
@@ -253,6 +272,45 @@ class BiasCorrectionSetting():
         
         self.verbose            = True
 
+
+class LearningStepSizeSetting():
+    def __init__(self) -> None:
+        # should only contain computing ops, if given, ops in interested_layers will be checked and
+        # if conditions are satisfied, weight, scale of weight, scale of activation will be trained
+        # with mse optimization goal, if not given, every condition-satisfied computing op will be 
+        # optimized
+        self.interested_layers = []
+        # num of training epochs, please adjust it to your needs
+        self.epochs            = 30
+        # initial learning rate, by default Adam optimizer and a multistep scheduler with 0.1 decay
+        # are used for convergence
+        self.lr                = 1e-4
+        # scale multiplifer for bias(negative quantized param)
+        self.scale_multiplier  = 2.0
+        # graphwise or layerwise, if mode is set to graphwise, you should make sure valid gradient
+        # could flow back to your parameters from variable specified in output_names
+        self.mode              = 'graphwise'
+        # variable names to compute loss, if not given, the final output will be used
+        # in graphwise mode, be careful in aware of valid back propagation in your graph
+        self.output_names      = []
+
+class BlockwiseReconstructionSetting():
+     def __init__(self) -> None:
+        # if given, only block containing op in interested_layers will be optimized, otherwise every
+        # block in graph will be optimized
+        self.interested_layers  = []
+        # whether to tune activation scale
+        self.tune_act_scale     = True
+        # initial learning rate, by default Adam optimizer and a multistep scheduler with 0.1 decay
+        self.lr                 = 1e-3
+        # number of training epochs
+        self.epochs             = 300
+        # max number of ops contained in a block
+        self.max_block_size     = 4
+        # loss = MSELoss + lamda * RoundingLoss
+        self.lamda              = 1.0
+        # scale multiplifer for bias(negative quantized param)
+        self.scale_multiplier   = 2.0
 
 class Dispatching():
     def __init__(self, operation: str, platform: int) -> None:
@@ -320,6 +378,15 @@ class QuantizationSetting():
         self.quantize_parameter              = True
         self.quantize_parameter_setting      = ParameterQuantizationSetting()
 
+
+        self.lsq_optimization                = False
+        self.lsq_optimization_setting        = LearningStepSizeSetting()
+
+        
+        self.blockwise_reconstruction         = False
+        self.blockwise_reconstruction_setting = BlockwiseReconstructionSetting()
+
+
         # 是否启动优化算法降低量化误差
         self.advanced_optimization           = False
         self.advanced_optimization_setting   = AdvancedOptimizationSetting()
@@ -359,7 +426,7 @@ class QuantizationSettingFactory:
     def pplcuda_setting() -> QuantizationSetting:
         default_setting = QuantizationSetting()
         default_setting.equalization = False
-        default_setting.fusion_setting.fuse_conv_add = True
+        default_setting.fusion_setting.fuse_conv_add = False
         return default_setting
 
     @ staticmethod

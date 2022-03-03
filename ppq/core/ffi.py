@@ -7,21 +7,21 @@
 """
 
 import os
-from typing import List
 
 import torch
 from torch.utils.cpp_extension import load
+from torch.cuda import synchronize
 
 from .defs import ppq_warning
 
-ppq_warning('Ninja is compling CUDA Backends now, Please wait...')
-PPQ_CUDA = load(
+ppq_warning('Compling CUDA Kernels. Please wait...')
+__CUDA_EXTENTION__ = load(
     name='PPQ_Cuda_Impls',
     sources=[
         os.path.join(os.path.dirname(os.path.dirname(__file__)), 'csrc/cuda/export.cc'),
         os.path.join(os.path.dirname(os.path.dirname(__file__)), 'csrc/cuda/linear.cu'),
         os.path.join(os.path.dirname(os.path.dirname(__file__)), 'csrc/cuda/sort.cu'),
-        os.path.join(os.path.dirname(os.path.dirname(__file__)), 'csrc/cuda/sieve.cu'),
+        os.path.join(os.path.dirname(os.path.dirname(__file__)), 'csrc/cuda/train.cu'),
     ],
     build_directory=os.path.join(os.path.dirname(os.path.dirname(__file__)), 'csrc/build/'),
     with_cuda=True,
@@ -33,37 +33,40 @@ class CUDA:
     """
     CUDA is a helper class for invoking highly-effcient custimized cuda kernel.
         PPQ developer team has implemented a series of quantization related cuda kernel,
-        They are 5-100x faster than torch kernels, with 50% less gpu memory cost.
+        They are 5-100x faster than torch kernels, with less gpu memory cost.
 
     You can easily extend your cuda kernel via this class:
         Firstly, implement your kernel within ppq/csrc/cuda, write your own .cu file and .h file.
         Secondly, add your functions to ppq/csrc/cuda/export.cc, add them to export table.
-        Finally, add a interface with this python class(ppq.core.ffi.CUDA), following the signature as same as others.
+        Finally, add a interface with this python class(ppq.core.ffi.CUDA), 
+        following the signature as same as others.
+
+    PPQ CUDA Extention 命名规则:
+        我们使用函数名+后缀名的形式命名 CUDA Extension 函数:
+        
+        后缀名 _T 表示 Tensorwise 函数
+        后缀名 _C 表示 Channelwise 函数
+        后缀名 _B 表示 导函数
+
+    例如函数 LinearQuantize_T_B 表示线性量化函数的 Tensorwise 版本，并且是导函数。
     """
     @ staticmethod
-    def TensorwiseLinearQuantize(
+    def LinearQuantize_T(
         tensor: torch.Tensor,
-        scale: float,
-        offset: int,
+        scales: torch.Tensor,
+        offsets: torch.Tensor,
         minimum: int = -128,
         maximum: int = 127,
-        rounding: int = 0,
-        inplace: bool = False,
+        rounding: int = 0
     ) -> torch.Tensor:
-        # we can quantize all element inplace via custimized CUDA kernel to save memory.
-        if not inplace: output = tensor.clone()
-        else: output = tensor
-
+        if not tensor.is_contiguous(): tensor = tensor.contiguous()
         # if scale is too small, quantization might cause fp32 underflow.
         # if scale < 1e-7: raise ValueError('scale is too small.')
+        return __CUDA_EXTENTION__.QuantizeTensor_LT(
+            tensor, scales, offsets, minimum, maximum, rounding)
 
-        PPQ_CUDA.TensorwiseLinearQuantize(
-            tensor, output, scale, offset, minimum, maximum, rounding)
-
-        return output
-    
     @ staticmethod
-    def ChannelwiseLinearQuantize(
+    def LinearQuantize_C(
         tensor: torch.Tensor,
         scales: torch.Tensor,
         offsets: torch.Tensor,
@@ -71,28 +74,53 @@ class CUDA:
         minimum: int = -128,
         maximum: int = 127,
         rounding: int = 0,
-        inplace: bool = False,
     ) -> torch.Tensor:
-        # we can quantize all element inplace via custimized CUDA kernel to save memory.
-        if not inplace: output = tensor.clone()
-        else: output = tensor
-
-        PPQ_CUDA.ChannelwiseLinearQuantize(tensor, scales, offsets, output, 
-                                           channel_axis, minimum, maximum, rounding)
-
-        return output
+        if not tensor.is_contiguous(): tensor = tensor.contiguous()
+        return __CUDA_EXTENTION__.QuantizeTensor_LC(
+            tensor, scales, offsets, minimum, maximum, channel_axis, rounding)
+        
+    @ staticmethod
+    def LinearQuantize_T_B(
+        tensor: torch.Tensor,
+        quantized: torch.Tensor,
+        scales: torch.Tensor,
+        offsets: torch.Tensor,
+        dy: torch.Tensor,
+        minimum: int,
+        maximum: int
+    ) -> torch.Tensor:
+        if not tensor.is_contiguous(): tensor = tensor.contiguous()
+        return __CUDA_EXTENTION__.QuantizeTensor_LT_B(
+            tensor, quantized, scales, offsets, 
+            dy, minimum, maximum
+        )
 
     @ staticmethod
-    def Histogram(
+    def LinearQuantize_C_B(
+        tensor: torch.Tensor,
+        quantized: torch.Tensor,
+        scales: torch.Tensor,
+        offsets: torch.Tensor,
+        dy: torch.Tensor,
+        minimum: int,
+        maximum: int,
+        channel_axis: int,
+    ) -> torch.Tensor:
+        if not tensor.is_contiguous(): tensor = tensor.contiguous()
+        return __CUDA_EXTENTION__.QuantizeTensor_LC_B(
+            tensor, quantized, scales, offsets, 
+            dy, minimum, maximum, channel_axis
+        )
+
+    @ staticmethod
+    def Histogram_T(
         tensor: torch.Tensor,
         histogram: torch.Tensor,
         scale: float,
-        offset: int = 0,
-        abs_mode: bool = True,
-        rounding: int = 0
+        clip_outliers: bool = True
     ) -> torch.Tensor:
         # if scale < 1e-7: raise ValueError('scale is too small.')
-        PPQ_CUDA.TensorwiseHistogram(tensor, histogram, scale, offset, abs_mode, rounding)
+        __CUDA_EXTENTION__.Histogram_T(tensor, scale, clip_outliers, histogram)
         return histogram
 
     @ staticmethod
@@ -100,38 +128,89 @@ class CUDA:
         tensor: torch.Tensor,
         q: float,
     ) -> torch.Tensor:
-        return PPQ_CUDA.Quantile(tensor, q)
+        return __CUDA_EXTENTION__.Quantile_T(tensor, q)
 
     @ staticmethod
-    def TensorwiseLinearQuantSieve(
+    def TensorClip_T(
         tensor: torch.Tensor,
-        fp_offset: torch.Tensor,
-        scale: float,
-        offset: int,
+        reference: torch.Tensor,
+        limit: torch.Tensor,
+    ) -> torch.Tensor:
+        if not tensor.is_contiguous(): tensor = tensor.contiguous()
+        if not reference.is_contiguous(): tensor = reference.contiguous()
+        return __CUDA_EXTENTION__.TensorClip_T(tensor, reference, limit)
+
+    @ staticmethod
+    def TensorClip_C(
+        tensor: torch.Tensor,
+        reference: torch.Tensor,
+        limit: torch.Tensor,
+        channel_axis: int,
+    ) -> torch.Tensor:
+        if not tensor.is_contiguous(): tensor = tensor.contiguous()
+        if not reference.is_contiguous(): tensor = reference.contiguous()
+        return __CUDA_EXTENTION__.TensorClip_C(
+            tensor, reference, limit, channel_axis)
+        
+    @ staticmethod
+    def RoundingLoss_LT(
+        tensor: torch.Tensor,
+        scales: torch.Tensor,
+        offsets: torch.Tensor,
         minimum: int = -128,
         maximum: int = 127,
-        rounding: int = 0,
-        limit: float = 2.0,
-        threshold: float = 0.95
-    ) -> List[torch.Tensor]:
-        return PPQ_CUDA.TensorwiseLinearQuantSieve(
-            tensor, fp_offset, scale, offset, 
-            minimum, maximum, rounding, limit, threshold)
-    
+        rounding: int = 0
+    ) -> torch.Tensor:
+        if not tensor.is_contiguous(): tensor = tensor.contiguous()
+        return __CUDA_EXTENTION__.RoundingLoss_LT(
+            tensor, scales, offsets, minimum, maximum, rounding)
+
     @ staticmethod
-    def ChannelwiseLinearQuantSieve(
+    def RoundingLoss_LT_B(
         tensor: torch.Tensor,
-        fp_offset: torch.Tensor,
+        dy    : torch.Tensor,
+        scales: torch.Tensor,
+        offsets: torch.Tensor,
+        minimum: int = -128,
+        maximum: int = 127,
+        rounding: int = 0
+    ) -> torch.Tensor:
+        if not tensor.is_contiguous(): tensor = tensor.contiguous()
+        return __CUDA_EXTENTION__.RoundingLoss_LT_B(
+            tensor, dy, scales, offsets, minimum, maximum, rounding)
+        
+    @ staticmethod
+    def RoundingLoss_LC(
+        tensor: torch.Tensor,
         scales: torch.Tensor,
         offsets: torch.Tensor,
         channel_axis: int,
         minimum: int = -128,
         maximum: int = 127,
-        rounding: int = 0,
-        limit: float = 2.0,
-        threshold: float = 0.95
-    ) -> List[torch.Tensor]:
-        return PPQ_CUDA.ChannelwiseLinearQuantSieve(
-            tensor, fp_offset, scales, offsets, 
-            channel_axis, minimum, maximum, rounding, 
-            limit, threshold)
+        rounding: int = 0
+    ) -> torch.Tensor:
+        if not tensor.is_contiguous(): tensor = tensor.contiguous()
+        return __CUDA_EXTENTION__.RoundingLoss_LC(
+            tensor, scales, offsets, minimum, maximum, channel_axis, rounding)
+
+    @ staticmethod
+    def RoundingLoss_LC_B(
+        tensor: torch.Tensor,
+        dy    : torch.Tensor,
+        scales: torch.Tensor,
+        offsets: torch.Tensor,
+        channel_axis: int,
+        minimum: int = -128,
+        maximum: int = 127,
+        rounding: int = 0
+    ) -> torch.Tensor:
+        if not tensor.is_contiguous(): tensor = tensor.contiguous()
+        return __CUDA_EXTENTION__.RoundingLoss_LC_B(
+            tensor, dy, scales, offsets, minimum, maximum, channel_axis, rounding)
+
+    @ staticmethod
+    def Sync():
+        """
+        Synchronize device.
+        """
+        synchronize()

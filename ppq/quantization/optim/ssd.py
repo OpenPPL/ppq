@@ -10,7 +10,7 @@ from ppq.executor.base import GLOBAL_DISPATCHING_TABLE
 from ppq.quantization.observer import CalibrationHook, OperationObserver
 from ppq.quantization.observer.range import TorchHistObserver
 from ppq.quantization.qfunction import BaseQuantFunction
-from ppq.quantization.qfunction.linear import TorchLinearQuantFunction
+from ppq.quantization.qfunction.linear import PPQLinearQuantFunction
 from ppq.quantization.measure import torch_mean_square_error
 from .base import QuantizationOptimizationPass
 from typing import Callable, Dict, Iterable, List, Set
@@ -44,7 +44,7 @@ class SSDEqualizationPass(QuantizationOptimizationPass):
         channel_ratio: float = 0.5,
         loss_threshold: float = 0.8,
         layer_norm: bool = False,
-        quant_func: BaseQuantFunction = TorchLinearQuantFunction,
+        quant_func: BaseQuantFunction = PPQLinearQuantFunction,
         iteration: int = 3
     ):
         """SSD Equalization Pass With Loss Checking

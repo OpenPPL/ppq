@@ -1,204 +1,360 @@
 # include "linear.h"
+# include "common.cuh"
 
-__device__ inline int _round2int(
-    const float value, 
-    const int rounding
-){
-    switch(rounding){
-        case ROUND_HALF_EVEN:
-            return __float2int_rn(value);
-        case ROUND_HALF_UP:
-            return floor(value + .5);
-        case ROUND_HALF_DOWN:
-            return ceil(value - .5);
-        case ROUND_HALF_TOWARDS_ZERO:
-            if (value > 0) return _round2int(value, ROUND_HALF_DOWN);
-            else return _round2int(value, ROUND_HALF_UP);
-        case ROUND_HALF_FAR_FORM_ZERO:
-            if (value > 0) return _round2int(value, ROUND_HALF_UP);
-            else return _round2int(value, ROUND_HALF_DOWN);
-        case ROUND_UP:
-            return ceil(value);
-        case ROUND_DOWN:
-            return floor(value);
-        default:
-            return __float2int_rn(value);
-    }
-    return 0;
+template<typename T>
+__device__ __forceinline__ T WARP_SHFL_XOR(T value, int laneMask,
+                                            int width = 32, unsigned int mask = FINAL_MASK) {
+#if __CUDACC_VER_MAJOR__ * 1000 + __CUDACC_VER_MINOR__ * 10 >= 9000
+    return __shfl_xor_sync(mask, value, laneMask, width);
+#else
+    return __shfl_xor(value, laneMask, width);
+#endif
 }
 
-template<typename Dtype>
-__global__ static void _linear_tensor_quantize(
-    const int num_of_elements,
-    Dtype* source,
-    Dtype* dest,
-    const float scale,
-    const int offset,
-    const int minimum,
-    const int maximum,
-    const int rounding
-){
-    for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < num_of_elements; i += blockDim.x * gridDim.x)
-    {
-        int quantized_value = _round2int(source[i] / scale, rounding) + offset;
-        if(quantized_value > maximum) quantized_value = maximum;
-        if(quantized_value < minimum) quantized_value = minimum;
-        dest[i] = (quantized_value - offset) * scale;
-    }
+template<typename T>
+__device__ __forceinline__ T WarpReduceSum(T val) {
+    for (int mask = 16; mask > 0; mask >>= 1)
+        val += WARP_SHFL_XOR(val, mask, 32, FINAL_MASK);
+    return val;
 }
 
-template<typename Dtype>
-__global__ static void _linear_channel_quantize(
-    const int num_of_elements,
-    Dtype* source,
-    Dtype* dest,
-    float* scales,
-    int* offsets,
-    const int element_per_channel,
-    const int num_of_channel,
-    const int minimum,
-    const int maximum,
-    const int rounding
+template<typename T>
+__device__ __forceinline__ T BlockReduceSum(T val) {
+    __shared__ T shared[32];
+    int lane = threadIdx.x & 0x1f;
+    int wid = threadIdx.x >> 5;
+
+    val = WarpReduceSum(val);
+    if(lane == 0) shared[wid] = val;
+    __syncthreads();
+
+    val = (lane < (blockDim.x >> 5)) ? shared[lane] : (T)0.0f;
+    val = WarpReduceSum(val);
+    return val;
+}
+
+__global__ void _QuantizeTensor_LT(
+    const int64_t num_of_element,
+    const float*     value,
+    const float*     scale,
+    const float*     offset,
+    const int        clip_min,
+    const int        clip_max,
+    const Rounding   rounding,
+    float* out
 ){
-    for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < num_of_elements; i += blockDim.x * gridDim.x)
-    {
-        int channel = (i / element_per_channel) % num_of_channel;
-        int quantized_value = _round2int(source[i] / scales[channel], rounding) + offsets[channel];
-        if(quantized_value > maximum) quantized_value = maximum;
-        if(quantized_value < minimum) quantized_value = minimum;
-        dest[i] = (quantized_value - offsets[channel]) * scales[channel];
+    float s = scale[0]; int o = std::nearbyint(offset[0]); int64_t iter;
+    KERNEL_LOOP(iter, num_of_element){
+        auto _ = QuantizeScalar<float, float, int>(
+            value[iter], s, o, clip_min, clip_max, rounding);
+        out[iter] = DequantizeScalar<int, float, int>(_, s, o);
     }
 }
 
-template<typename Dtype>
-__global__ static void _tensor_histogram(
-    const int num_of_elements,
-    const int num_of_bins,
-    Dtype* source,
-    int* dest,
-    const float scale,
-    const int offset,
-    const bool abs,
-    const int rounding
-){
-    for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < num_of_elements; i += blockDim.x * gridDim.x)
-    {
-        int selected_bin;
-        if(abs && source[i] < 0) selected_bin = __float2int_rz(- source[i] / scale) + offset;
-        else selected_bin = floor(source[i] / scale) + offset;
+__host__ Tensor QuantizeTensor_LT(
+    const Tensor &value, const Tensor &scale, const Tensor &offset, 
+    const int clip_min, const int clip_max, 
+    Rounding rounding){
+    /** 
+     * PPQ Tensor Quantization Function implementation.
+     * This function quantizes a float tensor(tensor wise), 
+     * giving an quantized tensor as output 
+     * 
+     * Say we have a float value f, and int value i
+     * This Transformation satisfies: f = (clip(i / s + o) - o) * s
+     * Where s is scale factor, and o is offset
+     * 
+     * This function is tensor wise quantization function
+     * All tensor share a same scale and offset
+     */
+    CheckTensor(value, at::kFloat, "Value(FP32)");
+    CheckTensor(scale, at::kFloat, "Scale(FP32)");
+    CheckTensor(offset, at::kFloat, "Offset(FP32)");
 
-        selected_bin = selected_bin >= 0 ? selected_bin : 0;
-        selected_bin = selected_bin < num_of_bins ? selected_bin : num_of_bins - 1;
-        atomicAdd(&dest[selected_bin], 1);
+    Tensor quantized = at::empty_like(value);
+    _QuantizeTensor_LT<<<NUM_OF_BLOCK(NUM_OF_ELEMENT(value)), CUDA_NUM_THREADS, 0, at::cuda::getCurrentCUDAStream()>>>(
+        NUM_OF_ELEMENT(value),
+        PTR<float>(value), PTR<float>(scale), PTR<float>(offset),
+        clip_min, clip_max, rounding, PTR<float>(quantized)
+    );
+    return quantized;
+}
+
+__global__ void _QuantizeTensor_LC(
+    const int64_t    num_of_element,
+    const int64_t    element_per_channel,
+    const int        num_of_channel,
+    const float*     value,
+    const float*     scale,
+    const float*     offset,
+    const int        clip_min,
+    const int        clip_max,
+    const Rounding   rounding,
+    float* out
+){
+    int64_t iter;
+    KERNEL_LOOP(iter, num_of_element){
+        int c = (iter / element_per_channel) % num_of_channel;
+        auto _ = QuantizeScalar<float, float, int>(
+            value[iter], scale[c], std::nearbyint(offset[c]), clip_min, clip_max, rounding);
+        out[iter] = DequantizeScalar<int, float, int>(_, scale[c], std::nearbyint(offset[c]));
     }
 }
 
-/*
-template<typename Dtype>
-__global__ static void _mse_quantize_scale_searching(
-    const int num_of_elements,
-    const float* scales,
-    const int *offsets,
-    Dtype* source,
-    Dtype* dest,
-    const int minimum,
-    const int maximum,
-    const int rounding,
-){
-    for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < num_of_elements; i += blockDim.x * gridDim.x)
-    {
-        int quantized_value = _round2int(source[i] / scale, rounding) + offset;
-        if(quantized_value > maximum) quantized_value = maximum;
-        if(quantized_value < minimum) quantized_value = minimum;
-        dest[i] = (quantized_value - offset) * scale;
-    }
-}
-*/
+__host__ Tensor QuantizeTensor_LC(
+    const Tensor &value, const Tensor &scale, const Tensor &offset, 
+    const int clip_min, const int clip_max, const int channel_axis,
+    Rounding rounding){
+    /** 
+     * PPQ Tensor Quantization Function implementation.
+     * This function quantizes a float tensor(channel wise), 
+     * giving an quantized tensor as output 
+     * 
+     * Say we have a float value f, and int value i
+     * This Transformation satisfies: f = (clip(i / s + o) - o) * s
+     * Where s is scale factor, and o is offset
+     * 
+     * This function is channel wise quantization function
+     * Each channel has its own scale and offset.
+     */
+    CheckTensor(value, at::kFloat, "Value(FP32)");
+    CheckTensor(scale, at::kFloat, "Scale(FP32)");
+    CheckTensor(offset, at::kFloat, "Offset(FP32)");
 
-void cuda_linear_tensor_quantize(
-    const Tensor &source,
-    Tensor &dest,
-    const float scale,
-    const float offset,
-    const int minimum,
-    const int maximum,
-    const int rounding
-){
-    constexpr int num_of_threads = CUDA_NUM_THREADS;
-    const int num_of_elements = source.numel();
-    const int num_of_blocks  = (num_of_elements + num_of_threads - 1) / num_of_threads;
-
-    if (source.dtype() == at::kFloat){
-        float *source_data = source.data_ptr<float>();
-        float *dest_data   = dest.data_ptr<float>();
-        _linear_tensor_quantize<float> <<<num_of_blocks, num_of_threads>>>(
-            num_of_elements, source_data, dest_data, scale, offset, minimum, maximum, rounding
-        );
-    }
-    else {
-        throw "Unsupported tensor dtype.";
-    }
-}
-
-void cuda_linear_channel_quantize(
-    const Tensor &source,
-    const Tensor &scales,
-    const Tensor &offsets,
-    Tensor &dest,
-    const int channel_axis,
-    const int minimum,
-    const int maximum,
-    const int rounding
-){
-    constexpr int num_of_threads = CUDA_NUM_THREADS;
-    const int num_of_elements = source.numel();
-    const int num_of_blocks  = (num_of_elements + num_of_threads - 1) / num_of_threads;
-    
     int element_per_channel = 1;
-    const int num_of_channel = source.sizes()[channel_axis];
-    for(int axis = source.ndimension() - 1; axis != channel_axis; axis--){
-        element_per_channel *= source.sizes()[axis];
+    const int num_of_channel = value.sizes()[channel_axis];
+    for(int axis = value.ndimension() - 1; axis != channel_axis; axis--){
+        element_per_channel *= value.sizes()[axis];
     }
-    
-    float *scale_data_ptr = scales.data_ptr<float>();
-    int *offset_data_ptr = offsets.data_ptr<int>();
 
-    // calculate element_per_channel, num_of_channel
-    if (source.dtype() == at::kFloat){
-        float *source_data = source.data_ptr<float>();
-        float *dest_data   = dest.data_ptr<float>();
-        _linear_channel_quantize<float> <<<num_of_blocks, num_of_threads>>>(
-            num_of_elements, source_data, dest_data, scale_data_ptr, offset_data_ptr, 
-            element_per_channel, num_of_channel, minimum, maximum, rounding
-        );
-    }
-    else {
-        throw "Unsupported tensor dtype.";
+    Tensor quantized = at::empty_like(value);
+    _QuantizeTensor_LC<<<NUM_OF_BLOCK(NUM_OF_ELEMENT(value)), CUDA_NUM_THREADS, 0, at::cuda::getCurrentCUDAStream()>>>(
+        NUM_OF_ELEMENT(value), element_per_channel, num_of_channel,
+        PTR<float>(value), PTR<float>(scale), PTR<float>(offset),
+        clip_min, clip_max, rounding, PTR<float>(quantized)
+    );
+    return quantized;
+}
+
+__global__ void _Histogram_T(
+    const int64_t num_of_elements,
+    const int64_t num_of_bins,
+    const float* value,
+    const float hist_scale,
+    const bool clip_outliers,
+    int* hist){
+    int64_t iter;
+    KERNEL_LOOP(iter, num_of_elements){
+        int b = floor(fabs(value[iter]) / hist_scale);
+        if (clip_outliers && b > num_of_bins - 1) continue;
+        else if (b > num_of_bins - 1) b = num_of_bins - 1;
+        atomicAdd(&hist[b], 1); // fast enough ...
     }
 }
 
-void cuda_tensor_histogram(
-    const Tensor &source,
-    Tensor &dest,
-    const float scale,
-    const int offset,
-    const bool abs,
-    const int rounding
-){
-    constexpr int num_of_threads = CUDA_NUM_THREADS;
-    const int num_of_elements = source.numel();
-    const int num_of_bins     = dest.numel();
-    const int num_of_blocks   = (num_of_elements + num_of_threads - 1) / num_of_threads;
+__host__ void Histogram_T(
+    const Tensor &value,
+    const float hist_scale,
+    const bool clip_outliers,
+    Tensor &hist){
+    /** 
+     * PPQ Tensorwise Histogram Implementation
+     * This function computes histogram of given value.
+     * Result will sum up to hist tensor.
+     * 
+     * Say we have a float value f, and a float value hist_scale
+     * We will select hist_bin = floor(f / hist_scale)
+     */
+    CheckTensor(value, at::kFloat, "Value(FP32)");
+    CheckTensor(hist, at::kInt, "Histogram(INT8)");
 
-    if (abs && offset != 0) throw "offset is invalid when abs mode is activated, please set it to 0.";
-    if (source.dtype() == at::kFloat){
-        float *source_data = source.data_ptr<float>();
-        int *dest_data     = dest.data_ptr<int>();
-        _tensor_histogram<float> <<<num_of_blocks, num_of_threads>>>(
-            num_of_elements, num_of_bins, source_data, dest_data, scale, offset, abs, rounding
-        );
+    _Histogram_T<<<NUM_OF_BLOCK(NUM_OF_ELEMENT(value)), CUDA_NUM_THREADS, 0, at::cuda::getCurrentCUDAStream()>>>(
+        NUM_OF_ELEMENT(value), NUM_OF_ELEMENT(hist), PTR<float>(value),
+        hist_scale, clip_outliers, PTR<int>(hist)
+    );
+}
+
+__global__
+void _QuantizeTensor_LT_B(
+    const int64_t num_of_elements,
+    const float* value,
+    const float* quantized,
+    const float* scales,
+    const float* offsets,
+    const float* grad_y,
+    const int clip_min,
+    const int clip_max,
+    float * grad_v,
+    float * grad_s,
+    float * grad_o
+){
+    int64_t iter; float s = scales[0]; int o = std::nearbyint(offsets[0]);
+
+    KERNEL_LOOP(iter, num_of_elements){
+        float v = value[iter];
+        
+        /* Calculate grad for scales, offsets, alpha */
+        float partial_gard_s = ((quantized[iter] - v) / s) * grad_y[iter];
+        float partial_gard_o = 0.0f;
+        float partial_gard_v = grad_y[iter];;
+
+        if(v > s * (clip_max - o)) {
+            partial_gard_s = 1 * grad_y[iter];
+            partial_gard_o = -grad_y[iter] * s;
+            partial_gard_v = 0;
+        }
+        else if(v < s * (clip_min - o)) {
+            partial_gard_s = -1 * grad_y[iter];
+            partial_gard_o = -grad_y[iter] * s;
+            partial_gard_v = 0;
+        }
+        grad_v[iter] = partial_gard_v;
+        
+        /* Reduce Gradient */
+        float reduced_grad_o = BlockReduceSum<float>(partial_gard_o); __syncthreads();
+        float reduced_grad_s = BlockReduceSum<float>(partial_gard_s); __syncthreads();
+
+        if (threadIdx.x == 0) {
+            atomicAdd(grad_s, reduced_grad_s);
+            atomicAdd(grad_o, reduced_grad_o);
+        }
     }
-    else {
-        throw "Unsupported tensor dtype.";
+}
+
+__host__ std::vector<Tensor> QuantizeTensor_LT_B(
+    const Tensor &value, const Tensor &quantized, 
+    const Tensor &scales, const Tensor &offsets, const Tensor &grad_y, 
+    const int clip_min, const int clip_max
+){
+    /** 
+     * Gradient Bakcwrad for quantization
+     * Solve grad_s, grad_o, grad_v at once.
+     */
+    CheckTensor(value, at::kFloat, "Value(FP32)");
+    CheckTensor(quantized, at::kFloat, "Quantized(FP32)");
+    CheckTensor(scales, at::kFloat, "Scale(FP32)");
+    CheckTensor(offsets, at::kFloat, "Offset(FP32)");
+    CheckTensor(grad_y, at::kFloat, "Gard(FP32)");
+
+    Tensor grad_v = at::zeros_like(value);
+    Tensor grad_s = at::zeros_like(scales);
+    Tensor grad_o = at::zeros_like(scales);
+
+    _QuantizeTensor_LT_B<<<NUM_OF_BLOCK(NUM_OF_ELEMENT(value)), CUDA_NUM_THREADS, 0, at::cuda::getCurrentCUDAStream()>>>(
+        NUM_OF_ELEMENT(value),
+        PTR<float>(value),
+        PTR<float>(quantized),
+        PTR<float>(scales),
+        PTR<float>(offsets),
+        PTR<float>(grad_y),
+        clip_min,
+        clip_max,
+        PTR<float>(grad_v),
+        PTR<float>(grad_s),
+        PTR<float>(grad_o)
+    );
+    return {grad_v, grad_s, grad_o};
+}
+
+__global__
+void _QuantizeTensor_LC_B(
+    const int64_t    num_of_elements,
+    const int64_t    element_per_channel,
+    const int        num_of_channel,
+    const float* value,
+    const float* quantized,
+    const float* scales,
+    const float* offsets,
+    const float* grad_y,
+    const int clip_min,
+    const int clip_max,
+    float * grad_v,
+    float * grad_s,
+    float * grad_o
+){
+    int64_t iter; 
+    int64_t iter_offset = (blockIdx.x * element_per_channel * num_of_channel) + 
+                          (blockIdx.y * element_per_channel);
+    float partial_gard_o = 0; float partial_gard_s = 0;
+    int c = blockIdx.y; float s = scales[c]; int o = std::nearbyint(offsets[c]);
+
+    for(iter = (blockIdx.x * blockDim.x) + threadIdx.x; 
+        // if processing element is not belongs to correct channel, skip its computation
+        iter < element_per_channel; 
+        iter += blockDim.x * gridDim.x)
+    {
+        float g = grad_y[iter + iter_offset];
+        
+        /* Calculate grad for scales, offsets, alpha */
+        partial_gard_s = (quantized[iter + iter_offset] - value[iter + iter_offset]) * (g / s);
+        float partial_gard_v = g;
+
+        if(value[iter + iter_offset] > s * (clip_max - o)) {
+            partial_gard_s = 1 * g;
+            partial_gard_o = -g * s;
+            partial_gard_v = 0;
+        }
+        else if(value[iter + iter_offset] < s * (clip_min - o)) {
+            partial_gard_s = -1 * g;
+            partial_gard_o = -g * s;
+            partial_gard_v = 0;
+        }
+
+        grad_v[iter + iter_offset] = partial_gard_v;
+
+        /* Reduce Gradient */
+        float reduced_grad_o = BlockReduceSum<float>(partial_gard_o); __syncthreads();
+        float reduced_grad_s = BlockReduceSum<float>(partial_gard_s); __syncthreads();
+
+        if (threadIdx.x == 0) {
+            // printf("ro=%.2f\t rs=%.2f\t c=%d\t\n", reduced_grad_o, reduced_grad_s, c);
+            atomicAdd(&grad_o[c], reduced_grad_o);
+            atomicAdd(&grad_s[c], reduced_grad_s);
+        }
     }
+}
+
+__host__ std::vector<Tensor> QuantizeTensor_LC_B(
+    const Tensor &value, const Tensor &quantized, 
+    const Tensor &scales, const Tensor &offsets, const Tensor &grad_y, 
+    const int clip_min, const int clip_max, const int channel_axis
+){
+    /** 
+     * Gradient Bakcwrad for quantization
+     * Solve grad_s, grad_o, grad_v at once.
+     */
+    CheckTensor(value, at::kFloat, "Value(FP32)");
+    CheckTensor(quantized, at::kFloat, "Quantized(FP32)");
+    CheckTensor(scales, at::kFloat, "Scale(FP32)");
+    CheckTensor(offsets, at::kFloat, "Offset(FP32)");
+    CheckTensor(grad_y, at::kFloat, "Gard(FP32)");
+
+    Tensor grad_v = at::zeros_like(value);
+    Tensor grad_s = at::zeros_like(scales);
+    Tensor grad_o = at::zeros_like(scales);
+
+    int element_per_channel = 1;
+    const int num_of_channel = value.sizes()[channel_axis];
+    for(int axis = value.ndimension() - 1; axis != channel_axis; axis--){
+        element_per_channel *= value.sizes()[axis];
+    }
+
+    const int batchs = NUM_OF_ELEMENT(value) / (element_per_channel * num_of_channel);
+    const dim3 grid_size(batchs, num_of_channel, NUM_OF_BLOCK(element_per_channel));
+    _QuantizeTensor_LC_B<<<grid_size, CUDA_NUM_THREADS, 0, at::cuda::getCurrentCUDAStream()>>>(
+        NUM_OF_ELEMENT(value),
+        element_per_channel,
+        num_of_channel,
+        PTR<float>(value),
+        PTR<float>(quantized),
+        PTR<float>(scales),
+        PTR<float>(offsets),
+        PTR<float>(grad_y),
+        clip_min,
+        clip_max,
+        PTR<float>(grad_v),
+        PTR<float>(grad_s),
+        PTR<float>(grad_o)
+    );
+    return {grad_v, grad_s, grad_o};
 }

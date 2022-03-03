@@ -92,12 +92,9 @@ def graphwise_error_analyse(
     executor = TorchExecutor(graph=graph, device=running_device)
 
     # find all quantable operations.
-    interested_op = []
-    for operation in graph.operations.values():
-        if isinstance(operation, QuantableOperation):
-            # we only need reports from operation that has a valid output quant
-            if operation.config.output_quantization_config[0].state == QuantizationStates.ACTIVATED:
-                interested_op.append(operation)
+    interested_op = [operation for operation in graph.operations.values()
+                     if (isinstance(operation, QuantableOperation) and 
+                         operation.config.output_quantization_config[0].state == QuantizationStates.ACTIVATED)]
 
     # set up all hooks.
     recorders, hooks, caches = {}, {}, {}

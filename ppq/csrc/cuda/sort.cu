@@ -3,34 +3,72 @@
 # include <thrust/execution_policy.h>
 
 
-__global__ static void _cuda_quantile(
+__global__ 
+static void _Quantile_T(
     const float *source,
     float *dest,
-    const int num_of_elements,
-    float q
+    const int64_t num_of_elements,
+    const float q
 ){
     int max_pos = __float2int_rn(num_of_elements * q);
-    if (max_pos >= num_of_elements) max_pos = num_of_elements - 1;
-    if (max_pos <= 0) max_pos = 0;
+    max_pos = CLIP<int>(max_pos, 0, num_of_elements - 1);
     dest[0] = source[max_pos];
 
     int min_pos = __float2int_rn(num_of_elements * (1 - q));
-    if (min_pos >= num_of_elements) min_pos = num_of_elements - 1;
-    if (min_pos <= 0) max_pos = 0;
+    min_pos = CLIP<int>(min_pos, 0, num_of_elements - 1);
     dest[1] = source[min_pos];
 }
 
-Tensor cuda_quantile(Tensor &source, const float q){
-    constexpr int num_of_threads = CUDA_NUM_THREADS;
-    const int num_of_elements = source.numel();
+
+__global__ 
+static void _cuda_order_preserving_observe(
+    const float *source,
+    float *dest,
+    const int64_t num_of_elements
+){
+    if(num_of_elements == 1){
+        dest[0] = source[0];
+        dest[1] = source[0];
+        dest[2] = source[0];
+        dest[3] = source[0];
+    } else {
+        dest[0] = source[num_of_elements - 1];
+        dest[1] = source[num_of_elements - 2];
+        dest[2] = source[0];
+        dest[3] = source[1];
+    }
+}
+
+__host__ Tensor Quantile_T(const Tensor &source, const float q){
+    CheckTensor(source, at::kFloat, "Value(FP32)");
+    const int64_t num_of_elements = NUM_OF_ELEMENT(source);
     
     Tensor dest = at::empty({2}, source.options());
+    Tensor value = source.clone();
+
+    thrust::sort(
+        thrust::device, 
+        PTR<float>(value),
+        PTR<float>(value) + num_of_elements);
+
+    _Quantile_T<<<1, 1>>>(
+        PTR<float>(value), 
+        PTR<float>(dest), 
+        num_of_elements, q);
+    return dest;
+}
+
+
+Tensor cuda_order_preserving_observe(Tensor &source){
+    const int num_of_elements = source.numel();
+    
+    Tensor dest = at::empty({4}, source.options());
     Tensor source_cpy = source.clone();
 
     float *source_ptr = source_cpy.data_ptr<float>();
     float *dest_ptr   = dest.data_ptr<float>();
 
     thrust::sort(thrust::device, source_ptr, source_ptr + num_of_elements);
-    _cuda_quantile<<<1, 1>>>(source_ptr, dest_ptr, num_of_elements, q);
+    _cuda_order_preserving_observe<<<1, 1>>>(source_ptr, dest_ptr, num_of_elements);
     return dest;
 }

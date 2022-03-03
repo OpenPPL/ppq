@@ -187,7 +187,7 @@ class ConservativeDispatcher(GraphDispatcher):
             'Conv', 'ConvTranspose', 'Gemm', 'Relu', 'PRelu', 'Clip', 'Pad',
             'Resize', 'MaxPool', 'AveragePool', 'GlobalMaxPool', 'GlobalAveragePool',
             'Mul', 'Add', 'Max', 'Sub', 'Div', 'LeakyRelu', 'Split', 'Concat',
-            'Reshape', 'Transpose', 'Slice', 'Flatten', 'MatMul'}
+            'Reshape', 'Transpose', 'Slice', 'Flatten', 'MatMul', 'Softmax'}
 
         recivers, generators = SOI_receivers(graph), SOI_generators(graph)
         search_engine, SOI_opeartions = SearchableGraph(graph), set(recivers)
@@ -314,7 +314,7 @@ class PPLNNDispatcher(GraphDispatcher):
         Args:
             graph (BaseGraph): graph object which going to be dispatched by this dispatcher.
             
-            quant_platform (TargetPlatform): 
+            quant_platform (TargetPlatform): =
                 platform object where quantable parts will goes to.
 
             fp32_platform (TargetPlatform): 
@@ -330,7 +330,7 @@ class PPLNNDispatcher(GraphDispatcher):
             'Conv', 'Relu', 'PRelu', 'Clip',
             'Resize', 'MaxPool', 'AveragePool', 'GlobalMaxPool', 'GlobalAveragePool',
             'Mul', 'Add', 'LeakyRelu', 'Split', 'Concat',
-            'Transpose', 'Slice', 'Reshape', 'Flatten'}
+            'Transpose', 'Slice', 'Reshape', 'Flatten', 'Softmax'}
 
         recivers, generators = SOI_receivers(graph), SOI_generators(graph)
         search_engine, SOI_opeartions = SearchableGraph(graph), set(recivers)
