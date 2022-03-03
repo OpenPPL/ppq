@@ -153,6 +153,9 @@ def Conv_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
     checker(op.attributes, values[0].shape[2:], values[1].shape[2:])
     op_attr = preprocess_attr(op.attributes, 'Conv')
     x, w = values[: 2]
+    if "external_padding" in op_attr:
+        x = F.pad(x, op_attr["external_padding"])
+        op_attr.pop("external_padding")
     b = values[2] if len(values) > 2 else None
     output = F.conv2d(input=x, weight=w, bias=b, **op_attr)
 
@@ -166,6 +169,9 @@ def ConvTranspose_forward(op: Operation, values: List[torch.Tensor], ctx: TorchB
 
     op_attr['output_padding'] = op.attributes.get('output_padding', 0)
     input_data, weight = values[:2]
+    if "external_padding" in op_attr:
+        input_data = F.pad(input_data, op_attr["external_padding"])
+        op_attr.pop("external_padding")
     bias = values[2] if len(values) > 2 else None
     output = F.conv_transpose2d(input_data, weight, bias=bias, **op_attr)
 
@@ -176,6 +182,9 @@ def MaxPool_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackend
     checker(op.attributes, values[0].shape[2:])
     op_attr = preprocess_attr(op.attributes, 'Pooling')
     [input_value] = values
+    if "external_padding" in op_attr:
+        input_value = F.pad(input_value, op_attr["external_padding"])
+        op_attr.pop("external_padding")
     if op.type == 'GlobalMaxPool':
         image_shape = input_value.size()[-2:]
         op_attr['kernel_size'] = image_shape
@@ -339,6 +348,9 @@ def AveragePool_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBac
     checker(op.attributes, values[0].shape[2:])
     op_attr = preprocess_attr(op.attributes, 'Pooling')
     [input_value] = values
+    if "external_padding" in op_attr:
+        input_value = F.pad(input_value, op_attr["external_padding"])
+        op_attr.pop("external_padding")
     if op.type == 'GlobalAveragePool':
         image_shape = input_value.size()[-2:]
         op_attr['kernel_size'] = image_shape

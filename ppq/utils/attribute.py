@@ -63,7 +63,10 @@ def preprocess_attr(attr, op_type=None):
             if begin_pad == end_pad:
                 new_attr['padding'] = begin_pad
             else:
-                raise ValueError('Torch function only support begin_pad == end_pad in layer')
+                # onnx pads format[top, left, bottom, right] to torch pads format[left, right, top, bottom]
+                new_attr["external_padding"] = [pads[1], pads[3], pads[0], pads[2]]
+                new_attr['padding'] = [0, 0]
+                # raise ValueError('Torch function only support begin_pad == end_pad in layer')
         else:
             new_attr['padding'] = pads
 
