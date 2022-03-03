@@ -35,6 +35,10 @@ class OperationBase(metaclass=ABCMeta):
     def type(self) -> str:
         return self._type
 
+    @ type.setter
+    def type(self, type: str):
+        self._type = type
+
     @ property
     def attributes(self) -> Dict[str, Any]:
         return self._attributes

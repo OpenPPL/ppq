@@ -4,6 +4,7 @@ from typing import Iterable, List
 from ppq.core import (COMPELING_OP_TYPES, PPLCUDA_ACTIVATIONS,
                       QuantizationStates, RoundingPolicy, TargetPlatform,
                       empty_ppq_cache)
+from ppq.core.common import ORT_OOS_FUSE_START_OPS
 from ppq.executor import BaseGraphExecutor
 from ppq.IR import GraphCommandProcesser, QuantableOperation, Variable
 from ppq.IR.base.graph import Operation
@@ -358,6 +359,12 @@ class QuantizeFusionPass(QuantizationOptimizationPass):
                     rp_expr=lambda x, y: False,
                     ep_expr=lambda x: (x.type in PPLCUDA_ACTIVATIONS or 
                                        x.is_linear_activation),
+                    direction='down')
+            elif self.platform == TargetPlatform.ORT_OOS_INT8:
+                computing_act_matching = processer.path_matching(
+                    sp_expr=lambda x: x.type in ORT_OOS_FUSE_START_OPS,
+                    rp_expr=lambda x, y: False,
+                    ep_expr=lambda x: x.is_linear_activation,
                     direction='down')
             else:
                 computing_act_matching = processer.path_matching(

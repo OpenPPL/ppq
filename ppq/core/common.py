@@ -18,6 +18,9 @@ OBSERVER_MSE_HIST_BINS = 8192
 # PPLCUDA 中所有需要与 Conv 融合的激活函数
 PPLCUDA_ACTIVATIONS = {'Clip', 'LeakyRelu', 'Relu', 'Sigmoid'}
 
+ORT_OOS_FUSE_START_OPS = {'Conv', 'GlobalAveragePool', 'AveragePool', 'Add', 'Mul', 'Matmul'}
+ORT_MICROSOFT_CONTRIB_LINEAR_OPS = {'Add', 'Mul'}
+
 # PASSIVE OPERATIONS 是那些不参与计算的 Op, 这些 op 的输入与输出将直接共享 scale
 PASSIVE_OPERATIONS = {
     'Resize', 'MaxPool', 'GlobalMaxPool', 'Reshape',

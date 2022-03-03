@@ -5,3 +5,4 @@ from .NXPQuantizer import NXP_Quantizer
 from .PPLQuantizer import (PPLCUDA_INT4_Quantizer,
                            PPLCUDAMixPrecisionQuantizer, PPLCUDAQuantizer)
 from .TRTQuantizer import TensorRTQuantizer
+from .ORTQuantizer import ORT_PerTensorQuantizer, ORT_PerChannelQuantizer
