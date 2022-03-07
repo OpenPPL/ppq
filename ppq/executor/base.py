@@ -5,7 +5,7 @@ from ppq.core import OperationMeta, TargetPlatform, TensorQuantizationConfig
 from ppq.executor.op import (DEFAULT_BACKEND_TABLE, EXTENSION_BACKEND_TABLE,
                              NXP_BACKEND_TABLE, PPL_DSP_BACKEND_TABLE,
                              PPL_GPU_BACKEND_TABLE, SOI_BACKEND_TABLE,
-                             ONNX_BACKEND_TABLE)
+                             ONNX_BACKEND_TABLE, ACADEMIC_BACKEND_TABLE)
 from ppq.IR import BaseGraph, Operation, QuantableOperation
 
 import torch
@@ -25,8 +25,10 @@ GLOBAL_DISPATCHING_TABLE[TargetPlatform.NXP_INT8] = NXP_BACKEND_TABLE
 GLOBAL_DISPATCHING_TABLE[TargetPlatform.SHAPE_OR_INDEX] = SOI_BACKEND_TABLE
 
 GLOBAL_DISPATCHING_TABLE[TargetPlatform.ORT_OOS_INT8] = ONNX_BACKEND_TABLE
-GLOBAL_DISPATCHING_TABLE[TargetPlatform.EXTENSION] = EXTENSION_BACKEND_TABLE
+GLOBAL_DISPATCHING_TABLE[TargetPlatform.ACADEMIC_INT4] = ACADEMIC_BACKEND_TABLE
+GLOBAL_DISPATCHING_TABLE[TargetPlatform.ACADEMIC_INT8] = ACADEMIC_BACKEND_TABLE
 
+GLOBAL_DISPATCHING_TABLE[TargetPlatform.EXTENSION] = EXTENSION_BACKEND_TABLE
 
 def register_operation_handler(hanlder: Callable, operation_type: str, platform: TargetPlatform):
     if platform not in GLOBAL_DISPATCHING_TABLE:

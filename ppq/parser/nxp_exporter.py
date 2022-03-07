@@ -38,12 +38,8 @@ class NxpExporter(GraphExporter):
             )
         return tensor_proto
 
-    def export(self, file_path: str, framework: NetworkFramework, graph: BaseGraph,
+    def export(self, file_path: str, graph: BaseGraph,
         config_path: str = None, export_param: bool = False):
-        if framework != NetworkFramework.NXP:
-            raise TypeError(f'NXP Exporter is only capable for dumping network to NXP platform' \
-                f' While your network dump target is {framework}')
-
         onnx_graph = onnx.GraphProto()
         onnx_graph.name = graph._name
 

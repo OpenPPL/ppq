@@ -10,6 +10,16 @@ def ppq_numerical_round(value: float,
     policy: RoundingPolicy=RoundingPolicy.ROUND_HALF_EVEN) -> int:
     """
         reference: https://en.wikipedia.org/wiki/Rounding
+        
+        decimal defination:
+            - decimal.ROUND_CEILING (towards Infinity)
+            - decimal.ROUND_DOWN (towards zero)
+            - decimal.ROUND_FLOOR (towards -Infinity)
+            - decimal.ROUND_HALF_DOWN (to nearest with ties going towards zero)
+            - decimal.ROUND_HALF_EVEN (to nearest with ties going to nearest even integer)
+            - decimal.ROUND_HALF_UP (to nearest with ties going away from zero)
+            - decimal.ROUND_UP (away from zero)
+            - decimal.ROUND_05UP (away from zero if last digit after rounding towards zero would have been 0 or 5; otherwise towards zero)
 
     Args:
         value (float): [description]
@@ -25,15 +35,15 @@ def ppq_numerical_round(value: float,
     if policy == RoundingPolicy.ROUND_HALF_EVEN:
         return int(Decimal(value).quantize(exp=Decimal(1), rounding=ROUND_HALF_EVEN))
     elif policy == RoundingPolicy.ROUND_HALF_UP:
-        return int(Decimal(value).quantize(exp=Decimal(1), rounding=ROUND_HALF_UP))
+        if value > 0: return int(Decimal(value).quantize(exp=Decimal(1), rounding=ROUND_HALF_UP))
+        else: return int(Decimal(value).quantize(exp=Decimal(1), rounding=ROUND_HALF_DOWN))
     elif policy == RoundingPolicy.ROUND_HALF_DOWN:
-        return int(Decimal(value).quantize(exp=Decimal(1), rounding=ROUND_HALF_DOWN))
+        if value > 0: return int(Decimal(value).quantize(exp=Decimal(1), rounding=ROUND_HALF_DOWN))
+        else: return int(Decimal(value).quantize(exp=Decimal(1), rounding=ROUND_HALF_UP))
     elif policy == RoundingPolicy.ROUND_HALF_TOWARDS_ZERO:
-        if value > 0: return ppq_numerical_round(value, RoundingPolicy.ROUND_HALF_DOWN)
-        else: return ppq_numerical_round(value, RoundingPolicy.ROUND_HALF_UP)
+        return ppq_numerical_round(value, RoundingPolicy.ROUND_HALF_DOWN)
     elif policy == RoundingPolicy.ROUND_HALF_FAR_FORM_ZERO:
-        if value > 0: return ppq_numerical_round(value, RoundingPolicy.ROUND_HALF_UP)
-        else: return ppq_numerical_round(value, RoundingPolicy.ROUND_HALF_DOWN)
+        return ppq_numerical_round(value, RoundingPolicy.ROUND_HALF_UP)
     elif policy == RoundingPolicy.ROUND_TO_NEAR_INT:
         if value > 0: return floor(value + 0.5)
         else: return ceil(value - 0.5)

@@ -166,7 +166,7 @@ class MatrixFactorizationPass(QuantizationOptimizationPass):
                 platform=operation.platform
             )
             
-            graph.insert_operation_on_var(
+            graph.insert_op_on_var(
                 inserting_op=splited, var=operation.outputs[0].name)
             if operation.outputs[0].name in graph.outputs:
                 graph.outputs.pop(operation.outputs[0].name)
@@ -423,11 +423,16 @@ class ChannelSplitPass(QuantizationOptimizationPass):
         search_engine = SearchableGraph(processer)
 
         for name, search_direction in zip(self.interested_layers, self.search_directions):
-            self.current_search_direction = search_direction
-            if name not in graph.operations or not graph.operations[name].is_computing_op:
-                logger.warning(f'Check op {name}, it might not be in graph and only Conv,\
-                    Gemm, ConvTranspose is supported')
+            if name not in graph.operations:
+                ppq_warning(f'Can not find operation {name} in your graph, skip its split.')
                 continue
+            op = graph.operations[name]
+            if not op.is_computing_op or not isinstance(op, QuantableOperation):
+                ppq_warning(f'Operation {name} can not be splited via channel spilt function, '
+                            'cause it is not quantable or it has no parameter.')
+                continue
+            
+            self.current_search_direction = search_direction
             matching = search_engine.path_matching(
                 sp_expr=lambda x: x.name == name,
                 rp_expr=lambda x, y: True, # be careful when choosing interested_layers, we assume a reasonable path
@@ -436,7 +441,8 @@ class ChannelSplitPass(QuantizationOptimizationPass):
             )
 
             if len(matching) != 1:
-                logger.warning(f'Can not find a proper counterpart operation for {name}.')
+                ppq_warning(f'Can not find a counterpart of operation {name}, '
+                            'graph is too complex.')
                 continue
 
             path = matching[0]
@@ -450,16 +456,6 @@ class ChannelSplitPass(QuantizationOptimizationPass):
                 logger.info(f"Now processing path {'--'.join([op.name for op in path])}")
 
             split_op, counterpart_op = path[0], path[-1]
-
-            assert isinstance(split_op, QuantableOperation), (
-                f"op {split_op.name} should be quantable, "
-                "please whether your dispatcher send the op to quantable platform")
-
-            config = split_op.config.input_quantization_config[1]
-            
-            # if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
-            #     logger.warning(f'Channel split is designed for per tensor only, skip {name}')
-            #     continue
 
             copy_channels = self.OCS_forward(split_op)
             self.update_counterpart(counterpart_op, copy_channels)

@@ -275,24 +275,42 @@ class BiasCorrectionSetting():
 
 class LearningStepSizeSetting():
     def __init__(self) -> None:
+
         # should only contain computing ops, if given, ops in interested_layers will be checked and
         # if conditions are satisfied, weight, scale of weight, scale of activation will be trained
         # with mse optimization goal, if not given, every condition-satisfied computing op will be 
         # optimized
-        self.interested_layers = []
+        self.interested_layers      = []
+
+        # if set True, only operations in interested_layers will be tuned, and if set False, ops in
+        # the same subgraph(block) will be tuned, it's hard to say which one is better, you need to
+        # try yourself
+        self.interested_layers_only = False
+
         # num of training epochs, please adjust it to your needs
-        self.epochs            = 30
+        self.epochs                 = 30
+
         # initial learning rate, by default Adam optimizer and a multistep scheduler with 0.1 decay
         # are used for convergence
-        self.lr                = 1e-4
-        # scale multiplifer for bias(negative quantized param)
-        self.scale_multiplier  = 2.0
-        # graphwise or layerwise, if mode is set to graphwise, you should make sure valid gradient
-        # could flow back to your parameters from variable specified in output_names
-        self.mode              = 'graphwise'
+        self.lr                     = 5e-5
+
+        # scale multiplifer for bias(passive quantized param)
+        self.scale_multiplier       = 2.0
+
+        # global or local, if mode is set to global, you should make sure valid gradient could flow back
+        # to your parameters from variable specified in output_names, by default the graph outputs will be
+        # used for loss computing and gradient backward
+        self.mode                   = 'global'
+
         # variable names to compute loss, if not given, the final output will be used
         # in graphwise mode, be careful in aware of valid back propagation in your graph
-        self.output_names      = []
+        self.output_names           = []
+
+        # only useful when mode is global, should be a dict specifying how much each output weighes when 
+        # multiple output names are given in graphwise mode, by default every output will weigh equally to 
+        # 1.0 when computing loss, but if you care some output more, you can make it weigh more by specifying
+        # some larger value in loss_weights, i.e., self.loss_weights = {some_output_1:2.0, some_output_2 : 5.0, ...}
+        self.loss_weights           = {}
 
 class BlockwiseReconstructionSetting():
      def __init__(self) -> None:
@@ -303,11 +321,9 @@ class BlockwiseReconstructionSetting():
         self.tune_act_scale     = True
         # initial learning rate, by default Adam optimizer and a multistep scheduler with 0.1 decay
         self.lr                 = 1e-3
-        # number of training epochs
-        self.epochs             = 300
-        # max number of ops contained in a block
-        self.max_block_size     = 4
-        # loss = MSELoss + lamda * RoundingLoss
+        # number of training epochs = 20000iter / 32 = 625
+        self.epochs             = 625
+        # loss = LpNormLoss + lamda * RoundingLoss
         self.lamda              = 1.0
         # scale multiplifer for bias(negative quantized param)
         self.scale_multiplier   = 2.0
@@ -421,6 +437,12 @@ class QuantizationSettingFactory:
     @ staticmethod
     def default_setting() -> QuantizationSetting:
         return QuantizationSetting()
+
+    @staticmethod
+    def academic_setting() -> QuantizationSetting:
+        default_setting = QuantizationSetting()
+        default_setting.fusion = False
+        return default_setting
 
     @ staticmethod
     def pplcuda_setting() -> QuantizationSetting:

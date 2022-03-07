@@ -1,18 +1,20 @@
 # TODO move training logic to here.
+from __future__ import annotations
 
 import random
 from math import sqrt
 from random import randint
-from typing import Iterable, List, Tuple
+from typing import Iterable, List, Tuple, Union
 
 import numpy as np
 import torch
 from ppq.core import (NUM_OF_CHECKPOINT_FETCHS, USING_CUDA_KERNEL,
                       ChannelwiseTensorQuantizationConfig, NetworkFramework,
                       QuantizationProperty, QuantizationStates, RoundingPolicy,
-                      TensorQuantizationConfig)
+                      TensorQuantizationConfig, convert_any_to_torch_tensor)
 from ppq.executor import TorchQuantizeDelegate
-from ppq.IR import BaseGraph, Operation, Variable
+from ppq.IR import (BaseGraph, Operation, QuantableOperation,
+                    QuantableVariable, Variable)
 from ppq.IR.search import SearchableGraph
 from ppq.quantization.qfunction.linear import PPQLinearQuantFunction
 from ppq.utils.fetch import batch_random_fetch
@@ -481,15 +483,12 @@ class AdaroundRegTerm(torch.nn.Module):
     def rectified_sigmoid(self, round_mask):
         return ((self.zeta - self.gamma) * torch.sigmoid(round_mask) + self.gamma).clamp(0, 1)
 
-    def forward(self, round_mask, iter, reduction='sum'):
+    def forward(self, round_mask, iter):
         if iter < self.max_iter * self.warm_ratio:
             round_loss = 0
         else:
             self.beta = self.temp_anneal(iter)
-            if reduction == 'sum':
-                round_loss = self.alpha * (1 - torch.pow((self.rectified_sigmoid(round_mask) - 0.5).abs() * 2, self.beta)).sum()
-            else:
-                round_loss = self.alpha * (1 - torch.pow((self.rectified_sigmoid(round_mask) - 0.5).abs() * 2, self.beta)).mean()
+            round_loss = self.alpha * (1 - torch.pow((self.rectified_sigmoid(round_mask) - 0.5).abs() * 2, self.beta)).sum()
         return round_loss
 
 
@@ -649,3 +648,165 @@ class BlockBuilder:
                 assert up_op in self.depth, ('Oops, that should not happen to your network.')
                 depths_cache.append(self.depth[up_op])
             self.depth[operation] = max(depths_cache) + 1
+
+class StraightThroughEstimateDelegator(TorchQuantizeDelegate):
+    def __init__(self,
+                config: TensorQuantizationConfig,
+                is_parameter: bool,
+                scale_multiplier: Union[torch.Tensor, float],
+                device: Union[str, torch.device]='cuda'
+    ) -> None:
+        self.config           = config
+        self.is_parameter     = is_parameter
+        self.policy           = config.policy
+        self.passive          = config.state == QuantizationStates.PASSIVE
+        self.scale_multiplier = scale_multiplier
+        self.scale            = torch.nn.Parameter(convert_any_to_torch_tensor(config.scale, device=device,\
+                            dtype=torch.float32), requires_grad=True)
+        self.bias             = torch.nn.Parameter(convert_any_to_torch_tensor(config.offset, device=device,\
+                            dtype=torch.float32) * self.scale.detach(), requires_grad=True)
+        self._masters          = []
+    
+    @ property
+    def masters(self) -> List[StraightThroughEstimateDelegator]:
+        return self._masters
+    
+    @ masters.setter
+    def masters(self, masters) -> None:
+        self._masters = masters
+
+    def collect_params(self) -> List[torch.Tensor]:
+        params = []
+        if len(self.masters) == 0:
+            assert not self.passive, 'master delegators should be set for passive parameters'
+            params.append(self.scale)
+            if self.policy.has_property(QuantizationProperty.ASYMMETRICAL):
+                params.append(self.bias)
+        return params
+    
+    def finalize(self) -> None:
+        if self.config.dominated_by == self.config:
+            if not self.passive:
+                self.config.scale = self.scale.data.abs()
+                self.config.offset = self.bias.data / self.scale.data.abs()
+            else:
+                # bias
+                scale = self.scale_multiplier
+                for delegator in self.masters:
+                    scale = scale * delegator.scale.data.abs()
+                self.config.scale = scale
+
+    def __call__(self, tensor: torch.Tensor, config: TensorQuantizationConfig) -> torch.Tensor:
+        
+        scale = self.scale
+        bias  = self.bias
+
+        if len(self.masters) > 0:
+            # could be bias or joint input var
+            scale = self.scale_multiplier
+            for delegator in self.masters:
+                scale = scale * delegator.scale
+            # must be joint input var(one master only)
+            if not self.passive:
+                bias = self.masters[0].bias
+ 
+        # must be weight
+        elif self.is_parameter:
+            grad_scale = 1 / (tensor.numel() * config.quant_max)**0.5
+            scale = scale * grad_scale + (scale - scale * grad_scale).detach()
+
+        if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
+            assert isinstance(config, ChannelwiseTensorQuantizationConfig)
+            shape = [1 if axis != config.channel_axis else -1 for axis in range(tensor.ndim)]
+            scale = scale.view(shape)
+            bias = bias.view(shape)
+
+        # only bias doesn't need offset in asym quant
+        if not self.passive and config.policy.has_property(QuantizationProperty.ASYMMETRICAL):
+            tensor = tensor + bias
+        
+        scale = scale.abs()
+        tensor = tensor / scale
+        tensor_round = ppq_tensor_round(tensor, config.rounding)
+        tensor = (tensor_round - tensor).detach() + tensor
+        tensor = torch.clamp(tensor, config.quant_min, config.quant_max)
+        tensor = tensor * scale 
+        
+        if not self.passive and config.policy.has_property(QuantizationProperty.ASYMMETRICAL):
+            tensor = tensor - bias
+        return tensor
+
+
+class BlockwiseReconstructionDelegator(StraightThroughEstimateDelegator):
+    def __init__(self,
+                binding_var: QuantableVariable,
+                config: TensorQuantizationConfig,
+                reg: AdaroundRegTerm,
+                scale_multiplier: float,
+                device: Union[str, torch.device]='cuda'
+    ) -> None:
+        super().__init__(config, binding_var.is_parameter, scale_multiplier, device)
+        self.binding_var = binding_var
+        self.reg         = reg
+        self.rounding    = self.initiate_rounding()
+
+    def initiate_rounding(self) -> Union[None, torch.nn.Parameter]:
+        if not self.is_parameter or self.passive:
+            return None
+        weight = self.binding_var.value
+        scale = self.config.scale
+        if self.config.policy.has_property(QuantizationProperty.PER_CHANNEL):
+            assert isinstance(self.config, ChannelwiseTensorQuantizationConfig)
+            shape = [1 if axis != self.config.channel_axis else -1 for axis in range(weight.ndim)]
+            scale = scale.view(shape)
+        round_diff = (weight / scale) - (weight / scale).floor()
+        v_init = -torch.log((self.reg.zeta - self.reg.gamma) / (round_diff - self.reg.gamma) - 1)
+        continuous_v = torch.nn.Parameter(v_init, True)
+        return continuous_v
+
+    def collect_params(self) -> List[torch.Tensor]:
+        params = []
+        # collect scale and offset for act
+        # must be activated
+        if not self.is_parameter:
+            params.extend(super().collect_params())
+        # only collect rounding for weight param
+        elif not self.passive:
+            assert self.rounding is not None, 'rounding param should be intiated for weight param\
+            before finetuning'
+            params.append(self.rounding)
+        return params
+
+    def finalize(self) -> None:
+        # activation or bias
+        if not self.is_parameter or self.passive:
+            return super().finalize()
+        else:
+            weight = self.binding_var.value
+            scale = self.config.scale
+            offset = self.config.offset
+            if self.policy.has_property(QuantizationProperty.PER_CHANNEL):
+                assert isinstance(self.config, ChannelwiseTensorQuantizationConfig)
+                shape = [1 if axis != self.config.channel_axis else -1 for axis in range(weight.ndim)]
+                scale = scale.view(shape)
+                offset = offset.view(shape)
+            weight = (weight / scale).floor() + (self.rounding >= 0).float()
+            weight = torch.clamp(weight, self.config.quant_min, self.config.quant_max)
+            weight = (weight - offset) * scale
+            self.binding_var.value = weight
+
+    def __call__(self, tensor: torch.Tensor, config: TensorQuantizationConfig) -> torch.Tensor:
+        if not self.is_parameter or self.passive:
+            return super().__call__(tensor, config)
+        elif not self.passive:
+            scale = config.scale
+            offset = config.offset
+            if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
+                assert isinstance(config, ChannelwiseTensorQuantizationConfig)
+                shape = [1 if axis != config.channel_axis else -1 for axis in range(tensor.ndim)]
+                scale = scale.view(shape)
+                offset = offset.view(shape)
+            tensor = (tensor / scale).floor() + self.reg.rectified_sigmoid(self.rounding)
+            tensor = torch.clamp(tensor + offset, config.quant_min, config.quant_max)
+            tensor = (tensor - offset) * scale
+            return tensor

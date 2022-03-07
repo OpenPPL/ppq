@@ -281,7 +281,7 @@ class SSDEqualizationPass(QuantizationOptimizationPass):
                 if calib_step >= calib_steps:
                     break
 
-    def calibrate_negative_parameter(self, pair: List[Operation], scale_multiplier: int=2):
+    def calibration_passive_param(self, pair: List[Operation], scale_multiplier: int=2):
         for op in pair:
             if not isinstance(op, QuantableOperation): continue
             if op.type in {'Conv', 'ConvTranspose', 'Gemm'}:
@@ -294,9 +294,7 @@ class SSDEqualizationPass(QuantizationOptimizationPass):
                     bias_config = op.config.input_quantization_config[-1]
                     bias_config.scale  = weight_config.scale * input_config.scale * scale_multiplier
                     bias_config.state  = QuantizationStates.PASSIVE
-                    bias_config.offset = 0
-                    if isinstance(bias_config, ChannelwiseTensorQuantizationConfig):
-                        bias_config.offset = torch.zeros_like(bias_config.scale, dtype=torch.int)
+                    bias_config.offset = torch.zeros_like(bias_config.scale, dtype=torch.float)
                     assert not bias_config.policy.has_property(QuantizationProperty.ASYMMETRICAL), (
                         'Negative parameter does not support ASYMMETRICAL quantization')
 
@@ -379,7 +377,7 @@ class SSDEqualizationPass(QuantizationOptimizationPass):
             self.calibrate(pair, data_loader, executor, hooks, collate_fn, calib_steps)
             for _, observer in observers.items():
                 observer.render_quantization_config()
-        self.calibrate_negative_parameter(pair)
+        self.calibration_passive_param(pair)
         # calculate loss
         loss = []
         for calib_epoch in range(ceil(calib_steps / len(data_loader))):

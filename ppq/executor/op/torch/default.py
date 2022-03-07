@@ -6,7 +6,7 @@ from typing import List
 import numpy as np
 from ppq.core import DataType, convert_any_to_python_primary_type
 from ppq.IR import Operation
-from ppq.utils import checker, preprocess_attr
+from ppq.utils import process_attribute
 
 import torch
 import torch.nn.functional as F
@@ -24,7 +24,7 @@ __all__ = [
     'Constant_forward', 'ConstantOfShape_forward', 'Conv_forward', 'Eltwise_forward', 'Equal_forward',
     'UnaryEltwise_forward', 'Expand_forward', 'Flatten_forward', 'Gather_forward', 'GatherND_forward', 'Gemm_forward',
     'Grid_sampler_forward', 'AveragePool_forward', 'Greater_forward', 'Less_forward', 'MatMul_forward',
-    'MaxPool_forward', '_NMS_forward', 'NonZero_forward', 'Not_forward', 'Range_forward',
+    'MaxPool2d_forward', '_NMS_forward', 'NonZero_forward', 'Not_forward', 'Range_forward',
     'ReduceL2_forward', 'ReduceMax_forward', 'Reshape_forward', 'Resize_forward', 'ScatterElements_forward',
     'ScatterND_forward', 'Shape_forward', 'Slice_forward', 'Softmax_forward', 'Squeeze_forward', 'Tile_forward',
     'TopK_forward', 'Transpose_forward', 'Unsqueeze_forward', 'Where_forward', 'ReduceSum_forward', 'ArgMax_forward',
@@ -123,63 +123,185 @@ def Conv_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
     """
     ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=2, max_num_of_input=3)
+    process_attribute(op.attributes, values[0].shape[2:], values[1].shape[2:])
     
-    '''
-    auto_pad  = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='auto_pad', default='NOTSET')
-    strides   = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='strides', default=[1, 1])
-    dilations = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='dilations', compulsive=True)
-    kernel_shape = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='kernel_shape', compulsive=True)
-    pads      = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='pads', default=[0, 0])
-    groups    = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='groups', default=1)
+    groups    = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='group', default=1)
+    padding   = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='pads', default=0)
+    dilation  = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='dilations', default=1)
+    stride    = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='strides', default=1)
     
-    x, w = values[: 2]
-    if auto_pad != 'NOTSET':
-        if 'pads' in op.attributes:
-            raise ValueError(f'Conv{op.name} has both auto_pad and pads set.')
-        if auto_pad == 'VALID':
-            pads = [0, 0, 0, 0]
-        if auto_pad == 'SAME_UPPER' or auto_pad == 'SAME_LOWER':
-            shape = w.shape[2: ]
-            out_shape = [(shape[i] + strides[i] - 1) // strides[i] for i in range(len(shape))]
-            onnx_pads = [(out_shape[i] - 1) * strides[i] + dilations[i] * (kernel_shape[i] - 1) + 1 - shape[i]
-                          for i in range(len(shape))]
-
-            pads = []
-            for item in onnx_pads:
-                start = (item + 1) // 2 if auto_pad == 'SAME_LOWER' else item // 2
-                end = item - start
-                pads.extend([start, end])
-    '''
-    checker(op.attributes, values[0].shape[2:], values[1].shape[2:])
-    op_attr = preprocess_attr(op.attributes, 'Conv')
     x, w = values[: 2]
     b = values[2] if len(values) > 2 else None
-    output = F.conv2d(input=x, weight=w, bias=b, **op_attr)
-
+    
+    # onnx pads format[top, left, bottom, right] to torch pads format[left, right, top, bottom]
+    if isinstance(padding, list) and len(padding) == 4:
+        p_left, p_right, p_top, p_bottom = padding[1], padding[3], padding[0], padding[2]
+        # torch does not support padding contains 4 value, there is a fix of it.
+        if p_left == p_right and p_top == p_bottom:
+            padding = [p_top, p_left]
+        else:
+            x = F.pad(x, pad=[p_left, p_right, p_top, p_bottom])
+            padding = 0
+    
+    output = F.conv2d(input=x, weight=w, bias=b, groups=groups, padding=padding, 
+                      dilation=dilation, stride=stride)
     return output
 
 
 def ConvTranspose_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    checker(op.attributes, values[0].shape[2:],
-            values[1].shape[2:], 'ConvTranspose')
-    op_attr = preprocess_attr(op.attributes, 'Conv')
+    """
+    
+    The convolution transpose operator consumes an input tensor and a filter, and computes the output.
 
-    op_attr['output_padding'] = op.attributes.get('output_padding', 0)
-    input_data, weight = values[:2]
-    bias = values[2] if len(values) > 2 else None
-    output = F.conv_transpose2d(input_data, weight, bias=bias, **op_attr)
+    If the pads parameter is provided the shape of the output is calculated via the following equation:
 
+        output_shape[i] = stride[i] * (input_size[i] - 1) + output_padding[i] + ((kernel_shape[i] - 1) * dilations[i] + 1) - pads[start_i] - pads[end_i]
+        output_shape can also be explicitly specified in which case pads values are 
+            auto generated using these equations:
+
+    total_padding[i] = stride[i] * (input_size[i] - 1) + output_padding[i] + ((kernel_shape[i] - 1) * dilations[i] + 1) - output_shape[i]
+
+    If (auto_pads == SAME_UPPER): 
+        pads[start_i] = total_padding[i]/2; 
+        pads[end_i] = total_padding[i] - (total_padding[i]/2)
+    Else: 
+        pads[start_i] = total_padding[i] - (total_padding[i]/2); 
+        pads[end_i] = (total_padding[i]/2).
+
+    Attributes
+        auto_pad : string (default is NOTSET)
+        auto_pad must be either NOTSET, SAME_UPPER, SAME_LOWER or VALID. Where default value is NOTSET,
+            which means explicit padding is used. SAME_UPPER or SAME_LOWER mean pad the input so that 
+            `output_shape[i] = input_shape[i] * strides[i]` for each axis `i`. 
+        The padding is split between the two sides equally or almost equally 
+            (depending on whether it is even or odd). 
+        In case the padding is an odd number, 
+            the extra padding is added at the end for SAME_UPPER and at the beginning for SAME_LOWER.
+
+        dilations : list of ints
+        dilation value along each spatial axis of the filter. 
+            If not present, the dilation defaults to 1 along each spatial axis.
+
+        group : int (default is 1)
+        number of groups input channels and output channels are divided into.
+
+        kernel_shape : list of ints
+        The shape of the convolution kernel. If not present, should be inferred from input W.
+
+        output_padding : list of ints
+        Additional elements added to the side with higher coordinate indices in the output. 
+            Each padding value in "output_padding" must be less than the corresponding stride/dilation dimension. 
+            By default, this attribute is a zero vector. 
+        Note that this attribute doesn't directly affect the computed output values. 
+            It only controls the selection of the computed values, 
+            so changing this attribute only adds or removes output elements. 
+        If "output_shape" is explicitly provided, 
+            "output_padding" does not contribute additional size to "output_shape" 
+            but participates in the computation of the needed padding amount. 
+            This is also called adjs or adjustment in some frameworks.
+
+        output_shape : list of ints
+        The shape of the output can be explicitly set which will cause pads values to be auto generated. 
+        If output_shape is specified pads values are ignored. See doc for details for equations to generate pads
+
+        pads : list of ints
+        Padding for the beginning and ending along each spatial axis, 
+            it can take any value greater than or equal to 0. 
+        The value represent the number of pixels added to the beginning and end part of the corresponding axis. 
+        `pads` format should be as follow [x1_begin, x2_begin...x1_end, x2_end,...], 
+            where xi_begin the number of pixels added at the beginning of axis `i` and xi_end, 
+            the number of pixels added at the end of axis `i`. 
+        This attribute cannot be used simultaneously with auto_pad attribute. 
+        If not present, the padding defaults to 0 along start and end of each spatial axis.
+
+        strides : list of ints
+        Stride along each spatial axis. If not present, the stride defaults to 1 along each spatial axis.
+
+    Inputs (2 - 3)
+        X (differentiable) : T
+        Input data tensor from previous layer; has size (N x C x H x W), 
+            where N is the batch size, C is the number of channels, and H and W are the height and width. 
+            Note that this is for the 2D image. Otherwise the size is (N x C x D1 x D2 ... x Dn)
+        
+        W (differentiable) : T
+        The weight tensor that will be used in the convolutions; has size (C x M/group x kH x kW), 
+        where C is the number of channels, and kH and kW are the height and width of the kernel, 
+            and M is the number of feature maps. 
+        For more than 2 dimensions, the weight shape will be (C x M/group x k1 x k2 x ... x kn), 
+            where (k1 x k2 x ... x kn) is the dimension of the kernel. 
+        The number of channels in the output should be equal to 
+            W.shape[1] * group (assuming zero based indices of the shape array)
+        
+        B (optional, differentiable) : T
+        Optional 1D bias to be added to the convolution, has size of M.
+
+    Outputs
+        Y (differentiable) : T
+        Output data tensor that contains the result of the convolution. 
+        The output dimensions are functions of the kernel size, stride size, pad lengths and group count. 
+        The number of channels in the output should be equal to 
+            W.shape[1] * group (assuming zero based indices of the shape array)
+        
+    Type Constraints
+        T : tensor(float16), tensor(float), tensor(double)
+        Constrain input and output types to float tensors.
+    """
+    ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
+    ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=2, max_num_of_input=3)
+    process_attribute(op.attributes, values[0].shape[2:], values[1].shape[2:], 'ConvTranspose')
+    
+    groups    = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='group', default=1)
+    padding   = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='pads', default=0)
+    dilation  = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='dilations', default=1)
+    stride    = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='strides', default=1)
+    output_padding = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='output_padding', default=0)
+
+    x, w = values[:2]
+    b = values[2] if len(values) > 2 else None
+
+    # onnx pads format[top, left, bottom, right] to torch pads format[left, right, top, bottom]
+    if isinstance(padding, list) and len(padding) == 4:
+        p_left, p_right, p_top, p_bottom = padding[1], padding[3], padding[0], padding[2]
+        # torch does not support padding contains 4 value, there is a fix of it.
+        if p_left == p_right and p_top == p_bottom:
+            padding = [p_top, p_left]
+        else:
+            x = F.pad(x, pad=[p_left, p_right, p_top, p_bottom])
+            padding = 0
+
+    output = F.conv_transpose2d(
+        input=x, weight=w, bias=b, groups=groups, padding=padding, 
+        dilation=dilation, stride=stride, output_padding=output_padding)
     return output
 
 
-def MaxPool_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    checker(op.attributes, values[0].shape[2:])
-    op_attr = preprocess_attr(op.attributes, 'Pooling')
+def MaxPool2d_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
+    ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
+    ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
+    process_attribute(op.attributes, values[0].shape[2:])
+    
     [input_value] = values
-    if op.type == 'GlobalMaxPool':
-        image_shape = input_value.size()[-2:]
-        op_attr['kernel_size'] = image_shape
-    output = F.max_pool2d(input_value, **op_attr)
+    padding   = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='pads', default=0)
+    dilation  = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='dilations', default=1)
+    stride    = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='strides', default=None)
+    ceil_mode = bool(GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='ceil_mode', default=False))
+
+    # onnx pads format[top, left, bottom, right] to torch pads format[left, right, top, bottom]
+    if isinstance(padding, list) and len(padding) == 4:
+        p_left, p_right, p_top, p_bottom = padding[1], padding[3], padding[0], padding[2]
+        # torch does not support padding contains 4 value, there is a fix of it.
+        if p_left == p_right and p_top == p_bottom:
+            padding = [p_top, p_left]
+        else:
+            input_value = F.pad(input_value, pad=[p_left, p_right, p_top, p_bottom])
+            padding = 0
+    
+    if op.type == 'GlobalMaxPool': kernel_size = input_value.size()[-2:]
+    else: kernel_size = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='kernel_shape', compulsive=True)
+    
+    output = F.max_pool2d(input_value, kernel_size=kernel_size,
+                          padding=padding, dilation=dilation, 
+                          stride=stride, ceil_mode=ceil_mode)
     return output
 
 
@@ -289,6 +411,7 @@ def Eltwise_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackend
         output = values
     return output
 
+
 # TODO: shape might contain 0, needs better solution
 def Reshape_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
     """
@@ -336,14 +459,30 @@ def Reshape_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackend
 
 
 def AveragePool_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    checker(op.attributes, values[0].shape[2:])
-    op_attr = preprocess_attr(op.attributes, 'Pooling')
+    ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
+    ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
+    process_attribute(op.attributes, values[0].shape[2:])
+    
     [input_value] = values
-    if op.type == 'GlobalAveragePool':
-        image_shape = input_value.size()[-2:]
-        op_attr['kernel_size'] = image_shape
+    padding   = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='pads', default=0)
+    stride    = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='strides', default=None)
+    ceil_mode = bool(GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='ceil_mode', default=False))
+    
+    # onnx pads format[top, left, bottom, right] to torch pads format[left, right, top, bottom]
+    if isinstance(padding, list) and len(padding) == 4:
+        p_left, p_right, p_top, p_bottom = padding[1], padding[3], padding[0], padding[2]
+        # torch does not support padding contains 4 value, there is a fix of it.
+        if p_left == p_right and p_top == p_bottom:
+            padding = [p_top, p_left]
+        else:
+            input_value = F.pad(input_value, pad=[p_left, p_right, p_top, p_bottom])
+            padding = 0
 
-    output = F.avg_pool2d(input_value, **op_attr)
+    if op.type == 'GlobalAveragePool': kernel_size = input_value.size()[-2:]
+    else: kernel_size = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='kernel_shape', compulsive=True)
+    
+    output = F.avg_pool2d(input_value, kernel_size=kernel_size,
+                          padding=padding, stride=stride, ceil_mode=ceil_mode)
     return output
 
 
@@ -540,8 +679,14 @@ def Squeeze_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackend
     ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=2)
     [squeezing_tensor], axes = values, GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='axes', compulsive=True)
-    if isinstance(axes, list): axes = axes[0] # axes 应该是一个整数，但是有些时候我们发现这里会传入一个list，不知道是不是图解析的问题。
-    return torch.squeeze(squeezing_tensor, axes)
+    if isinstance(axes, list): 
+        for squeezing_dim in sorted(axes, reverse=True):
+            squeezing_tensor = torch.squeeze(squeezing_tensor, squeezing_dim)
+    elif isinstance(axes, int):
+        squeezing_tensor = torch.squeeze(squeezing_tensor, axes)
+    else: raise TypeError(f'Parameter axes of operation {op.name} misunderstood, '
+                          f'expect int value of list of int, while {type(axes)} was given.')
+    return squeezing_tensor
 
 
 def Unsqueeze_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
@@ -589,8 +734,14 @@ def Unsqueeze_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
     ASSERT_NUM_OF_INPUT(op=op, values=values)
     [unsqueezing_tensor] = values
     axes = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='axes', compulsive=True)
-    output = torch.unsqueeze(unsqueezing_tensor, axes[0])
-    return output
+    if isinstance(axes, list): 
+        for squeezing_dim in sorted(axes, reverse=True):
+            unsqueezing_tensor = torch.unsqueeze(unsqueezing_tensor, squeezing_dim)
+    elif isinstance(axes, int):
+        unsqueezing_tensor = torch.unsqueeze(unsqueezing_tensor, axes)
+    else: raise TypeError(f'Parameter axes of operation {op.name} misunderstood, '
+                          f'expect int value of list of int, while {type(axes)} was given.')
+    return unsqueezing_tensor
 
 
 def Gather_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
@@ -1760,13 +1911,13 @@ DEFAULT_BACKEND_TABLE = {
     'Gemm': Gemm_forward,
     'grid_sampler': Grid_sampler_forward,
     'GlobalAveragePool': AveragePool_forward,
-    'GlobalMaxPool': MaxPool_forward,
+    'GlobalMaxPool': MaxPool2d_forward,
     'Greater': Greater_forward,
     'LeakyRelu': LeakyRelu_forward,
     'Less': Less_forward,
     'MatMul': MatMul_forward,
     'Max': Eltwise_forward,
-    'MaxPool': MaxPool_forward,
+    'MaxPool': MaxPool2d_forward,
     'Min': Eltwise_forward,
     'Mul': Mul_forward,
     'NonMaxSuppression': _NMS_forward,

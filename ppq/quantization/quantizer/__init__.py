@@ -6,3 +6,4 @@ from .PPLQuantizer import (PPLCUDA_INT4_Quantizer,
                            PPLCUDAMixPrecisionQuantizer, PPLCUDAQuantizer)
 from .TRTQuantizer import TensorRTQuantizer
 from .ORTQuantizer import ORT_PerTensorQuantizer, ORT_PerChannelQuantizer
+from .AcademicQuantizer import ACADEMICQuantizer, ACADEMIC_INT4_Quantizer, ACADEMIC_Mix_Quantizer

@@ -248,6 +248,7 @@ class BaseGraph(Serializable):
         self._name = name
         self._built_from = built_from
         self._detail        = {}
+        self._num_of_generated_var = 0
 
 
     @ property
@@ -378,7 +379,7 @@ class BaseGraph(Serializable):
                 ''.join(str(self.operations[op_name]) + '\n' for op_name in visited if visited[op_name] == False)
             )
 
-    def insert_operation_on_var(self, inserting_op: Operation, var: str):
+    def insert_op_on_var(self, inserting_op: Operation, var: str):
         """
         Insert one operation to current graph.
             Inserting operation will replace var.dest_ops and automatically connect to var.source_op.
@@ -401,7 +402,7 @@ class BaseGraph(Serializable):
         self.append_operation(inserting_op)
 
         # create all links.
-        link_var = Variable(name=var + '_linker', 
+        link_var = Variable(name=f'PPQ_Generated_Var_{self._num_of_generated_var}', 
                             dest_ops=variable.dest_ops.copy(), 
                             source_op=inserting_op)
         self.append_variable(link_var)
@@ -414,11 +415,31 @@ class BaseGraph(Serializable):
         
         for op in link_var.dest_ops:
             op.inputs[op.inputs.index(variable)] = link_var
+        
+        if var in self.outputs:
+            self.outputs.pop(var)
+            self.outputs[link_var.name] = link_var
 
-    def insert_operation_btw(self, inserting_op: Operation, up_op: Operation, down_op: Operation):
+        self._num_of_generated_var += 1
+
+    def insert_op_between_ops(self, inserting_op: Operation, up_op: Operation, down_op: Operation):
         """
         Insert one operation to current graph.
             Inserting operation will just between up_op and down_op.
+
+        Example1(Insert Conv3 between Conv1 and Conv2):
+            Before insertion: Conv1 -- Conv2
+            After insertion:  Conv1 -- Conv3 -- Conv1
+        
+        Example2(Insert Conv3 between Conv1 and Conv2):
+        
+            Before insertion: Conv1 ----- Conv2
+                                      |
+                                      --- Conv4
+
+            After insertion:  Conv1 ----- Conv3 -- Conv2
+                                      |
+                                      --- Conv4
 
         ATTENTION: Inserting opeartion must be an empty opeartion with no input and output variables linked to it.
 
@@ -449,7 +470,7 @@ class BaseGraph(Serializable):
         self.append_operation(inserting_op)
 
         # create all links.
-        link_var = Variable(name='linker_' + str(len(self.variables)), 
+        link_var = Variable(name=f'PPQ_Generated_Var_{self._num_of_generated_var}', 
                             dest_ops=[down_op], 
                             source_op=inserting_op)
         self.append_variable(link_var)
@@ -457,8 +478,10 @@ class BaseGraph(Serializable):
         inserting_op.inputs.append(variable)
         inserting_op.outputs.append(link_var)
 
+        assert isinstance(variable, Variable)
         variable.dest_ops[variable.dest_ops.index(down_op)] = inserting_op
         down_op.inputs[down_op.inputs.index(variable)] = link_var
+        self._num_of_generated_var += 1
 
     def remove_operation(self, removing_op: Operation):
         """

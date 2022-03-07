@@ -362,8 +362,6 @@ class QuantizeFusionPass(QuantizationOptimizationPass):
                 if op.type in LINEAR_ACTIVATIONS: act_ops.append(op)
                 elif self.platform == TargetPlatform.PPL_CUDA_INT8:
                     if op.type in PPLCUDA_ACTIVATIONS: act_ops.append(op)
-                elif self.platform == TargetPlatform.ORT_OOS_INT8:
-                    if op.type in ORT_OOS_FUSE_START_OPS: act_ops.append(op)
                 else: continue
 
             # fusion
@@ -373,6 +371,9 @@ class QuantizeFusionPass(QuantizationOptimizationPass):
                 assert len(upstream_ops) == 1, 'Oops, we got some problem here.'
                 
                 upstream_op = upstream_ops[0]
+                if self.platform == TargetPlatform.ORT_OOS_INT8:
+                    if not upstream_op.type in ORT_OOS_FUSE_START_OPS: continue
+
                 if (isinstance(upstream_op, QuantableOperation) and 
                     len(graph.get_downstream_operations(upstream_op)) == 1 and 
                     upstream_op.platform == op.platform):

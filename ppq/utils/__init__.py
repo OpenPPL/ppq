@@ -1,1 +1,1 @@
-from .attribute import checker, preprocess_attr
+from .attribute import process_attribute
