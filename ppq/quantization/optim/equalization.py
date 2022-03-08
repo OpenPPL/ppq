@@ -216,9 +216,11 @@ class LayerwiseEqualizationPass(QuantizationOptimizationPass):
         pairs = self.find_equalization_pair(
             graph=processer.graph, interested_operations=interested_operations)
 
+        '''
         activations = self.collect_activations(
             executor=executor, dataloader=dataloader, collate_fn=collate_fn, 
             operations=interested_operations)
+        '''
 
         layerwise_equalization(
             equalization_pairs=pairs,

@@ -18,6 +18,7 @@ DEVICE = 'cuda' # only cuda is fully tested :(  For other executing device there
 PLATFORM = TargetPlatform.PPL_CUDA_INT8 # identify a target platform for your network.
 
 def load_calibration_dataset() -> Iterable:
+    # Any Iterable python object is acceptable for being a dataset in ppq.
     return [torch.rand(size=INPUT_SHAPE) for _ in range(32)]
 
 def collate_fn(batch: torch.Tensor) -> torch.Tensor:
@@ -33,10 +34,11 @@ quant_setting.equalization = True # use layerwise equalization algorithm.
 quant_setting.dispatcher   = 'conservative' # dispatch this network in conservertive way.
 
 # Load training data for creating a calibration dataloader.
+# Notice you can not set shuffle = True for analysing your network.
 calibration_dataset = load_calibration_dataset()
 calibration_dataloader = DataLoader(
     dataset=calibration_dataset, 
-    batch_size=BATCHSIZE, shuffle=True)
+    batch_size=BATCHSIZE, shuffle=False)
 
 # quantize your model.
 quantized = quantize_torch_model(

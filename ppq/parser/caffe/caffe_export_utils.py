@@ -1,8 +1,8 @@
 import logging
-import torch
 import numpy as np
 
 from ppq.core.data import DataType, convert_any_to_numpy, convert_any_to_python_primary_type
+from ppq.IR import Operation
 from . import ppl_caffe_pb2
 
 logger = logging.getLogger('PPQ')
@@ -46,7 +46,7 @@ class CaffeOpExporter(object):
         'HardSigmoid': 'HSigmoid'
     }
 
-    def __init__(self, op):
+    def __init__(self, op: Operation):
         self.op = op
         self.op_type = self.set_type()
         self.layer = ppl_caffe_pb2.LayerParameter(type=self.op_type, name=self.op.name)
@@ -242,8 +242,17 @@ class ReduceL2(CaffeOpExporter):
 @register_class
 class ReduceMean(CaffeOpExporter):
     def set_attr(self):
-        self.layer.reduce_param.axis = refine_value(self.op.attributes.get('axis'))
-
+        axis = None
+        if 'axis' in self.op.attributes:
+            axis = self.op.attributes.get('axis')
+        elif 'axes' in self.op.attributes:
+            axis = self.op.attributes.get('axes')
+        if isinstance(axis, list):
+            assert len(axis) == 1, (
+                'You are trying to dump a RuduceMean op to caffe, '
+                f'however caffe support 1 axis only, your mean opeartion has {len(axis)} working axis')
+            axis = axis[0]
+        self.layer.reduce_param.axis = axis
 
 @register_class
 class Div(CaffeOpExporter):

@@ -74,6 +74,7 @@ class GraphReplacer(GraphCommandProcesser):
             GraphCommandType.REPLACE_VAR,
         ]
 
+
 class GraphFormatter(GraphCommandProcesser):
     def _acceptable_command_types(self) -> List[GraphCommandType]:
         return [
@@ -283,6 +284,20 @@ class GraphFormatter(GraphCommandProcesser):
                 for var in op.outputs:
                     self.graph.delete_variable(var.name, force_delete=True)
                 self.graph.delete_operation(op.name, force_delete=True)
+        
+        var_blacklist = [None]
+        while len(var_blacklist) > 0:
+            var_blacklist = set()
+            # delete all variables that links to invalid operations:
+            for var in self.graph.variables.values():
+                if var.source_op is not None and var.source_op.name not in self.graph.operations:
+                    var_blacklist.add(var.name)
+                for op in var.dest_ops:
+                    if op.name not in self.graph.operations:
+                        var_blacklist.add(var.name)
+    
+            for var in var_blacklist:
+                self.graph.delete_variable(var, force_delete=True)
 
     def format_parameter_variables(self) -> None:
         vars = []
@@ -359,6 +374,7 @@ class GraphFormatter(GraphCommandProcesser):
         if len(input_var.dest_ops) == 0:
             self.graph.delete_variable(input_var.name)
             self.graph.delete_operation(input_var.source_op.name)
+
 
 class GraphMerger(GraphCommandProcesser):
     """
@@ -504,13 +520,13 @@ class GraphDeviceSwitcher(GraphCommandProcesser):
 
                 if all([not can_pass_shape(operation, op) for op in var.dest_ops]):
                     boundary_op = DeviceSwitchOP(name=var.name + '_Switcher')
-                    self._graph.insert_operation_on_var(inserting_op=boundary_op, var=var.name)
+                    self._graph.insert_op_on_var(inserting_op=boundary_op, var=var.name)
                     boundary_op.platform = TargetPlatform.FP32
                 else:
                     for dest_op in var.dest_ops:
                         if can_pass_shape(operation, dest_op): continue
                         boundary_op = DeviceSwitchOP(name=operation.name + '_' + dest_op.name)
-                        self._graph.insert_operation_btw(inserting_op=boundary_op, up_op=operation, down_op=dest_op)
+                        self._graph.insert_op_between_ops(inserting_op=boundary_op, up_op=operation, down_op=dest_op)
                         boundary_op.platform = TargetPlatform.FP32
             
             for var in operation.inputs:
@@ -519,7 +535,7 @@ class GraphDeviceSwitcher(GraphCommandProcesser):
                 if source_op is None: continue
                 if source_op.platform != TargetPlatform.SHAPE_OR_INDEX and not source_op.is_soi_generator:
                     boundary_op = DeviceSwitchOP(name=source_op.name + '_' + operation.name)
-                    self._graph.insert_operation_btw(inserting_op=boundary_op, up_op=source_op, down_op=operation)
+                    self._graph.insert_op_between_ops(inserting_op=boundary_op, up_op=source_op, down_op=operation)
                     boundary_op.platform = TargetPlatform.SHAPE_OR_INDEX
 
     def remove_switcher(self):

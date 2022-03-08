@@ -1,14 +1,21 @@
 # include "linear.h"
 # include "sort.h"
-# include "sieve.h"
+# include "train.h"
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-    m.def("TensorwiseLinearQuantize", cuda_linear_tensor_quantize, "TensorwiseLinearQuantize");
-    m.def("ChannelwiseLinearQuantize", cuda_linear_channel_quantize, "ChannelwiseLinearQuantize");
+    m.def("Quantile_T", Quantile_T, "Quantile_T");
+    m.def("Histogram_T", Histogram_T, "Histogram_T");
     
-    m.def("TensorwiseHistogram", cuda_tensor_histogram, "TensorwiseHistogram");
-    m.def("Quantile", cuda_quantile, "Quantile");
+    m.def("QuantizeTensor_LT", QuantizeTensor_LT, "QuantizeTensor_LT");
+    m.def("QuantizeTensor_LC", QuantizeTensor_LC, "QuantizeTensor_LC");
+    m.def("QuantizeTensor_LT_B", QuantizeTensor_LT_B, "QuantizeTensor_LT_B");
+    m.def("QuantizeTensor_LC_B", QuantizeTensor_LC_B, "QuantizeTensor_LC_B");
 
-    m.def("TensorwiseLinearQuantSieve", cuda_linear_tensor_quant_sieve, "TensorwiseLinearQuantSieve");
-    m.def("ChannelwiseLinearQuantSieve", cuda_linear_channel_quant_sieve, "ChannelwiseLinearQuantSieve");
+    m.def("TensorClip_T", TensorClip_T, "TensorClip_T");
+    m.def("TensorClip_C", TensorClip_C, "TensorClip_C");
+
+    m.def("RoundingLoss_LT", RoundingLoss_LT, "RoundingLoss_LT");
+    m.def("RoundingLoss_LC", RoundingLoss_LC, "RoundingLoss_LC");
+    m.def("RoundingLoss_LT_B", RoundingLoss_LT_B, "RoundingLoss_LT_B");
+    m.def("RoundingLoss_LC_B", RoundingLoss_LC_B, "RoundingLoss_LC_B");
 }

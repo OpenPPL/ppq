@@ -69,7 +69,7 @@ class PPL_DSP_Quantizer(BaseQuantizer):
         return {
             'Conv', 'ConvTranspose', 'Gemm', 'Relu', 'PRelu',
             'Clip', 'Pad', 'Resize', 'MaxPool', 'AveragePool',
-            'GlobalMaxPool', 'GlobalAveragePool',
+            'GlobalMaxPool', 'GlobalAveragePool', 'Softmax',
             'Mul', 'Add', 'Max', 'Sub', 'Div',
             'LeakyRelu', 'Concat', 'Sigmoid', 'Slice'
         }

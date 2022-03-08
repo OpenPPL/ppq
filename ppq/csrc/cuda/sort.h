@@ -1,6 +1,3 @@
-#include "common.h"
+# include "common.cuh"
 
-Tensor cuda_quantile(
-    Tensor &source, 
-    const float q
-);
+Tensor Quantile_T(const Tensor &source, const float q);

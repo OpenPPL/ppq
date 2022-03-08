@@ -60,6 +60,7 @@ class ConstantBakingPass(QuantizationOptimizationPass):
     def optimize(self, processer: GraphCommandProcesser, dataloader: Iterable, 
         executor: BaseGraphExecutor, **kwargs) -> None:
         raise NotImplementedError('This pass has been removed from current PPQ version.')
+    
         graph = processer.graph
         for _, operation in graph.operations.items():
             assert isinstance(operation, Operation)

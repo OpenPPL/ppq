@@ -194,8 +194,8 @@ class QuantableVariable(Variable):
 class DeviceSwitchOP(Operation):
     """
     DeviceSwitch is a PPQ internal operation.
-        It defines different platfrom's boundary,
-        and converts data device(cpu->cuda) for downstream operations.
+        This operation is inserted at platfrom's boundary
+        for transfering data between devices.
 
     Args:
         Operation ([type]): [description]

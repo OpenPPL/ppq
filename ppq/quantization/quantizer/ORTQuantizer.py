@@ -10,7 +10,6 @@ from .base import BaseQuantizer
 
 import torch
 
-
 class ORT_PerTensorQuantizer(BaseQuantizer):
     def __init__(
         self,
@@ -84,7 +83,6 @@ class ORT_PerTensorQuantizer(BaseQuantizer):
     @ property
     def rounding_policy(self) -> RoundingPolicy:
         return RoundingPolicy.ROUND_HALF_EVEN
-
 
 class ORT_PerChannelQuantizer(BaseQuantizer):
     def __init__(

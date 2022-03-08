@@ -5,12 +5,11 @@
 from typing import Union
 
 import torch
-from ppq.IR.base.graph import Operation
-from ppq.core import (OperationMeta, OperationQuantizationConfig,
+from ppq.core import (PASSIVE_OPERATIONS, OperationQuantizationConfig,
                       QuantizationPolicy, QuantizationProperty,
                       QuantizationStates, RoundingPolicy, TargetPlatform)
 from ppq.IR import BaseGraph, GraphCommandProcesser
-from ppq.core.common import PASSIVE_OPERATIONS
+from ppq.IR.base.graph import Operation
 
 from .base import BaseQuantizer
 
@@ -47,7 +46,7 @@ class ExtQuantizer(BaseQuantizer):
         """
         使用这个函数来初始化算子的量化配置，该函数会被父类作为接口调用。
         
-        我们提供了一个方便的函数 create_base_tensor_quant_config 来帮助你实现相关逻辑
+        我们提供了一个方便的函数 create_default_quant_config 来帮助你实现相关逻辑
             调用这个函数将直接产生一个默认的量化配置，你可以在此基础上进行修改。
         
         注意并不是所有算子都可以使用默认量化配置完成量化，有些算子明显具有更加复杂的量化逻辑
@@ -56,7 +55,7 @@ class ExtQuantizer(BaseQuantizer):
         Initial your quantization configuration for each operation.
             (This function will be invoked by BaseQuantizer as an interface.)
         
-        We provide a helper function called self.create_base_tensor_quant_config()
+        We provide a helper function called self.create_default_quant_config()
             use this funtion to create a default quantization configuration.
 
         However, some operations' quantization logic might be much more complex so that
@@ -154,9 +153,9 @@ class ExtQuantizer(BaseQuantizer):
     def quantize_policy(self) -> QuantizationPolicy:
         """
         quantize_policy 指明了默认量化策略
-            被函数 create_base_tensor_quant_config 所使用
+            被函数 create_default_quant_config 所使用
         
-        quantize_policy is used by create_base_tensor_quant_config(),
+        quantize_policy is used by create_default_quant_config(),
             to generate a default quantization configuration.
 
         Returns:
@@ -172,9 +171,9 @@ class ExtQuantizer(BaseQuantizer):
     def rounding_policy(self) -> RoundingPolicy:
         """
         rounding_policy 指明了默认取整策略
-            被函数 create_base_tensor_quant_config 所使用
+            被函数 create_default_quant_config 所使用
         
-        rounding_policy is used by create_base_tensor_quant_config(),
+        rounding_policy is used by create_default_quant_config(),
             to generate a default quantization configuration.
 
         Returns:

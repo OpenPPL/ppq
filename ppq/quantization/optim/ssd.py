@@ -10,7 +10,7 @@ from ppq.executor.base import GLOBAL_DISPATCHING_TABLE
 from ppq.quantization.observer import CalibrationHook, OperationObserver
 from ppq.quantization.observer.range import TorchHistObserver
 from ppq.quantization.qfunction import BaseQuantFunction
-from ppq.quantization.qfunction.linear import TorchLinearQuantFunction
+from ppq.quantization.qfunction.linear import PPQLinearQuantFunction
 from ppq.quantization.measure import torch_mean_square_error
 from .base import QuantizationOptimizationPass
 from typing import Callable, Dict, Iterable, List, Set
@@ -44,7 +44,7 @@ class SSDEqualizationPass(QuantizationOptimizationPass):
         channel_ratio: float = 0.5,
         loss_threshold: float = 0.8,
         layer_norm: bool = False,
-        quant_func: BaseQuantFunction = TorchLinearQuantFunction,
+        quant_func: BaseQuantFunction = PPQLinearQuantFunction,
         iteration: int = 3
     ):
         """SSD Equalization Pass With Loss Checking
@@ -281,7 +281,7 @@ class SSDEqualizationPass(QuantizationOptimizationPass):
                 if calib_step >= calib_steps:
                     break
 
-    def calibrate_negative_parameter(self, pair: List[Operation], scale_multiplier: int=2):
+    def calibration_passive_param(self, pair: List[Operation], scale_multiplier: int=2):
         for op in pair:
             if not isinstance(op, QuantableOperation): continue
             if op.type in {'Conv', 'ConvTranspose', 'Gemm'}:
@@ -294,9 +294,7 @@ class SSDEqualizationPass(QuantizationOptimizationPass):
                     bias_config = op.config.input_quantization_config[-1]
                     bias_config.scale  = weight_config.scale * input_config.scale * scale_multiplier
                     bias_config.state  = QuantizationStates.PASSIVE
-                    bias_config.offset = 0
-                    if isinstance(bias_config, ChannelwiseTensorQuantizationConfig):
-                        bias_config.offset = torch.zeros_like(bias_config.scale, dtype=torch.int)
+                    bias_config.offset = torch.zeros_like(bias_config.scale, dtype=torch.float)
                     assert not bias_config.policy.has_property(QuantizationProperty.ASYMMETRICAL), (
                         'Negative parameter does not support ASYMMETRICAL quantization')
 
@@ -379,7 +377,7 @@ class SSDEqualizationPass(QuantizationOptimizationPass):
             self.calibrate(pair, data_loader, executor, hooks, collate_fn, calib_steps)
             for _, observer in observers.items():
                 observer.render_quantization_config()
-        self.calibrate_negative_parameter(pair)
+        self.calibration_passive_param(pair)
         # calculate loss
         loss = []
         for calib_epoch in range(ceil(calib_steps / len(data_loader))):

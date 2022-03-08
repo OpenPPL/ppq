@@ -1,8 +1,10 @@
 import logging
+
+from ppq.core.defs import ppq_legacy
 logger = logging.getLogger('PPQ')
 
 # attribute checker and preprocess
-def checker(attr, input_shape, kernel_shape=None, op_type=None):
+def process_attribute(attr, input_shape, kernel_shape=None, op_type=None):
     # ASSUME input is 2D
     assert len(input_shape) == 2
     # Get default attr value
@@ -46,13 +48,13 @@ def checker(attr, input_shape, kernel_shape=None, op_type=None):
         # onnx pads attribute cannot be used simultaneously with auto_pad attribute
         attr.pop('auto_pad')
 
-
+@ ppq_legacy(version='0.6.2')
 def preprocess_attr(attr, op_type=None):
-    new_attr = {}
+    processed_attribute = {}
     if 'kernel_shape' in attr and op_type == 'Pooling':
-        new_attr['kernel_size'] = attr['kernel_shape']
+        processed_attribute['kernel_size'] = attr['kernel_shape']
     if 'group' in attr:
-        new_attr['groups'] = attr['group']
+        processed_attribute['groups'] = attr['group']
     if 'pads' in attr:
         # Change pads from start-end to torch format
         pads = attr['pads']
@@ -61,16 +63,16 @@ def preprocess_attr(attr, op_type=None):
             begin_pad = pads[:2]
             end_pad = pads[2:]
             if begin_pad == end_pad:
-                new_attr['padding'] = begin_pad
+                processed_attribute['padding'] = begin_pad
             else:
                 raise ValueError('Torch function only support begin_pad == end_pad in layer')
         else:
-            new_attr['padding'] = pads
+            processed_attribute['padding'] = pads
 
     if 'dilations' in attr:
-        new_attr['dilation'] = attr['dilations']
+        processed_attribute['dilation'] = attr['dilations']
     if 'strides' in attr:
-        new_attr['stride'] = attr['strides']
+        processed_attribute['stride'] = attr['strides']
     if 'ceil_mode' in attr:
-        new_attr['ceil_mode'] = bool(attr['ceil_mode'])
-    return new_attr
+        processed_attribute['ceil_mode'] = bool(attr['ceil_mode'])
+    return processed_attribute

@@ -1,4 +1,4 @@
-#include "common.h"
+# include "common.cuh"
 
 void dummy_pooling_v1(
     const Tensor source,

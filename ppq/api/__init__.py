@@ -9,10 +9,16 @@ from ppq.IR import (BaseGraph, GraphCommand, GraphCommandType, GraphFormatter,
                     GraphMerger)
 from ppq.IR.morph import GraphDeviceSwitcher
 from ppq.parser import dump_graph_to_file, load_graph
-from ppq.quantization.quantizer import (BaseQuantizer, ExtQuantizer,
-                                        NXP_Quantizer,
-                                        ORT_PerTensorQuantizer, ORT_PerChannelQuantizer,
-                                        PPL_DSP_Quantizer, PPLCUDA_INT4_Quantizer,
+from ppq.quantization.quantizer import (ACADEMIC_INT4_Quantizer,
+                                        ACADEMIC_Mix_Quantizer,
+                                        ACADEMICQuantizer, BaseQuantizer,
+                                        ExtQuantizer,
+                                        MetaxChannelwiseQuantizer,
+                                        MetaxTensorwiseQuantizer,
+                                        NXP_Quantizer, ORT_PerChannelQuantizer,
+                                        ORT_PerTensorQuantizer,
+                                        PPL_DSP_Quantizer,
+                                        PPLCUDA_INT4_Quantizer,
                                         PPLCUDAMixPrecisionQuantizer,
                                         PPLCUDAQuantizer, TensorRTQuantizer)
 from ppq.scheduler import DISPATCHER_TABLE
@@ -25,11 +31,16 @@ QUANTIZER_COLLECTION = {
     TargetPlatform.TRT_INT8: TensorRTQuantizer,
     TargetPlatform.NXP_INT8: NXP_Quantizer,
     TargetPlatform.ORT_OOS_INT8: ORT_PerTensorQuantizer,
+    TargetPlatform.METAX_INT8_C: MetaxChannelwiseQuantizer,
+    TargetPlatform.METAX_INT8_T: MetaxTensorwiseQuantizer,
     # TargetPlatform.ORT_OOS_INT8: ORT_PerChannelQuantizer,
     TargetPlatform.PPL_CUDA_INT8: PPLCUDAQuantizer,
     TargetPlatform.EXTENSION: ExtQuantizer,
     TargetPlatform.PPL_CUDA_MIX: PPLCUDAMixPrecisionQuantizer,
-    TargetPlatform.PPL_CUDA_INT4: PPLCUDA_INT4_Quantizer
+    TargetPlatform.PPL_CUDA_INT4: PPLCUDA_INT4_Quantizer,
+    TargetPlatform.ACADEMIC_INT8: ACADEMICQuantizer,
+    TargetPlatform.ACADEMIC_INT4: ACADEMIC_INT4_Quantizer,
+    TargetPlatform.ACADEMIC_MIX: ACADEMIC_Mix_Quantizer
 }
 
 def load_onnx_graph(onnx_import_file: str, setting: QuantizationSetting) -> BaseGraph:
@@ -92,6 +103,8 @@ def dump_torch_to_onnx(
     """
 
     # set model to eval mode, stablize normalization weights.
+    assert isinstance(model, torch.nn.Module), (
+        f'Model must be instance of torch.nn.Module, however {type(model)} is given.')
     model.eval()
 
     if inputs is None:
@@ -470,4 +483,4 @@ def format_graph(graph: BaseGraph, setting: QuantizationSetting) -> BaseGraph:
     return graph
 
 __all__ = ['load_onnx_graph', 'load_caffe_graph', 'dump_torch_to_onnx', 'quantize_onnx_model', 
-           'quantize_torch_model', 'export_ppq_graph', 'format_graph']
+           'quantize_torch_model', 'quantize_caffe_model', 'export_ppq_graph', 'format_graph']
