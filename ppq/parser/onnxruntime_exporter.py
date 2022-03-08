@@ -1,11 +1,13 @@
+from ast import Continue
 from typing import Any, Dict, List, Tuple
+
 import onnx
 import torch
 from onnx import helper
 from ppq.core import (COMPELING_OP_TYPES, EXPORT_DEVICE_SWITCHER, PPQ_NAME,
-                      OperationMeta, QuantizationProperty, QuantizationStates,
-                      TensorMeta, TensorQuantizationConfig,
-                      convert_any_to_torch_tensor)
+                      ChannelwiseTensorQuantizationConfig, OperationMeta,
+                      QuantizationProperty, QuantizationStates, TensorMeta,
+                      TensorQuantizationConfig, convert_any_to_torch_tensor)
 from ppq.IR import (BaseGraph, Operation, QuantableOperation,
                     QuantableVariable, Variable)
 from ppq.IR.base.command import GraphCommand, GraphCommandType
@@ -49,8 +51,9 @@ class ONNXRUNTIMExporter(OnnxExporter):
         super().__init__()
         self.removed_activation_types = removed_activation_types
 
-    def inplace_quantization(self, var: Variable, is_bias: bool) -> Tuple[torch.Tensor, torch.Tensor, int]:
+    def inplace_quantization(self, var: QuantableVariable, is_bias: bool) -> Tuple[torch.Tensor, torch.Tensor, int]:
         config = var.dest_op_configs[0]
+        assert isinstance(config, TensorQuantizationConfig)
         tensor = var.value
         scale, offset = config.scale, config.offset
         axis = 1
@@ -58,6 +61,7 @@ class ONNXRUNTIMExporter(OnnxExporter):
             tensor = ppq_tensor_round((tensor / scale), config.rounding) + offset
             tensor = torch.clamp(tensor, config.quant_min, config.quant_max)
         else:
+            assert isinstance(config, ChannelwiseTensorQuantizationConfig)
             shape = [1 if axis != config.channel_axis else -1 for axis in range(tensor.ndim)]
             scale, offset = scale.view(shape), offset.view(shape)
             tensor = ppq_tensor_round((tensor / scale), config.rounding) + offset
@@ -69,16 +73,13 @@ class ONNXRUNTIMExporter(OnnxExporter):
             var.value = tensor.type(torch.uint8)
         else:
             var.value = tensor.type(torch.int8)
-        return convert_any_to_torch_tensor(config.scale, dtype=torch.float32), \
-            convert_any_to_torch_tensor(config.offset, dtype=var.value.dtype), axis
+        return (convert_any_to_torch_tensor(config.scale, dtype=torch.float32), 
+            convert_any_to_torch_tensor(config.offset, dtype=var.value.dtype), axis)
 
-    def insert_quant_dequant_var(self, 
-                                graph: BaseGraph,
-                                var: Variable,
-                                config: TensorQuantizationConfig=None,
-                                single_branch: bool=False,
-                                dest_op: Operation=None
-    ) -> None:
+    def insert_quant_dequant_on_var(
+        self, graph: BaseGraph, var: QuantableVariable,
+        config: TensorQuantizationConfig=None, single_branch: bool=False,
+        dest_op: Operation=None) -> None:
         """insert quant and dequant op on common quantable variables, by default a pair of quant
         and dequant ops will be inserted on var, i.e., all destinations of original var will be
         replaced by output of dequant op, but you can also insert on single var--dest_op branch
@@ -97,58 +98,40 @@ class ONNXRUNTIMExporter(OnnxExporter):
             configs = [cfg for cfg in [var.source_op_config] + var.dest_op_configs if cfg is not None]
             config = configs[0]
 
-        offset_dtype = torch.uint8 if config.policy.has_property( \
-            QuantizationProperty.ASYMMETRICAL) else torch.int8
-
-        scale = convert_any_to_torch_tensor(config.scale, dtype=torch.float32)
+        offset_dtype = torch.uint8 
+        if config.policy.has_property(QuantizationProperty.ASYMMETRICAL): offset_dtype = torch.int8 
+        scale  = convert_any_to_torch_tensor(config.scale, dtype=torch.float32)
         offset = convert_any_to_torch_tensor(config.offset, dtype=offset_dtype)
-
-        x_scale = Variable(name=var.name + '_scale', value=scale, is_parameter=True)
-        x_zero_point = Variable(name=var.name+'_zero_point', value=offset, is_parameter=True)
-
-        quant_op = Operation(name=var.name + '_QuantizeLinear', op_type='QuantizeLinear', attributes={})
-        dequant_op = Operation(name=var.name + '_DequantizeLinear', op_type='DequantizeLinear', attributes={})
-
-
-        intermediate_var_2 = Variable(name=var.name + '_DequantizeLinear', source_op=dequant_op)
-        graph.append_variable(intermediate_var_2)
-        if single_branch:
-            assert dest_op is not None, "a destination op should be given for single branch insertion"
-            intermediate_var_2.dest_ops.append(dest_op)
-            dest_op.inputs[dest_op.inputs.index(var)] = intermediate_var_2
-        else:
-            intermediate_var_2.dest_ops.extend(var.dest_ops)
-            for op in var.dest_ops:
-                op.inputs[op.inputs.index(var)] = intermediate_var_2
-
-        graph.append_operation(dequant_op)
-        dequant_op.outputs.append(intermediate_var_2)
-
-        intermediate_var_1 = Variable(name=var.name + '_QuantizeLinear', source_op=quant_op, dest_ops=[dequant_op])
-        graph.append_variable(intermediate_var_1)
-        dequant_op.inputs.append(intermediate_var_1)
-        graph.append_operation(quant_op)
-        quant_op.outputs.append(intermediate_var_1)
-
-        quant_op.inputs.append(var)
-        if single_branch:
-            var.dest_ops[var.dest_ops.index(dest_op)] = quant_op
-        else:
-            var.dest_ops.clear()
-            var.dest_ops.append(quant_op)
         
-        quant_op.inputs.extend([x_scale, x_zero_point])
-        dequant_op.inputs.extend([x_scale, x_zero_point])
+        qt_svar = Variable(name=var.name + '_qt_scale', value=scale.clone(), is_parameter=True)
+        qt_zvar = Variable(name=var.name + '_qt_zeropoint', value=offset.clone(), is_parameter=True)
+        dq_svar = Variable(name=var.name + '_dq_scale', value=scale.clone(), is_parameter=True)
+        dq_zvar = Variable(name=var.name + '_dq_zeropoint', value=offset.clone(), is_parameter=True)
         
-        x_scale.dest_ops.extend([quant_op, dequant_op])
-        x_zero_point.dest_ops.extend([quant_op, dequant_op])
+        qt_op = Operation(name=var.name + '_QuantizeLinear', op_type='QuantizeLinear', attributes={})
+        dq_op = Operation(name=var.name + '_DequantizeLinear', op_type='DequantizeLinear', attributes={})
+        
+        if single_branch:
+            upstream_op, downstream_op = var.source_op, dest_op
+            graph.insert_op_between_ops(qt_op, up_op=upstream_op, down_op=downstream_op)
+            graph.insert_op_between_ops(dq_op, up_op=qt_op, down_op=downstream_op)
 
-        graph.append_variable(x_scale)
-        graph.append_variable(x_zero_point)
+        if not single_branch:
+            graph.insert_op_on_var(dq_op, var=var.name)
+            graph.insert_op_on_var(qt_op, var=var.name)
 
-        if var.name in graph.outputs:
-            graph.outputs.pop(var.name)
-            graph.outputs[intermediate_var_2.name] = intermediate_var_2
+        qt_op.inputs.extend([qt_svar, qt_zvar])
+        dq_op.inputs.extend([dq_svar, dq_zvar])
+
+        qt_svar.dest_ops.append(qt_op)
+        qt_zvar.dest_ops.append(qt_op)
+        dq_svar.dest_ops.append(dq_op)
+        dq_zvar.dest_ops.append(dq_op)
+
+        graph.append_variable(qt_svar)
+        graph.append_variable(qt_zvar)
+        graph.append_variable(dq_svar)
+        graph.append_variable(dq_zvar)
 
 
     def insert_dequant_param(self, graph: BaseGraph, var: Variable, is_bias: bool) -> None:
@@ -156,7 +139,7 @@ class ONNXRUNTIMExporter(OnnxExporter):
         # on pre-quant var
         scale, offset, axis = self.inplace_quantization(var, is_bias)
         dequant_op = Operation(name=var.name + '_DequantizeLinear', op_type='DequantizeLinear', attributes={'axis':axis})
-        graph.insert_operation_on_var(dequant_op, var.name)
+        graph.insert_op_on_var(dequant_op, var.name)
         scale = Variable(name=var.name + '_scale', value=scale, is_parameter=True, dest_ops=[dequant_op])
         offset = Variable(name=var.name + '_zero_point', value=offset, is_parameter=True, dest_ops=[dequant_op])
         graph.append_variable(scale)
@@ -200,6 +183,7 @@ class ONNXRUNTIMExporter(OnnxExporter):
                 # meta can't be None itself because we have built TensorMeta 
                 # for every input when we correct param meta
                 while meta.shape is None or meta.dtype is None:
+                    assert isinstance(dest_op, Operation)
                     var = dest_op.outputs[0]
                     dest_op = var.dest_ops[0]
                     dest_idx = var.dest_idx[0]
@@ -217,26 +201,31 @@ class ONNXRUNTIMExporter(OnnxExporter):
                 op.meta_data.output_metas[0].dtype = op.meta_data.input_metas[1].dtype
 
     def remove_activation(self, graph: BaseGraph, activation_ops: List[Operation]) -> None:
+        # Activation op can only be relu and clip,
+        # so it is safe to access op.inputs[0], op.outputs[0] as their input and output.
         for op in activation_ops:
             if not isinstance(op, QuantableOperation): continue
-            input_variable = op.inputs[0]
-            assert isinstance(input_variable, QuantableVariable)
-            cfg = input_variable.source_op_config
-            if cfg is None: continue # upstream operation is not a QuantableOperation
-            
-            if not cfg.policy.has_property(QuantizationProperty.ASYMMETRICAL):
-                continue
-            if len(op.inputs) <= 1:
-                graph.remove_operation(op)
-            else:
+            if len(graph.get_upstream_operations(op)) == 0: Continue
+
+            upstream_op = graph.get_upstream_operations(op)[0]
+            if not isinstance(upstream_op, QuantableOperation): continue
+            input_var, input_cfg = op.inputs[0], op.config.input_quantization_config[0]
+            if not input_cfg.policy.has_property(QuantizationProperty.ASYMMETRICAL): continue
+
+            # PATCH 20220304 Removing graph output op might cause error.
+            if op.outputs[0].name in graph.outputs:
+                graph.outputs.pop(op.outputs[0].name)
+                graph.outputs[input_var.name] = input_var
+
+            if op.type == 'Clip':
                 for var in op.inputs[1:]:
                     var.dest_ops.clear()
                     graph.delete_variable(var.name)
                 while len(op.inputs) > 1:
                     op.inputs.pop()
-                graph.remove_operation(op)
+            graph.remove_operation(op)
         formater = GraphFormatter(graph)
-        formater.process(GraphCommand(GraphCommandType.DELETE_ISOLATED))
+        formater(GraphCommand(GraphCommandType.DELETE_ISOLATED))
 
     def required_opsets(self) -> Dict[str, int]:
         extra_domain_versions = [
@@ -276,13 +265,15 @@ class ONNXRUNTIMExporter(OnnxExporter):
             if op.type in COMPELING_OP_TYPES and isinstance(op, QuantableOperation):
                 compel_ops.append(op)
         for op in compel_ops:
+            assert isinstance(op, QuantableOperation)
             for var in op.inputs:
+                assert isinstance(var, QuantableVariable)
                 if var.source_op_config is not None and \
                     var.source_op_config.dominated_by != op.config.input_quantization_config[0].dominated_by:
                     compel_pairs.append((var, op, op.config.input_quantization_config[0]))
         return compel_pairs
 
-    def export(self, file_path: str, graph: BaseGraph, config_path: str = None, compel_joint_var = True) -> None:
+    def export(self, file_path: str, graph: BaseGraph, config_path: str = None) -> None:
         # remove switchers.
         if not EXPORT_DEVICE_SWITCHER:
             processer = GraphDeviceSwitcher(graph)
@@ -311,6 +302,7 @@ class ONNXRUNTIMExporter(OnnxExporter):
                         break
 
         for var in quantable_vars:
+            assert isinstance(var, QuantableVariable)
             # assume parameter var is used by only one op
             if var.is_parameter:
                 if var.dest_ops[0].is_computing_op and var.dest_idx[0] > 1:
@@ -319,20 +311,20 @@ class ONNXRUNTIMExporter(OnnxExporter):
                     self.insert_dequant_param(graph, var, False)
             elif not(var.source_op is not None and var.source_op.is_computing_op and\
                 len(var.dest_ops) == 1 and var.dest_ops[0].type in self.removed_activation_types):
-                self.insert_quant_dequant_var(graph, var)
+                self.insert_quant_dequant_on_var(graph, var)
             else:
                 removed_activations.extend(var.dest_ops)
 
         self.remove_activation(graph, removed_activations)
-        
-        if compel_joint_var:
-            # insert another pair of quant and dequant ops for compel pairs
-            for (var, op, cfg) in compel_pairs:
-                # skip newly added ops
-                while op not in var.dest_ops:
-                    assert var.dest_ops[0].type in {'QuantizeLinear', 'DequantizeLinear'}
-                    var = var.dest_ops[0].outputs[0]
-                self.insert_quant_dequant_var(graph, var, cfg, True, op)
+
+        # insert another pair of quant and dequant ops for compel pairs
+        for (var, op, cfg) in compel_pairs:
+            assert isinstance(var, Variable)
+            # skip newly added ops
+            while op not in var.dest_ops:
+                assert var.dest_ops[0].type in {'QuantizeLinear', 'DequantizeLinear'}
+                var = var.dest_ops[0].outputs[0]
+            self.insert_quant_dequant_on_var(graph, var, cfg, True, op)
 
         # collect meta info for parameters and newly-added variables
         self.correct_param_meta(graph)

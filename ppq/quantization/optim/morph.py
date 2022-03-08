@@ -3,10 +3,11 @@ from math import ceil
 from typing import Iterable, List
 
 import torch
-from ppq.core import (QuantizationProperty, QuantizationStates, TensorMeta,
-                      empty_ppq_cache, ppq_warning)
+from ppq.core import (QuantizationStates, TensorMeta, empty_ppq_cache,
+                      ppq_warning)
 from ppq.executor import BaseGraphExecutor
 from ppq.IR import BaseGraph, GraphCommandProcesser, Operation, Variable
+from ppq.IR.morph import GraphReplacer
 from ppq.IR.quantize import QuantableOperation
 from ppq.IR.search import Path, SearchableGraph
 from ppq.quantization.observer import TensorObserverFactroy
@@ -166,7 +167,7 @@ class MatrixFactorizationPass(QuantizationOptimizationPass):
                 platform=operation.platform
             )
             
-            graph.insert_operation_on_var(
+            graph.insert_op_on_var(
                 inserting_op=splited, var=operation.outputs[0].name)
             if operation.outputs[0].name in graph.outputs:
                 graph.outputs.pop(operation.outputs[0].name)
@@ -246,13 +247,12 @@ class ChannelSplitPass(QuantizationOptimizationPass):
         self.current_search_direction = None
         super().__init__(name='Channel Split Pass')
 
-    def calculate_scale(self, split_op: QuantableOperation) -> float:
+    def calculate_scale(self, split_op: QuantableOperation) -> torch.Tensor:
         config = split_op.config.input_quantization_config[1]
         observer = TensorObserverFactroy.build_observer(split_op.parameters[0], config)
         observer.observe(split_op.parameters[0].value)
         observer.render_quantization_config()
-        w_scale = config.scale
-        return w_scale
+        return config.scale
 
     def flip(self, op: Operation) -> bool:
         return (self.current_search_direction == 'down') != (op.type == 'ConvTranspose' or (op.type == 'Gemm'\
@@ -424,11 +424,16 @@ class ChannelSplitPass(QuantizationOptimizationPass):
         search_engine = SearchableGraph(processer)
 
         for name, search_direction in zip(self.interested_layers, self.search_directions):
-            self.current_search_direction = search_direction
-            if name not in graph.operations or not graph.operations[name].is_computing_op:
-                logger.warning(f'Check op {name}, it might not be in graph and only Conv,\
-                    Gemm, ConvTranspose is supported')
+            if name not in graph.operations:
+                ppq_warning(f'Can not find operation {name} in your graph, skip its split.')
                 continue
+            op = graph.operations[name]
+            if not op.is_computing_op or not isinstance(op, QuantableOperation):
+                ppq_warning(f'Operation {name} can not be splited via channel spilt function, '
+                            'cause it is not quantable or it has no parameter.')
+                continue
+            
+            self.current_search_direction = search_direction
             matching = search_engine.path_matching(
                 sp_expr=lambda x: x.name == name,
                 rp_expr=lambda x, y: True, # be careful when choosing interested_layers, we assume a reasonable path
@@ -437,7 +442,8 @@ class ChannelSplitPass(QuantizationOptimizationPass):
             )
 
             if len(matching) != 1:
-                logger.warning(f'Can not find a proper counterpart operation for {name}.')
+                ppq_warning(f'Can not find a counterpart of operation {name}, '
+                            'graph is too complex.')
                 continue
 
             path = matching[0]
@@ -452,18 +458,59 @@ class ChannelSplitPass(QuantizationOptimizationPass):
 
             split_op, counterpart_op = path[0], path[-1]
 
-            assert isinstance(split_op, QuantableOperation), (
-                f"op {split_op.name} should be quantable, "
-                "please whether your dispatcher send the op to quantable platform")
-
-            config = split_op.config.input_quantization_config[1]
-            
-            # if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
-            #     logger.warning(f'Channel split is designed for per tensor only, skip {name}')
-            #     continue
-
             copy_channels = self.OCS_forward(split_op)
             self.update_counterpart(counterpart_op, copy_channels)
             self.modify_meta(path, len(copy_channels))
             self.store_parameter(path)
             self.initiate_path_state(path)
+
+
+class MetaxGemmSplitPass(QuantizationOptimizationPass):
+    """
+    Metax 不支持 Gemm 的量化，这个 pass 将 Gemm 拆分成 
+    
+        --- Matmul -----|
+                        + --- Add ---
+            bias   -----|
+    
+    """
+    def __init__(self, name: str = 'Metax Gemm Split Pass') -> None:
+        super().__init__(name)
+    
+    def optimize(self, processer: GraphCommandProcesser, 
+                 dataloader: Iterable, executor: BaseGraphExecutor, **kwargs) -> None:
+        morpher = GraphReplacer(processer)
+        interested_ops = []
+        for operation in processer.graph.operations.values():
+            if operation.type == 'Gemm':
+                interested_ops.append(operation)
+
+        for op in interested_ops:
+            assert isinstance(op, Operation)
+            if op.num_of_input == 2: # no bias gemm
+                inserting_matmul = Operation(name=f'{op.name}', op_type='Gemm')
+                morpher.replace_op(op_name=op.name, replace_to=inserting_matmul)
+            elif op.num_of_input == 3:
+                inserting_add      = Operation(name=f'{op.name}', op_type='Add', attributes={})
+                inserting_matmul   = Operation(name=f'{op.name}_matmul', op_type='MatMul', attributes={})
+                morpher.replace_op(op_name=op.name, replace_to=inserting_add)
+
+                # process with matmul
+                weight_var = op.inputs[1]
+                inserting_add.inputs.remove(weight_var)
+                upstream_op = morpher.graph.get_upstream_operations(inserting_add)
+                assert len(upstream_op) == 1, 'Gemm is expected to have at most 1 income op.'
+                upstream_op = upstream_op[0]
+                
+                morpher.graph.insert_op_between_ops(inserting_op=inserting_matmul, up_op=upstream_op, down_op=inserting_add)
+                op.inputs.remove(weight_var)
+                inserting_matmul.inputs.append(weight_var)
+                weight_var.dest_ops.clear()
+                weight_var.dest_ops.append(inserting_matmul)
+            else: raise ValueError(f'Operation {op.name} should contains 2-3 input, however {op.num_of_input} was given.')
+            
+            if op.attributes.get('transA') == 1:
+                raise ValueError(f'Can not process with operation {op.name}, transA=1 is not allowed.')
+            if op.attributes.get('transB') == 1:
+                inserting_matmul.inputs[-1].value = torch.permute(inserting_matmul.inputs[-1].value, (1, 0))
+            

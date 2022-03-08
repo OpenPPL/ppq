@@ -1,29 +1,32 @@
 from collections import defaultdict
 from typing import Iterable, List
 
-from ppq.core import (COMPELING_OP_TYPES, PPLCUDA_ACTIVATIONS,
-                      QuantizationStates, RoundingPolicy, TargetPlatform,
+import torch
+from ppq.core import (COMPELING_OP_TYPES, LINEAR_ACTIVATIONS,
+                      ORT_OOS_FUSE_START_OPS, PPLCUDA_ACTIVATIONS,
+                      QuantizationProperty, QuantizationStates, RoundingPolicy,
+                      TargetPlatform, TensorQuantizationConfig,
                       empty_ppq_cache)
-from ppq.core.common import ORT_OOS_FUSE_START_OPS
 from ppq.executor import BaseGraphExecutor
 from ppq.IR import GraphCommandProcesser, QuantableOperation, Variable
 from ppq.IR.base.graph import Operation
 from ppq.IR.quantize import QuantableVariable
 from ppq.IR.search import SearchableGraph, TraversalCommand
+from ppq.quantization.observer.range import minmax_to_scale_offset
 
 from .base import QuantizationOptimizationPass
 
 
 class QuantizeReducePass(QuantizationOptimizationPass):
     """
-        QuantizeReducePass 用来简化量化定点信息：通常每一个 Quantable 算子都有前后两个定点信息，
+        QuantizeReducePass 用来简化量化定点信息:通常每一个 Quantable 算子都有前后两个定点信息，
         而运算时通常可以屏蔽一半定点信息以加速。QuantizeReducePass 被设计用来找出可以屏蔽的定点信息。
 
         对于两个相邻算子(op_1 -> op_2)而言，将会出现以下几种情况
             1. op_1 与 op_2 均不量化，此时无需对数据流进行额外处理
             2. op_1 量化，op_2 不量化，op_1 需要对结果进行量化
             3. op_1 不量化，op_2 量化，此时需要按 op_2 的量化参数对数据流进行量化
-            4. op_1 与 op_2 均量化，此时分情况讨论：
+            4. op_1 与 op_2 均量化，此时分情况讨论:
                 4.1. op_1 量化位宽高于 op_2，此时按 op_2 的量化参数对数据流进行量化
                 4.2. op_1 量化位宽低于 op_2，此时按 op_1 的量化参数对数据流进行量化
                 4.3. op_1 量化位等于 op_2，此时按 op_1 的量化参数对数据流进行量化
@@ -35,7 +38,7 @@ class QuantizeReducePass(QuantizationOptimizationPass):
             op_1 如果有定点信息，则必须对数据流进行量化
             op_2, op_3 则需要分别确认是否需要再次对输入数据执行再次量化
 
-        总结：
+        总结:
             当 下游节点 的量化位宽大于等于 上游节点 时，按 上游节点 的量化信息执行量化，此时量化操作发生在上游
             当 下游节点 的量化位宽小于 上游节点 时，按 下游节点 的量化信息执行量化，此时量化操作发生在下游（上游量化未必可以省略）
         
@@ -351,65 +354,31 @@ class QuantizeFusionPass(QuantizationOptimizationPass):
 
         # fuse computing opeartions and its following activation.
         if self.fuse_activation:
-            
-            # pair matching
-            if self.platform == TargetPlatform.PPL_CUDA_INT8:
-                computing_act_matching = processer.path_matching(
-                    sp_expr=lambda x: x.is_computing_op,
-                    rp_expr=lambda x, y: False,
-                    ep_expr=lambda x: (x.type in PPLCUDA_ACTIVATIONS or 
-                                       x.is_linear_activation),
-                    direction='down')
-            elif self.platform == TargetPlatform.ORT_OOS_INT8:
-                computing_act_matching = processer.path_matching(
-                    sp_expr=lambda x: x.type in ORT_OOS_FUSE_START_OPS,
-                    rp_expr=lambda x, y: False,
-                    ep_expr=lambda x: x.is_linear_activation,
-                    direction='down')
-            else:
-                computing_act_matching = processer.path_matching(
-                    sp_expr=lambda x: x.is_computing_op,
-                    rp_expr=lambda x, y: False,
-                    ep_expr=lambda x: x.is_linear_activation,
-                    direction='down')
-            
-            # group by computing layer
-            computing_op_group_by = defaultdict(list)
-            for path in computing_act_matching:
-                computing_op, act_op = path[0], path[-1]
-                computing_op_group_by[computing_op].append(act_op)
+
+            # find all activation operations
+            act_ops = []
+            for op in graph.operations.values():
+                if not isinstance(op, QuantableOperation): continue
+                if op.type in LINEAR_ACTIVATIONS: act_ops.append(op)
+                elif self.platform == TargetPlatform.PPL_CUDA_INT8:
+                    if op.type in PPLCUDA_ACTIVATIONS: act_ops.append(op)
+                else: continue
 
             # fusion
-            for computing_op, act_ops in computing_op_group_by.items():
-                if len(act_ops) != 1: continue # operation that has more than one activations.
-                act_op = act_ops[0]
+            for op in act_ops:
+                assert isinstance(op, QuantableOperation)
+                upstream_ops = graph.get_upstream_operations(op)
+                assert len(upstream_ops) == 1, 'Oops, we got some problem here.'
+                
+                upstream_op = upstream_ops[0]
+                if self.platform == TargetPlatform.ORT_OOS_INT8:
+                    if not upstream_op.type in ORT_OOS_FUSE_START_OPS: continue
 
-                if (isinstance(computing_op, QuantableOperation) and
-                    isinstance(act_op, QuantableOperation) and
-                    computing_op.platform == act_op.platform):
-                    activation_cfg = act_op.config.output_quantization_config[0]
-                    conv_cfg = computing_op.config.output_quantization_config[0]
-                    conv_cfg.dominated_by = activation_cfg
-
-        if self.fuse_concat:
-            # concat layer's inputs should share a same scale with output.
-            for op in graph.operations.values():
-                if (op.type == 'Concat' and 
-                    isinstance(op, QuantableOperation)):
-                    out_config = op.config.output_quantization_config[0]
-
-                    # overlap all concat's input config
-                    for config in op.config.input_quantization_config:
-                        config.dominated_by = out_config
-
-                    # overlap all upstream layers output config
-                    upstream_layers = graph.get_upstream_operations(op)
-                    if self.is_same_platform(upstream_layers + [op]):
-                        for layer in upstream_layers:
-                            if not isinstance(layer, QuantableOperation): continue
-                            for cfg, var in layer.config_with_variable:
-                                if var in op.inputs:
-                                    cfg.dominated_by = out_config
+                if (isinstance(upstream_op, QuantableOperation) and 
+                    len(graph.get_downstream_operations(upstream_op)) == 1 and 
+                    upstream_op.platform == op.platform):
+                    upstream_op.config.output_quantization_config[0].dominated_by = (
+                        op.config.output_quantization_config[0])
 
         if self.fuse_passive_op:
             # all passive operations should never changes quantization configuration of its input
@@ -442,7 +411,7 @@ class InplaceQuantizationSettingPass(QuantizationOptimizationPass):
                 for cfg, var in op.config_with_variable:
                     if not var.is_parameter:
                         cfg.inplace = True
-                
+           
 
 class PPLCudaAddConvReluMerge(QuantizationOptimizationPass):
     def __init__(self) -> None:
@@ -537,42 +506,98 @@ class PPLCudaAddConvReluMerge(QuantizationOptimizationPass):
                     unchanged = False
 
 
-class CompelQuantPass(QuantizationOptimizationPass):
+class QuantAlignmentPass(QuantizationOptimizationPass):
     """
-    对 add, sub, concat 算子执行强制定点覆盖，确保计算过程与硬件一致
-        确保 add, sub, concat 算子的输入与输出定点信息一致
-        确保 add, sub, concat 算子对输入进行定点
-    Args:
-        QuantizationOptimizationPass ([type]): [description]
+        对多输入算子执行强制定点覆盖
     """
-    def __init__(self) -> None:
-        super().__init__(name='PPQ Compel Quant Pass(For Add, Sub)')
+    def __init__(self, 
+                 elementwise_merge_method: str = 'Align to Large', 
+                 concat_merge_method: str = 'Align to Output',
+                 force_overlap: bool = False) -> None:
+        self.elementwise_merge_method = elementwise_merge_method
+        self.concat_merge_method      = concat_merge_method
+        self.force_overlap            = force_overlap
+        assert self.elementwise_merge_method in {'Align to Large', 'Align to Output'}, (
+            'elementwise_merge_method can only be Align to Large or Align to Output')
+        assert self.concat_merge_method in {'Align to Large', 'Align to Output'}, (
+            'concat_merge_method can only be Align to Large or Align to Output')
+        super().__init__(name='PPQ Quantization Alignment Pass')
+
+    def align_to_large(self, op: QuantableOperation) -> TensorQuantizationConfig:
+        """
+        Align quant scale and offset to larger input config.
+            The first input config will be set as master config,
+            all slave config will share the same scale and offset with master.
+        
+        Any change to slave config will be rejected since then.
+        """
+        global_min, global_max, master_config = 0, 0, op.config.input_quantization_config[0]
+        for config in op.config.input_quantization_config:
+            assert config.policy.has_property(QuantizationProperty.PER_TENSOR), (
+                'Quant Alignment can only happen with per tensor quantization.')
+            local_min = config.scale * (config.quant_min - config.offset)
+            local_max = config.scale * (config.quant_max - config.offset)
+
+            assert isinstance(local_min, torch.Tensor)
+            assert isinstance(local_max, torch.Tensor)
+            global_max = max(global_max, local_max.item())
+            global_min = min(global_min, local_min.item())
+
+        # recompute scale and offset
+        scale, offset = minmax_to_scale_offset(
+            global_min, global_max, op.config.input_quantization_config[0])
+
+        device = master_config.scale.device
+        master_config._father_config = master_config
+        master_config.state  = QuantizationStates.ACTIVATED
+        master_config.scale  = torch.tensor([scale], dtype=torch.float32, device=device)
+        master_config.offset = torch.tensor([offset], dtype=torch.float32, device=device)
+
+        for slave_config in op.config.input_quantization_config[1: ]:
+            slave_config.set_master(master=master_config)
+        
+        return master_config
+
+    def align_to_output(self, op: QuantableOperation) -> TensorQuantizationConfig:
+        """
+        Align quant scale and offset to output config.
+            All input configs wiil share a same scale and offset with output config.
+            (as a slave to output config)
+
+        Any change to slave config will be rejected since then.
+        """
+        master_config = op.config.output_quantization_config[0]
+        for slave_config in op.config.input_quantization_config:
+            slave_config.set_master(master=master_config)
+        return master_config
 
     def optimize(
-        self,
-        processer: GraphCommandProcesser,
-        dataloader: Iterable,
-        executor: BaseGraphExecutor,
-        **kwargs
-    ) -> None:
-        
+        self, processer: GraphCommandProcesser,
+        dataloader: Iterable, 
+        executor: BaseGraphExecutor, **kwargs) -> None: 
         graph = processer.graph
-        for operation in graph.operations.values():
+        for operation in processer.graph.operations.values():
             if isinstance(operation, QuantableOperation) and operation.type in COMPELING_OP_TYPES:
                 assert operation.config.output_quantization_config[0].state != QuantizationStates.INITIAL, (
                     f'Can not modify quantization state of opeartion {operation.name}, '
                     'cause it has not been correctly quantized.')
-                out_config = operation.config.output_quantization_config[0]
-
-                for config in operation.config.input_quantization_config:
-                    config._father_config = config
-                    config.dominated_by   = out_config
-                    config.state = QuantizationStates.JOINT
                 
+                method = self.elementwise_merge_method if operation.type != 'Concat' else self.concat_merge_method
+
+                if method == 'Align to Large':
+                    master_config = self.align_to_large(operation)
+                else: master_config = self.align_to_output(operation)
+
                 # override up stream layer's config if possible
                 for up_op in graph.get_upstream_operations(operation):
-                    if len(graph.get_downstream_operations(up_op)) == 1 and isinstance(up_op, QuantableOperation):
+                    if not isinstance(up_op, QuantableOperation): continue
+
+                    if self.force_overlap:
                         for cfg, var in up_op.config_with_variable:
-                            if operation in var.dest_ops and cfg.state == QuantizationStates.ACTIVATED:
-                                cfg.dominated_by = out_config
-                                cfg.state = QuantizationStates.JOINT
+                            if operation in var.dest_ops: 
+                                cfg.set_master(master=master_config, recursive=True)
+                    else:
+                        if len(graph.get_downstream_operations(up_op)) != 1: continue
+                        for cfg, var in up_op.config_with_variable:
+                            if operation in var.dest_ops: 
+                                cfg.set_master(master=master_config, recursive=False)

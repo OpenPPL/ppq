@@ -1,2 +1,2 @@
 from .base import (BaseGraphExecutor, QuantOPRuntimeHook, RuntimeHook)
-from .torch import TorchExecutor
+from .torch import TorchExecutor, TorchQuantizeDelegate

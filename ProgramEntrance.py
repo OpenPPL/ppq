@@ -25,6 +25,7 @@ NETWORK_INPUTSHAPE    = [1, 3, 224, 224]                  # input shape of your 
 CALIBRATION_BATCHSIZE = 16                                # batchsize of calibration dataset
 EXECUTING_DEVICE      = 'cuda'                            # 'cuda' or 'cpu', 'cpu' is untested.
 REQUIRE_ANALYSE       = True
+DUMP_RESULT           = False
 
 # -------------------------------------------------------------------
 # SETTING 对象用于控制 PPQ 的量化逻辑 
@@ -56,14 +57,12 @@ quantized = quantize(
     input_shape=NETWORK_INPUTSHAPE, target_platform=TARGET_PLATFORM,
     dataloader=dataloader)
 
-print('网络量化结束，正在生成目标文件:')
-if MODEL_TYPE == NetworkFramework.ONNX:
-    export(working_directory=WORKING_DIRECTORY,
-           quantized=quantized, platform=TARGET_PLATFORM)
-
-elif MODEL_TYPE == NetworkFramework.CAFFE:
-    export(working_directory=WORKING_DIRECTORY,
-           quantized=quantized, platform=TARGET_PLATFORM)
+if DUMP_RESULT:
+    print('正准备导出中间结果...')
+    dump_internal_results(
+        graph=quantized, dataloader=dataloader, 
+        dump_dir=WORKING_DIRECTORY, executing_device=EXECUTING_DEVICE,
+        sample=False)
     
 # -------------------------------------------------------------------
 # PPQ 计算量化误差时，使用信噪比的倒数作为指标，即噪声能量 / 信号能量 
@@ -84,3 +83,13 @@ if REQUIRE_ANALYSE:
     layerwise_error_analyse(graph=quantized, running_device=EXECUTING_DEVICE,
                             interested_outputs=[var for var in quantized.outputs],
                             dataloader=dataloader, collate_fn=lambda x: x.to(EXECUTING_DEVICE))
+
+
+print('网络量化结束，正在生成目标文件:')
+if MODEL_TYPE == NetworkFramework.ONNX:
+    export(working_directory=WORKING_DIRECTORY,
+           quantized=quantized, platform=TargetPlatform.ONNX)
+
+elif MODEL_TYPE == NetworkFramework.CAFFE:
+    export(working_directory=WORKING_DIRECTORY,
+           quantized=quantized, platform=TargetPlatform.CAFFE)

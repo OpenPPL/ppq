@@ -239,4 +239,10 @@ public:
         const std::vector<Dtype*> &outputs,
         const OperatorQuantConfig<typename ScaleType> &config
     );
+    virtual const int backward(
+        const std::map<std::string, object> &operator_attributes,
+        const std::vector<Dtype*> &inputs,
+        const std::vector<Dtype*> &outputs,
+        const OperatorQuantConfig<typename ScaleType> &config
+    );
 };

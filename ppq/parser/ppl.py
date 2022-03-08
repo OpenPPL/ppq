@@ -1,22 +1,13 @@
 import json
-from typing import Union
 
-import numpy as np
-import torch
-from ppq.core import (QuantizationProperty, QuantizationStates, TargetPlatform,
-                      TensorQuantizationConfig, convert_any_to_numpy,
-                      ppq_legacy)
+from ppq.core import (DataType, QuantizationProperty, QuantizationStates,
+                      TargetPlatform, TensorQuantizationConfig)
 from ppq.IR import BaseGraph
 from ppq.IR.quantize import QuantableOperation
 
 from .onnx_exporter import OnnxExporter
+from .util import convert_value
 
-
-def convert_value(value: Union[int, float, np.ndarray, torch.Tensor]) -> str:
-    if type(value) in {int, float}: return value
-    else:
-        value = convert_any_to_numpy(value, accepet_none=False)
-        return value.tolist()
 
 def convert_type(platform: TargetPlatform) -> str:
     if platform == TargetPlatform.PPL_CUDA_INT8: return "INT8"
@@ -51,22 +42,23 @@ class PPLBackendExporter(OnnxExporter):
                 # we do not support mix presicion quantization for CUDA backend now.
                 # All configurations for this variable should keep identical towards each other.
                 
-                if config.state == QuantizationStates.JOINT and var.name in var_quant_info_recorder: continue
+                if config.state == QuantizationStates.SLAVE and var.name in var_quant_info_recorder: continue
                 var_quant_info_recorder[var.name] = config
 
         # ready to render config to json.
         for var in var_quant_info_recorder:
             config = var_quant_info_recorder[var]
             assert isinstance(config, TensorQuantizationConfig)
+            tensorwise = config.policy.has_property(QuantizationProperty.PER_TENSOR)
             var_quant_info_recorder[var] = {
                 'bit_width'  : config.num_of_bits,
                 'per_channel': config.policy.has_property(QuantizationProperty.PER_CHANNEL),
                 'quant_flag' : True,
                 'sym'        : config.policy.has_property(QuantizationProperty.SYMMETRICAL),
-                'scale'      : convert_value(config.scale),
-                'zero_point' : convert_value(config.offset),
-                'tensor_min' : convert_value(config.scale * (config.quant_min - config.offset)),
-                'tensor_max' : convert_value(config.scale * (config.quant_max - config.offset)),
+                'scale'      : convert_value(config.scale, tensorwise, DataType.FP32),
+                'zero_point' : convert_value(config.offset, tensorwise, DataType.INT32),
+                'tensor_min' : convert_value(config.scale * (config.quant_min - config.offset), tensorwise, DataType.FP32),
+                'tensor_max' : convert_value(config.scale * (config.quant_max - config.offset), tensorwise, DataType.FP32),
                 'q_min'      : config.quant_min,
                 'q_max'      : config.quant_max,
                 'hash'       : config.__hash__(),

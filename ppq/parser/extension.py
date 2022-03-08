@@ -24,5 +24,5 @@ class ExtensionExporter(GraphExporter):
             graph (BaseGraph): [description]
             config_path (str, optional): [description]. Defaults to None.
         """
-        print('You are using Extension Exporter now, however i am afraid that you do not have any logic here yet, so i just print this.')
+        print('You are using Extension Exporter now, however there has no logic yet, so i just print this.')
         print('你调用了 Extension Exporter，但你很可能还没有在这里写任何逻辑，所以我就打印了这行信息。')

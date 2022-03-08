@@ -38,9 +38,11 @@ class SingletonMeta(type):
 def ppq_legacy(version: str, adapt_to: str = None):
     def wrapper(func: Callable):
         if adapt_to is not None:
+            return
             print(f'\033[31mfunction {func.__name__} is obsoleted since version {version}, '
                 f'use {adapt_to} function instead.\033[0m')
         else:
+            return
             print(f'\033[31mfunction {func.__name__} is obsoleted since version {version}, '
                 f'contact with system developer to get more information.\033[0m')
         def _wrapper(*args, **kwargs):
@@ -108,3 +110,7 @@ def ppq_file_io(func: Callable):
 
 def ppq_warning(info: str):
     print(f'\033[31m{info}\033[0m')
+
+
+def ppq_info(info: str):
+    print(f'\033[33m{info}\033[0m')

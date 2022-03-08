@@ -292,12 +292,14 @@ class SearchableGraph(GraphCommandProcesser):
         path_matching 用于图检索，匹配完整路径
             一个最简单的例子：
                 sp_expr = lamdba x: x.type == 'Conv'
-                rp_expr = lamdba x: x.type == 'Relu'
+                rp_expr = lamdba x, y: y.type == 'Relu'
                 ep_expr = lamdba x: x.type == 'Conv'
                 limitation = None
                 direction = 'down'
             该指令检索出从任意 Conv 出发，到任意 Conv 的所有可行路径
             其中路径上含有任意多个 Relu 节点，并且只能包含 Relu
+            
+            你需要注意到 rp_expr 是一个二元表达式，其中 x 代表起点，y 代表终点
         Args:
             sp_expr (Union[Pattern, Callable]): 
                 start point expression, 用于匹配检索起点的表达式
@@ -349,12 +351,14 @@ class SearchableGraph(GraphCommandProcesser):
         opset_matching 用于图检索，匹配算子集合（无序）
             一个最简单的例子：
                 sp_expr = lamdba x: x.type == 'Conv'
-                rp_expr = lamdba x: x.type == 'Relu'
+                rp_expr = lamdba x, y: y.type == 'Relu'
                 ep_expr = lamdba x: x.type == 'Conv'
                 limitation = None
                 direction = 'down'
             该指令检索出从任意 Conv 出发，经过任意多个Relu，到任意 Conv 的所有相关算子
             注意返回结果是无序的，相比于 path matching，opset matching 的性能更高。
+            
+            你需要注意到 rp_expr 是一个二元表达式，其中 x 代表起点，y 代表终点
             
             在极端情况下，path matching 的结果是无法返回的（由于其结果数可能过多）
             此时应当使用 opset matching 

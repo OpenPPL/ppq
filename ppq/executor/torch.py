@@ -1,10 +1,11 @@
 from typing import Any, Callable, Dict, List, Union
 
 import numpy
-from ppq.core import OperationMeta, TargetPlatform, TensorMeta, empty_ppq_cache
+from ppq.core import (OperationMeta, QuantizationStates, TargetPlatform,
+                      TensorMeta, TensorQuantizationConfig, empty_ppq_cache)
 from ppq.IR import BaseGraph, Operation, QuantableOperation, RunnableGraph
 from ppq.IR.base.command import GraphDepolyCommand
-from ppq.quantization.qfunction.linear import TorchLinearQuantFunction
+from ppq.quantization.qfunction.linear import PPQLinearQuantFunction
 
 import torch
 
@@ -33,10 +34,44 @@ class TorchMetaDataTracingHook(RuntimeHook):
         return outputs
 
 
+class TorchQuantizeDelegate(Callable):
+    """
+    Since PPQ 0.6.2, Interface TorchQuantizeDelegate is introduced to customize quantization logic:
+        To be specific, you are suppose to inherit this class, and define your own computation logic
+        within function __call__.
+        
+        Pass your Delegate to TorchExecutor by TorchExecutor.register_quantize_delegate(c, d)
+            Where c is the target quantization config, d is your delegator class. 
+            Once you invoke this function, PPQ execution system will hand the quantization
+            computation of config c over to your delegate. PPQ execution system will no 
+            longer quantize variable related with config c anymore.
+
+    Notice that a delegate replaces quantization computation only, it still under the control of PPQ quantization
+    System, so to say if your config has an invalid state like DEQUANTIZED, PPQ execution system will never been
+    required to quantize related tensor and so your delegate class will take no effects on config c.
+
+        Remove delegate function by TorchExecutor.remove_quantize_delegate(c)
+    
+    If you have some customized parameter of your delegator logic, set them as class attributes.
+    Like: self.param1 = ..., self.param2 = ...
+    
+    Do not edit config structure directly.
+
+    Args:
+        Callable (_type_): _description_
+    """
+    def __init__(self) -> None:
+        super().__init__()
+
+    def __call__(self, tensor: torch.Tensor, 
+                 config: TensorQuantizationConfig) -> torch.Tensor:
+        raise NotImplementedError('Implement this function first.')
+
+
 class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
     def __init__(
         self, graph: BaseGraph, fp16_mode: bool = True,
-        device: str = 'cuda', quant_function: Callable=TorchLinearQuantFunction) -> None:
+        device: str = 'cuda') -> None:
         """
             TorchExecutor - executor object which use torch as its backend.
                 torch backend is used to graph simulating & training(QAT)
@@ -67,16 +102,71 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
                 graph will always be send to the very first visible cuda device.
             ]. Defaults to 'cuda'.
         """
-        self._quant_function = quant_function
+        self._default_quant_fn = PPQLinearQuantFunction
         self._depolyed = False
         self._device = device
         self._executing_contenxt = TorchBackendContext(executing_device=self._device)
         super().__init__(graph)
         self._runnable_graph = RunnableGraph(self._graph)
+        self._delegates = {}
 
         # fp16 is not availible for now.
         self.fp16_mode = fp16_mode
         self.deploy()
+
+    def register_quantize_delegate(
+        self, config: TensorQuantizationConfig, 
+        delegator: TorchQuantizeDelegate):
+        """
+        Since PPQ 0.6.2, Interface TorchQuantizeDelegate is introduced to customize quantization logic:
+            To be specific, you are suppose to inherit this class, and define your own computation logic
+            within function __call__.
+            
+            Pass your Delegate to TorchExecutor by TorchExecutor.register_quantize_delegate(c, d)
+                Where c is the target quantization config, d is your delegator class. 
+                Once you invoke this function, PPQ execution system will hand the quantization
+                computation of config c over to your delegate. PPQ execution system will no 
+                longer quantize variable related with config c anymore.
+
+        Notice that a delegate replaces quantization computation only, it still under the control of PPQ quantization
+        System, so to say if your config has an invalid state like DEQUANTIZED, PPQ execution system will never been
+        required to quantize related tensor and so your delegate class will take no effects on config c.
+
+        Remove delegate function by TorchExecutor.remove_quantize_delegate(c)
+        """
+        if not isinstance(delegator, TorchQuantizeDelegate):
+            raise TypeError(
+                f'You can only register a TorchQuantizeDelegate as quantization delegator function,'
+                f' however a/an {type(delegator)} was given')
+        if not isinstance(config, TensorQuantizationConfig):
+            raise TypeError(
+                f'Except a TensorQuantizationConfig instance, however {type(config)} was passed.')
+        self._delegates[config] = delegator
+
+    def remove_quantize_delegate(
+        self, config: TensorQuantizationConfig):
+        """
+        Since PPQ 0.6.2, Interface TorchQuantizeDelegate is introduced to customize quantization logic:
+            To be specific, you are suppose to inherit this class, and define your own computation logic
+            within function __call__.
+            
+            Pass your Delegate to TorchExecutor by TorchExecutor.register_quantize_delegate(c, d)
+                Where c is the target quantization config, d is your delegator class. 
+                Once you invoke this function, PPQ execution system will hand the quantization
+                computation of config c over to your delegate. PPQ execution system will no 
+                longer quantize variable related with config c anymore.
+
+        Notice that a delegate replaces quantization computation only, it still under the control of PPQ quantization
+        System, so to say if your config has an invalid state like DEQUANTIZED, PPQ execution system will never been
+        required to quantize related tensor and so your delegate class will take no effects on config c.
+
+        Remove delegate function by TorchExecutor.remove_quantize_delegate(c)
+        """
+        if not isinstance(config, TensorQuantizationConfig):
+            raise TypeError(
+                f'Except a TensorQuantizationConfig instance, however {type(config)} was passed.')
+        if config in self._delegates:
+            self._delegates.pop(config)   
 
     def deploy(self):
         """
@@ -248,7 +338,12 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
                 # if opeartion is an QuantableOperation, we have to quant its inputs and outputs at first.
                 if isinstance(operation, QuantableOperation):
                     input_configs = [_ for _ in operation.config.input_quantization_config]
-                    inputs = [self._quant_function(input, config) for input, config in zip(inputs, input_configs)]
+                    inputs = [self.quantize_function(input, config) for input, config in zip(inputs, input_configs)]
+                
+                # PATCH 20220208
+                for idx, var in enumerate(operation.inputs):
+                    if var.name in output_names:
+                        result_collector[output_names.index(var.name)] = inputs[idx]
 
                 # invoking pre-forward hook
                 if operation_runtime_hook is not None:
@@ -268,8 +363,8 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
                 # quantize all result if is necessary
                 if isinstance(operation, QuantableOperation):
                     output_configs = [_ for _ in operation.config.output_quantization_config]
-                    outputs = [self._quant_function(output, config) for output, config in zip(outputs, output_configs)]
-                
+                    outputs = [self.quantize_function(output, config) for output, config in zip(outputs, output_configs)]
+
                 # invoking post-forward hook
                 if operation_runtime_hook is not None:
                     if isinstance(operation_runtime_hook, QuantOPRuntimeHook):
@@ -345,9 +440,11 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
         self._runnable_graph = RunnableGraph(self._graph)
         self._runnable_graph(GraphDepolyCommand(device=self._device))
 
-    @ property
-    def quantize_function(self):
-        return self._quant_function
+    def quantize_function(self, input: torch.Tensor, config: TensorQuantizationConfig = None) -> torch.Tensor:
+        if config is None: return self._default_quant_fn(input, config)
+        elif not QuantizationStates.is_activated(config.state): return input
+        elif config in self._delegates: return self._delegates[config](input, config)
+        else: return self._default_quant_fn(input, config)
 
     def dummy_forward(self, hooks: Dict[str, RuntimeHook] = None) -> None:
         """
@@ -389,66 +486,6 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
             tensor_meta = dest_op.meta_data.input_metas[dest_idx]
             feed_dict[var_name] = tensor_meta.create_tensor(device=self._device)
         self.forward(inputs=feed_dict, hooks=hooks)
-
-    def operation_forward(
-        self, operation: Operation, 
-        inputs: List[torch.Tensor], 
-        quantize_input: bool = True,
-        quantize_output: bool = True) -> List[torch.Tensor]:
-        """
-        This forward function allows you to execute a tiny piece of your graph.
-            (only one operation will be executed with this function)
-        Which serves as a great feature for graph Analysis and local optimization.
-
-        All quantization related computations, including quantization of input, output and parameters 
-            still take effects here with this function. 
-        Quantization calculations are crucial for some local optimization algorithms such as
-            Adaquant, Adaround, Bercq, etc.
-
-        However, to bypass all quantization computations, calling of operation.dequantized is required.
-        Once your operation is dequantized, executor will never quantize its parameter, input, output then.
-            ATTENTION: All baked or stored quantized value will be replaced as its original version.
-
-        This function doesn't support hook for now.
-        Cause hook for input and output can be easily implemented outside this function.
-        
-        Args:
-            operation (Operation): 
-                Target operation to be executed.
-                Given operation must be maintained by executor's internal graph.
-
-            inputs (list):
-                Input tensors of this operation
-            
-            quantize_input (bool):
-                whether to skip input quantization.
-
-            quantize_input (bool):
-                whether to skip output quantization.
-
-        Returns:
-            List[torch.Tensor]: forward result.
-        """
-        platform_dispatching_table = GLOBAL_DISPATCHING_TABLE[operation.platform]
-        if operation.type not in platform_dispatching_table:
-            raise NotImplementedError(f'Graph op: {operation.name}({operation.type}) '\
-                f'has no backend implementation on target platform {operation.platform}')
-        operation_forward_func = platform_dispatching_table[operation.type]
-
-        # quantize all input if necessary.
-        if isinstance(operation, QuantableOperation) and quantize_input:
-            input_configs = [_ for _ in operation.config.input_quantization_config]
-            inputs = [self._quant_function(input, config) for input, config in zip(inputs, input_configs)]
-
-        outputs = operation_forward_func(operation, inputs)
-        outputs = outputs if isinstance(outputs, (list, tuple)) else [outputs]
-
-        # quantize all result if is necessary
-        if isinstance(operation, QuantableOperation) and quantize_output:
-            output_configs = [_ for _ in operation.config.output_quantization_config]
-            outputs = [self._quant_function(output, config) for output, config in zip(outputs, output_configs)]
-
-        return outputs
 
     def partial_graph_forward(
         self, operations: List[Operation], 

@@ -1,7 +1,7 @@
 # This file defines export functions & class of PPQ.
 from ppq.api.setting import *
 from ppq.core import *
-from ppq.executor import TorchExecutor
+from ppq.executor import TorchExecutor, TorchQuantizeDelegate
 from ppq.IR import BaseGraph, Operation, Variable
 from ppq.IR.quantize import QuantableOperation, QuantableVariable
 from ppq.log import *
@@ -28,7 +28,7 @@ from ppq.quantization.optim import (AdaRoundPass, BiasCorrectionPass,
                                     QuantizeRefinePass, RuntimeCalibrationPass,
                                     RuntimePerlayerCalibrationPass)
 from ppq.quantization.qfunction import BaseQuantFunction
-from ppq.quantization.qfunction.linear import TorchLinearQuantFunction
+from ppq.quantization.qfunction.linear import PPQLinearQuantFunction
 from ppq.quantization.quantizer import (BaseQuantizer, NXP_Quantizer,
                                         PPL_DSP_Quantizer, PPLCUDAQuantizer,
                                         TensorRTQuantizer)

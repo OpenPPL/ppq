@@ -6,7 +6,8 @@ def generate_indexer(
     num_of_elements: int, 
     seed: int = 0x20211230) -> torch.Tensor:
     """
-    使用这个函数可以保证在种子一致的情况下产生一致的结果
+    Sample with a given seed.
+    This function will generates a indexer based on your seed.
 
     Args:
         num_of_fetches (int): [description]
@@ -34,6 +35,8 @@ def tensor_random_fetch(
     num_of_fetches: int = 1024) -> torch.Tensor:
     """
     Fetch some elements from tensor randomly.
+        if a valid seed is given, elements will be sampled based on your seed,
+        otherwise a random seed will be generated.
 
     Args:
         tensor (torch.Tensor): [description]
@@ -56,6 +59,10 @@ def channel_random_fetch(
     channel_axis: int = 0) -> torch.Tensor:
     """
     Fetch some elements from tensor randomly by each channel.
+        if a valid seed is given, elements will be sampled based on your seed,
+        otherwise a random seed will be generated.
+        
+    result: [num_of_channel, fetchs_per_channel]
 
     Args:
         tensor (torch.Tensor): [description]
@@ -83,7 +90,11 @@ def batch_random_fetch(
     ) -> torch.Tensor:
     """
     Fetch some elements from each sample in a batched tensor.
-
+        if a valid seed is given, elements will be sampled based on your seed,
+        otherwise a random seed will be generated.
+        
+    result: [num_of_batch, fetchs_per_batch]
+    
     Args:
         tensor (torch.Tensor): [description]
         fetchs_per_channel (int, optional): [description]. Defaults to 1024.

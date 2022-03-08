@@ -276,7 +276,7 @@ def layerwise_equalization(
         layerwise_equalization - 层间权重均一化，使用该函数从大尺度上拉平各个层之间的权重与bias，从而使得量化结果更加精确
                                 this func equalizes weights and biases between differenr layers and reduces
                                 quantization error
-        一次 equalization 操作是指利用性质：C * ( AX + b ) = C/s * ( AsX + b )，所作的恒等变换，其中s为对角矩阵
+        一次 equalization 操作是指利用性质: C * ( AX + b ) = C/s * ( AsX + b )，所作的恒等变换，其中s为对角矩阵
         one equalization step refers to use above formula to do equivalent transformation
 
         通过上述变换以及精心选取的 s，可以使得权重矩阵 A, b, C 的数值大小尽可能接近，从而使得量化更加精准
@@ -302,7 +302,7 @@ def layerwise_equalization(
             equalization_pair.display()
 
     print(f'{len(equalization_pairs)} equalization pair(s) was found, ready to run optimization.')
-    for iter_times in Progressbar(range(iteration), total=iteration):
+    for iter_times in Progressbar(range(iteration), desc='Layerwise Equalization', total=iteration):
         for equalization_pair in equalization_pairs:
             assert isinstance(equalization_pair, EqualizationPair), \
                 "Input equalization pairs should be encapsuled with class EqualizationPair"

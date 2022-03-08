@@ -1,7 +1,8 @@
 from functools import partial
 from typing import Dict
-
+import math
 import torch
+from ppq.core.defs import ppq_warning
 from ppq.quantization.measure.cosine import torch_cosine_similarity
 from ppq.quantization.measure.norm import (torch_mean_square_error,
                                            torch_snr_error)
@@ -81,6 +82,9 @@ class MeasurePrinter():
         print(f'{self.label}{" " * (self.max_name_length - len(self.label))}  | {self.measure_str} ')
         for name, value in self.collection:
             normalized_value = (value - self.min) / (self.normalized_by + 1e-7)
+            if math.isnan(value): 
+                ppq_warning('MeasurePrinter found an NaN value in your data.')
+                normalized_value = 0
             num_of_blocks = round(normalized_value * max_blocks)
             print(f'{name}:{" " * (self.max_name_length - len(name))} | '
                   f'{"█" * num_of_blocks}{" " * (max_blocks - num_of_blocks)} | '

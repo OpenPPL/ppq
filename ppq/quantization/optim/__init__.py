@@ -7,10 +7,11 @@ from .extension import ExtensionPass
 from .morph import (ChannelSplitPass, MatrixFactorizationPass,
                     NXPResizeModeChangePass)
 from .parameters import ParameterQuantizePass, PassiveParameterQuantizePass
-from .refine import (CompelQuantPass, InplaceQuantizationSettingPass,
+from .refine import (QuantAlignmentPass, InplaceQuantizationSettingPass,
                      NxpInputRoundingRefinePass, NxpQuantizeFusionPass,
                      PPLCudaAddConvReluMerge, QuantizeFusionPass,
                      QuantizeReducePass, QuantizeRefinePass)
 from .ssd import SSDEqualizationPass
 from .training import (AdaRoundPass, AdvancedQuantOptimization,
-                       BiasCorrectionPass)
+                       BiasCorrectionPass, BlockwiseReconstructionPass,
+                       LearningStepSizeOptimization)
