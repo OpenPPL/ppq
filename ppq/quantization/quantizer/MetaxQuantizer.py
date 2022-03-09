@@ -22,8 +22,8 @@ class MetaxTensorwiseQuantizer(BaseQuantizer):
     ) -> Union[torch.Tensor, list, dict]:
 
         self._num_of_bits = 8
-        self._quant_min = -128
-        self._quant_max = 127
+        self._quant_min = 0
+        self._quant_max = 255
 
         super().__init__(graph=graph)
 
@@ -63,7 +63,7 @@ class MetaxTensorwiseQuantizer(BaseQuantizer):
 
     @ property
     def target_platform(self) -> TargetPlatform:
-        return TargetPlatform.METAX_INT8_C
+        return TargetPlatform.METAX_INT8_T
 
     @ property
     def default_platform(self) -> TargetPlatform:
@@ -82,7 +82,7 @@ class MetaxTensorwiseQuantizer(BaseQuantizer):
     @ property
     def quantize_policy(self) -> QuantizationPolicy:
         return QuantizationPolicy(
-            QuantizationProperty.SYMMETRICAL +
+            QuantizationProperty.ASYMMETRICAL +
             QuantizationProperty.LINEAR +
             QuantizationProperty.PER_TENSOR)
 
@@ -102,7 +102,7 @@ class MetaxChannelwiseQuantizer(BaseQuantizer):
     ) -> Union[torch.Tensor, list, dict]:
 
         self._num_of_bits = 8
-        self._quant_min = -128
+        self._quant_min = -127
         self._quant_max = 127
 
         super().__init__(graph=graph)
@@ -123,8 +123,8 @@ class MetaxChannelwiseQuantizer(BaseQuantizer):
             # layout: [out_channel, in_channel, kernel_size, kernel_size]
             if operation.type in {'Conv'}:
                 conv_weight_config = base_quant_config.input_quantization_config[1]
-                conv_weight_config.quant_max = int(pow(2, self._num_of_bits - 1))
-                conv_weight_config.quant_min = - int(pow(2, self._num_of_bits - 1) - 1)
+                conv_weight_config.quant_max = 127
+                conv_weight_config.quant_min = -127
                 conv_weight_config.policy = QuantizationPolicy(
                     QuantizationProperty.SYMMETRICAL +
                     QuantizationProperty.LINEAR +
@@ -138,23 +138,21 @@ class MetaxChannelwiseQuantizer(BaseQuantizer):
                 base_quant_config.input_quantization_config[1].observer_algorithm = 'Minmax'
             # first parameter must exits, for gemm layer it will be gemm_weight
             # layout: [in_dim, out_dim]
-            else:
-                for index, input_var in enumerate(operation.inputs):
-                    if input_var.is_parameter:
-                        matmul_weight_config = base_quant_config.input_quantization_config[index]
-                        matmul_weight_config.quant_max = int(pow(2, self._num_of_bits - 1))
-                        matmul_weight_config.quant_min = - int(pow(2, self._num_of_bits - 1) - 1)
-                        matmul_weight_config.policy = QuantizationPolicy(
-                            QuantizationProperty.SYMMETRICAL +
-                            QuantizationProperty.LINEAR +
-                            QuantizationProperty.PER_CHANNEL
-                        )
-                        base_quant_config.input_quantization_config[index] = \
-                            ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
-                                convert_from = matmul_weight_config,
-                                offsets = None, scales  = None, channel_axis = 1
-                            )
-                        base_quant_config.input_quantization_config[index].observer_algorithm = 'Minmax'
+            elif operation.type in {'MatMul'}:
+                matmul_weight_config = base_quant_config.input_quantization_config[1]
+                matmul_weight_config.quant_max = 127
+                matmul_weight_config.quant_min = -127
+                matmul_weight_config.policy = QuantizationPolicy(
+                    QuantizationProperty.SYMMETRICAL +
+                    QuantizationProperty.LINEAR +
+                    QuantizationProperty.PER_CHANNEL
+                )
+                base_quant_config.input_quantization_config[1] = \
+                    ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
+                        convert_from = matmul_weight_config,
+                        offsets = None, scales  = None, channel_axis = 1
+                    )
+                base_quant_config.input_quantization_config[1].observer_algorithm = 'Minmax'
             # if operation has bias
             if operation.type == 'Conv' and operation.num_of_input > 2:
                 bias_config = base_quant_config.input_quantization_config[-1]
