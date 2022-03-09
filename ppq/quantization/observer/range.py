@@ -87,8 +87,8 @@ class TorchMinMaxObserver(BaseTensorObserver):
             self._quant_cfg.state = QuantizationStates.ACTIVATED
 
         elif self._quant_cfg.policy.has_property(QuantizationProperty.PER_CHANNEL):
-            min_vals = torch.min(torch.cat(self._min_val_collector, dim=-1), dim=-1, keepdim=False)[0].cpu()
-            max_vals = torch.max(torch.cat(self._max_val_collector, dim=-1), dim=-1, keepdim=False)[0].cpu()
+            min_vals = torch.min(torch.cat(self._min_val_collector, dim=-1), dim=-1, keepdim=False)[0].cpu().numpy()
+            max_vals = torch.max(torch.cat(self._max_val_collector, dim=-1), dim=-1, keepdim=False)[0].cpu().numpy()
             assert(len(min_vals) == len(max_vals)), 'Min values and max values should at same length.'
             scales, offsets = [], []
             for min_val, max_val in zip(min_vals, max_vals):
