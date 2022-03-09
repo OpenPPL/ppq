@@ -98,8 +98,8 @@ class ONNXRUNTIMExporter(OnnxExporter):
             configs = [cfg for cfg in [var.source_op_config] + var.dest_op_configs if cfg is not None]
             config = configs[0]
 
-        offset_dtype = torch.uint8 
-        if config.policy.has_property(QuantizationProperty.ASYMMETRICAL): offset_dtype = torch.int8 
+        offset_dtype = torch.int8 
+        if config.policy.has_property(QuantizationProperty.ASYMMETRICAL): offset_dtype = torch.uint8 
         scale  = convert_any_to_torch_tensor(config.scale, dtype=torch.float32)
         offset = convert_any_to_torch_tensor(config.offset, dtype=offset_dtype)
         
