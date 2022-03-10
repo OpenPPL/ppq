@@ -10,11 +10,11 @@ class GraphFormatSetting():
         # this pass will convert constant operation into parameter variable(if can be done).
         self.format_constant_op = True
         
-        # 融合Conv和Batchnorm，不开这个 pass 八成要崩
+        # 融合Conv和Batchnorm
         # Fuse Conv and Batchnorm Layer. This pass is necessary and curicial.
         self.fuse_conv_bn       = True
         
-        # 将所有的parameter variable进行分裂，使得每个variable具有至多一个输出算子，不开八成也要崩
+        # 将所有的parameter variable进行分裂，使得每个variable具有至多一个输出算子
         # Split all parameter variables, making all variable has at most 1 output operation. 
         # This pass is necessary and curicial.
         self.format_paramters   = True
@@ -23,8 +23,7 @@ class GraphFormatSetting():
         # This pass is necessary and curicial.
         self.format_cast        = True
         
-        # 尝试从网络中删除所有与输出无关的算子和 variable，注意有一些平台很无聊，
-        # 喜欢把量化参数秃着写在网络里，在这种情况下开启这个选项就要崩了。
+        # 尝试从网络中删除所有与输出无关的算子和 variable
         # Remove all unnecessary operations and variables(which are not link to graph output) from current graph,
         # notice that some platfrom use unlinked variable as quantization parameters, do not set this as true if so.
         self.delete_isolate     = True
