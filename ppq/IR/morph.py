@@ -6,6 +6,7 @@ from ppq.core import (DataType, TargetPlatform,
                       convert_any_to_python_primary_type, ppq_warning)
 from ppq.IR.quantize import DeviceSwitchOP
 from ppq.IR.search import SearchableGraph
+from ppq.core.data import convert_any_to_torch_tensor
 from ppq.scheduler import value_tracing_pattern
 
 from .base.command import (GraphCommand, GraphCommandType,
@@ -108,6 +109,35 @@ class GraphFormatter(GraphCommandProcesser):
             return self.format_parameter_variables()
         if command.command_type == GraphCommandType.FORMAT_CONSTANT_INPUT:
             return self.format_constant_input()
+
+    def format_slice(self) -> None:
+        """
+            Slice: opset1 格式跟其他的不太一样，这个 pass 将 opset1 的 slice 强行转换为 opset 11
+        """
+        interested_ops = []
+        for operation in self.graph.operations.values():
+            if operation.type == 'Slice':
+                if 'starts' in operation.attributes:
+                    assert 'starts' in operation.attributes and 'ends' in operation.attributes, (
+                        f'Invalid Slice Operation Format, Slice operation is expected to have axes, '
+                        'starts and ends attributes with opset 1, '
+                        f'however your operation {operation.name}, do not have completed attributes')
+                interested_ops.append(operation)
+
+        for slice in interested_ops:
+            assert isinstance(slice, Operation)
+            axes   = slice.attributes.get('axes', None)
+            starts = slice.attributes['starts']
+            ends   = slice.attributes['ends']
+            if axes == None: axes = [_ for _ in range(starts)]
+
+            slice.attributes.pop('starts')
+            slice.attributes.pop('ends')
+            if 'axes' in slice.attributes: slice.attributes.pop('axes')
+            self.__add_constant_input(slice, convert_any_to_torch_tensor(starts))
+            self.__add_constant_input(slice, convert_any_to_torch_tensor(ends))
+            self.__add_constant_input(slice, convert_any_to_torch_tensor(axes))
+            
 
     def format_pad(self) -> None:
         """
@@ -374,6 +404,16 @@ class GraphFormatter(GraphCommandProcesser):
         if len(input_var.dest_ops) == 0:
             self.graph.delete_variable(input_var.name)
             self.graph.delete_operation(input_var.source_op.name)
+
+    def __add_constant_input(self, op: Operation, value: torch.Tensor):
+        op_name = op.name
+        if op_name not in self._graph.operations:
+            raise KeyError(f'Operation {op_name} not in current graph.')
+        operation = self._graph.operations[op_name]
+        var = Variable(name=f'{op_name}_{len(op.inputs) + 1}', value=value, is_parameter=True)
+        self.graph.append_variable(var)
+        var.dest_ops.append(operation)
+        operation.inputs.append(var)
 
 
 class GraphMerger(GraphCommandProcesser):

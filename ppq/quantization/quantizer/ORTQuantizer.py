@@ -111,8 +111,8 @@ class ORT_PerChannelQuantizer(BaseQuantizer):
             # layout: [out_channel, in_channel, kernel_size, kernel_size]
             if operation.type in {'Conv'}:
                 conv_weight_config = base_quant_config.input_quantization_config[1]
-                conv_weight_config.quant_max = int(pow(2, self._num_of_bits - 1))
-                conv_weight_config.quant_min = - int(pow(2, self._num_of_bits - 1) - 1)
+                conv_weight_config.quant_max = + 127
+                conv_weight_config.quant_min = - 127
                 conv_weight_config.policy = QuantizationPolicy(
                     QuantizationProperty.SYMMETRICAL +
                     QuantizationProperty.LINEAR +
@@ -130,8 +130,8 @@ class ORT_PerChannelQuantizer(BaseQuantizer):
                 for index, input_var in enumerate(operation.inputs):
                     if input_var.is_parameter:
                         matmul_weight_config = base_quant_config.input_quantization_config[index]
-                        matmul_weight_config.quant_max = int(pow(2, self._num_of_bits - 1))
-                        matmul_weight_config.quant_min = - int(pow(2, self._num_of_bits - 1) - 1)
+                        matmul_weight_config.quant_max = + 127
+                        matmul_weight_config.quant_min = - 127
                         matmul_weight_config.policy = QuantizationPolicy(
                             QuantizationProperty.SYMMETRICAL +
                             QuantizationProperty.LINEAR +
@@ -152,8 +152,8 @@ class ORT_PerChannelQuantizer(BaseQuantizer):
                     QuantizationProperty.PER_CHANNEL
                 )
                 bias_config.num_of_bits = 30
-                bias_config.quant_max = int(pow(2, bias_config.num_of_bits - 1)) - 1
-                bias_config.quant_min = - int(pow(2, bias_config.num_of_bits - 1)) + 1
+                bias_config.quant_max = + 127
+                bias_config.quant_min = - 127
                 bias_config.state = QuantizationStates.PASSIVE_INIT
                 base_quant_config.input_quantization_config[-1] = \
                     ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(

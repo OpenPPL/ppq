@@ -57,13 +57,14 @@ class CUDA:
         offsets: torch.Tensor,
         minimum: int = -128,
         maximum: int = 127,
-        rounding: int = 0
+        rounding: int = 0,
+        dropout: float = 0
     ) -> torch.Tensor:
         if not tensor.is_contiguous(): tensor = tensor.contiguous()
         # if scale is too small, quantization might cause fp32 underflow.
         # if scale < 1e-7: raise ValueError('scale is too small.')
         return __CUDA_EXTENTION__.QuantizeTensor_LT(
-            tensor, scales, offsets, minimum, maximum, rounding)
+            tensor, scales, offsets, minimum, maximum, rounding, dropout)
 
     @ staticmethod
     def LinearQuantize_C(
@@ -74,10 +75,11 @@ class CUDA:
         minimum: int = -128,
         maximum: int = 127,
         rounding: int = 0,
+        dropout: float = 0,
     ) -> torch.Tensor:
         if not tensor.is_contiguous(): tensor = tensor.contiguous()
         return __CUDA_EXTENTION__.QuantizeTensor_LC(
-            tensor, scales, offsets, minimum, maximum, channel_axis, rounding)
+            tensor, scales, offsets, minimum, maximum, channel_axis, rounding, dropout)
         
     @ staticmethod
     def LinearQuantize_T_B(
@@ -121,6 +123,18 @@ class CUDA:
     ) -> torch.Tensor:
         # if scale < 1e-7: raise ValueError('scale is too small.')
         __CUDA_EXTENTION__.Histogram_T(tensor, scale, clip_outliers, histogram)
+        return histogram
+
+    @ staticmethod
+    def Histogram_C(
+        tensor: torch.Tensor,
+        channel_axis: int,
+        histogram: torch.Tensor,
+        scale: float,
+        clip_outliers: bool = True
+    ) -> torch.Tensor:
+        # if scale < 1e-7: raise ValueError('scale is too small.')
+        __CUDA_EXTENTION__.Histogram_C(tensor, channel_axis, scale, clip_outliers, histogram)
         return histogram
 
     @ staticmethod

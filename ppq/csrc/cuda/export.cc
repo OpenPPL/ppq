@@ -5,6 +5,7 @@
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("Quantile_T", Quantile_T, "Quantile_T");
     m.def("Histogram_T", Histogram_T, "Histogram_T");
+    m.def("Histogram_C", Histogram_C, "Histogram_C");
     
     m.def("QuantizeTensor_LT", QuantizeTensor_LT, "QuantizeTensor_LT");
     m.def("QuantizeTensor_LC", QuantizeTensor_LC, "QuantizeTensor_LC");
