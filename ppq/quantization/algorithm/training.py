@@ -361,65 +361,41 @@ class BanditDelegator(TorchQuantizeDelegate):
             quantization scale and offset.
     """
     class EMA():
-        def __init__(self, decay):
+        def __init__(self, value, decay):
             self.decay = decay
-            self.value = 0
+            self.value = value
 
         def put(self, value: float):
             value = (1.0 - self.decay) * value + self.decay * self.value
     
     def __init__(self,  arms: List[float], config: TensorQuantizationConfig, smooth: float = 1) -> None:
         if len(arms) < 2: raise ValueError('Can not initialize bandit with less than 2 arms.')
+        self.e = 0.1
         self.arms = arms
         self.num_of_arms = len(arms)
-        self.smooth = smooth
-        self.active = True
-        self.wins   = [0 for _ in range(self.num_of_arms)]
-        self.trials = [0 for _ in range(self.num_of_arms)]
-        self.last_roll = -1
-        assert isinstance(config.scale, torch.Tensor)
+        self.rewards = [10 for _ in range(self.num_of_arms)]
+        self.last_selected = 0
         self.reference = config.scale.clone()
         self.config = config
-        self.rewards = {r: [] for r in range(self.num_of_arms)}
+        self.decay = 0.99
 
     def roll(self) -> int:
-        # print(self.smooth, self.wins,  self.trials)
-        '''
-        rolls = [
-            random.betavariate(self.smooth + self.wins[i] * 0.3, self.smooth + (self.trials[i] - self.wins[i]) * 0.3)
-            for i in range(self.num_of_arms)]
-        '''
-        # r = np.argmax(rolls)
-        if random.random() > 0.5:
-            r = random.randint(0, len(self.arms) - 1)
-        else: 
-            r = np.argmax([sum(v) / (len(v) + 1e-7) for r, v in self.rewards.items()])
-        self.trials[r] += 1
-        self.last_roll = r
-        return r
+        if random.random() > self.e: selected = random.randint(0, len(self.arms) - 1)
+        else: selected = np.argmax(self.rewards)
+        self.last_selected = selected
+        return selected
 
     def mark(self, rewards: float):
-        self.rewards[self.last_roll].append(rewards)
-        if rewards > 0: self.wins[self.last_roll] += 1
+        v = self.rewards[self.last_selected]
+        v = (1 - self.decay) * rewards + self.decay * v
+        self.rewards[self.last_selected] = v
 
     def finalize(self) -> bool:
-        print('-------------------------------------------')
-        for r, v in self.rewards.items():
-            print(f"Arm {r} | Rewards {sum(v) / (len(v) + 1e-7):.3f} | wins: {self.wins[r]} | trials: {self.trials[r]}")
-
-        selected = np.argmax(self.wins)
-        eta_reward = sum(self.rewards[selected]) / (len(self.rewards[selected]) + 1e-7)
-        if eta_reward > 0.01: 
-            self.config.scale = self.reference * self.arms[np.argmax(self.wins)]
-            return True
-        else: 
-            self.config.scale = self.reference
-            return False
+        self.config.scale = self.reference * self.arms[np.argmax(self.rewards)]
 
     def __call__(self, tensor: torch.Tensor, 
                  config: TensorQuantizationConfig) -> torch.Tensor:
-        if self.active: config.scale = self.reference * self.arms[self.roll()]
-        else: config.scale = self.reference
+        config.scale = self.reference * self.arms[self.roll()]
         return PPQLinearQuantFunction(tensor, config)
 
 
@@ -654,6 +630,7 @@ class BlockBuilder:
                 depths_cache.append(self.depth[up_op])
             self.depth[operation] = max(depths_cache) + 1
 
+
 class StraightThroughEstimateDelegator(TorchQuantizeDelegate):
     def __init__(self,
                 config: TensorQuantizationConfig,
@@ -796,7 +773,7 @@ class BlockwiseReconstructionDelegator(StraightThroughEstimateDelegator):
                 scale = scale.view(shape)
                 offset = offset.view(shape)
             weight = (weight / scale).floor() + (self.rounding >= 0).float()
-            weight = torch.clamp(weight, self.config.quant_min, self.config.quant_max)
+            weight = torch.clamp(weight + offset, self.config.quant_min, self.config.quant_max)
             weight = (weight - offset) * scale
             self.binding_var.value = weight
 

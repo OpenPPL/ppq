@@ -69,14 +69,15 @@ def find_all_blocks(graph: BaseGraph,
         block_builder = BlockBuilder(graph=graph, topo_order=executing_order)
 
         for op in graph.operations.values():
-            if isinstance(op, QuantableOperation) and op.is_computing_op\
-                and op not in visited_ops:
+            if op not in visited_ops:
                 if block_limit is None:
                     block = block_builder.build(op, OPTIM_ADVOPT_GRAPH_MAXSIZE)
                 else:
                     block = block_builder.build(op, block_limit)
                 for op in block.rps:
                     visited_ops.add(op)
+                if len(graph.get_downstream_operations(block.ep)) > 1:
+                    visited_ops.remove(block.ep)
                 blocks.append(block)
         return blocks
 
@@ -580,10 +581,10 @@ class BlockwiseReconstructionPass(TrainingBasedPass):
     def tune_block_weight_scale(self,
                             block: TrainableBlock,
                             device: Union[str, torch.device],
-                            epochs: int=30
+                            epochs: int=900
     ) -> None:
         # before we tune weight roundings and activation scales, we optimize weight scale by
-        # minimizing MSE(W, W^)
+        # minimizing MSE(W, W^), 900 epochs would be enough in this non-overfit setting
         for op in block.rps:
             if op.is_computing_op:
                 cfg = op.config.input_quantization_config[1]
@@ -593,6 +594,7 @@ class BlockwiseReconstructionPass(TrainingBasedPass):
                 delegator = StraightThroughEstimateDelegator(cfg, True, 1.0, device)
                 params = delegator.collect_params()
                 optimizer = torch.optim.Adam(params, lr=1e-3)
+                scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, [int(epochs / 2), int(epochs * 2 / 3)])
                 initial_loss, final_loss = None, None
                 for _ in tqdm(range(epochs), total=epochs, desc=f'tune weight scale for {op.name}'):
                     loss = torch_mean_square_error(delegator(weight, cfg), weight, reduction='sum')
@@ -602,6 +604,7 @@ class BlockwiseReconstructionPass(TrainingBasedPass):
                     if initial_loss is None:
                         initial_loss = loss.detach().item()
                     final_loss = loss.detach().item()
+                    scheduler.step()
                 logger.info(f'Optimize {op.name} weight scale, initial loss {initial_loss}, optimized loss {final_loss}')
                 if final_loss < initial_loss:
                     delegator.finalize()
@@ -670,8 +673,6 @@ class BlockwiseReconstructionPass(TrainingBasedPass):
                     fp_outputs = executor.forward(data, output_names)
                     restore_quantization_state(graph)
                     quant_outputs = executor.forward_with_gradient(data, output_names)
-                    for optimizer in optimizers:
-                        optimizer.zero_grad()
                     reconstruction_loss = 0.0
                     for (name, fp_output, quant_output) in zip(output_names, fp_outputs, quant_outputs):
                         loss = Lp_norm(fp_output, quant_output)
@@ -1247,58 +1248,117 @@ class LearningToCalibPass(TrainingBasedPass):
         ATTENTION: ONLY CONFIGURATION WITH STATE "ACTIVED" WILL BE TUNED VIA THIS FUNCTION.
     """
     
-    def __init__(self, 
-                 interested_output: List[str] = None, method: str = 'TS', 
+    def __init__(self, interested_output: List[str] = None, method: str = 'e-greedy', 
                  calib_act: bool = True, calib_weight: bool = True) -> None:
         self.interested_output = interested_output
-        self.method = method
-        self.calib_act = calib_act
-        self.calib_weight = calib_weight
-        self.bandit_arms = [0.7, 0.82, 0.9, 0.97, 1, 1.03, 1.1, 1.18, 1.3] # for power-of-2 policy, use bandit like [0.5, 1, 2]
-        super().__init__('Sampling Based Calibration Pass')
+        self.method            = method
+        self.calib_act         = calib_act
+        self.calib_weight      = calib_weight
+        self.e                 = 0.1
+        self.bandit_arms       = [0.7, 0.82, 0.9, 0.97, 0.99, 1, 1.01, 1.03, 1.1, 1.18, 1.3] 
+        # for power-of-2 policy, use bandit like [0.5, 1, 2]
+        super().__init__('RL Based Calibration Pass')
 
     def compute_loss(self, y_preds: List[torch.Tensor], y_reals: List[torch.Tensor]) -> float:
         return sum(
             torch_mean_square_error(y_pred=y_pred, y_real=y_real).item() 
             for y_pred, y_real in zip(y_preds, y_reals))
 
+    def calib_block(self, quant_inputs: List[torch.Tensor], fp32_outputs: List[torch.Tensor],
+        executor: TorchExecutor, block: TrainableBlock, dataloader: Iterable, collate_fn: Callable):
+        # create trainable delegators for each parameter.
+        delegators = []
+        for operation in block.rps:
+            if isinstance(operation, QuantableOperation):
+                for cfg, var in operation.config_with_variable:
+                    if cfg.state == QuantizationStates.ACTIVATED:
+                        delegators.append(BanditDelegator(arms=self.bandit_arms, config=cfg))
+
+        for delegator in delegators:
+            assert isinstance(delegator, BanditDelegator)
+        
+        pass
+            
+    def collect_training_data(
+        self, output_name: str,
+        dataloader: Iterable,
+        executor: BaseGraphExecutor, 
+        collate_fn: Callable) -> List[List[torch.Tensor]]:
+
+        output_collector = []
+        for data in dataloader:
+            if collate_fn is not None: data = collate_fn(data)
+            [output] = executor.forward(data, output_names=[output_name])
+            output_collector.append(output.to(self.collecting_device))
+        return output_collector
+
     def optimize(self, processer: GraphCommandProcesser, 
                  dataloader: Iterable, executor: TorchExecutor, 
                  collate_fn: Callable, **kwargs) -> None:
-        graph = processer.graph
-        interested_outputs = [name for name in graph.outputs]
-        target_iter, samples_per_iter = 5, 2048
+        
+        graph         = processer.graph
+        block_builder = BlockBuilder(graph=graph, topo_order=executor._executing_order)
 
-        # find all trainable configs
-        training_configs = []
+        # check if there is any baked value inside your graph
         for operation in graph.operations.values():
             if isinstance(operation, QuantableOperation):
                 for cfg, var in operation.config_with_variable:
-                    if (cfg.state == QuantizationStates.ACTIVATED and 
-                        cfg.policy.has_property(QuantizationProperty.PER_TENSOR)):
-                        training_configs.append(cfg)
+                    if cfg.state in {QuantizationStates.BAKED, QuantizationStates.PASSIVE_BAKED}:
+                        raise PermissionError('Can not apply advanced optimization pass when weight value is baked. '
+                                              f'Variable {var.name} has a baked value.')
 
-        for iter in range(target_iter):
-            bandits = [BanditDelegator(arms=self.bandit_arms, config=config) for config in training_configs]
-            for bandit in bandits: executor.register_quantize_delegate(bandit.config, bandit)
+        # build all blocks, drop overlapped layers.
+        blocks, visited = [], set()
+        for op in graph.operations.values():
+            if op in visited: continue
+            block = block_builder.build(op, limit=OPTIM_ADVOPT_GRAPH_MAXSIZE)
+            for rp in block.rps:
+                if rp != block.sp and rp != block.ep:
+                    visited.add(rp)
+            blocks.append(block)
+            
+        graph         = processer.graph
+        block_builder = BlockBuilder(graph=graph, topo_order=executor._executing_order)
 
-            for data in tqdm(dataloader):
-                data = collate_fn(data)
-                
-                self.dequantize_graph_immediately(graph)
-                fp_refs = executor.forward(data)
-                
-                for bandit in bandits: bandit.active = False
-                self.quantize_graph_immediately(graph)
-                qt_refs = executor.forward(data)
-                ref_loss = self.compute_loss(y_preds=qt_refs, y_reals=fp_refs)
-                
-                # 那有赌狗一直输 ...
-                for bandit in bandits: bandit.active = True
-                for i in range(10):
-                    results = executor.forward(data)
-                    loss = self.compute_loss(y_preds=results, y_reals=fp_refs)
-                    for bandit in bandits: bandit.mark(ref_loss - loss)
-    
-            for bandit in bandits: bandit.finalize()
-            for bandit in bandits: executor.remove_quantize_delegate(bandit.config)
+        self.initialize_checkpoints(
+            graph=graph, executor=executor, 
+            dataloader=dataloader, collate_fn=collate_fn)
+
+        for bidx, block in enumerate(blocks):
+            self._bidx, self._num_of_blocks = bidx, len(blocks)
+            assert isinstance(block, TrainableBlock)
+
+            end_op       = block.ep
+            block_input  = block.sp.inputs[0]
+            block_output = end_op.outputs[0]
+            
+            # dequantize prefix operations and block operations
+            for op in graph.operations.values():
+                if isinstance(op, QuantableOperation): 
+                    op.dequantize()
+                    # can not use dequantize_immediately cause weight has been changed.
+                    # self.dequantize_immediately(op)
+
+            fp32_outputs = self.collect_training_data(
+                output_name=block_output.name, dataloader=dataloader, 
+                executor=executor, collate_fn=collate_fn)
+
+            # quantize prefix operations and block operations
+            for op in graph.operations.values():
+                if isinstance(op, QuantableOperation): 
+                    op.restore_quantize_state()
+
+            quant_inputs = self.collect_training_data(
+                output_name= block_input.name, dataloader=dataloader, 
+                executor=executor, collate_fn=collate_fn)
+
+            # start training, solve the best parameters
+            self.calib_block(
+                quant_inputs=quant_inputs, fp32_outputs=fp32_outputs,
+                executor=executor, block=block,
+                dataloader=dataloader, collate_fn=collate_fn)
+
+            # empty cache.
+            fp32_outputs.clear()
+            quant_inputs.clear()
+            empty_cache()

@@ -92,6 +92,8 @@ class GraphCommandType(Enum):
     # 删除图中的 Constant Input
     # remove constant input
     FORMAT_CONSTANT_INPUT = 28
+    # 将 opset1 的 slice 弄成 opset 11 的
+    FORMAT_SLICE = 29
 
 class GraphCommand():
     def __init__(self, command_type: GraphCommandType, **kwargs) -> None:

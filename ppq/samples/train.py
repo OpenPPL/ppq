@@ -34,7 +34,7 @@ quant_setting.advanced_optimization = True # train your network for better quant
 quant_setting.advanced_optimization_setting.lr = 1e-3 # change this for better performance
 
 # Load training data for creating a calibration dataloader.
-# Set shuffle=True when training your network.
+# Set shuffle=False when training your network.
 calibration_dataset = load_calibration_dataset()
 calibration_dataloader = DataLoader(
     dataset=calibration_dataset, 

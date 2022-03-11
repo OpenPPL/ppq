@@ -2,19 +2,13 @@
 
 Tensor QuantizeTensor_LT(
     const Tensor &value, const Tensor &scale, const Tensor &offset, 
-    const int clip_min, const int clip_max, 
-    Rounding rounding);
+    const int clip_min, const int clip_max, Rounding rounding, 
+    const float dropout);
 
 Tensor QuantizeTensor_LC(
     const Tensor &value, const Tensor &scale, const Tensor &offset, 
     const int clip_min, const int clip_max, const int channel_axis,
-    Rounding rounding);
-
-void Histogram_T(
-    const Tensor &value,
-    const float hist_scale,
-    const bool clip_outliers,
-    Tensor &hist);
+    Rounding rounding, const float dropout);
 
 std::vector<Tensor> QuantizeTensor_LT_B(
     const Tensor &value, const Tensor &quantized, 

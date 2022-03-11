@@ -34,27 +34,32 @@ __device__ __forceinline__ T BlockReduceSum(T val) {
 }
 
 __global__ void _QuantizeTensor_LT(
-    const int64_t num_of_element,
+    const int64_t    num_of_element,
     const float*     value,
     const float*     scale,
     const float*     offset,
     const int        clip_min,
     const int        clip_max,
     const Rounding   rounding,
+    const float      dropout,
     float* out
 ){
     float s = scale[0]; int o = std::nearbyint(offset[0]); int64_t iter;
     KERNEL_LOOP(iter, num_of_element){
-        auto _ = QuantizeScalar<float, float, int>(
+        float qt = QuantizeScalar<float, float, int>(
             value[iter], s, o, clip_min, clip_max, rounding);
-        out[iter] = DequantizeScalar<int, float, int>(_, s, o);
+        float deq = DequantizeScalar<int, float, int>(qt, s, o);
+
+        // Qdrop, Notice here out[iter] is initilized with torch.rand
+        bool mask = dropout > 0 && dropout > out[iter];
+        out[iter] = value[iter] * mask + deq * (1 - mask);
     }
 }
 
 __host__ Tensor QuantizeTensor_LT(
     const Tensor &value, const Tensor &scale, const Tensor &offset, 
-    const int clip_min, const int clip_max, 
-    Rounding rounding){
+    const int clip_min, const int clip_max, const Rounding rounding,  
+    const float dropout){
     /** 
      * PPQ Tensor Quantization Function implementation.
      * This function quantizes a float tensor(tensor wise), 
@@ -71,11 +76,13 @@ __host__ Tensor QuantizeTensor_LT(
     CheckTensor(scale, at::kFloat, "Scale(FP32)");
     CheckTensor(offset, at::kFloat, "Offset(FP32)");
 
-    Tensor quantized = at::empty_like(value);
+    Tensor quantized;
+    if (dropout == 0) quantized = at::empty_like(value);
+    else quantized = at::rand_like(value);
+
     _QuantizeTensor_LT<<<NUM_OF_BLOCK(NUM_OF_ELEMENT(value)), CUDA_NUM_THREADS, 0, at::cuda::getCurrentCUDAStream()>>>(
-        NUM_OF_ELEMENT(value),
-        PTR<float>(value), PTR<float>(scale), PTR<float>(offset),
-        clip_min, clip_max, rounding, PTR<float>(quantized)
+        NUM_OF_ELEMENT(value), PTR<float>(value), PTR<float>(scale), PTR<float>(offset),
+        clip_min, clip_max, rounding, dropout, PTR<float>(quantized)
     );
     return quantized;
 }
@@ -90,21 +97,26 @@ __global__ void _QuantizeTensor_LC(
     const int        clip_min,
     const int        clip_max,
     const Rounding   rounding,
+    const float      dropout,
     float* out
 ){
     int64_t iter;
     KERNEL_LOOP(iter, num_of_element){
         int c = (iter / element_per_channel) % num_of_channel;
-        auto _ = QuantizeScalar<float, float, int>(
+        auto qt = QuantizeScalar<float, float, int>(
             value[iter], scale[c], std::nearbyint(offset[c]), clip_min, clip_max, rounding);
-        out[iter] = DequantizeScalar<int, float, int>(_, scale[c], std::nearbyint(offset[c]));
+        float deq = DequantizeScalar<int, float, int>(qt, scale[c], std::nearbyint(offset[c]));
+
+        // Qdrop, Notice here out[iter] is initilized with torch.rand
+        bool mask = dropout > 0 && dropout > out[iter];
+        out[iter] = value[iter] * mask + deq * (1 - mask);
     }
 }
 
 __host__ Tensor QuantizeTensor_LC(
     const Tensor &value, const Tensor &scale, const Tensor &offset, 
     const int clip_min, const int clip_max, const int channel_axis,
-    Rounding rounding){
+    const Rounding rounding, const float dropout){
     /** 
      * PPQ Tensor Quantization Function implementation.
      * This function quantizes a float tensor(channel wise), 
@@ -127,51 +139,16 @@ __host__ Tensor QuantizeTensor_LC(
         element_per_channel *= value.sizes()[axis];
     }
 
-    Tensor quantized = at::empty_like(value);
+    Tensor quantized;
+    if (dropout == 0) quantized = at::empty_like(value); // torch empty like will not invoke actual kernel.
+    else quantized = at::rand_like(value);
+
     _QuantizeTensor_LC<<<NUM_OF_BLOCK(NUM_OF_ELEMENT(value)), CUDA_NUM_THREADS, 0, at::cuda::getCurrentCUDAStream()>>>(
         NUM_OF_ELEMENT(value), element_per_channel, num_of_channel,
         PTR<float>(value), PTR<float>(scale), PTR<float>(offset),
-        clip_min, clip_max, rounding, PTR<float>(quantized)
+        clip_min, clip_max, rounding, dropout, PTR<float>(quantized)
     );
     return quantized;
-}
-
-__global__ void _Histogram_T(
-    const int64_t num_of_elements,
-    const int64_t num_of_bins,
-    const float* value,
-    const float hist_scale,
-    const bool clip_outliers,
-    int* hist){
-    int64_t iter;
-    KERNEL_LOOP(iter, num_of_elements){
-        int b = floor(fabs(value[iter]) / hist_scale);
-        if (clip_outliers && b > num_of_bins - 1) continue;
-        else if (b > num_of_bins - 1) b = num_of_bins - 1;
-        atomicAdd(&hist[b], 1); // fast enough ...
-    }
-}
-
-__host__ void Histogram_T(
-    const Tensor &value,
-    const float hist_scale,
-    const bool clip_outliers,
-    Tensor &hist){
-    /** 
-     * PPQ Tensorwise Histogram Implementation
-     * This function computes histogram of given value.
-     * Result will sum up to hist tensor.
-     * 
-     * Say we have a float value f, and a float value hist_scale
-     * We will select hist_bin = floor(f / hist_scale)
-     */
-    CheckTensor(value, at::kFloat, "Value(FP32)");
-    CheckTensor(hist, at::kInt, "Histogram(INT8)");
-
-    _Histogram_T<<<NUM_OF_BLOCK(NUM_OF_ELEMENT(value)), CUDA_NUM_THREADS, 0, at::cuda::getCurrentCUDAStream()>>>(
-        NUM_OF_ELEMENT(value), NUM_OF_ELEMENT(hist), PTR<float>(value),
-        hist_scale, clip_outliers, PTR<int>(hist)
-    );
 }
 
 __global__
