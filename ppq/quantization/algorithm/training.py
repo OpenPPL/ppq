@@ -1,6 +1,4 @@
 # TODO move training logic to here.
-from __future__ import annotations
-
 import random
 from math import sqrt
 from random import randint
@@ -650,7 +648,7 @@ class StraightThroughEstimateDelegator(TorchQuantizeDelegate):
         self._masters          = []
     
     @ property
-    def masters(self) -> List[StraightThroughEstimateDelegator]:
+    def masters(self):
         return self._masters
     
     @ masters.setter
@@ -675,6 +673,7 @@ class StraightThroughEstimateDelegator(TorchQuantizeDelegate):
                 # bias
                 scale = self.scale_multiplier
                 for delegator in self.masters:
+                    assert isinstance(delegator, StraightThroughEstimateDelegator)
                     scale = scale * delegator.scale.data.abs()
                 self.config.scale = scale
 
