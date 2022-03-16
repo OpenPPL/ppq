@@ -230,7 +230,7 @@ class SSDEqualizationPass(QuantizationOptimizationPass):
             kernel_scale = kernel_scale / next_kernel_scale
             act_scale = act_scale / next_kernel_scale
             min_scale = torch.min(kernel_scale, act_scale)
-            min_scale = torch.min(min_scale, torch.tensor(default_min_scale, dtype=torch.float32))
+            min_scale = torch.min(min_scale, torch.tensor(default_min_scale, dtype=torch.float32, device=min_scale.device))
             min_scale /= min_scale.min()
             min_scale = torch.clip(min_scale, 1.0, max_scale)
         else:
