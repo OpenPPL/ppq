@@ -1,1 +1,1 @@
-from .logger import ppq_logger
+from .logger import NaiveLogger

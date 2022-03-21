@@ -1,8 +1,11 @@
 from collections import defaultdict
-from . import ppl_caffe_pb2
-import logging
+
 import numpy as np
-logger = logging.getLogger('PPQ')
+from ppq.log import NaiveLogger
+
+from . import ppl_caffe_pb2
+
+logger = NaiveLogger.get_logger('PPQ')
 
 def de_inplace(net_def: ppl_caffe_pb2.NetParameter) -> ppl_caffe_pb2.NetParameter:
     """
@@ -95,7 +98,7 @@ def merge_batchnorm_scale(caffe_net: ppl_caffe_pb2.NetParameter) -> ppl_caffe_pb
             idx += 1
     return new_net
 
-def dump_optimize(caffe_net: ppl_caffe_pb2.NetParameter):
+def optimize_for_export(caffe_net: ppl_caffe_pb2.NetParameter) -> ppl_caffe_pb2.NetParameter:
     """
     Simplify some caffe ops
     Pattern 1: combine multi-slices to one
@@ -103,6 +106,7 @@ def dump_optimize(caffe_net: ppl_caffe_pb2.NetParameter):
     """
     slice_combine(caffe_net)
     eltwise_combine(caffe_net)
+    return caffe_net
 
 
 def slice_combine(caffe_net: ppl_caffe_pb2.NetParameter):

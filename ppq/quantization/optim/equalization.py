@@ -15,7 +15,7 @@ from .base import QuantizationOptimizationPass
 
 OPTIMIZATION_LAYERTYPE_CONFIG = {
     1: {'Relu', 'MaxPool', 'GlobalMaxPool', 'PRelu', 'AveragePool', 'GlobalAveragePool'},                     # level - 1 optimize
-    2: {'Relu', 'MaxPool', 'GlobalMaxPool', 'Add', 'Sub', 'PRelu'},       # level - 2 optimize
+    2: {'Relu', 'MaxPool', 'GlobalMaxPool', 'Add', 'Sub', 'PRelu', 'AveragePool', 'GlobalAveragePool'},       # level - 2 optimize
 }
 EQUALIZATION_OPERATION_TYPE = {'Conv', 'Gemm', 'ConvTranspose'}
 

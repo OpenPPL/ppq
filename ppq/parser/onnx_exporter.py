@@ -28,13 +28,13 @@ class OnnxExporter(GraphExporter):
 
     def export_quantization_config(
         self, config_path: str, graph: BaseGraph):
-        
+
         render_buffer = {
             'configs': {},
             'dispatchings' : {},
             'values': {}
         }
-        
+
         # Render quantization config.
         for operation in graph.operations.values():
             if isinstance(operation, QuantableOperation):

@@ -53,15 +53,14 @@ class TargetPlatform(Enum):
         Quantizer then dispatches them towards desired platform through its quantization logic.
     """
     TRT_INT8  = 101
-    TRT_INT4  = 102
-    TRT_FP16  = 103
     
-    PPL_CUDA_INT8 = 201
-    PPL_CUDA_INT4 = 202
-    PPL_CUDA_FP16 = 203
-    PPL_CUDA_MIX  = 204
+    PPL_CUDA_INT8 = 201 
+    PPL_CUDA_INT4 = 202 
+    PPL_CUDA_FP16 = 203 
+    PPL_CUDA_MIX  = 204 
 
-    DSP_INT8  = 301
+    PPL_DSP_INT8  = 301
+    SNPE_INT8 = 302
 
     HOST_INT8 = 401
 
@@ -94,7 +93,7 @@ class TargetPlatform(Enum):
     @ classmethod
     def is_quantized_platform(cls, platform) -> bool:
         return platform in {
-            cls.DSP_INT8, cls.TRT_INT4, cls.TRT_INT8, cls.NXP_INT8, 
+            cls.PPL_DSP_INT8, cls.TRT_INT8, cls.NXP_INT8, cls.SNPE_INT8,
             cls.PPL_CUDA_INT8, cls.PPL_CUDA_INT4, cls.EXTENSION, cls.PPL_CUDA_MIX, cls.ORT_OOS_INT8,
             cls.ACADEMIC_INT4, cls.ACADEMIC_INT8, cls.ACADEMIC_MIX, cls.METAX_INT8_C, cls.METAX_INT8_T}
 

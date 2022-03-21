@@ -3,8 +3,8 @@
   <img src="doc/assets/img/banner.jpg" width="1280"/>
 </div>
 
-# PPL Quantization Tool 0.6.2(PPL 量化工具)
-PPL Quant Tool (PPQ) is a highly efficient offline neural network quantization tool with custimized IR, executor, dispacher and optimization passes. 
+# PPL Quantization Tool 0.6.3(PPL 量化工具)
+PPL Quant Tool (PPQ) is a highly efficient offline neural network quantization tool with custimized IR, executor, dispacher and optimization passes.
 
 # Features
 * Quantizable IR, an quantization-oriented network representation.

@@ -1,6 +1,5 @@
-# TODO move training logic to here.
 import random
-from math import sqrt
+from math import sqrt, pow
 from random import randint
 from typing import Iterable, List, Tuple, Union
 
@@ -11,8 +10,7 @@ from ppq.core import (NUM_OF_CHECKPOINT_FETCHS, USING_CUDA_KERNEL,
                       QuantizationProperty, QuantizationStates, RoundingPolicy,
                       TensorQuantizationConfig, convert_any_to_torch_tensor)
 from ppq.executor import TorchQuantizeDelegate
-from ppq.IR import (BaseGraph, Operation, QuantableOperation,
-                    QuantableVariable, Variable)
+from ppq.IR import BaseGraph, Operation, QuantableVariable, Variable
 from ppq.IR.search import SearchableGraph
 from ppq.quantization.qfunction.linear import PPQLinearQuantFunction
 from ppq.utils.fetch import batch_random_fetch
@@ -110,6 +108,7 @@ if not USING_CUDA_KERNEL:
             qt = torch.clamp(qt, quant_min, quant_max)
             qt = (qt - offset) * scale
             return torch.sum(torch.abs(qt - tensor)) / sqrt(qt.numel())
+
 
 else: # if USING_CUDA_KERNEL:
     class Clip_T(Function):
@@ -358,20 +357,13 @@ class BanditDelegator(TorchQuantizeDelegate):
         Multi-arm bandits are introduced since PPQ 0.6.2 for training
             quantization scale and offset.
     """
-    class EMA():
-        def __init__(self, value, decay):
-            self.decay = decay
-            self.value = value
-
-        def put(self, value: float):
-            value = (1.0 - self.decay) * value + self.decay * self.value
-    
-    def __init__(self,  arms: List[float], config: TensorQuantizationConfig, smooth: float = 1) -> None:
+    def __init__(self,  arms: List[float], config: TensorQuantizationConfig) -> None:
         if len(arms) < 2: raise ValueError('Can not initialize bandit with less than 2 arms.')
         self.e = 0.1
         self.arms = arms
         self.num_of_arms = len(arms)
-        self.rewards = [10 for _ in range(self.num_of_arms)]
+        self.rewards = [EMARecorder() for _ in range(self.num_of_arms)]
+        self.rewards[0].push(1)
         self.last_selected = 0
         self.reference = config.scale.clone()
         self.config = config
@@ -379,17 +371,18 @@ class BanditDelegator(TorchQuantizeDelegate):
 
     def roll(self) -> int:
         if random.random() > self.e: selected = random.randint(0, len(self.arms) - 1)
-        else: selected = np.argmax(self.rewards)
+        else: selected = np.argmax([ema.pop() for ema in self.rewards])
         self.last_selected = selected
         return selected
 
     def mark(self, rewards: float):
-        v = self.rewards[self.last_selected]
-        v = (1 - self.decay) * rewards + self.decay * v
-        self.rewards[self.last_selected] = v
+        self.rewards[self.last_selected].push(rewards)
 
     def finalize(self) -> bool:
-        self.config.scale = self.reference * self.arms[np.argmax(self.rewards)]
+        self.config.scale = self.reference * self.arms[np.argmax([ema.pop() for ema in self.rewards])]
+
+    def withdraw(self):
+        self.config.scale = self.reference
 
     def __call__(self, tensor: torch.Tensor, 
                  config: TensorQuantizationConfig) -> torch.Tensor:
@@ -454,10 +447,10 @@ class AdaroundRegTerm(torch.nn.Module):
         self.temp_anneal = TimeDecay(self.max_iter, self.warm_ratio)
         super().__init__()
 
-    def rectified_sigmoid(self, round_mask):
+    def rectified_sigmoid(self, round_mask) -> torch.Tensor:
         return ((self.zeta - self.gamma) * torch.sigmoid(round_mask) + self.gamma).clamp(0, 1)
 
-    def forward(self, round_mask, iter):
+    def forward(self, round_mask, iter) -> torch.Tensor:
         if iter < self.max_iter * self.warm_ratio:
             round_loss = 0
         else:
@@ -543,15 +536,16 @@ class BlockBuilder:
 
     def build(self, op: Operation, limit: int) -> TrainableBlock:
         """
+        子图分割算法, 这个算法将从指定节点出发, 构造一个满足定义的子图结构
         Solving best block from given operation.
         
-        Block defination:  
+        Block defination:(子图定义)
             A Block is a triple contains S, E, M, 
                 where S is the input node of block
                 where E is the output node of block
                 where M contains all nodes inside block
         
-        Property:
+        Property:(子图性质)
             1. Minmal TrainableBlock start from p is {p, p, {p}}, 
                this block have only one node as both input and output.
             2. When S != E, 
@@ -559,23 +553,28 @@ class BlockBuilder:
                S must on every path from graph input to E.
             3. M contains and only contains nodes on all paths from S to E.
         
-        Lemma:
-            1. 如果 s 的后继节点只有一个 e，且 e 的输入只有一个，那么 {s, e, {s, e}} 构成区块，从 s 寻找区块的任务可以递归由 e 完成
-            2. 如果 s 的后继存在多个节点，则:
-                2.1 从 s 出发，不存在能够符合定义的区块。
-                2.2 从 s 出发，构成的区块内必须含有一个节点接收多个输入。（可用反证法证明，略）
+        Lemma:(算法引理)
+            1. 如果 s 的后继节点只有一个 e, 且 e 的输入只有一个，那么 {s, e, {s, e}} 构成满足定义的子图，从 s 寻找子图的任务可以递归由 e 完成
+            2. 如果 s 的后继存在多个节点，则只存在两种情况:
+                2.1 从 s 出发，最大子图即为 {s, s, {s}}。
+                2.2 从 s 出发，可以构成子图 {s, e, R} (e!=s), 那么R中必须含有一个节点接收多个输入。（可用反证法证明，略）
 
-        Algorithm:
-            0. 如果区块长度大于所需，则返回现有内容，否则转 1
-            1. 从 s 出发，如果 s 的后继节点只有一个，则递归寻找从后继节点开始的区块；
-               如果 s 的后继节点存在多个，找出距离 s 拓扑序最近的多输入的节点 k1，判断 s 到输出的路径是否能够被 k1 阻断
-                    如果 k 成功阻断所有输出，递归寻找从 k 开始的区块
+        Algorithm:(算法)
+            Build(s, d):
+                如果区块长度大于所需，则返回现有内容
+                从 s 出发，如果 s 的后继节点只有一个e，则判断e的输入节点个数：
+                    1. 如果 e 是单输入节点，执行Build(e, d-1)，并将其结果与 {s, e, {s, e}} 合并
+                    2. 如果 e 是多输入节点，算法立即停机，返回 {s, s, {s}}
+                
+                如果 s 的后继节点存在多个，找出距离 s 拓扑序最近的多输入的节点 k1，判断 s 到输出的路径是否能够被 k1 阻断
+                    如果 k 成功阻断所有输出，执行Build(k1, d-1)，并将其结果与 {s, k1, F(s, k1)} 合并
                     如果 k 不能阻断输出，寻找距离 s 次近的多输入节点 k2，重复判断
-               直到 kn 到达 s 的距离超出限制
+                直到 kn 到达 s 的距离超出限制
+
+                函数 F(s, k1) 取出 从 s 到 k1 路上的所有节点
 
         可利用引理证明算法正确性，从略
-        时间复杂度: O(kd) k 为节点最大度数，d 为深度限制。
-        建立所有Block所需时间 O(nkd)
+        时间复杂度: O(kd) k 为节点最大度数 d 为深度限制。建立所有Block所需时间 O(nkd)
         """
         def _find_multi_input_ep(op: Operation):
             # 如果当前节点后继节点存在多个，层序遍历寻找阻断节点
@@ -586,7 +585,9 @@ class BlockBuilder:
             
             while not least_first_queue.empty():
                 iter_operation = least_first_queue.pop()[-1]
-                if least_first_queue.empty(): return iter_operation
+                if (least_first_queue.empty() and 
+                    len(self.graph.get_upstream_operations(iter_operation)) > 1): 
+                    return iter_operation
                 for down_op in self.graph.get_downstream_operations(iter_operation):
                     least_first_queue.push(self.depth[down_op], down_op)
 
@@ -791,3 +792,22 @@ class BlockwiseReconstructionDelegator(StraightThroughEstimateDelegator):
             tensor = torch.clamp(tensor + offset, config.quant_min, config.quant_max)
             tensor = (tensor - offset) * scale
             return tensor
+
+
+class EMARecorder():
+    """
+    Exponential Moving Average(EMA) 
+        with bias correction.
+    """
+    def __init__(self, beta: float = 0.98):
+        self.beta  = beta
+        self.t     = 0
+        self.value = 0
+
+    def push(self, value: float):
+        self.value = (1.0 - self.beta) * value + self.beta * self.value
+        self.t += 1
+
+    def pop(self) -> float:
+        if self.t == 0: return 0
+        return self.value / (1 - pow(self.beta, self.t))

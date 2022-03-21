@@ -5,7 +5,6 @@ from ppq.executor import TorchExecutor, TorchQuantizeDelegate
 from ppq.IR import BaseGraph, Operation, Variable
 from ppq.IR.quantize import QuantableOperation, QuantableVariable
 from ppq.log import *
-from ppq.parser import dump_graph_to_file, load_graph
 from ppq.quantization.analyise.graphwise import graphwise_error_analyse
 from ppq.quantization.analyise.layerwise import (layerwise_error_analyse,
                                                  parameter_analyse,

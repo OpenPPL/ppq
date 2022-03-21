@@ -1,4 +1,3 @@
-import logging
 from typing import Dict, List
 
 import numpy as np
@@ -11,7 +10,10 @@ from ppq.IR import (BaseGraph, GraphCommand, GraphCommandType, GraphFormatter,
 from . import ppl_caffe_pb2
 
 caffe_import_map = {}
-logger = logging.getLogger('PPQ')
+
+from ppq.log import NaiveLogger
+
+logger = NaiveLogger.get_logger('PPQ')
 
 
 def build_temp_graph(initializer: Dict[str, dict], nodes: List[dict], inputs: List[str]=[], outputs: List[str]=[], graph: BaseGraph=None) -> BaseGraph:

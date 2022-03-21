@@ -1,18 +1,19 @@
 from ppq.core import NetworkFramework, TargetPlatform, ppq_warning
 from ppq.IR import BaseGraph, GraphBuilder, GraphExporter
-from ppq.quantization.quantizer.ORTQuantizer import ORT_PerTensorQuantizer
 
-from .caffe_exporter import CaffeExporter
+from .caffe_exporter import (CaffeExporter, PPLDSPCaffeExporter,
+                             SNPECaffeExporter)
 from .caffe_parser import CaffeParser
+from .extension import ExtensionExporter
 from .native import NativeExporter, NativeImporter
 from .nxp_exporter import NxpExporter
 from .onnx_exporter import OnnxExporter
 from .onnx_parser import OnnxParser
 from .onnxruntime_exporter import ONNXRUNTIMExporter
 from .onnxruntime_oos_exporter import ORTOOSExporter
-from .extension import ExtensionExporter
 from .ppl import PPLBackendExporter
 
+'''
 PARSERS = {
     NetworkFramework.ONNX: OnnxParser,
     NetworkFramework.CAFFE: CaffeParser,
@@ -20,8 +21,9 @@ PARSERS = {
 }
 
 EXPORTERS = {
-    TargetPlatform.DSP_INT8:      PPLBackendExporter,
+    TargetPlatform.PPL_DSP_INT8:  PPLDSPCaffeExporter,
     TargetPlatform.PPL_CUDA_INT8: PPLBackendExporter,
+    TargetPlatform.SNPE_INT8:     SNPECaffeExporter,
     TargetPlatform.NXP_INT8:      NxpExporter,
     TargetPlatform.ONNX:          OnnxExporter,
     TargetPlatform.ONNXRUNTIME:   ONNXRUNTIMExporter,
@@ -35,7 +37,7 @@ try:
     from .tensorRT import TensorRTExporter
     EXPORTERS[TargetPlatform.TRT_INT8] = TensorRTExporter
 except ImportError as e:
-    ppq_warning('Since PPQ can not found tensorRT installation, tensorRT export has been deactived.')
+    ppq_warning('Since PPQ can not found a tensorRT installation, tensorRT export has been deactived.')
 
 
 def load_graph(file_path: str, from_framework: NetworkFramework=NetworkFramework.ONNX, **kwargs) -> BaseGraph:
@@ -57,3 +59,4 @@ def dump_graph_to_file(file_path: str, config_path: str, target_platform: Target
     exporter = EXPORTERS[target_platform]()
     assert isinstance(exporter, GraphExporter), 'Unexpected Exporter found.'
     exporter.export(file_path=file_path, config_path=config_path, graph=graph, **kwargs)
+'''
