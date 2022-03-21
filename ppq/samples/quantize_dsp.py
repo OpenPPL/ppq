@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 BATCHSIZE = 32
 INPUT_SHAPE = [3, 224, 224]
 DEVICE = 'cuda' # only cuda is fully tested :(  For other executing device there might be bugs.
-PLATFORM = TargetPlatform.DSP_INT8  # identify a target platform for your network.
+PLATFORM = TargetPlatform.PPL_DSP_INT8  # identify a target platform for your network.
 
 def load_calibration_dataset() -> Iterable:
     return [torch.rand(size=INPUT_SHAPE) for _ in range(32)]

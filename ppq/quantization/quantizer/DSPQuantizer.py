@@ -58,7 +58,7 @@ class PPL_DSP_Quantizer(BaseQuantizer):
 
     @ property
     def target_platform(self) -> TargetPlatform:
-        return TargetPlatform.DSP_INT8
+        return TargetPlatform.PPL_DSP_INT8
 
     @ property
     def default_platform(self) -> TargetPlatform:

@@ -332,6 +332,8 @@ class BaseGraph(Serializable):
         self.variables[var.name] = var
     
     def get_downstream_operations(self, operation: Operation) -> List[Operation]:
+        if not isinstance(operation, Operation):
+            raise TypeError(f'Expect an operation instance, however {type(operation)} is given.')
         if operation.name not in self.operations:
             raise KeyError(f'Operation {operation.name} not in current graph.')
         downstream_ops = []
@@ -340,6 +342,8 @@ class BaseGraph(Serializable):
         return downstream_ops
     
     def get_upstream_operations(self, operation: Operation) -> List[Operation]:
+        if not isinstance(operation, Operation):
+            raise TypeError(f'Expect an operation instance, however {type(operation)} is given.')
         if operation.name not in self.operations:
             raise KeyError(f'Operation {operation.name} not in current graph.')
         upstream_ops = []

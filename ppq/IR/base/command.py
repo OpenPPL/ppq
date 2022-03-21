@@ -6,7 +6,7 @@ from .graph import Operation, Variable
 
 
 class GraphCommandType(Enum):
-    # 图上权重部署到 GPU(tensor)，暂时不能选择设备哦亲，由 RunnableGraph 进行处理
+    # 图上权重部署到 GPU(tensor)，由 RunnableGraph 进行处理
     # deploy graph weights to GPU
     DEPLOY_TO_CUDA = 1
 

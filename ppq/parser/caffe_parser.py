@@ -1,14 +1,13 @@
-import logging
-
 from google.protobuf import text_format
 from ppq.core import NetworkFramework, is_file_exist
 from ppq.IR import BaseGraph, GraphBuilder
+from ppq.log import NaiveLogger
 
 from .caffe import ppl_caffe_pb2
 from .caffe.caffe_graph_optim import de_inplace, merge_batchnorm_scale
 from .caffe.caffe_import_utils import caffe_import_map, get_input_shape
 
-logger = logging.getLogger('PPQ')
+logger = NaiveLogger.get_logger('PPQ')
 
 class CaffeParser(GraphBuilder):
     def load_graph_and_format(self, prototxt_path: str, caffemodel_path: str) -> ppl_caffe_pb2.NetParameter:

@@ -7,7 +7,7 @@ from ppq.core import DataType, convert_any_to_numpy
 
 def convert_value(
     value: Union[int, float, np.ndarray, torch.Tensor], 
-    export_as_list: bool, dtype: DataType = DataType.FP32) -> Union[float, list]:
+    export_as_float: bool, dtype: DataType = DataType.FP32) -> Union[float, list]:
     """
     Converting value from any to python native data dtype, ready for export.
 
@@ -24,7 +24,7 @@ def convert_value(
                          f'while you are requiring to dump a {dtype.name} value')
     value = convert_any_to_numpy(value, accepet_none=False)
     value = value.astype(dtype=DataType.to_numpy(dtype))
-    if export_as_list:
+    if export_as_float:
         value = np.asscalar(value[0])
         assert type(value) in {int, float}, (
             f'Trying to dump a tensorwise quantization value {value}. '

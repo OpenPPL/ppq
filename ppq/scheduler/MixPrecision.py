@@ -1,4 +1,3 @@
-import logging
 from collections import deque
 from math import ceil, floor
 from typing import Callable, Dict, Iterable, List, Set, Tuple
@@ -10,11 +9,12 @@ from ppq.core import (LINEAR_ACTIVATIONS, PASSIVE_OPERATIONS,
 from ppq.executor.base import BaseGraphExecutor
 from ppq.IR import BaseGraph, Operation
 from ppq.IR.search import SearchableGraph
+from ppq.log import NaiveLogger
 from tqdm import tqdm
 
 from .dispatchers import PPLNNDispatcher
 
-logger = logging.getLogger('PPQ')
+logger = NaiveLogger.get_logger('PPQ')
 
 
 class HessianDispatcher:

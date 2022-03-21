@@ -1,23 +1,26 @@
 from math import ceil
-from ppq.IR.base.graph import BaseGraph
-from ppq.IR import (GraphCommandProcesser, Operation, QuantableOperation,
-                    Variable)
-from ppq.IR.search import Path, SearchableGraph, TraversalCommand
-from ppq.core import QuantizationStates, ChannelwiseTensorQuantizationConfig,\
-    QuantizationProperty
+from typing import Callable, Dict, Iterable, List, Set
+
+import torch
+import torch.nn.functional as F
+from ppq.core import (ChannelwiseTensorQuantizationConfig,
+                      QuantizationProperty, QuantizationStates)
 from ppq.executor import BaseGraphExecutor
 from ppq.executor.base import GLOBAL_DISPATCHING_TABLE
+from ppq.IR import (GraphCommandProcesser, Operation, QuantableOperation,
+                    Variable)
+from ppq.IR.base.graph import BaseGraph
+from ppq.IR.search import Path, SearchableGraph, TraversalCommand
+from ppq.log import NaiveLogger
+from ppq.quantization.measure import torch_mean_square_error
 from ppq.quantization.observer import CalibrationHook, OperationObserver
 from ppq.quantization.observer.range import TorchHistObserver
 from ppq.quantization.qfunction import BaseQuantFunction
 from ppq.quantization.qfunction.linear import PPQLinearQuantFunction
-from ppq.quantization.measure import torch_mean_square_error
+
 from .base import QuantizationOptimizationPass
-from typing import Callable, Dict, Iterable, List, Set
-import torch
-import torch.nn.functional as F
-import logging
-logger = logging.getLogger('PPQ')
+
+logger = NaiveLogger.get_logger('PPQ')
 
 
 OPTIMIZATION_LAYERTYPE_CONFIG = {
