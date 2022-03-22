@@ -569,14 +569,12 @@ class UnbelievableUserFriendlyQuantizationSetting:
                 来指定一个variable的名字，我们将用这个variable的输出结果来引导finetune流程，当然一个variable list也是可以的。
             equalization (bool, optional): 是否要拉平网络权重. Defaults to True.
             non_quantable_op (List[str], optional): 非量化算子集合，所有名字出现在该集合里的算子将不被量化. Defaults to None.
-            very_bad_op (List[str], optional): 量化误差很大的算子集合，PPQ 将对这些算子进行分裂，
-                注意分裂操作会降低推理性能，而且不是所有层都可以分解的. Defaults to True.
         """
         self.equalization     = equalization
         self.finetune_steps   = finetune_steps
         self.finetune_lr      = finetune_lr
         self.calibration      = calibration
-        self.platform         = platform.name
+        self.platform         = platform
         self.non_quantable_op = non_quantable_op
         self.interested_outputs = interested_outputs
 
@@ -622,17 +620,38 @@ class UnbelievableUserFriendlyQuantizationSetting:
             if os.path.isdir(file_path): 
                 raise FileExistsError(f'文件 {file_path} 已经存在且是一个目录，无法将配置文件写入到该位置！')
             ppq_warning(f'文件 {file_path} 已经存在并将被覆盖')
+
+        # TargetPlatform is not a native type, convert it to string.
+        dump_dict = self.__dict__.copy()
+        dump_dict['platform'] = self.platform.name
+
         with open(file_path, 'w', encoding='utf-8') as file:
-            json.dump(obj=self.__dict__, fp=file, sort_keys=True, indent=4, ensure_ascii=False)
+            json.dump(obj=dump_dict, fp=file, sort_keys=True, indent=4, ensure_ascii=False)
 
     @ staticmethod
     def from_file(file_path: str):
         if not os.path.exists(file_path):
             raise FileNotFoundError('找不到你的配置文件，检查配置文件路径是否正确！')
         with open(file_path, 'r', encoding='utf-8') as file:
-            setting = json.load(file)
+            loaded = json.load(file)
+        assert isinstance(loaded, dict), 'Json文件无法解析，格式不正确'
+        assert 'platform' in loaded, 'Json文件缺少必要项目 "platform"'
+        
+        platform = loaded['platform']
+        if platform in TargetPlatform._member_names_:
+            platform = TargetPlatform._member_map_[platform]
+        else: raise KeyError('无法解析你的json配置文件，遇到了未知的platform属性。')
+        
+        setting = UnbelievableUserFriendlyQuantizationSetting(platform)
+        for key, value in loaded.items():
+            if key == 'platform': continue
+            if key in setting.__dict__: setting.__dict__[key] = value
+            if key not in setting.__dict__: ppq_warning(f'你的Json文件中包含无法解析的属性 {key} ，该属性已经被舍弃')
         assert isinstance(setting, UnbelievableUserFriendlyQuantizationSetting)
         return setting
+
+    def __str__(self) -> str:
+        return str(self.__dict__)
 
 
 def quantize(working_directory: str, setting: QuantizationSetting, model_type: NetworkFramework,
