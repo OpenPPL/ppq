@@ -72,10 +72,6 @@ quantized = quantize(
 executor = TorchExecutor(graph=quantized)
 # output = executor.forward(input)
 
-print('网络量化结束，正在生成目标文件:')
-export(working_directory=WORKING_DIRECTORY,
-       quantized=quantized, platform=TARGET_PLATFORM)
-
 # -------------------------------------------------------------------
 # 导出 PPQ 执行网络的所有中间结果，该功能是为了和硬件对比结果
 # 中间结果可能十分庞大，因此 PPQ 将使用线性同余发射器从执行结果中采样
@@ -102,13 +98,17 @@ reports = graphwise_error_analyse(
 for op, snr in reports.items():
     if snr > 0.1: ppq_warning(f'层 {op} 的累计量化误差显著，请考虑进行优化')
 
-reports = graphwise_error_analyse(
-    graph=quantized, running_device=EXECUTING_DEVICE,
-    dataloader=dataloader, collate_fn=lambda x: x.to(EXECUTING_DEVICE), 
-    method='cosine', steps=32)
-
 if REQUIRE_ANALYSE:
     print('正计算逐层量化误差(SNR)，每一层的独立量化误差应小于 0.1 以保证量化精度:')
     layerwise_error_analyse(graph=quantized, running_device=EXECUTING_DEVICE, 
                             interested_outputs=None,
                             dataloader=dataloader, collate_fn=lambda x: x.to(EXECUTING_DEVICE))
+
+print('网络量化结束，正在生成目标文件:')
+export(working_directory=WORKING_DIRECTORY,
+       quantized=quantized, platform=TARGET_PLATFORM)
+
+# 如果你需要导出 CAFFE 模型，使用下面的语句
+# export(working_directory=WORKING_DIRECTORY,
+#        quantized=quantized, platform=TARGET_PLATFORM,
+#        input_shapes=[NETWORK_INPUTSHAPE])

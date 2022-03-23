@@ -37,7 +37,7 @@ class BaseQuantizer(metaclass = ABCMeta):
         calib_dataloader: Iterable,
         executor: BaseGraphExecutor,
         setting: QuantizationSetting,
-        **kwargs,
+        **kwargs
     ) -> None:
 
         # step - 1, build graph processer chain

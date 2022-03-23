@@ -888,7 +888,7 @@ def Clip_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
     if len(values) == 1:
         values.append(op.attributes.get('min', float('-inf')))
         values.append(op.attributes.get('max', float('+inf')))
-    output = torch.clip(*values)
+    output = torch.clamp(*values)
     return output
 
 

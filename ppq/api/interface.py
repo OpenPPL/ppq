@@ -678,11 +678,12 @@ def quantize(working_directory: str, setting: QuantizationSetting, model_type: N
         )
 
 
-def export(working_directory: str, quantized: BaseGraph, platform: TargetPlatform):
+def export(working_directory: str, quantized: BaseGraph, platform: TargetPlatform, **kwargs):
     export_ppq_graph(
         graph=quantized, platform=platform,
         graph_save_to=os.path.join(working_directory, 'quantized'),
-        config_save_to=os.path.join(working_directory, 'quantized.json')
+        config_save_to=os.path.join(working_directory, 'quantized.json'),
+        **kwargs
     )
 
 

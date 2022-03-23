@@ -49,7 +49,7 @@ def tensor_random_fetch(
     if seed is None:
         indexer = generate_torch_indexer(num_of_fetches=num_of_fetches, num_of_elements=num_of_elements)
     else: indexer = generate_indexer(num_of_fetches=num_of_fetches, num_of_elements=num_of_elements, seed=seed)
-    return tensor.index_select(dim=0, index=indexer.to(tensor.device))
+    return tensor.index_select(dim=0, index=indexer.to(tensor.device).long())
 
 
 def channel_random_fetch(
@@ -80,7 +80,7 @@ def channel_random_fetch(
     if seed is None:
         indexer = generate_torch_indexer(num_of_fetches=fetchs_per_channel, num_of_elements=num_of_elements)
     else: indexer = generate_indexer(num_of_fetches=fetchs_per_channel, num_of_elements=num_of_elements, seed=seed)
-    return tensor.index_select(dim=-1, index=indexer.to(tensor.device))
+    return tensor.index_select(dim=-1, index=indexer.to(tensor.device).long())
 
 
 def batch_random_fetch(
@@ -109,4 +109,4 @@ def batch_random_fetch(
     if seed is None:
         indexer = generate_torch_indexer(num_of_fetches=fetchs_per_batch, num_of_elements=num_of_elements)
     else: indexer = generate_indexer(num_of_fetches=fetchs_per_batch, num_of_elements=num_of_elements, seed=seed)
-    return tensor.index_select(dim=-1, index=indexer.to(tensor.device))
+    return tensor.index_select(dim=-1, index=indexer.to(tensor.device).long())

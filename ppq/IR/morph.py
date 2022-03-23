@@ -125,7 +125,7 @@ class GraphFormatter(GraphCommandProcesser):
                         f'Invalid Slice Operation Format, Slice operation is expected to have axes, '
                         'starts and ends attributes with opset 1, '
                         f'however your operation {operation.name}, do not have completed attributes')
-                interested_ops.append(operation)
+                    interested_ops.append(operation)
 
         for slice in interested_ops:
             assert isinstance(slice, Operation)

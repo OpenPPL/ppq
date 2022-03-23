@@ -65,7 +65,7 @@ class RuntimeCalibrationPass(QuantizationOptimizationPass):
         executor: BaseGraphExecutor,
         calib_steps: int,
         collate_fn: Callable,
-        **kwargs,
+        **kwargs
     ) -> None:
         self._collate_fn = collate_fn
         self._calib_steps = calib_steps

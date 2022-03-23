@@ -276,8 +276,8 @@ class PPLDSPCaffeExporter(CaffeExporter):
                         for _min, _max in zip(qt_min, qt_max):
                             p = layer.convolution_param.perchannel_quantize_param.add()
                             p.type = 'filter'
-                            p.range_min = _min[idx]
-                            p.range_max = _max[idx]
+                            p.range_min = _min
+                            p.range_max = _max
 
                     if cfg.policy.has_property(QuantizationProperty.PER_TENSOR):
                         qt_min = convert_value(cfg.scale * (cfg.quant_min - cfg.offset), True, DataType.FP32)
@@ -287,6 +287,28 @@ class PPLDSPCaffeExporter(CaffeExporter):
                         p.range_min = qt_min
                         p.range_max = qt_max
             
+            if layer.type == 'InnerProduct':
+                for cfg, var in op.config_with_variable:
+                    if not var.is_parameter: continue
+                    if cfg.num_of_bits > 8: continue # skip bias
+                    
+                    if cfg.policy.has_property(QuantizationProperty.PER_CHANNEL):
+                        qt_min = convert_value(cfg.scale * (cfg.quant_min - cfg.offset), False, DataType.FP32)
+                        qt_max = convert_value(cfg.scale * (cfg.quant_max - cfg.offset), False, DataType.FP32)
+                        for _min, _max in zip(qt_min, qt_max):
+                            p = layer.inner_product_param.perchannel_quantize_param.add()
+                            p.type = 'filter'
+                            p.range_min = _min
+                            p.range_max = _max
+
+                    if cfg.policy.has_property(QuantizationProperty.PER_TENSOR):
+                        qt_min = convert_value(cfg.scale * (cfg.quant_min - cfg.offset), True, DataType.FP32)
+                        qt_max = convert_value(cfg.scale * (cfg.quant_max - cfg.offset), True, DataType.FP32)
+                        p = layer.inner_product_param.quantize_param
+                        p.type = 'filter'
+                        p.range_min = qt_min
+                        p.range_max = qt_max
+
             if layer.type == 'PReLU':
                 for cfg, var in op.config_with_variable:
                     if not var.is_parameter: continue
@@ -297,8 +319,8 @@ class PPLDSPCaffeExporter(CaffeExporter):
                         for _min, _max in zip(qt_min, qt_max):
                             p = layer.prelu_param.perchannel_quantize_param.add()
                             p.type = 'slope'
-                            p.range_min = _min[idx]
-                            p.range_max = _max[idx]
+                            p.range_min = _min
+                            p.range_max = _max
 
                     if cfg.policy.has_property(QuantizationProperty.PER_TENSOR):
                         qt_min = convert_value(cfg.scale * (cfg.quant_min - cfg.offset), True, DataType.FP32)
@@ -311,8 +333,6 @@ class PPLDSPCaffeExporter(CaffeExporter):
             # step - 3 dump input config
             for bottom in layer.bottom:
                 for cfg, var, in zip(op.config.input_quantization_config, op.inputs):
-                    assert cfg.policy.has_property(QuantizationProperty.PER_TENSOR)
-
                     if var.name == str(bottom):
                         qt_min = convert_value(cfg.scale * (cfg.quant_min - cfg.offset), True, DataType.FP32)
                         qt_max = convert_value(cfg.scale * (cfg.quant_max - cfg.offset), True, DataType.FP32)
@@ -323,7 +343,7 @@ class PPLDSPCaffeExporter(CaffeExporter):
                 for cfg, var, in zip(op.config.output_quantization_config, op.outputs):
                     assert cfg.policy.has_property(QuantizationProperty.PER_TENSOR)
 
-                    if var.name == str(bottom):
+                    if var.name == str(top):
                         qt_min = convert_value(cfg.scale * (cfg.quant_min - cfg.offset), True, DataType.FP32)
                         qt_max = convert_value(cfg.scale * (cfg.quant_max - cfg.offset), True, DataType.FP32)
                         layer.quantize_param.add(type='top', range_min=qt_min, range_max=qt_max)

@@ -847,7 +847,7 @@ def Clip_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
     """
     ASSERT_ALL_TENSORS_AT_CPU(op=op, values=values)
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=3, max_num_of_input=3)
-    output = torch.clip(*values)
+    output = torch.clamp(*values)
     return output
 
 def Flatten_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:

@@ -22,7 +22,7 @@ class QuantizationOptimizationPass(metaclass = ABCMeta):
     def apply(
         self, processer: GraphCommandProcesser,
         dataloader: Iterable, executor: BaseGraphExecutor,
-        **kwargs,
+        **kwargs
     ) -> None:
         if not isinstance(processer, GraphCommandProcesser):
             raise TypeError(f'Incorrect graph object input, expect one GraphCommandProcesser object, ' \
@@ -73,7 +73,7 @@ class QuantizationOptimizationPipeline(Container, Iterable):
     def optimize(
         self, graph: Union[GraphCommandProcesser, BaseGraph],
         dataloader: Iterable, executor: BaseGraphExecutor, verbose: bool = False,
-        **kwargs,
+        **kwargs
     ) -> None:
         if isinstance(graph, BaseGraph): processer = DefaultGraphProcesser(graph=graph)
         else: processer = graph
