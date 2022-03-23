@@ -473,9 +473,11 @@ class QuantizationSettingFactory:
         return default_setting
 
     @ staticmethod
-    def from_json(json_str: str) -> QuantizationSetting:
+    def from_json(json_obj: Union[str, dict]) -> QuantizationSetting:
         setting = QuantizationSetting()
-        setting_dict = json.loads(json_str)
+        if isinstance(json_obj, str):
+            setting_dict = json.loads(json_obj)
+        else: setting_dict = json_obj
         
         if 'version' not in setting_dict:
             ppq_warning('Can not find a valid version from your json input, input might not be correctly parsed.')

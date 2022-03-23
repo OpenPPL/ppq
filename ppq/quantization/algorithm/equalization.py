@@ -299,7 +299,7 @@ class EqualizationPair:
         scale_clip_value: float = 10,
     ):
         scale = 1 / torch.sqrt(upstream_key_values / downstream_key_values)
-        scale = torch.clip(scale, 1 / scale_clip_value, scale_clip_value)
+        scale = torch.clamp(scale, 1 / scale_clip_value, scale_clip_value)
         scale[(upstream_key_values + downstream_key_values) < minval_threshold] = 1
 
         return scale
