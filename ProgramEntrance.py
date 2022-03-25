@@ -34,10 +34,9 @@ DUMP_RESULT           = False
 # 当你的网络量化误差过高时，你需要修改 SETTING 对象中的参数来进行特定的优化
 # -------------------------------------------------------------------
 SETTING = UnbelievableUserFriendlyQuantizationSetting(
-    platform = TARGET_PLATFORM, finetune_steps = 5000,
-    finetune_lr = 3e-4, calibration = 'percentile',
-    equalization = True, non_quantable_op = None,
-    interested_outputs = None)
+    platform = TARGET_PLATFORM, finetune_steps = 2500,
+    finetune_lr = 1e-3, calibration = 'percentile',
+    equalization = True, non_quantable_op = None)
 SETTING = SETTING.convert_to_daddy_setting()
 
 print('正准备量化你的网络，检查下列设置:')

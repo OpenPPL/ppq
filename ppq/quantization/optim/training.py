@@ -715,13 +715,18 @@ class BlockwiseReconstructionPass(TrainingBasedPass):
                 logger.info(f'Epoch {epoch + 1} || reconstruction loss {avg_recon_loss :.5f}'
                             f' || rounding loss {avg_rounding_loss :.5f}')
 
+                early_stop_flag = 1
                 for _,continue_v in enumerate(continue_vs):
                     h_v = continue_v.detach()
                     logger.info("Rounding var {} Ceil: {:>5} Floor: {:>5} Total: {:>5} Ratio: {:>.3f}".format(
                         _ + 1, h_v[h_v + 1e-4 >= 1.0].numel(), h_v[h_v <= 1e-4].numel(), torch.numel(h_v),
                         (h_v[h_v + 1e-4 >= 1.0].numel() + h_v[h_v <= 1e-4].numel()) / torch.numel(h_v))
                     )
-
+                    early_stop_flag &= ((h_v[h_v + 1e-4 >= 1.0].numel() + h_v[h_v <= 1e-4].numel()) / torch.numel(h_v) > 0.9999)
+                
+                if early_stop_flag:
+                    logger.info('Already converged, stop training...')
+                    break
             logger.info(f'Original Reconstruction Loss {original_loss} || Optimized Reconstruction loss {avg_recon_loss}')
             if avg_recon_loss < original_loss:
                 for (cfg, delegator) in all_params.items():

@@ -2,7 +2,7 @@ from ppq.core import NetworkFramework, TargetPlatform, ppq_warning
 from ppq.IR import BaseGraph, GraphBuilder, GraphExporter
 
 from .caffe_exporter import (CaffeExporter, PPLDSPCaffeExporter,
-                             SNPECaffeExporter)
+                             SNPECaffeExporter, PPLDSPTICaffeExporter)
 from .caffe_parser import CaffeParser
 from .extension import ExtensionExporter
 from .native import NativeExporter, NativeImporter

@@ -1,5 +1,5 @@
 from abc import abstractstaticmethod
-from typing import Dict, Set
+from typing import Dict, List, Set
 from ppq.IR import BaseGraph, Operation
 from ppq.core import TargetPlatform
 
@@ -19,7 +19,7 @@ class GraphDispatcher:
     """
     @ staticmethod
     @ abstractstaticmethod
-    def dispatch(self, graph: BaseGraph, 
+    def dispatch(self, graph: BaseGraph, quant_types: List[str],
                  quant_platform: TargetPlatform, 
                  fp32_platform: TargetPlatform, 
                  SOI_platform: TargetPlatform, **kwargs
@@ -39,6 +39,8 @@ class GraphDispatcher:
 
         Args:
             graph (BaseGraph): graph object which going to be dispatched by this dispatcher.
+            
+            quant_types(Set[str]): all quantable types for given platforms.
             
             quant_platform (TargetPlatform): 
                 platform object where quantable parts will goes to.
