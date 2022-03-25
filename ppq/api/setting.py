@@ -129,9 +129,9 @@ class AdvancedOptimizationSetting():
         # cpu - store data to cpu memory.
         self.collecting_device    = 'executor' # executor or cpu
         
-        # 每一轮迭代后是否校验优化结果，建议开启，延长执行时间，提升精度
+        # 每一轮迭代后是否校验优化结果，开启后延长执行时间，提升精度
         # whether to check optimization result after each iteration.
-        self.auto_check           = True
+        self.auto_check           = False
         
         # 偏移量限制，试试 2, 4, 10
         # offset limitation used in this optimziation, try 2, 4, 10
@@ -139,11 +139,11 @@ class AdvancedOptimizationSetting():
 
         # 学习率
         # learning rate.
-        self.lr                   = 3e-4
+        self.lr                   = 1e-3
         
         # 训练步数
         # training steps
-        self.steps                = 5000
+        self.steps                = 2500
         
         # 对那些层进行训练，默认为 空数组 则训练全部层
         # layers that need to be finetuned via this method.

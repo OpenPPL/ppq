@@ -42,7 +42,7 @@ if not USING_CUDA_KERNEL:
             tensor = torch.clamp(tensor, quant_min, quant_max)
             tensor = (tensor - offsets) * scales
             return tensor
-    
+
         @ staticmethod
         def backward(ctx, dy: torch.Tensor):
             return dy, None, None, None, None, None, None
@@ -96,14 +96,15 @@ else: # if USING_CUDA_KERNEL:
         @ staticmethod
         def forward(ctx, tensor: torch.Tensor, scales: torch.Tensor, 
                     offsets: torch.Tensor, quant_min: int, quant_max: int, 
-                    rounding: RoundingPolicy) -> torch.Tensor:
+                    rounding: RoundingPolicy, dropout: float) -> torch.Tensor:
             quantized = CUDA.LinearQuantize_T(
                 tensor=tensor,
                 scales=scales,
                 offsets=offsets,
                 minimum=quant_min,
                 maximum=quant_max,
-                rounding=rounding.value
+                rounding=rounding.value,
+                dropout=dropout
             )
             ctx.save_for_backward(tensor, quantized, scales, offsets)
             ctx._quant_params = [quant_min, quant_max]
@@ -114,7 +115,7 @@ else: # if USING_CUDA_KERNEL:
             tensor, quantized, scales, offsets = ctx.saved_tensors
             quant_min, quant_max = ctx._quant_params
             dx, ds, do = CUDA.LinearQuantize_T_B(tensor, quantized, scales, offsets, dy, quant_min, quant_max)
-            return dx, ds, do, None, None, None, None
+            return dx, ds, do, None, None, None, None, None
     
     class ChannelwiseLinearQuantImpl(Function):
         """
@@ -133,7 +134,7 @@ else: # if USING_CUDA_KERNEL:
         def forward(ctx, tensor: torch.Tensor, scales: torch.Tensor, 
                     offsets: torch.Tensor, channel_axis: int, 
                     quant_min: int, quant_max: int, 
-                    rounding: RoundingPolicy) -> torch.Tensor:
+                    rounding: RoundingPolicy, dropout: float) -> torch.Tensor:
             quantized = CUDA.LinearQuantize_C(
                 tensor=tensor,
                 scales=scales,
@@ -141,7 +142,8 @@ else: # if USING_CUDA_KERNEL:
                 channel_axis=channel_axis,
                 minimum=quant_min,
                 maximum=quant_max,
-                rounding=rounding.value
+                rounding=rounding.value,
+                dropout=dropout
             )
             ctx.save_for_backward(tensor, quantized, scales, offsets)
             ctx._quant_params = [quant_min, quant_max, channel_axis]
@@ -152,11 +154,12 @@ else: # if USING_CUDA_KERNEL:
             tensor, quantized, scales, offsets = ctx.saved_tensors
             quant_min, quant_max, channel_axis = ctx._quant_params
             dx, ds, do = CUDA.LinearQuantize_C_B(tensor, quantized, scales, offsets, dy, quant_min, quant_max, channel_axis)
-            return dx, ds, do, None, None, None, None
+            return dx, ds, do, None, None, None, None, None
 
 
 def PPQLinearQuantFunction(
-    tensor: torch.Tensor, config: TensorQuantizationConfig) -> torch.Tensor:
+    tensor: torch.Tensor, config: TensorQuantizationConfig, 
+    dropout: float = 0.0) -> torch.Tensor:
     if not QuantizationStates.is_activated(config.state): return tensor
     if not config.policy.has_property(QuantizationProperty.LINEAR):
         raise ValueError('Critical Quantization Error! Non-linear config detected.')
@@ -165,11 +168,13 @@ def PPQLinearQuantFunction(
             'Critical Quantization Error! Except a ChannelwiseTensorQuantizationConfig.')
         return ChannelwiseLinearQuantImpl.apply(
             tensor, config.scale, config.offset, config.channel_axis,
-            config.quant_min, config.quant_max, config.rounding)
+            config.quant_min, config.quant_max, config.rounding,
+            dropout)
     elif config.policy.has_property(QuantizationProperty.PER_TENSOR):
         return TensorwiseLinearQuantImpl.apply(
             tensor, config.scale, config.offset,
-            config.quant_min, config.quant_max, config.rounding)
+            config.quant_min, config.quant_max, config.rounding,
+            dropout)
 
 
 class PPQLinearQuantize(torch.nn.Module):

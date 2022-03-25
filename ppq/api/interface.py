@@ -18,16 +18,18 @@ from ppq.quantization.quantizer import (ACADEMIC_INT4_Quantizer,
                                         NXP_Quantizer, ORT_PerChannelQuantizer,
                                         ORT_PerTensorQuantizer,
                                         PPL_DSP_Quantizer,
+                                        PPL_DSP_TI_Quantizer,
                                         PPLCUDA_INT4_Quantizer,
                                         PPLCUDAMixPrecisionQuantizer,
                                         PPLCUDAQuantizer, TensorRTQuantizer)
-from ppq.scheduler import DISPATCHER_TABLE
+from ppq.scheduler import DISPATCHER_TABLE, GraphDispatcher
 from torch.utils.data import DataLoader
 
 from .setting import *
 
 QUANTIZER_COLLECTION = {
     TargetPlatform.PPL_DSP_INT8: PPL_DSP_Quantizer,
+    TargetPlatform.PPL_DSP_TI_IN8: PPL_DSP_TI_Quantizer,
     TargetPlatform.SNPE_INT8:    PPL_DSP_Quantizer,
     TargetPlatform.TRT_INT8:     TensorRTQuantizer,
     TargetPlatform.NXP_INT8:     NXP_Quantizer,
@@ -52,6 +54,7 @@ PARSERS = {
 
 EXPORTERS = {
     TargetPlatform.PPL_DSP_INT8:  PPLDSPCaffeExporter,
+    TargetPlatform.PPL_DSP_TI_IN8: PPLDSPTICaffeExporter,
     TargetPlatform.PPL_CUDA_INT8: PPLBackendExporter,
     TargetPlatform.SNPE_INT8:     SNPECaffeExporter,
     TargetPlatform.NXP_INT8:      NxpExporter,
@@ -68,6 +71,7 @@ EXPORTERS = {
 # postfix for exporting model
 EXPORTING_POSTFIX = {
     TargetPlatform.PPL_DSP_INT8:  '.caffemodel',
+    TargetPlatform.PPL_DSP_TI_IN8:'.caffemodel',
     TargetPlatform.PPL_CUDA_INT8: '.onnx',
     TargetPlatform.SNPE_INT8:     '.caffemodel',
     TargetPlatform.NXP_INT8:      '.caffemodel',
@@ -92,9 +96,9 @@ def load_graph(file_path: str, from_framework: NetworkFramework=NetworkFramework
         graph = parser.build(file_path)
     return graph
 
-def load_onnx_graph(onnx_import_file: str, setting: QuantizationSetting) -> BaseGraph:
+def load_onnx_graph(onnx_import_file: str) -> BaseGraph:
     """
-        从一个指定位置加载 onnx 计算图
+        从一个指定位置加载 onnx 计算图，注意该加载的计算图尚未经过调度，此时所有算子被认为是可量化的
         load onnx graph from the specified location
     Args:
         onnx_import_file (str): onnx 计算图的保存位置 the specified location
@@ -103,12 +107,11 @@ def load_onnx_graph(onnx_import_file: str, setting: QuantizationSetting) -> Base
         BaseGraph: 解析 onnx 获得的 ppq 计算图对象 the parsed ppq IR graph
     """
     ppq_ir = load_graph(onnx_import_file, from_framework=NetworkFramework.ONNX)
-    return format_graph(graph=ppq_ir, setting=setting)
+    return format_graph(graph=ppq_ir)
 
-def load_caffe_graph(prototxt_path: str, caffemodel_path: str, 
-                     setting: QuantizationSetting) -> BaseGraph:
+def load_caffe_graph(prototxt_path: str, caffemodel_path: str) -> BaseGraph:
     """
-        从一个指定位置加载 caffe 计算图
+        从一个指定位置加载 caffe 计算图，注意该加载的计算图尚未经过调度，此时所有算子被认为是可量化的
         load caffe graph from the specified location
     Args:
         prototxt_path (str): caffe prototxt的保存位置 the specified location of caffe prototxt
@@ -118,7 +121,7 @@ def load_caffe_graph(prototxt_path: str, caffemodel_path: str,
         BaseGraph: 解析 caffe 获得的 ppq 计算图对象 the parsed ppq IR graph
     """
     ppq_ir = load_graph(file_path=prototxt_path, caffemodel_path=caffemodel_path, from_framework=NetworkFramework.CAFFE)
-    return format_graph(graph=ppq_ir, setting=setting)
+    return format_graph(graph=ppq_ir)
 
 def dump_torch_to_onnx(
     model: torch.nn.Module, 
@@ -239,7 +242,8 @@ def quantize_onnx_model(
     if setting is None:
         setting = QuantizationSettingFactory.default_setting()
 
-    ppq_ir = load_onnx_graph(onnx_import_file=onnx_import_file, setting=setting)
+    ppq_ir = load_onnx_graph(onnx_import_file=onnx_import_file)
+    ppq_ir = dispatch_graph(graph=ppq_ir, platform=platform, setting=setting)
 
     if inputs is None:
         dummy_input = torch.zeros(size=input_shape, device=device, dtype=input_dtype)
@@ -417,7 +421,8 @@ def quantize_caffe_model(
                         caffemodel_path=caffe_model_file, 
                         from_framework=NetworkFramework.CAFFE)
     
-    ppq_ir = format_graph(ppq_ir, setting=setting)
+    ppq_ir = format_graph(ppq_ir)
+    ppq_ir = dispatch_graph(ppq_ir, platform, setting)
 
     if inputs is None:
         dummy_input = torch.zeros(size=input_shape, device=device, dtype=input_dtype)
@@ -440,6 +445,7 @@ def quantize_caffe_model(
         return quantizer._graph
     else:
         return quantizer._graph
+
 
 def export_ppq_graph(
     graph: BaseGraph, 
@@ -491,26 +497,32 @@ def export_ppq_graph(
     assert isinstance(exporter, GraphExporter), 'Unexpected Exporter found.'
     exporter.export(file_path=graph_save_to, config_path=config_save_to, graph=graph, **kwargs)
 
-def format_graph(graph: BaseGraph, setting: QuantizationSetting) -> BaseGraph:
+
+def format_graph(graph: BaseGraph) -> BaseGraph:
     """
 
-    这个函数将对读入的计算图进行预处理 this func will preprocess the loaded computational graph
+    这个函数对计算图进行预处理工作，其主要内容是将计算图的格式进行统一
+    这个函数将会统一 cast, slice, parameter, constant 算子的格式，并且执行有关 batchnorm 的合并工作
     
-    所有的算子将被规范化，将符合 PPQ 的定义标准 all operators will be regularized 
-
-    计算图将被切分并调度到不同设备 operators will be dispatched to different devices
+    在 PPQ 中，我们不希望出现 Constant 算子，所有 Constant 输入将被当作 parameter variable 连接到下游算子上
+    在 PPQ 中，我们不希望出现 Batchnorm 算子，所有 Batchnorm 将被合并
+    在 PPQ 中，我们不希望出现权重共享的算子，所有被共享的权重将被复制分裂成多份
+    在 PPQ 中，我们不希望出现孤立算子，所有孤立算子将被移除
     
-    这不是一个可重入函数，如果你需要手动调用这个函数，则不能够使用 ppq.api.load_from_onnx 等函数加载模型！
-    This is not an reenterable function, do not invoke this twice.
-    if you are using functions like ppq.api.load_from_onnx, notice they will invoke this function automatically.
+    This function takes pre-processing procedure with your graph.
+    This function will convert operations like cast, slice, parameter, constant to the format that supported by ppq.
+    This function will merge batchnorm when possible.
+    
+    During quantization logic, we do not expect there is any constant operation in your network, so
+        all of them will be converted as parameter input variable.
+    
+    We do not expect there is any shared parameter in your network, all of them will be copied and spilted.
+    We do not expect any isolated operation in your network, all of them will be removed.
 
     """
 
     # do graph level optimization
-    formatter = GraphDeviceSwitcher(GraphFormatter(GraphMerger(graph)))
-    if str(setting.dispatcher).lower() not in DISPATCHER_TABLE:
-        raise ValueError(f'Can not found dispatcher type "{setting.dispatcher}", check your input again.')
-    dispatcher = DISPATCHER_TABLE[str(setting.dispatcher).lower()]
+    formatter = GraphFormatter(GraphMerger(graph))
 
     formatter(GraphCommand(GraphCommandType.FORMAT_CONSTANT_INPUT))
     formatter(GraphCommand(GraphCommandType.FUSE_BN))
@@ -519,10 +531,39 @@ def format_graph(graph: BaseGraph, setting: QuantizationSetting) -> BaseGraph:
     formatter(GraphCommand(GraphCommandType.FORMAT_SLICE))
     formatter(GraphCommand(GraphCommandType.DELETE_ISOLATED))
 
-    # dispatching.
+    return graph
+
+
+def dispatch_graph(graph: BaseGraph, platform: TargetPlatform, setting: QuantizationSetting) -> DispatchingTable:
+    """
+    
+    这个函数执行图切分与调度，你的计算图将被切分成一系列子图，并被调度到不同设备上。
+    调度的逻辑分为自动控制的部分以及手动覆盖的部分，你可以使用 QuantizationSetting 来向这个函数传递手动调度表
+    从而覆盖 PPQ 的调度逻辑。
+    
+    注意：这个函数依据调度器和TargetPlatform 平台的不同而产生行为差异，生成不同的调度计划。
+    
+    This function will cut your graph into a series of subgraph and send them to different device.
+    PPQ provides an automatic dispatcher which, will generate different dispatching scheme on your TargetPlatform.
+    A dispatching table can be passed via QuantizationSetting to override 
+        the default dispatching logic of ppq dispatcher manually.
+
+    """
+    assert platform in QUANTIZER_COLLECTION, (
+        f'Platform misunderstood, except one of following platform {QUANTIZER_COLLECTION.keys()}')
+    quantizer = QUANTIZER_COLLECTION[platform](graph) # 初始化一个 quantizer 没有很大代价...
+    
+    if str(setting.dispatcher).lower() not in DISPATCHER_TABLE:
+        raise ValueError(f'Can not found dispatcher type "{setting.dispatcher}", check your input again.')
+    dispatcher = DISPATCHER_TABLE[str(setting.dispatcher).lower()]()
+    assert isinstance(dispatcher, GraphDispatcher)
+    assert isinstance(quantizer, BaseQuantizer)
+    quant_types = quantizer.quant_operation_types
+
     dispatching_table = dispatcher.dispatch(
-        graph, quant_platform=TargetPlatform.UNSPECIFIED, 
-        fp32_platform=TargetPlatform.FP32, 
+        graph=graph, quant_types=quant_types, 
+        quant_platform=quantizer.target_platform, 
+        fp32_platform=quantizer.default_platform, 
         SOI_platform=TargetPlatform.SHAPE_OR_INDEX)
 
     # override dispatching result with setting
@@ -541,9 +582,10 @@ def format_graph(graph: BaseGraph, setting: QuantizationSetting) -> BaseGraph:
         operation.platform = dispatching_table[operation.name]
     
     # insert necessary device switchers.
+    formatter = GraphDeviceSwitcher(graph)
     formatter(GraphCommand(GraphCommandType.INSERT_SWITCHER))
     return graph
-
+    
 
 class UnbelievableUserFriendlyQuantizationSetting:
     """
@@ -597,14 +639,14 @@ class UnbelievableUserFriendlyQuantizationSetting:
             daddy.advanced_optimization               = True
             daddy.advanced_optimization_setting.steps = self.finetune_steps
             daddy.advanced_optimization_setting.lr    = self.finetune_lr
-            daddy.advanced_optimization_setting.limit = 4.0
+            daddy.advanced_optimization_setting.limit = 2.0
             daddy.advanced_optimization_setting.interested_outputs = self.interested_outputs
 
         if self.equalization == True:
             daddy.equalization                    = True
             daddy.equalization_setting.iterations = 3
             daddy.equalization_setting.opt_level  = 1
-            daddy.equalization_setting.value_threshold = 0.5
+            daddy.equalization_setting.value_threshold = 0
 
         if self.non_quantable_op is not None:
             for op_name in self.non_quantable_op:
@@ -656,14 +698,14 @@ class UnbelievableUserFriendlyQuantizationSetting:
 
 def quantize(working_directory: str, setting: QuantizationSetting, model_type: NetworkFramework,
              executing_device: str, input_shape: List[int], target_platform: TargetPlatform,
-             dataloader: DataLoader, calib_steps: int =32) -> BaseGraph:
+             dataloader: DataLoader, calib_steps: int = 32) -> BaseGraph:
     if model_type == NetworkFramework.ONNX:
         if not os.path.exists(os.path.join(working_directory, 'model.onnx')):
             raise FileNotFoundError(f'无法找到你的模型: {os.path.join(working_directory, "model.onnx")},'
                                     '如果你使用caffe的模型, 请设置MODEL_TYPE为CAFFE')
         return quantize_onnx_model(
             onnx_import_file=os.path.join(working_directory, 'model.onnx'),
-            calib_dataloader=dataloader, calib_steps=32, input_shape=input_shape, setting=setting,
+            calib_dataloader=dataloader, calib_steps=calib_steps, input_shape=input_shape, setting=setting,
             platform=target_platform, device=executing_device, collate_fn=lambda x: x.to(executing_device)
         )
     if model_type == NetworkFramework.CAFFE:
@@ -687,8 +729,8 @@ def export(working_directory: str, quantized: BaseGraph, platform: TargetPlatfor
     )
 
 
-__all__ = ['load_graph', 'load_onnx_graph', 'load_caffe_graph', 
-           'dump_torch_to_onnx', 'quantize_onnx_model', 
+__all__ = ['load_graph', 'load_onnx_graph', 'load_caffe_graph',
+           'dispatch_graph', 'dump_torch_to_onnx', 'quantize_onnx_model', 
            'quantize_torch_model', 'quantize_caffe_model', 
            'export_ppq_graph', 'format_graph', 'quantize', 'export', 
            'UnbelievableUserFriendlyQuantizationSetting']

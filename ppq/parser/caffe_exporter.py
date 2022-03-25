@@ -244,6 +244,7 @@ class SNPECaffeExporter(CaffeExporter):
             caffe_proto = caffe_proto,
             file_path = file_path)
 
+
 class PPLDSPCaffeExporter(CaffeExporter):
     def export(self, file_path: str, graph: BaseGraph, config_path: str = None, input_shapes: List[List[int]] = [[1, 3, 224, 224]]):
         # PPL3 DSP do not need a json config file, all quantization configuration will be merged into protobuf
@@ -347,6 +348,137 @@ class PPLDSPCaffeExporter(CaffeExporter):
                         qt_min = convert_value(cfg.scale * (cfg.quant_min - cfg.offset), True, DataType.FP32)
                         qt_max = convert_value(cfg.scale * (cfg.quant_max - cfg.offset), True, DataType.FP32)
                         layer.quantize_param.add(type='top', range_min=qt_min, range_max=qt_max)
+
+        # dump model
+        self.dump_to_file(
+            caffe_model = caffe_model,
+            caffe_proto = caffe_proto,
+            file_path = file_path)
+
+
+class PPLDSPTICaffeExporter(CaffeExporter):
+    def export(self, file_path: str, graph: BaseGraph, config_path: str = None, \
+                input_shapes: List[List[int]] = [[1, 3, 224, 224]], write_weight=False):
+        # PPL3 DSP TI do not need a json config file, all quantization configuration will be merged into protobuf
+        # DSP TI differs from DSP in the perchannel quantization param for computing ops
+        caffe_model, caffe_proto = self.prepare_model(graph, input_shapes)
+        for idx in range(len(caffe_proto.layer)):
+            layer = caffe_proto.layer[idx]
+            layer_name = layer.name
+            
+            assert isinstance(layer, ppl_caffe_pb2.LayerParameter)
+            assert isinstance(layer_name, str)
+            # layer is a caffe data structure, corresponding to operation in ppq.
+            # following code write ppq quantization configuration to caffe layer.
+
+            # step - 1, find corresponding op
+            if layer_name not in graph.operations:
+                raise KeyError(f'Can not find operation {layer_name} with current graph.')
+            
+            op = graph.operations[layer_name]
+            if not isinstance(op, QuantableOperation): continue
+            
+            # don't dump by default
+            if write_weight:
+                if layer.type in {'Convolution', 'Deconvolution'}:
+                    for cfg, var in op.config_with_variable:
+                        if not var.is_parameter: continue
+                        if cfg.num_of_bits > 8: continue # skip bias
+
+                        if cfg.policy.has_property(QuantizationProperty.PER_CHANNEL):
+                            qt_min = convert_value(cfg.scale * (cfg.quant_min - cfg.offset), False, DataType.FP32)
+                            qt_max = convert_value(cfg.scale * (cfg.quant_max - cfg.offset), False, DataType.FP32)
+                            for _min, _max in zip(qt_min, qt_max):
+                                p = layer.convolution_param.perchannel_quantize_param.add()
+                                p.type = 'filter'
+                                p.range_min = _min
+                                p.range_max = _max
+
+                        if cfg.policy.has_property(QuantizationProperty.PER_TENSOR):
+                            qt_min = convert_value(cfg.scale * (cfg.quant_min - cfg.offset), True, DataType.FP32)
+                            qt_max = convert_value(cfg.scale * (cfg.quant_max - cfg.offset), True, DataType.FP32)
+                            p = layer.convolution_param.quantize_param
+                            p.type = 'filter'
+                            p.range_min = qt_min
+                            p.range_max = qt_max
+                
+                if layer.type == 'InnerProduct':
+                    for cfg, var in op.config_with_variable:
+                        if not var.is_parameter: continue
+                        if cfg.num_of_bits > 8: continue # skip bias
+                        
+                        if cfg.policy.has_property(QuantizationProperty.PER_CHANNEL):
+                            qt_min = convert_value(cfg.scale * (cfg.quant_min - cfg.offset), False, DataType.FP32)
+                            qt_max = convert_value(cfg.scale * (cfg.quant_max - cfg.offset), False, DataType.FP32)
+                            for _min, _max in zip(qt_min, qt_max):
+                                p = layer.inner_product_param.perchannel_quantize_param.add()
+                                p.type = 'filter'
+                                p.range_min = _min
+                                p.range_max = _max
+
+                        if cfg.policy.has_property(QuantizationProperty.PER_TENSOR):
+                            qt_min = convert_value(cfg.scale * (cfg.quant_min - cfg.offset), True, DataType.FP32)
+                            qt_max = convert_value(cfg.scale * (cfg.quant_max - cfg.offset), True, DataType.FP32)
+                            p = layer.inner_product_param.quantize_param
+                            p.type = 'filter'
+                            p.range_min = qt_min
+                            p.range_max = qt_max
+
+                if layer.type == 'PReLU':
+                    for cfg, var in op.config_with_variable:
+                        if not var.is_parameter: continue
+
+                        if cfg.policy.has_property(QuantizationProperty.PER_CHANNEL):
+                            qt_min = convert_value(cfg.scale * (cfg.quant_min - cfg.offset), False, DataType.FP32)
+                            qt_max = convert_value(cfg.scale * (cfg.quant_max - cfg.offset), False, DataType.FP32)
+                            for _min, _max in zip(qt_min, qt_max):
+                                p = layer.prelu_param.perchannel_quantize_param.add()
+                                p.type = 'slope'
+                                p.range_min = _min
+                                p.range_max = _max
+
+                        if cfg.policy.has_property(QuantizationProperty.PER_TENSOR):
+                            qt_min = convert_value(cfg.scale * (cfg.quant_min - cfg.offset), True, DataType.FP32)
+                            qt_max = convert_value(cfg.scale * (cfg.quant_max - cfg.offset), True, DataType.FP32)
+                            p = layer.prelu_param.quantize_param
+                            p.type = 'slope'
+                            p.range_min = qt_min
+                            p.range_max = qt_max
+
+            # step - 3 dump input config
+            # only ops related with graph inputs record bottom param
+            # usually first conv op
+            record_bottom = False
+            for input_var in op.inputs:
+                if input_var.name in graph.inputs:
+                    record_bottom = True
+                    break
+            if record_bottom:
+                for bottom in layer.bottom:
+                    for cfg, var, in zip(op.config.input_quantization_config, op.inputs):
+                        if var.name == str(bottom):
+                            qt_min = convert_value(cfg.scale * (cfg.quant_min - cfg.offset), True, DataType.FP32)
+                            qt_max = convert_value(cfg.scale * (cfg.quant_max - cfg.offset), True, DataType.FP32)
+                            if var.name in graph.inputs:
+                                range_min = convert_value(cfg.detail.get('range_min', -1), True, DataType.FP32)
+                                # no negative values in input
+                                if range_min >= 0.0:
+                                    qt_min = 0.0
+                            layer.quantize_param.add(type='bottom', range_min=qt_min, range_max=qt_max)
+
+            # step - 4 dump output config
+            for top in layer.top:
+                for cfg, var, in zip(op.config.output_quantization_config, op.outputs):
+                    assert cfg.policy.has_property(QuantizationProperty.PER_TENSOR)
+
+                    if var.name == str(top):
+                        qt_min = convert_value(cfg.scale * (cfg.quant_min - cfg.offset), True, DataType.FP32)
+                        qt_max = convert_value(cfg.scale * (cfg.quant_max - cfg.offset), True, DataType.FP32)
+                        layer.quantize_param.add(type='top', range_min=qt_min, range_max=qt_max)
+                    
+                    if op.is_computing_op:
+                        for _min, _max in zip(cfg.detail['range_min'], cfg.detail['range_max']):
+                            layer.quantize_param.add(type='topperchannel', range_min=_min, range_max=_max)
 
         # dump model
         self.dump_to_file(

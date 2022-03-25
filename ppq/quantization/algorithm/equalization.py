@@ -154,7 +154,7 @@ class EqualizationPair:
                 num_of_groups = upstream_layer.attributes.get('group', 1)
                 weight = torch.reshape(weight, (num_of_groups, weight.shape[0] // num_of_groups) + weight.shape[1:])
                 weight *= torch.reshape(scale, (num_of_groups, 1, -1, 1, 1))
-                weight = torch.reshape(weight, (weight.shape[0] * weight.shape[1]) + weight.shape[2:])
+                weight = torch.reshape(weight, (weight.shape[0] * weight.shape[1], ) + weight.shape[2:])
                 if bias is not None:
                     bias *= scale
                 self.set_convtranspose2d_params(upstream_layer, bias, weight)
