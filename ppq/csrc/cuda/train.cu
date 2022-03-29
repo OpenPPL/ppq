@@ -137,7 +137,7 @@ __global__ void _RoundingLoss_LT(
         diff_sum += diff;
     }
     float diff_reduced = BlockReduceSum<float>(diff_sum);
-    if(threadIdx.x == 0) atomicAdd(out, diff_reduced / sqrt(num_of_element));
+    if(threadIdx.x == 0) atomicAdd(out, diff_reduced / sqrt((float)num_of_element));
 }
 
 __host__ Tensor RoundingLoss_LT(
@@ -189,7 +189,7 @@ __global__ void _RoundingLoss_LT_B(
         // if value has been clipped, set grad = 0
         if (v > s * (clip_max - o)) grad = 0;
         if (v < s * (clip_min - o)) grad = 0;
-        dx[iter] = grad / sqrt(num_of_element);
+        dx[iter] = grad / sqrt((float)num_of_element);
     }
 }
 
@@ -243,7 +243,7 @@ __global__ void _RoundingLoss_LC(
         diff_sum += diff;
     }
     float diff_reduced = BlockReduceSum<float>(diff_sum);
-    if(threadIdx.x == 0) atomicAdd(out, diff_reduced / sqrt(num_of_element));
+    if(threadIdx.x == 0) atomicAdd(out, diff_reduced / sqrt((float)num_of_element));
 }
 
 __host__ Tensor RoundingLoss_LC(
@@ -303,7 +303,7 @@ __global__ void _RoundingLoss_LC_B(
         // if value has been clipped, set grad = 0
         if (v > scale[c] * (clip_max - offset[c])) grad = 0;
         if (v < scale[c] * (clip_min - offset[c])) grad = 0;
-        dx[iter] = grad / sqrt(num_of_element);
+        dx[iter] = grad / sqrt((float)num_of_element);
     }
 }
 
