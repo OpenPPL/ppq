@@ -36,7 +36,7 @@ if not USING_CUDA_KERNEL:
         @ staticmethod
         def forward(ctx, tensor: torch.Tensor, scales: torch.Tensor, 
                     offsets: torch.Tensor, quant_min: int, quant_max: int, 
-                    rounding: RoundingPolicy) -> torch.Tensor:
+                    rounding: RoundingPolicy, dropout: float = 0) -> torch.Tensor:
     
             tensor = ppq_tensor_round((tensor / scales), rounding) + offsets
             tensor = torch.clamp(tensor, quant_min, quant_max)
@@ -45,7 +45,7 @@ if not USING_CUDA_KERNEL:
 
         @ staticmethod
         def backward(ctx, dy: torch.Tensor):
-            return dy, None, None, None, None, None, None
+            return dy, None, None, None, None, None, None, None
     
     class ChannelwiseLinearQuantImpl(Function):
         """
@@ -64,7 +64,7 @@ if not USING_CUDA_KERNEL:
         def forward(ctx, tensor: torch.Tensor, scales: torch.Tensor, 
                     offsets: torch.Tensor, channel_axis: int, 
                     quant_min: int, quant_max: int, 
-                    rounding: RoundingPolicy) -> torch.Tensor:
+                    rounding: RoundingPolicy, dropout: float = 0) -> torch.Tensor:
             # generate a shape that likes [1, 1, -1, 1], the only -1 is at channel axe.
             shape = [1 if axis != channel_axis else -1 for axis in range(tensor.ndim)]
             scale, offset = scales.view(shape), offsets.view(shape)
@@ -76,7 +76,7 @@ if not USING_CUDA_KERNEL:
 
         @ staticmethod
         def backward(ctx, dy: torch.Tensor):
-            return dy, None, None, None, None, None, None, None
+            return dy, None, None, None, None, None, None, None, None
 
 
 else: # if USING_CUDA_KERNEL:
