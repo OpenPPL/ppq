@@ -10,7 +10,7 @@ from ppq.core import (EXPORT_DEVICE_SWITCHER, DataType, QuantizationProperty,
 from ppq.executor.torch import TorchExecutor
 from ppq.IR import BaseGraph, GraphExporter
 from ppq.IR.morph import GraphDeviceSwitcher
-from ppq.IR.quantize import QuantableOperation
+from ppq.IR.quantize import QuantableOperation, QuantableVariable
 from ppq.log import NaiveLogger
 
 from .caffe import ppl_caffe_pb2
@@ -260,8 +260,38 @@ class PPLDSPCaffeExporter(CaffeExporter):
 
             # step - 1, find corresponding op
             if layer_name not in graph.operations:
-                raise KeyError(f'Can not find operation {layer_name} with current graph.')
-            
+                # PATCH FOR Slice
+                if layer.type == 'Slice':
+                    # slice0 --> (ppq parse, export, combine) --> slice0_0_0, everything else
+                    # is the same with original model
+                    # layer_name is slice0_0_0, obtain original_name slice0
+                    original_name = ''.join(layer_name.split('_')[:-2])
+                    for bottom in layer.bottom:
+                        var = graph.variables.get(bottom, None)
+                        if var is not None and isinstance(var, QuantableVariable) and not var.is_parameter:
+                            cfg = None
+                            for dest_op, dest_cfg in zip(var.dest_ops, var.dest_op_configs):
+                                # dest_op.name is slice0_0
+                                if ''.join(dest_op.name.split('_')[:-1]) == original_name:
+                                    cfg = dest_cfg
+                                    break
+                            assert cfg is not None
+                            qt_min = convert_value(cfg.scale * (cfg.quant_min - cfg.offset), True, DataType.FP32)
+                            qt_max = convert_value(cfg.scale * (cfg.quant_max - cfg.offset), True, DataType.FP32)
+                            layer.quantize_param.add(type='bottom', range_min=qt_min, range_max=qt_max)
+
+                    for top in layer.top:
+                        var = graph.variables.get(top, None)
+                        if var is not None and isinstance(var, QuantableVariable) and not var.is_parameter:
+                            cfg = var.source_op_config
+                            assert cfg is not None
+                            qt_min = convert_value(cfg.scale * (cfg.quant_min - cfg.offset), True, DataType.FP32)
+                            qt_max = convert_value(cfg.scale * (cfg.quant_max - cfg.offset), True, DataType.FP32)
+                            layer.quantize_param.add(type='top', range_min=qt_min, range_max=qt_max)
+                    continue
+                else:
+                    raise KeyError(f'Can not find operation {layer_name} with current graph.')
+
             op = graph.operations[layer_name]
             if not isinstance(op, QuantableOperation): continue
             
@@ -371,10 +401,40 @@ class PPLDSPTICaffeExporter(CaffeExporter):
             # layer is a caffe data structure, corresponding to operation in ppq.
             # following code write ppq quantization configuration to caffe layer.
 
-            # step - 1, find corresponding op
+             # step - 1, find corresponding op
             if layer_name not in graph.operations:
-                raise KeyError(f'Can not find operation {layer_name} with current graph.')
-            
+                # PATCH FOR Slice
+                if layer.type == 'Slice':
+                    # slice0 --> (ppq parse, export, combine) --> slice0_0_0, everything else
+                    # is the same with original model
+                    # layer_name is slice0_0_0, obtain original_name slice0
+                    original_name = ''.join(layer_name.split('_')[:-2])
+                    for bottom in layer.bottom:
+                        var = graph.variables.get(bottom, None)
+                        if var is not None and isinstance(var, QuantableVariable) and not var.is_parameter:
+                            cfg = None
+                            for dest_op, dest_cfg in zip(var.dest_ops, var.dest_op_configs):
+                                # dest_op.name is slice0_0
+                                if ''.join(dest_op.name.split('_')[:-1]) == original_name:
+                                    cfg = dest_cfg
+                                    break
+                            assert cfg is not None
+                            qt_min = convert_value(cfg.scale * (cfg.quant_min - cfg.offset), True, DataType.FP32)
+                            qt_max = convert_value(cfg.scale * (cfg.quant_max - cfg.offset), True, DataType.FP32)
+                            layer.quantize_param.add(type='bottom', range_min=qt_min, range_max=qt_max)
+
+                    for top in layer.top:
+                        var = graph.variables.get(top, None)
+                        if var is not None and isinstance(var, QuantableVariable) and not var.is_parameter:
+                            cfg = var.source_op_config
+                            assert cfg is not None
+                            qt_min = convert_value(cfg.scale * (cfg.quant_min - cfg.offset), True, DataType.FP32)
+                            qt_max = convert_value(cfg.scale * (cfg.quant_max - cfg.offset), True, DataType.FP32)
+                            layer.quantize_param.add(type='top', range_min=qt_min, range_max=qt_max)
+                    continue
+                else:
+                    raise KeyError(f'Can not find operation {layer_name} with current graph.')
+
             op = graph.operations[layer_name]
             if not isinstance(op, QuantableOperation): continue
             

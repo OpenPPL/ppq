@@ -33,7 +33,7 @@ def compute_loss(output_names: List[str],
                 loss_fn: Callable=torch_mean_square_error
 ) -> Dict[str, float]:
     losses = {name: 0.0 for name in output_names}
-    for idx,data in tqdm(enumerate(dataloader), total=len(dataloader), desc='Computing Original Loss'):
+    for idx,data in enumerate(dataloader):
         if collate_fn is not None:
             data = collate_fn(data)
         dequantize_graph(graph)
@@ -597,7 +597,8 @@ class BlockwiseReconstructionPass(TrainingBasedPass):
         # that this is usually unnecessary in 8 bit quantization, but we do it it anyway and
         # the loss checking procedure makes sure we always obtain no worse results.
         for op in block.rps:
-            if op.is_computing_op:
+            if op.is_computing_op and isinstance(op, QuantableOperation):
+                logger.info(f'Tune weight scale for {op.name} ...')
                 cfg = op.config.input_quantization_config[1]
                 weight = op.inputs[1].value
                 assert cfg.state == QuantizationStates.ACTIVATED, 'the config of weight param\
@@ -607,7 +608,7 @@ class BlockwiseReconstructionPass(TrainingBasedPass):
                 optimizer = torch.optim.Adam(params, lr=1e-3)
                 scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, [int(epochs / 2), int(epochs * 2 / 3)])
                 initial_loss, final_loss = None, None
-                for _ in tqdm(range(epochs), total=epochs, desc=f'tune weight scale for {op.name}'):
+                for _ in range(epochs):
                     loss = torch_mean_square_error(delegator(weight, cfg), weight, reduction='sum')
                     optimizer.zero_grad()
                     loss.backward()
@@ -616,12 +617,8 @@ class BlockwiseReconstructionPass(TrainingBasedPass):
                         initial_loss = loss.detach().item()
                     final_loss = loss.detach().item()
                     scheduler.step()
-                logger.info(f'Optimize {op.name} weight scale, initial loss {initial_loss}, optimized loss {final_loss}')
                 if final_loss < initial_loss:
                     delegator.finalize()
-                else:
-                    logger.warning('Loss increased, abandon trained values...')
-
 
     def optimize(self,
                 processer: GraphCommandProcesser,
@@ -638,12 +635,15 @@ class BlockwiseReconstructionPass(TrainingBasedPass):
             if len(self.interested_layers) > 0 and all([op.name not in self.interested_layers for op in block.rps]):
                 continue
 
+            logger.info(f'Optimize block {blk_idx + 1}/{len(all_blocks)} : {block.sp.name} -> ... -> {block.ep.name}, '
+                        f'{len(block.rps)} ops in total')
             # tune weight scale first
             output_names = [var.name for var in block.ep.outputs]
 
             self.tune_block_weight_scale(block, executor._device)
 
             # compute original loss for loss checking
+            logger.info('Computing Original Loss ...')
             original_loss = compute_loss(output_names, graph, \
                 dataloader, collate_fn, executor, loss_fn=Lp_norm)
             original_loss = sum(list(original_loss.values()))
@@ -670,15 +670,12 @@ class BlockwiseReconstructionPass(TrainingBasedPass):
                     T_max=len(dataloader) * self.epochs, eta_min=0.)
                 optimizers.append(scale_optimizer)
                 schedulers.append(scheduler)
-                
 
-            logger.info(f'Optimize block {blk_idx + 1}/{len(all_blocks)} : {block.sp.name} -> ... -> {block.ep.name}, '
-                        f'{len(block.rps)} ops in total')
             cur_iter = 0
-            for epoch in range(self.epochs):
+            for epoch in tqdm(range(self.epochs), desc=f'Optimize block {blk_idx + 1}/{len(all_blocks)}', total=self.epochs):
                 epoch_rounding_loss = 0.0
                 epoch_reconstruction_loss = {name: 0.0 for name in output_names}
-                for idx, data in tqdm(enumerate(dataloader), total=len(dataloader), desc=f'Epoch {epoch + 1}/{self.epochs}'):
+                for idx, data in enumerate(dataloader):
                     if collate_fn is not None:
                         data = collate_fn(data)
                     dequantize_graph(graph)
@@ -707,26 +704,29 @@ class BlockwiseReconstructionPass(TrainingBasedPass):
                     scheduler.step()
 
                 for name in epoch_reconstruction_loss:
-                    logger.info(f'Epoch {epoch + 1} || output variable {name} || reconstruction loss = '
+                    logger.debug(f'Epoch {epoch + 1} || output variable {name} || reconstruction loss = '
                                 f'{epoch_reconstruction_loss[name] / (idx + 1) :.5f}')
 
                 avg_recon_loss = sum(list(epoch_reconstruction_loss.values())) / (idx + 1)
                 avg_rounding_loss = epoch_rounding_loss / (idx + 1)
-                logger.info(f'Epoch {epoch + 1} || reconstruction loss {avg_recon_loss :.5f}'
+                logger.debug(f'Epoch {epoch + 1} || reconstruction loss {avg_recon_loss :.5f}'
                             f' || rounding loss {avg_rounding_loss :.5f}')
 
                 early_stop_flag = 1
                 for _,continue_v in enumerate(continue_vs):
                     h_v = continue_v.detach()
-                    logger.info("Rounding var {} Ceil: {:>5} Floor: {:>5} Total: {:>5} Ratio: {:>.3f}".format(
+                    logger.debug("Rounding var {} Ceil: {:>5} Floor: {:>5} Total: {:>5} Ratio: {:>.3f}".format(
                         _ + 1, h_v[h_v + 1e-4 >= 1.0].numel(), h_v[h_v <= 1e-4].numel(), torch.numel(h_v),
                         (h_v[h_v + 1e-4 >= 1.0].numel() + h_v[h_v <= 1e-4].numel()) / torch.numel(h_v))
                     )
                     early_stop_flag &= ((h_v[h_v + 1e-4 >= 1.0].numel() + h_v[h_v <= 1e-4].numel()) / torch.numel(h_v) > 0.9999)
                 
                 if early_stop_flag:
-                    logger.info('Already converged, stop training...')
                     break
+            
+            if  early_stop_flag:
+                logger.info('Already converged, stop training...')
+
             logger.info(f'Original Reconstruction Loss {original_loss} || Optimized Reconstruction loss {avg_recon_loss}')
             if avg_recon_loss < original_loss:
                 for (cfg, delegator) in all_params.items():
@@ -841,7 +841,7 @@ class LearningStepSizeOptimization(TrainingBasedPass):
         for op in block.rps:
             if isinstance(op, QuantableOperation) and op.is_computing_op:
                 for var in op.inputs[1:]:
-                    var.value.requires_grad = True
+                    var.value.requires_grad = False
 
     def recover(self, block: TrainableBlock) -> None:
         for op in block.rps:
@@ -857,8 +857,10 @@ class LearningStepSizeOptimization(TrainingBasedPass):
                 collate_fn: Callable,
                 executor: TorchExecutor
     ) -> None:
-        for blk in blocks:
+        for blk_idx, blk in enumerate(blocks):
             output_names = [var.name for var in blk.ep.outputs]
+            logger.info(f'Optimizing block {blk.sp.name} --> ... --> {blk.ep.name}, total {len(blk.rps)} ops')
+            logger.info('Computing Original Loss ...')
             original_loss = compute_loss(output_names, graph, dataloader, collate_fn, executor)
             params = self.initiate_param(blk, executor._device)
             block_params = []
@@ -874,10 +876,9 @@ class LearningStepSizeOptimization(TrainingBasedPass):
             optimizer = torch.optim.Adam([param for param in block_params if param.requires_grad], lr=self.lr)
             scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, [int(self.epochs / 2), int(self.epochs * 2 / 3)])
 
-            logger.info(f'Optimizing block {blk.sp.name} --> ... --> {blk.ep.name}, total {len(blk.rps)} ops')
-            for _ in range(self.epochs):
+            for _ in tqdm(range(self.epochs), total=self.epochs, desc=f'Optimize block {blk_idx + 1}/{len(blocks)}'):
                 epoch_loss = {name: 0.0 for name in output_names}
-                for idx,data in tqdm(enumerate(dataloader), total=len(dataloader), desc=f'Epoch {_ + 1}/{self.epochs}'):
+                for idx,data in enumerate(dataloader):
                     if collate_fn is not None:
                         data = collate_fn(data)
                     dequantize_graph(graph)
@@ -894,12 +895,12 @@ class LearningStepSizeOptimization(TrainingBasedPass):
                     optimizer.step()
                 scheduler.step()
                 for name in epoch_loss:
-                    logger.info(f'Epoch {_ + 1} || output variable {name} || avg MSE loss = {epoch_loss[name] / (idx + 1) :.5f}')
-                logger.info(f'Total avg MSE loss {sum(list(epoch_loss.values())) / (idx + 1) :.5f}')
+                    logger.debug(f'Epoch {_ + 1} || output variable {name} || avg MSE loss = {epoch_loss[name] / (idx + 1) :.5f}')
+                logger.debug(f'Total avg MSE loss {sum(list(epoch_loss.values())) / (idx + 1) :.5f}')
 
             original_block_loss = sum(list(original_loss.values()))
             lsq_block_loss = sum(list(epoch_loss.values())) / (idx + 1)
-            logger.info(f'Original loss {original_block_loss :.5f} || LSQ loss {lsq_block_loss :.5f}')
+            logger.info(f'Original Loss {original_block_loss :.5f} || Optimized Loss {lsq_block_loss :.5f}')
 
             for cfg, delegator in params.items():
                 if lsq_block_loss < original_block_loss:
@@ -922,6 +923,7 @@ class LearningStepSizeOptimization(TrainingBasedPass):
         output_names = [name for name in graph.outputs] if len(self.output_names) == 0 else self.output_names
         logger.info('The following variable will be used for loss computing and gradient backward')
         logger.info(', '.join(output_names))
+        logger.info('Computing Original Loss ...')
         original_loss = compute_loss(output_names, graph, dataloader, collate_fn, executor)
 
         all_params, trainable_params = {}, []
@@ -938,9 +940,9 @@ class LearningStepSizeOptimization(TrainingBasedPass):
         optimizer = torch.optim.Adam([param for param in trainable_params if param.requires_grad], lr=self.lr)
         scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, [int(self.epochs / 2), int(self.epochs * 2 / 3)])
 
-        for _ in range(self.epochs):
+        for _ in tqdm(range(self.epochs), total=self.epochs, desc='LSQ Global Optimize'):
             epoch_loss = {name: 0.0 for name in output_names}
-            for idx,data in tqdm(enumerate(dataloader), total=len(dataloader), desc=f'Epoch {_ + 1}/{self.epochs}'):
+            for idx,data in enumerate(dataloader):
                 if collate_fn is not None:
                     data = collate_fn(data)
                 dequantize_graph(graph)
@@ -960,8 +962,8 @@ class LearningStepSizeOptimization(TrainingBasedPass):
             for name in epoch_loss:
                 epoch_loss[name] /= idx + 1
                 weighted_loss += self.loss_weights.get(name, 1.0) * epoch_loss[name]
-                logger.info(f'Epoch {_ + 1} || output variable {name} || avg MSE loss = {epoch_loss[name]}')
-            logger.info(f'Epoch {_ + 1} || weighted MSE loss = {weighted_loss}')
+                logger.debug(f'Epoch {_ + 1} || Output variable {name} || Avg MSE loss = {epoch_loss[name]}')
+            logger.debug(f'Epoch {_ + 1} || Weighted MSE loss = {weighted_loss}')
         
         weighted_original_loss = 0.0
         for name in original_loss:
@@ -1007,10 +1009,10 @@ class LearningStepSizeOptimization(TrainingBasedPass):
                     final_blocks.append(blk)
 
         if self.mode == 'global':
-            logger.info('Begin globalwise LSQ Optimization...')
+            logger.info('Begin Globalwise LSQ Optimization ...')
             self.LSQ_optimize_global(final_blocks, graph, dataloader, collate_fn, executor)
         else:
-            logger.info('Begin localwise LSQ Optimization...')
+            logger.info('Begin Localwise LSQ Optimization ...')
             self.LSQ_optimize_local(final_blocks, graph, dataloader, collate_fn, executor)
 
 
