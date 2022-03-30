@@ -95,6 +95,9 @@ def graphwise_error_analyse(
     interested_op = [operation for operation in graph.operations.values()
                      if (isinstance(operation, QuantableOperation) and 
                          operation.config.output_quantization_config[0].state == QuantizationStates.ACTIVATED)]
+    if len(interested_op) == 0: 
+        print('Oops. you got nothing to analyse.')
+        return
 
     # set up all hooks.
     recorders, hooks, caches = {}, {}, {}

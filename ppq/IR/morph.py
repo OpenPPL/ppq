@@ -187,32 +187,30 @@ class GraphFormatter(GraphCommandProcesser):
                    min, max parameter will be given by the second and third input variable
                 2. min, max 参数由 attribute 给出
                    min, max parameter will be given by the attribute
-            此函数统一 clip 算子行为：所有 clip 算子的 min, max 参数均由 operation.attribute 给出
-            this func unifies behaviors of clip op: min, max parameter will be given in 
-            attribute
+            此函数统一 clip 算子行为：所有 clip 算子的 min, max 参数第二第三个变量给出
+            this func unifies behaviors of clip op: min, max parameter will be given by input vars
             针对可能存在的 min, max 为空的情况，将其直接置为 2 << 30（保证处理后非空）
 
             当 min, max 参数由 第二、第三个输入变量给出时，其中一个为空时直接返回 ValueError
             ValueError will be raised when any of min, max parameters is null
         """
+        
         interested_ops = []
         for _, operation in self.graph.operations.items():
-            if operation.type == 'Clip': interested_ops.append(operation)
-        for operation in interested_ops:
-            assert isinstance(operation, Operation)
-            if len(operation.inputs) == 3:
-                min_constant_op, max_constant_op = [var.source_op for var in operation.inputs[1:]]
-                min = convert_any_to_python_primary_type(min_constant_op.attributes['value'])
-                max = convert_any_to_python_primary_type(max_constant_op.attributes['value'])
-                self.__delete_constant_input(operation, 2)
-                self.__delete_constant_input(operation, 1)
-            elif len(operation.inputs) == 1:
-                min = operation.attributes.get('min', - 2 << 30)
-                max = operation.attributes.get('max', + 2 << 30)
-            else:
-                raise ValueError(f'Expect clip has 1 or 3 inputs, while {len(operation.inputs)} was given')
-            operation.attributes['min'] = min
-            operation.attributes['max'] = max
+            if operation.type == 'Clip' and ('min' in operation.attributes or 'max' in operation.attributes): 
+                interested_ops.append(operation)
+        for op in interested_ops:
+            assert isinstance(op, Operation)
+            min = op.attributes.get('min', - 2 << 30)
+            max = op.attributes.get('max', + 2 << 30)
+            min_var = Variable(name=op.name + '_min', value=min, is_parameter=True, dest_ops=[op])
+            max_var = Variable(name=op.name + '_max', value=max, is_parameter=True, dest_ops=[op])
+            self.graph.append_variable(min_var)
+            self.graph.append_variable(max_var)
+            op.inputs.append(min_var)
+            op.inputs.append(max_var)
+            if 'min' in op.attributes: op.attributes.pop('min')
+            if 'max' in op.attributes: op.attributes.pop('max')
 
     def format_gather(self) -> None:
         """

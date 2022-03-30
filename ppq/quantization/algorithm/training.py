@@ -643,9 +643,9 @@ class StraightThroughEstimateDelegator(TorchQuantizeDelegate):
         self.passive          = config.state == QuantizationStates.PASSIVE
         self.scale_multiplier = scale_multiplier
         self.scale            = torch.nn.Parameter(convert_any_to_torch_tensor(config.scale, device=device,\
-                            dtype=torch.float32), requires_grad=True)
+                            dtype=torch.float32).clone(), requires_grad=True)
         self.bias             = torch.nn.Parameter(convert_any_to_torch_tensor(config.offset, device=device,\
-                            dtype=torch.float32) * self.scale.detach(), requires_grad=True)
+                            dtype=torch.float32).clone() * self.scale.detach(), requires_grad=True)
         self._masters          = []
     
     @ property
@@ -669,7 +669,8 @@ class StraightThroughEstimateDelegator(TorchQuantizeDelegate):
         if self.config.dominated_by == self.config:
             if not self.passive:
                 self.config.scale = self.scale.data.abs()
-                self.config.offset = self.bias.data / self.scale.data.abs()
+                self.config.offset = torch.clamp(self.bias.data.abs() / self.scale.data.abs(), \
+                    self.config.quant_min, self.config.quant_max)
             else:
                 # bias
                 scale = self.scale_multiplier
@@ -705,7 +706,7 @@ class StraightThroughEstimateDelegator(TorchQuantizeDelegate):
 
         # only bias doesn't need offset in asym quant
         if not self.passive and config.policy.has_property(QuantizationProperty.ASYMMETRICAL):
-            tensor = tensor + bias
+            tensor = tensor + bias.abs()
         
         scale = scale.abs()
         tensor = tensor / scale
@@ -715,7 +716,7 @@ class StraightThroughEstimateDelegator(TorchQuantizeDelegate):
         tensor = tensor * scale 
         
         if not self.passive and config.policy.has_property(QuantizationProperty.ASYMMETRICAL):
-            tensor = tensor - bias
+            tensor = tensor - bias.abs()
         return tensor
 
 

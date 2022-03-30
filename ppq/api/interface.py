@@ -65,6 +65,8 @@ EXPORTERS = {
     TargetPlatform.EXTENSION:     ExtensionExporter,
     # TargetPlatform.ORT_OOS_INT8:  ONNXRUNTIMExporter,
     TargetPlatform.ORT_OOS_INT8:  ORTOOSExporter,
+    TargetPlatform.METAX_INT8_C:  ONNXRUNTIMExporter,
+    TargetPlatform.METAX_INT8_T:  ONNXRUNTIMExporter,
 }
 
 # 为你的导出模型取一个好听的后缀名
@@ -81,6 +83,8 @@ EXPORTING_POSTFIX = {
     TargetPlatform.NATIVE:        '.native',
     TargetPlatform.EXTENSION:     '.ext',
     TargetPlatform.ORT_OOS_INT8:  '.onnx',
+    TargetPlatform.METAX_INT8_C:  '.onnx',
+    TargetPlatform.METAX_INT8_T:  '.onnx',
 }
 
 def load_graph(file_path: str, from_framework: NetworkFramework=NetworkFramework.ONNX, **kwargs) -> BaseGraph:
@@ -529,6 +533,7 @@ def format_graph(graph: BaseGraph) -> BaseGraph:
     formatter(GraphCommand(GraphCommandType.FORMAT_PARAMETERS))
     formatter(GraphCommand(GraphCommandType.FORMAT_CAST))
     formatter(GraphCommand(GraphCommandType.FORMAT_SLICE))
+    formatter(GraphCommand(GraphCommandType.FORMAT_CLIP))
     formatter(GraphCommand(GraphCommandType.DELETE_ISOLATED))
 
     return graph
