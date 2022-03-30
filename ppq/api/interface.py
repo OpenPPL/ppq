@@ -567,8 +567,8 @@ def dispatch_graph(graph: BaseGraph, platform: TargetPlatform, setting: Quantiza
 
     dispatching_table = dispatcher.dispatch(
         graph=graph, quant_types=quant_types, 
-        quant_platform=quantizer.target_platform, 
-        fp32_platform=quantizer.default_platform, 
+        quant_platform=TargetPlatform.UNSPECIFIED, # MUST BE UNSPECIFIED, 这里的意思是交由 Quantizer 决定是否量化这个算子
+        fp32_platform=TargetPlatform.FP32,         
         SOI_platform=TargetPlatform.SHAPE_OR_INDEX)
 
     # override dispatching result with setting
