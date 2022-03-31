@@ -4,12 +4,35 @@
 </div>
 
 # PPL Quantization Tool 0.6.3(PPL 量化工具)
-PPL Quant Tool (PPQ) is a highly efficient offline neural network quantization tool with custimized IR, executor, dispacher and optimization passes.
+PPL QuantTool (PPQ) is a highly efficient neural network quantization tool with custimized IR, cuda based executor, automatic dispacher and powerful optimization passes. Together with OpenPPL ecosystem, we offer you this industrial-grade network depoly tool that empowers AI developers to unleash the full potential of AI hardware. With quantization and other optimizations, nerual network model can run 5~10x faster than ever. 
 
-# Features
-* Quantizable IR, an quantization-oriented network representation.
-* Quant related cuda kernels. with ppq, quantization simulating and finetuning will be 3x ~ 50x faster than ever.
-* Multi-platform support.
+PPL QuantTool 是一个工业级的神经网络量化工具：我们已经准备好了为你处理 maskrcnn 中复杂算子调度问题；esrgan 中的全网联合定点问题；或者是 transformer 中的大规模递归图融合，PPQ能够处理这些最复杂的网络量化任务，确保你的模型能够稳定部署在目标设备上。
+
+PPQ 使用量化计算图(QIR)描述量化细节，即便在网络极度复杂的情况下，我们依然能够保证以正确的方法模拟硬件计算，从而降低模拟误差。我们知晓硬件的运算细节——在所有已知平台上，PPQ 的模拟误差不超过1%，且保证模拟误差不会指数级扩散。PPQ 有着自定义的量化算子库、网络执行器、调度器与异构执行能力，在网络量化与量化训练方面，使用 PPQ 比原生 pytorch 快3 ~ 50倍。 借助 PPQ, OpenPPL, TensorRT, Tengine等框架，开发者可以将神经网络模型加速5 ~ 10倍，并部署到多种多样的目标终端，我们期待你将人工智慧真正带到千家万户之间。
+
+# Acceptable Framework: 
+1. Pytorch(via Onnx)
+2. Tensorflow(via Onnx)
+3. Caffe
+4. Onnx
+5. MMlab(via Onnx) 带后处理算子也没问题！只要你能导出Onnx我们就能量化
+
+# Deploy Platform
+1. TensorRT
+2. OpenPPL-CUDA
+3. OpenPPL-DSP
+4. SNPE(Qualcomm)
+5. NXP
+6. Metax
+7. Tengine(Developing)
+
+# Tutorial(Bilibili 视频教程)
+Watch video tutorial series on www.bilibili.com, following are links of PPQ tutorial links(Only Chinese version).
+
+* 安装教程: [https://www.bilibili.com/video/BV1WS4y1N7Kn](https://www.bilibili.com/video/BV1WS4y1N7Kn "PPQ Installation Tutorial") 
+* 使用教程: [https://www.bilibili.com/video/BV1934y147p2](https://www.bilibili.com/video/BV1934y147p2 "PPQ User Guide") 
+
+* 其他教程: 等待缓慢更新...
 
 # Installation
 
