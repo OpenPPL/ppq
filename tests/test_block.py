@@ -38,8 +38,8 @@ for scheme in TEST_SCHEMES:
                 f'Network Quantization Failed, expect error < 0.1, '
                 f'got {torch_snr_error(quant_outputs, reference_outputs).item()}')
 
-            if (case.depoly_platforms is None or 
-                scheme.export_platform in case.depoly_platforms):
+            if (case.deploy_platforms is None or
+                scheme.export_platform in case.deploy_platforms):
                 export_ppq_graph(
                     graph=quantized, 
                     platform=scheme.export_platform, 

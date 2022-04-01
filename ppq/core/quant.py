@@ -28,7 +28,7 @@ class TargetPlatform(Enum):
     """
     TargetPlatform is a core abstraction of PPQ framework,
         it defines "platform" as an attribute of an operation.
-    Platform attribute of an operation indicates where this operation is going to be depoly.
+    Platform attribute of an operation indicates where this operation is going to be deployed.
     This feature enables PPQ to simulate inter-device computing.
 
     Platform attribute also tells PPQ how to quantize an operation, and how to execute it.
@@ -41,7 +41,7 @@ class TargetPlatform(Enum):
     SHAPE_OR_INDEX is a virtual platform, however it is an EXTREMELY IMPORTANT components in PPQ.
         Dispatch an operation to platform SHAPE_OR_INDEX means this operation is SOI-related,
         it processes a SOI tensor and gives a processed SOI, all calculation of this operation must be sent to CPU
-            (or any platform capable for calculating this.) when depoly.
+            (or any platform capable for calculating this.) when deploy.
 
         An operation with SHAPE_OR_INDEX platform assigned will never be quantized regardless of its type.
         It is a crucial feature for quantizing network that contains SOI-related operation. (Shufflenet etc.)

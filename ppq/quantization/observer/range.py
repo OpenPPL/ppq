@@ -97,7 +97,7 @@ class TorchMinMaxObserver(BaseTensorObserver):
                 scales.append(scale)
                 offsets.append(offset)
 
-            # scale, offset here only depolyed on cpu
+            # scale, offset here only deployed on cpu
             # we will move them towards target device through RunnableGraph
             self._quant_cfg.scale  = torch.tensor(scales, dtype=torch.float32, device=device)
             self._quant_cfg.offset = torch.tensor(offsets, dtype=torch.float32, device=device)

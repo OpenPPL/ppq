@@ -135,7 +135,7 @@ from ppq.api import export_ppq_graph, quantize_torch_model
 BATCHSIZE = 32
 INPUT_SHAPE = [3, 224, 224]
 DEVICE = 'cuda' # only cuda is fully tested :(  For other executing device there might be bugs.
-PLATFORM = TargetPlatform.PPL_CUDA_INT8 # identify a target platform for depoly your network.
+PLATFORM = TargetPlatform.PPL_CUDA_INT8 # identify a target platform for deploy your network.
 
 def load_calibration_dataset() -> Iterable:
     return [torch.rand(size=INPUT_SHAPE) for _ in range(32)]

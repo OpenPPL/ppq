@@ -135,7 +135,7 @@ from ppq.api import export_ppq_graph, quantize_caffe_model
 BATCHSIZE = 32
 INPUT_SHAPE = [3, 96, 96]
 DEVICE = 'cuda' # only cuda is fully tested :(  For other executing device there might be bugs.
-PLATFORM = TargetPlatform.PPL_CUDA_INT8 # identify a target platform for depoly your network.
+PLATFORM = TargetPlatform.PPL_CUDA_INT8 # identify a target platform for deploy your network.
 PROTO_PATH = 'Models/model.prototxt' # For successfully loading caffe model, .prototxt file is required.
 MODEL_PATH = 'Models/model.caffemodel' # For successfully loading caffe model, .caffemodel file is required.
 
