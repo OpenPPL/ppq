@@ -111,7 +111,7 @@ class GraphDeployCommand(GraphCommand):
         if device.startswith('cuda'):
             super().__init__(GraphCommandType.DEPLOY_TO_CUDA)
         elif device.startswith('cpu'):
-            super().__init__(GraphCommandType.DEPLOY_TO_CUDA)
+            super().__init__(GraphCommandType.DEPLOY_TO_CPU)
         else:
             raise ValueError(f'Device type {device} not understand.')
         self._device = device

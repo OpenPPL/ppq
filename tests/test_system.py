@@ -19,8 +19,8 @@ for scheme in TEST_SCHEMES:
             platform=scheme.quant_platform,
             setting=scheme.setting)
 
-        if (case.depoly_platforms is None or 
-            scheme.export_platform in case.depoly_platforms):
+        if (case.deploy_platforms is None or 
+            scheme.export_platform in case.deploy_platforms):
             export_ppq_graph(
                 graph=quantized, 
                 platform=scheme.export_platform, 
