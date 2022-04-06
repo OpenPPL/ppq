@@ -646,7 +646,7 @@ class TensorQuantizationConfig(Serializable):
             quant_max=self.quant_max,
             scale=scale, offset=offset,
             observer_algorithm=self.observer_algorithm,
-            detail=self.detail,
+            detail=self.detail.copy(),
             inplace=self.inplace,
             state=self.state
         )
@@ -699,7 +699,7 @@ class ChannelwiseTensorQuantizationConfig(TensorQuantizationConfig):
             quant_max=convert_from.quant_max,
             scale=scales, offset=offsets,
             observer_algorithm=convert_from.observer_algorithm,
-            detail=convert_from.detail,
+            detail=convert_from.detail.copy(),
             state=convert_from.state,
             channel_axis=channel_axis,
             rounding=convert_from.rounding
