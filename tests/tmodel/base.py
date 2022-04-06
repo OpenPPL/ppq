@@ -30,7 +30,7 @@ class PPQTestCase():
                  input_generator: Callable, model_type: ModelType, 
                  model_name: str, running_device = 'cuda', 
                  deploy_platforms: List[TargetPlatform] = None) -> None:
-        self.depoly_platforms = deploy_platforms
+        self.deploy_platforms = deploy_platforms
         self.model_builder    = model_builder
         self.input_generator  = input_generator
         self.model_type       = model_type

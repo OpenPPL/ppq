@@ -106,12 +106,12 @@ class GraphCommand():
         return f'GraphCommand object {self.__hash__()},\t Command type: {self.command_type},\t Args:{self.kwargs}'
 
 
-class GraphDepolyCommand(GraphCommand):
+class GraphDeployCommand(GraphCommand):
     def __init__(self, device: str) -> None:
         if device.startswith('cuda'):
             super().__init__(GraphCommandType.DEPLOY_TO_CUDA)
         elif device.startswith('cpu'):
-            super().__init__(GraphCommandType.DEPLOY_TO_CUDA)
+            super().__init__(GraphCommandType.DEPLOY_TO_CPU)
         else:
             raise ValueError(f'Device type {device} not understand.')
         self._device = device

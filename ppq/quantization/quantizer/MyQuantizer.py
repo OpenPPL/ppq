@@ -113,7 +113,7 @@ class ExtQuantizer(BaseQuantizer):
             所有量化区的算子将被调度到这个设备上。
         
         Property target_platform is acquired by graph dispather.
-            It states where your quantized operation depoly.
+            It states where your quantized operation deploy.
         
         """
         return TargetPlatform.EXTENSION
@@ -125,7 +125,7 @@ class ExtQuantizer(BaseQuantizer):
             所有冲突区的算子将被调度到这个设备上。
         
         Property default_platform is acquired by graph dispather.
-            It states where non-quantable operation depoly.
+            It states where non-quantable operation deploy.
 
         """
         return TargetPlatform.FP32

@@ -80,7 +80,7 @@ class QuantableOperation(Operation):
                 assert isinstance(var, QuantableVariable), 'Unexpected error.'
                 # convert var.value to torch.Tensor
                 # notice here we set device = None, this conversion will not change var.value.device anyway.
-                # so that we can use var.value.device as a depoly device for stored_value
+                # so that we can use var.value.device as a deploy device for stored_value
                 var.stored_value = convert_any_to_torch_tensor(var.value, device='cpu')
         return self
 
@@ -94,7 +94,7 @@ class QuantableOperation(Operation):
             if var.is_parameter:
                 # convert var.value to torch.Tensor
                 # notice here we set device = None, this conversion will not change var.value.device anyway.
-                # so that we can use var.value.device as a depoly device for stored_value
+                # so that we can use var.value.device as a deploy device for stored_value
                 stored_value = convert_any_to_torch_tensor(var.value, device=expire_device)
                 var.value = convert_any_to_torch_tensor(var.value, device=None)
                 var.value = convert_any_to_torch_tensor(var.stored_value, device=var.value.device)
@@ -114,7 +114,7 @@ class QuantableOperation(Operation):
                     assert isinstance(var, QuantableVariable), 'Unexpected error.'
                     # convert var.value to torch.Tensor
                     # notice here we set device = None, this conversion will not change var.value.device anyway.
-                    # so that we can use var.value.device as a depoly device for stored_value
+                    # so that we can use var.value.device as a deploy device for stored_value
                     stored_value = convert_any_to_torch_tensor(var.value, device=expire_device)
                     var.value = convert_any_to_torch_tensor(var.value, device=None)
                     var.value = convert_any_to_torch_tensor(var.stored_value, device=var.value.device)

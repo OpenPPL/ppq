@@ -3,7 +3,7 @@ from typing import Any, List
 from ppq.core import (TargetPlatform, convert_any_to_numpy,
                       convert_any_to_torch_tensor)
 
-from .base.command import GraphCommand, GraphCommandType, GraphDepolyCommand
+from .base.command import GraphCommand, GraphCommandType, GraphDeployCommand
 from .base.graph import BaseGraph, Operation, Variable
 from .processer import GraphCommandProcesser
 
@@ -28,7 +28,7 @@ class RunnableGraph(GraphCommandProcesser):
             return self.deploy('cpu')
 
         elif command.command_type == GraphCommandType.DEPLOY_TO_CUDA:
-            if isinstance(command, GraphDepolyCommand):
+            if isinstance(command, GraphDeployCommand):
                 device = command._device
                 return self.deploy(device)
             else:

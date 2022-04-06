@@ -4,7 +4,7 @@ import numpy
 from ppq.core import (OperationMeta, QuantizationStates, TargetPlatform,
                       TensorMeta, TensorQuantizationConfig, empty_ppq_cache)
 from ppq.IR import BaseGraph, Operation, QuantableOperation, RunnableGraph
-from ppq.IR.base.command import GraphDepolyCommand
+from ppq.IR.base.command import GraphDeployCommand
 from ppq.quantization.qfunction.linear import PPQLinearQuantFunction
 
 import torch
@@ -103,7 +103,7 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
             ]. Defaults to 'cuda'.
         """
         self._default_quant_fn = PPQLinearQuantFunction
-        self._depolyed = False
+        self._deployed = False
         self._device = device
         self._executing_contenxt = TorchBackendContext(executing_device=self._device)
         super().__init__(graph)
@@ -174,8 +174,8 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
         Raises:
             ValueError: [when target device is unacceptable]
         """
-        self._depolyed = True
-        self._runnable_graph(GraphDepolyCommand(device=self._device))
+        self._deployed = True
+        self._runnable_graph(GraphDeployCommand(device=self._device))
 
     def to(self, device: str):
         # just keep TorchExecutor behaving like torch.nn.Module
@@ -436,9 +436,9 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
 
     def load_graph(self, graph: BaseGraph) -> dict:
         super().load_graph(graph)
-        self._depolyed = False
+        self._deployed = False
         self._runnable_graph = RunnableGraph(self._graph)
-        self._runnable_graph(GraphDepolyCommand(device=self._device))
+        self._runnable_graph(GraphDeployCommand(device=self._device))
 
     def quantize_function(self, input: torch.Tensor, config: TensorQuantizationConfig = None) -> torch.Tensor:
         if config is None: return self._default_quant_fn(input, config)

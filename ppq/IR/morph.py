@@ -450,7 +450,7 @@ class GraphMerger(GraphCommandProcesser):
                 len(self.graph.get_upstream_operations(bn_op)) != 1):
                 ppq_warning(f'PPQ can not merge operation {computing_op.name} and {bn_op.name}, '
                             'this is not suppose to happen with your network, '
-                            'network with batchnorm inside might not be able to quantize and depoly.')
+                            'network with batchnorm inside might not be able to quantize and deploy.')
 
             assert len(bn_op.parameters) == 4, 'BatchNorm should have 4 parameters, namely alpha, beta, mean, var'
             alpha = bn_op.parameters[0].value

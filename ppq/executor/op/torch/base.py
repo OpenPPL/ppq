@@ -35,13 +35,13 @@ def ASSERT_ALL_TENSORS_AT_CPU(op: Operation, values: List[torch.Tensor], force_c
         if str(tensor.device) != 'cpu':
             if not force_convert:
                 raise ValueError(
-                    f'Input at [{idx}] of Opeartion [{op.name}] depoly with incorrect device {tensor.device}, '
+                    f'Input at [{idx}] of Opeartion [{op.name}] deploy with incorrect device {tensor.device}, '
                     'which is not supposed to happen in PPQ execution system. This is a critical system failure, '
                     'you can set ppq.core.config.force_convert as True to force convert those values, which might be able to '
                     'continue executing your graph. YOU ARE RECOMMEND TO REPORT THIS FAILURE TO US.'
                 )
             else:
-                ppq_warning(f'Input at [{idx}] of Opeartion [{op.name}] depoly with incorrect device {tensor.device}. '
+                ppq_warning(f'Input at [{idx}] of Opeartion [{op.name}] deploy with incorrect device {tensor.device}. '
                             'Convert it to cpu tensor now.')
                 values[idx] = tensor.cpu()
 
