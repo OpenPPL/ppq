@@ -42,7 +42,7 @@ def process_attribute(attr, input_shape, kernel_shape=None, op_type=None):
     if pad_needed is not None:
         pads = []
         for item in pad_needed:
-            pads.append((item + 1 if auto_pad == 'SAME_LOWER' else item) // 2)
+            pads.append((item if auto_pad == 'SAME_UPPER' else item + 1) // 2)
         # onnx pads format should be as follow [x1_begin, x2_begin...x1_end, x2_end,...]
         pads = pads + [pad_needed[i] - p for i, p in enumerate(pads)]
         attr['pads'] = pads
