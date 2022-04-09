@@ -24,7 +24,7 @@ from ppq.IR.quantize import QuantableOperation
 from .onnxruntime_exporter import ONNXRUNTIMExporter
 
 
-class QuantLinearOpInputOrder(Enum):
+class QuantJointOpInputOrder(Enum):
     INPUT_FIRST = 1
     OUTPUT_FIRST = 2
 
@@ -387,7 +387,7 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
         op.inputs.extend(qlinear_conv_inputs)
 
     def transform_qlinear_joint_op(
-        self, graph: BaseGraph, op: Operation, input_order: QuantLinearOpInputOrder
+        self, graph: BaseGraph, op: Operation, input_order: QuantJointOpInputOrder
     ) -> None:
         # Output scale
         assert len(op.outputs) == 1
@@ -426,7 +426,7 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
         op.inputs.clear()
         op.inputs.extend(
             qlinear_inputs_for_origin_inputs + qlinear_inputs_for_origin_outputs
-            if input_order == QuantLinearOpInputOrder.INPUT_FIRST
+            if input_order == QuantJointOpInputOrder.INPUT_FIRST
             else qlinear_inputs_for_origin_outputs + qlinear_inputs_for_origin_inputs
         )
 
@@ -519,7 +519,7 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
             self.transform_qlinear_conv(graph, operation)
         if operation.type in ["Add", "Mul"]:
             self.transform_qlinear_joint_op(
-                graph, operation, QuantLinearOpInputOrder.INPUT_FIRST
+                graph, operation, QuantJointOpInputOrder.INPUT_FIRST
             )
         if operation.type == "GlobalAveragePool":
             self.transform_qlinear_average_pool(graph, operation, is_global=True)
@@ -529,7 +529,7 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
             self.transform_qlinear_matmul(graph, operation)
         if operation.type == "Concat":
             self.transform_qlinear_joint_op(
-                graph, operation, QuantLinearOpInputOrder.OUTPUT_FIRST
+                graph, operation, QuantJointOpInputOrder.OUTPUT_FIRST
             )
 
     def permute_op_meta_order(self, op: Operation, curr_meta_len: int) -> None:
