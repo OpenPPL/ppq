@@ -4,15 +4,29 @@ import numpy as np
 import onnx
 import torch
 from onnx import helper
-from ppq.core import (EXPORT_DEVICE_SWITCHER, ORT_MICROSOFT_CONTRIB_LINEAR_OPS,
-                      ORT_OOS_FUSE_START_OPS, PPQ_NAME, OperationMeta,
-                      QuantizationProperty, QuantizationStates, TensorMeta,
-                      TensorQuantizationConfig, convert_any_to_torch_tensor)
+from enum import Enum
+from ppq.core import (
+    EXPORT_DEVICE_SWITCHER,
+    ORT_MICROSOFT_CONTRIB_LINEAR_OPS,
+    ORT_OOS_FUSE_START_OPS,
+    PPQ_NAME,
+    OperationMeta,
+    QuantizationProperty,
+    QuantizationStates,
+    TensorMeta,
+    TensorQuantizationConfig,
+    convert_any_to_torch_tensor,
+)
 from ppq.IR import BaseGraph, Operation, QuantableVariable, Variable
 from ppq.IR.morph import GraphDeviceSwitcher
 from ppq.IR.quantize import QuantableOperation
 
 from .onnxruntime_exporter import ONNXRUNTIMExporter
+
+
+class QuantLinearOpInputOrder(Enum):
+    INPUT_FIRST = 1
+    OUTPUT_FIRST = 2
 
 
 class ORTOOSExporter(ONNXRUNTIMExporter):
@@ -39,6 +53,7 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
             "Conv": "QLinearConv",
             "GlobalAveragePool": "QLinearGlobalAveragePool",
             "MatMul": "QLinearMatMul",
+            "Concat": "QLinearConcat",
         }
 
     @property
@@ -56,6 +71,7 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
             "QLinearMatMul",
             "QLinearAdd",
             "QLinearMul",
+            "QLinearConcat",
         ]:
             # align with zp dtype
             return op.inputs[2].meta.dtype
@@ -370,37 +386,9 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
         op.inputs.clear()
         op.inputs.extend(qlinear_conv_inputs)
 
-    def transform_qlinear_linear_op(self, graph: BaseGraph, op: Operation) -> None:
-        # Input scale 0
-        input_val_name_0 = op.inputs[0].name.split(ORTOOSExporter.LINKER_VAR_SUFFIX)[0]
-        if op.inputs[0].is_parameter:
-            input_0, input_scale_0, input_offset_0 = self.add_quant_parameter_for_op(
-                graph, op.inputs[0]
-            )
-            graph.delete_variable(op.inputs[0].name, True)
-        else:
-            input_0 = op.inputs[0]
-            input_scale_0, input_offset_0 = (
-                graph.variables[
-                    input_val_name_0 + ORTOOSExporter.SCALE_PARAMETER_SUFFIX
-                ],
-                graph.variables[input_val_name_0 + ORTOOSExporter.ZP_PARAMETER_SUFFIX],
-            )
-        # Input scale 1
-        input_val_name_1 = op.inputs[1].name.split(ORTOOSExporter.LINKER_VAR_SUFFIX)[0]
-        if op.inputs[1].is_parameter:
-            input_1, input_scale_1, input_offset_1 = self.add_quant_parameter_for_op(
-                graph, op.inputs[1]
-            )
-            graph.delete_variable(op.inputs[1].name, True)
-        else:
-            input_1 = op.inputs[1]
-            input_scale_1, input_offset_1 = (
-                graph.variables[
-                    input_val_name_1 + ORTOOSExporter.SCALE_PARAMETER_SUFFIX
-                ],
-                graph.variables[input_val_name_1 + ORTOOSExporter.ZP_PARAMETER_SUFFIX],
-            )
+    def transform_qlinear_joint_op(
+        self, graph: BaseGraph, op: Operation, input_order: QuantLinearOpInputOrder
+    ) -> None:
         # Output scale
         assert len(op.outputs) == 1
         output_val_name = op.outputs[0].name.split(ORTOOSExporter.LINKER_VAR_SUFFIX)[0]
@@ -408,21 +396,39 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
             graph.variables[output_val_name + ORTOOSExporter.SCALE_PARAMETER_SUFFIX],
             graph.variables[output_val_name + ORTOOSExporter.ZP_PARAMETER_SUFFIX],
         )
-        qlinear_inputs = [
-            input_0,
-            input_scale_0,
-            input_offset_0,
-            input_1,
-            input_scale_1,
-            input_offset_1,
-            output_scale,
-            output_offset,
-        ]
+        qlinear_inputs_for_origin_outputs = [output_scale, output_offset]
+        # Input scales
+        qlinear_inputs_for_origin_inputs = []
+        for index, input_value in enumerate(op.inputs):
+            input_val_name = input_value.name.split(ORTOOSExporter.LINKER_VAR_SUFFIX)[0]
+            if input_value.is_parameter:
+                (
+                    input_value,
+                    input_scale,
+                    input_offset,
+                ) = self.add_quant_parameter_for_op(graph, input_value)
+                graph.delete_variable(op.inputs[index].name, True)
+            else:
+                input_scale, input_offset = (
+                    graph.variables[
+                        input_val_name + ORTOOSExporter.SCALE_PARAMETER_SUFFIX
+                    ],
+                    graph.variables[
+                        input_val_name + ORTOOSExporter.ZP_PARAMETER_SUFFIX
+                    ],
+                )
+            qlinear_inputs_for_origin_inputs.extend(
+                [input_value, input_scale, input_offset]
+            )
         if op.type in ORT_MICROSOFT_CONTRIB_LINEAR_OPS:
             op.attributes["domain"] = "com.microsoft"
         op.type = self.qlinear_op_map[op.type]
         op.inputs.clear()
-        op.inputs.extend(qlinear_inputs)
+        op.inputs.extend(
+            qlinear_inputs_for_origin_inputs + qlinear_inputs_for_origin_outputs
+            if input_order == QuantLinearOpInputOrder.INPUT_FIRST
+            else qlinear_inputs_for_origin_outputs + qlinear_inputs_for_origin_inputs
+        )
 
     def transform_qlinear_average_pool(
         self, graph: BaseGraph, op: Operation, is_global=False
@@ -454,9 +460,7 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
         op.inputs.clear()
         op.inputs.extend(qlinear_inputs)
 
-    def transform_qlinear_matmul(
-        self, graph: BaseGraph, op: Operation, is_global=False
-    ) -> None:
+    def transform_qlinear_matmul(self, graph: BaseGraph, op: Operation) -> None:
         # Input scale 0
         input_val_name_0 = op.inputs[0].name.split(ORTOOSExporter.LINKER_VAR_SUFFIX)[0]
         if op.inputs[0].is_parameter:
@@ -514,13 +518,29 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
         if operation.type == "Conv":
             self.transform_qlinear_conv(graph, operation)
         if operation.type in ["Add", "Mul"]:
-            self.transform_qlinear_linear_op(graph, operation)
+            self.transform_qlinear_joint_op(
+                graph, operation, QuantLinearOpInputOrder.INPUT_FIRST
+            )
         if operation.type == "GlobalAveragePool":
             self.transform_qlinear_average_pool(graph, operation, is_global=True)
         if operation.type == "AveragePool":
             self.transform_qlinear_average_pool(graph, operation, is_global=False)
         if operation.type == "MatMul":
-            self.transform_qlinear_matmul(graph, operation, is_global=False)
+            self.transform_qlinear_matmul(graph, operation)
+        if operation.type == "Concat":
+            self.transform_qlinear_joint_op(
+                graph, operation, QuantLinearOpInputOrder.OUTPUT_FIRST
+            )
+
+    def permute_op_meta_order(self, op: Operation, curr_meta_len: int) -> None:
+        if op.type == "QLinearAdd":
+            # the second operand's index move from 1 to 3
+            op.meta_data.input_metas[3] = op.meta_data.input_metas[1]
+        elif op.type == "QLinearConcat":
+            # first two holes are for output scale and zp, thus all input scale/zep needs to move
+            # two steps forward
+            for i in range(curr_meta_len - 1, -1, -1):
+                op.meta_data.input_metas[i + 2] = op.meta_data.input_metas[i]
 
     def correct_param_meta(self, graph: BaseGraph) -> None:
         # handle QLinear ops
@@ -530,9 +550,7 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
                 expected_len = len(op.inputs)
                 for _ in range(expected_len - curr_meta_len):
                     op.meta_data.input_metas.append(TensorMeta(None, None))
-            if op.type == "QLinearAdd":
-                # the second operand's index move from 1 to 3
-                op.meta_data.input_metas[3] = op.meta_data.input_metas[1]
+                self.permute_op_meta_order(op, curr_meta_len)
 
         # correct parameter meta data
         for var in graph.variables.values():

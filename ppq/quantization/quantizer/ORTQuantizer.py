@@ -69,7 +69,7 @@ class ORT_PerTensorQuantizer(BaseQuantizer):
         return {
             'Conv', 'GlobalAveragePool', 'AveragePool',
             'Relu', 'Add', 'Mul', 'Clip',
-            'MatMul'
+            'MatMul', 'Concat'
         }
 
     @ property
@@ -180,7 +180,7 @@ class ORT_PerChannelQuantizer(BaseQuantizer):
         return {
             'Conv', 'GlobalAveragePool', 'AveragePool',
             'Relu', 'Add', 'Mul', 'Clip',
-            'MatMul'
+            'MatMul', 'Concat'
         }
 
     @ property
