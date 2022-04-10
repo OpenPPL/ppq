@@ -152,8 +152,8 @@ class ORT_PerChannelQuantizer(BaseQuantizer):
                     QuantizationProperty.PER_CHANNEL
                 )
                 bias_config.num_of_bits = 30
-                bias_config.quant_max = + 127
-                bias_config.quant_min = - 127
+                bias_config.quant_max = int(pow(2, 30 - 1) - 1)
+                bias_config.quant_min = - int(pow(2, 30 - 1))
                 bias_config.state = QuantizationStates.PASSIVE_INIT
                 base_quant_config.input_quantization_config[-1] = \
                     ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
