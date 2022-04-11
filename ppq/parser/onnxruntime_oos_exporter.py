@@ -104,6 +104,21 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
     def is_per_channel(self, config: TensorQuantizationConfig) -> bool:
         return config.policy.has_property(QuantizationProperty.PER_CHANNEL)
 
+    def get_canonized_quantization_parameters(
+        self, var: Variable, quantize_config: TensorQuantizationConfig
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        # So far canonization only reduces dimensionality 1 -> 0,
+        # which is just a workaround for `QuantAlignmentPass`. See method: `align_to_large`
+        # For OOS style ONNX quantized model, scale & zp with shape like [0.xxx]
+        # are not accepted for activations
+        scale, offset = quantize_config.scale, quantize_config.offset
+        if var.is_parameter is False:
+            if len(scale.shape) != 0:
+                scale = torch.tensor(scale.item(), dtype=scale.dtype)
+            if len(offset.shape) != 0:
+                offset = torch.tensor(offset.item(), dtype=offset.dtype)
+        return scale, offset
+
     def build_per_channel_param_broadcast_shape(
         self, weight: torch.Tensor, param: torch.Tensor
     ) -> torch.Tensor:
@@ -164,7 +179,9 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
         else:
             is_asymmetrical = self.is_asymmetrical(quantize_config)
             offset_dtype = self.get_dtype_on_symmetricity(is_asymmetrical)
-            scale, offset = quantize_config.scale, quantize_config.offset
+            scale, offset = self.get_canonized_quantization_parameters(
+                var, quantize_config
+            )
             dest_ops = (
                 [var.source_op, var.dest_ops[dest_index]]
                 if link_to_source
