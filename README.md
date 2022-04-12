@@ -8,14 +8,14 @@ PPL QuantTool (PPQ) is a highly efficient neural network quantization tool with 
 
 PPL QuantTool 是一个工业级的神经网络量化工具：我们已经准备好了为你处理 maskrcnn 中复杂算子调度问题；esrgan 中的全网联合定点问题；或者是 transformer 中的大规模递归图融合，PPQ能够处理这些最复杂的网络量化任务，确保你的模型能够稳定部署在目标设备上。
 
-PPQ 使用量化计算图(QIR)描述量化细节，即便在网络极度复杂的情况下，我们依然能够保证以正确的方法模拟硬件计算，从而降低模拟误差。我们知晓硬件的运算细节——在所有已知平台上，PPQ 的模拟误差不超过1%，且保证模拟误差不会指数级扩散。PPQ 有着自定义的量化算子库、网络执行器、调度器与异构执行能力，在网络量化与量化训练方面，使用 PPQ 比原生 pytorch 快3 ~ 50倍。 借助 PPQ, OpenPPL, TensorRT, Tengine等框架，开发者可以将神经网络模型加速5 ~ 10倍，并部署到多种多样的目标终端，我们期待你将人工智慧真正带到千家万户之间。
+PPQ 使用量化计算图(QIR)描述量化细节，即便在网络极度复杂的情况下，我们依然能够保证以正确的方法模拟硬件计算，从而降低模拟误差。我们知晓硬件的运算细节——在所有已知平台上，PPQ 的模拟误差不超过1%，且保证模拟误差不会指数级扩散。PPQ 有着自定义的量化算子库、网络执行器、调度器与异构执行能力，在网络量化与量化训练方面，使用 PPQ 比原生 PyTorch 快3 ~ 50倍。 借助 PPQ, OpenPPL, TensorRT, Tengine等框架，开发者可以将神经网络模型加速5 ~ 10倍，并部署到多种多样的目标终端，我们期待你将人工智慧真正带到千家万户之间。
 
 # Acceptable Framework: 
-1. Pytorch(via Onnx)
-2. Tensorflow(via Onnx)
+1. PyTorch(via ONNX)
+2. TensorFlow(via ONNX)
 3. Caffe
-4. Onnx
-5. MMlab(via Onnx) 带后处理算子也没问题！只要你能导出Onnx我们就能量化
+4. ONNX
+5. MMlab(via ONNX) 带后处理算子也没问题！只要你能导出ONNX我们就能量化
 
 # Deploy Platform
 1. TensorRT
@@ -39,9 +39,9 @@ Watch video tutorial series on www.bilibili.com, following are links of PPQ tuto
 To release the power of this advanced quantization tool, at least one CUDA computing device is required.
 Install CUDA from [CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit-archive), PPL Quantization Tool will use CUDA compiler to compile cuda kernels at runtime.
 
-ATTENTION: For users of pytorch, pytorch might bring you a minimized CUDA libraries, which will not satisfy the requirement of this tool, you have to install CUDA from NVIDIA manually.
+ATTENTION: For users of PyTorch, PyTorch might bring you a minimized CUDA libraries, which will not satisfy the requirement of this tool, you have to install CUDA from NVIDIA manually.
 
-ATTENTION: Make sure your python version is >= 3.6.0. PPL Quantization Tool is written with dialects that only supported by python >= 3.6.0.
+ATTENTION: Make sure your Python version is >= 3.6.0. PPL Quantization Tool is written with dialects that only supported by Python >= 3.6.0.
 
 * Install dependencies:
     * For Linux User, use following command to install ninja:
@@ -65,11 +65,11 @@ pip install -r requirements.txt
 python setup.py install
 ```
 
-2. Wait for python finish its installation and pray for bug free.
+2. Wait for Python finish its installation and pray for bug free.
 
 * Install PPQ from Pip:
 
-1. pre-built wheels are maintained in [PPQ](https://pypi.org/project/ppq/0.5.2/#files), you could simply install ppq with the following command(You should notice that install from pypi might get a outdated version ...)
+1. pre-built wheels are maintained in [PPQ](https://pypi.org/project/ppq/0.5.2/#files), you could simply install ppq with the following command(You should notice that install from pypi might get an outdated version ...)
 
 ```bash
 python3 -m pip install ppq
