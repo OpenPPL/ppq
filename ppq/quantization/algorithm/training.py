@@ -342,6 +342,60 @@ class RQTDelegator(TorchQuantizeDelegate):
         )
 
 
+class QDropDelegator(TorchQuantizeDelegate):
+    """
+        QDrop function is an cuda implementation of quantization dropout.
+        With this function, optimizer can lower the variance of gradient estimations.
+        
+        With those features, we could directly finetune a quantized network
+            from 32-bit to lower bit width, avoiding the risk of over-fitting.
+        
+        USE THIS FUNCTION TO REPLACE PPQ EXECUTOR'S QUANTIZATION LOGIC WITH
+            executor.register_quant_delegator(config, RQTDelegator())
+        
+        ATTENTION: QDROP FUNCTION IS AVAILABLE ONLY WITH USING_CUDA_KERNEL = True
+    """
+    def __init__(
+        self, binding: Variable, 
+        config: TensorQuantizationConfig, 
+        dropout: float) -> None:
+        if config.state in {QuantizationStates.BAKED, QuantizationStates.PASSIVE_BAKED}:
+            raise PermissionError(f'Can not create TrainableDelegate with variable {binding.name},'
+                                  ' cause its value has been baked.')
+
+        self.config    = config
+        self.binding   = binding
+        self.dropout   = dropout
+
+        self.scale_backup         = self.config.scale.clone()
+        self.offset_backup        = self.config.offset.clone()
+
+        self.config.scale.requires_grad  = True
+        if self.config.policy.has_property(QuantizationProperty.ASYMMETRICAL):
+            self.config.offset.requires_grad = True
+
+    def withdraw(self):
+        self.config.scale  = self.scale_backup
+        self.config.offset = self.offset_backup
+
+    def finalize(self):
+        self.config.scale.requires_grad  = False
+        self.config.scale._grad          = None
+        
+        if self.config.policy.has_property(QuantizationProperty.ASYMMETRICAL):
+            self.config.offset.requires_grad = False
+            self.config.offset._grad         = None
+
+        with torch.no_grad():
+            self.config.offset = torch.clamp(self.config.offset, 0, self.config.quant_max)
+
+    def __call__(self, tensor: torch.Tensor, 
+                 config: TensorQuantizationConfig) -> torch.Tensor:
+        with torch.no_grad(): config.scale.copy_(torch.clamp(config.scale, min=1e-7, max=None))
+        with torch.no_grad(): config.offset.copy_(torch.clamp(config.offset, min=0, max=self.config.quant_max))
+        return PPQLinearQuantFunction(tensor, config, dropout=self.dropout)
+
+
 class BanditDelegator(TorchQuantizeDelegate):
     """
         带有多臂赌博机的量化代理，从 ppq 0.6.2 版本后，我们引入
@@ -797,8 +851,7 @@ class BlockwiseReconstructionDelegator(StraightThroughEstimateDelegator):
 
 class EMARecorder():
     """
-    Exponential Moving Average(EMA) 
-        with bias correction.
+    Exponential Moving Average(EMA) with bias correction.
     """
     def __init__(self, beta: float = 0.98):
         self.beta  = beta

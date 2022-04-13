@@ -130,6 +130,9 @@ class TensorMeta:
                 A int list contains size of each dimensions.
             tensor_name (str, optional): Not yet used.
         """
+        if not isinstance(dtype, DataType):
+            raise TypeError(f'Can not create Tensor Meta with dtype {type(dtype)}, '
+                            'only ppq.core.DataType instance is acceptable here.')
         self.dtype = dtype
         self.shape = shape
         self.name  = tensor_name

@@ -385,7 +385,7 @@ class BaseGraph(Serializable):
     def insert_op_on_var(self, inserting_op: Operation, var: str):
         """
         Insert one operation to current graph.
-            Inserting operation will replace var.dest_ops and automatically connect to var.source_op.
+            Inserting operation will replace var.dest_ops and automatically connect to inserting_op.
 
         ATTENTION: Inserting opeartion must be an empty opeartion with no input and output variables linked to it.
 
@@ -486,13 +486,62 @@ class BaseGraph(Serializable):
         down_op.inputs[down_op.inputs.index(variable)] = link_var
         self._num_of_generated_var += 1
 
+    def insert_op_between_var_and_op(self, inserting_op: Operation, up_var: Variable, down_op: Operation):
+        """
+        Insert one operation to current graph.
+            Inserting operation will just between up_var and down_op.
+
+        ATTENTION: Inserting opeartion must be an empty opeartion with no input and output variables linked to it.
+
+        Args:
+            inserting_op (Operation): [description]
+            up_op (Operation): [description]
+            down_op (Operation): [description]
+        """
+        if up_var.name not in self.variables:
+            raise KeyError(f'Can not inserting operation behind {up_var.name}, variable not found.')
+        if down_op.name not in self.operations:
+            raise KeyError(f'Can not inserting operation behind {down_op.name}, operation not found.')
+        if down_op.name not in [op.name for op in up_var.dest_ops]:
+            raise PermissionError(f'variable {up_var.name} and {down_op.name} are not linked,'
+                                  ' there is no way to insert an op between them.')
+        if len(inserting_op.inputs) != 0 or len(inserting_op.outputs) != 0:
+            raise PermissionError('Can only insert operation with no input and output variables.')
+        
+        variables = []
+        for var in down_op.inputs:
+            if var == up_var:
+                variables.append(var)
+        assert len(variables) == 1, (f'Can not insert opeartion between {var.name} and {down_op.name},'
+                                     ' graph is too complex.')
+        
+        # add to graph.
+        self.append_operation(inserting_op)
+
+        # create all links.
+        link_var = Variable(name=f'PPQ_Generated_Var_{self._num_of_generated_var}', 
+                            dest_ops=[down_op], 
+                            source_op=inserting_op)
+        self.append_variable(link_var)
+
+        inserting_op.inputs.append(up_var)
+        inserting_op.outputs.append(link_var)
+
+        up_var.dest_ops[up_var.dest_ops.index(down_op)] = inserting_op
+        down_op.inputs[down_op.inputs.index(up_var)] = link_var
+        self._num_of_generated_var += 1
+
     def remove_operation(self, removing_op: Operation):
         """
         Remove opeartion from graph, this function will unlink removing operation from
             current graph, and delete it from graph.
-        
-        removing operation is supposed to have only one output variable and one input variable,
-            and its output variable should not be the output of current graph. 
+
+        removing operation is supposed to have only 
+            1 input variable;
+            n parameter variable;
+            1 output variable;
+
+            its output variable should not be the output of current graph. 
         Otherwise errors will be thrown by this function.
 
         This function will auto link the source variable of removing operation to all 
@@ -505,12 +554,21 @@ class BaseGraph(Serializable):
         """
         if removing_op.name not in self.operations:
             raise KeyError(f'Can not remove operation {removing_op.name}, operation not found.')
-        if len(removing_op.outputs) != 1 or len(removing_op.inputs) != 1:
+        if len(removing_op.outputs) != 1 or len([var for var in removing_op.inputs if not var.is_parameter]) != 1:
             raise PermissionError(f'Can not remove operation {removing_op.name},'
                                   ' it has more than 1 input or output variable.')
         if removing_op.outputs[0].name in self._graph_outputs:
             raise PermissionError(f'Can not remove operation {removing_op.name},'
                         ' its output variable is listed in graph output.')
+        assert not removing_op.inputs[0].is_parameter, (
+            f'Removing operation got a parameter variable as its first input.')
+
+        # removing all parameters first.
+        for parameter in removing_op.inputs:
+            if parameter.is_parameter:
+                parameter.dest_ops.clear()
+                parameter.value = None # clear memory
+                self.variables.pop(parameter.name)
 
         removing_var = removing_op.outputs[0]
         input_var    = removing_op.inputs[0]

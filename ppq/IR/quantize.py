@@ -125,7 +125,8 @@ class QuantableOperation(Operation):
     @ property
     def config_with_variable(self) -> List[Tuple[TensorQuantizationConfig, Variable]]:
         """
-        Just a helper function.
+        Just a helper function,
+            This function will list all related config and variable with current operation.
 
         Returns:
             List[Tuple[TensorQuantizationConfig, Variable]]: [description]

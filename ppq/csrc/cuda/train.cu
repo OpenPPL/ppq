@@ -57,9 +57,9 @@ __host__ Tensor TensorClip_C(
 
     This function will clip tensor value inplace.
      */
-    CheckTensor(value, at::kFloat, "Value(FP32)");
-    CheckTensor(reference, at::kFloat, "Reference(FP32)");
-    CheckTensor(limit, at::kFloat, "Limit(FP32)");
+    CheckTensor(value, at::kFloat, "Value(Expect to be FP32)");
+    CheckTensor(reference, at::kFloat, "Reference(Expect to be FP32)");
+    CheckTensor(limit, at::kFloat, "Limit(Expect to be FP32)");
 
     int element_per_channel = 1;
     const int num_of_channel = value.sizes()[channel_axis];
@@ -98,9 +98,9 @@ __host__ Tensor TensorClip_T(
 
     This function will clip tensor value inplace.
     */
-    CheckTensor(value, at::kFloat, "Value(FP32)");
-    CheckTensor(reference, at::kFloat, "Reference(FP32)");
-    CheckTensor(limit, at::kFloat, "Limit(FP32)");
+    CheckTensor(value, at::kFloat, "Value(Expect to be FP32)");
+    CheckTensor(reference, at::kFloat, "Reference(Expect to be FP32)");
+    CheckTensor(limit, at::kFloat, "Limit(Expect to be FP32)");
 
     Tensor out = at::empty_like(value);
     _TensorClip_T<<<NUM_OF_BLOCK(NUM_OF_ELEMENT(value)), 
@@ -137,7 +137,7 @@ __global__ void _RoundingLoss_LT(
         diff_sum += diff;
     }
     float diff_reduced = BlockReduceSum<float>(diff_sum);
-    if(threadIdx.x == 0) atomicAdd(out, diff_reduced / sqrt((float)num_of_element));
+    if(threadIdx.x == 0) atomicAdd(out, diff_reduced / sqrt(num_of_element));
 }
 
 __host__ Tensor RoundingLoss_LT(
@@ -153,9 +153,9 @@ __host__ Tensor RoundingLoss_LT(
         If one value inside R is clipped by quant function, 
             then it contributes nothing to R.
     */
-    CheckTensor(value, at::kFloat, "Value(FP32)");
-    CheckTensor(scale, at::kFloat, "Scale(FP32)");
-    CheckTensor(offset, at::kFloat, "Offset(FP32)");
+    CheckTensor(value, at::kFloat, "Value(Expect to be FP32)");
+    CheckTensor(scale, at::kFloat, "Scale(Expect to be FP32)");
+    CheckTensor(offset, at::kFloat, "Offset(Expect to be FP32)");
 
     Tensor loss = at::zeros({1}, value.options());
     _RoundingLoss_LT<<<NUM_OF_BLOCK(NUM_OF_ELEMENT(value)), 
@@ -189,7 +189,7 @@ __global__ void _RoundingLoss_LT_B(
         // if value has been clipped, set grad = 0
         if (v > s * (clip_max - o)) grad = 0;
         if (v < s * (clip_min - o)) grad = 0;
-        dx[iter] = grad / sqrt((float)num_of_element);
+        dx[iter] = grad / sqrt(num_of_element);
     }
 }
 
@@ -202,9 +202,9 @@ __host__ Tensor RoundingLoss_LT_B(
     /*
         Compute grad through rounding loss.
     */
-    CheckTensor(value, at::kFloat, "Value(FP32)");
-    CheckTensor(scale, at::kFloat, "Scale(FP32)");
-    CheckTensor(offset, at::kFloat, "Offset(FP32)");
+    CheckTensor(value, at::kFloat, "Value(Expect to be FP32)");
+    CheckTensor(scale, at::kFloat, "Scale(Expect to be FP32)");
+    CheckTensor(offset, at::kFloat, "Offset(Expect to be FP32)");
 
     Tensor grad_v = at::zeros_like(value);
     _RoundingLoss_LT_B<<<NUM_OF_BLOCK(NUM_OF_ELEMENT(value)), 
@@ -243,7 +243,7 @@ __global__ void _RoundingLoss_LC(
         diff_sum += diff;
     }
     float diff_reduced = BlockReduceSum<float>(diff_sum);
-    if(threadIdx.x == 0) atomicAdd(out, diff_reduced / sqrt((float)num_of_element));
+    if(threadIdx.x == 0) atomicAdd(out, diff_reduced / sqrt(num_of_element));
 }
 
 __host__ Tensor RoundingLoss_LC(
@@ -259,9 +259,9 @@ __host__ Tensor RoundingLoss_LC(
         If one value inside R is clipped by quant function, 
             then it contributes nothing to R.
     */
-    CheckTensor(value, at::kFloat, "Value(FP32)");
-    CheckTensor(scale, at::kFloat, "Scale(FP32)");
-    CheckTensor(offset, at::kFloat, "Offset(FP32)");
+    CheckTensor(value, at::kFloat, "Value(Expect to be FP32)");
+    CheckTensor(scale, at::kFloat, "Scale(Expect to be FP32)");
+    CheckTensor(offset, at::kFloat, "Offset(Expect to be FP32)");
 
     int element_per_channel = 1;
     const int num_of_channel = value.sizes()[channel_axis];
@@ -303,7 +303,7 @@ __global__ void _RoundingLoss_LC_B(
         // if value has been clipped, set grad = 0
         if (v > scale[c] * (clip_max - offset[c])) grad = 0;
         if (v < scale[c] * (clip_min - offset[c])) grad = 0;
-        dx[iter] = grad / sqrt((float)num_of_element);
+        dx[iter] = grad / sqrt(num_of_element);
     }
 }
 
@@ -316,9 +316,9 @@ __host__ Tensor RoundingLoss_LC_B(
     /*
         Compute grad through rounding loss.
     */
-    CheckTensor(value, at::kFloat, "Value(FP32)");
-    CheckTensor(scale, at::kFloat, "Scale(FP32)");
-    CheckTensor(offset, at::kFloat, "Offset(FP32)");
+    CheckTensor(value, at::kFloat, "Value(Expect to be FP32)");
+    CheckTensor(scale, at::kFloat, "Scale(Expect to be FP32)");
+    CheckTensor(offset, at::kFloat, "Offset(Expect to be FP32)");
 
     int element_per_channel = 1;
     const int num_of_channel = value.sizes()[channel_axis];

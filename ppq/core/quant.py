@@ -72,9 +72,7 @@ class TargetPlatform(Enum):
     METAX_INT8_C = 701 # channel wise
     METAX_INT8_T = 702 # tensor wise
 
-    ACADEMIC_INT8 = 801
-    ACADEMIC_INT4 = 802
-    ACADEMIC_MIX  = 803
+    HEXAGON_INT8 = 801
 
     FP32 = 0
     # SHAPE-OR-INDEX related operation
@@ -90,6 +88,10 @@ class TargetPlatform(Enum):
     ONNXRUNTIME   = -7
     # THIS IS A DUUMY PLATFORM JUST FOR CREATING YOUR OWN EXTENSTION.
     EXTENSION     = -10086
+    
+    ACADEMIC_INT8 = 10081
+    ACADEMIC_INT4 = 10082
+    ACADEMIC_MIX  = 10083
     
     @ classmethod
     def is_quantized_platform(cls, platform) -> bool:
@@ -508,12 +510,12 @@ class TensorQuantizationConfig(Serializable):
         })
 
     @ property
-    def scale(self) -> Any:
+    def scale(self) -> torch.Tensor:
         if self.dominated_by == self: return self._scale
         else: return self.dominated_by.scale
 
     @ property
-    def offset(self) -> Any:
+    def offset(self) -> torch.Tensor:
         if self.dominated_by == self: return self._offset
         else: return self.dominated_by.offset
 

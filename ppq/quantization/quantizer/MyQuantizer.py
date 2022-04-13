@@ -50,7 +50,7 @@ class ExtQuantizer(BaseQuantizer):
             调用这个函数将直接产生一个默认的量化配置，你可以在此基础上进行修改。
         
         注意并不是所有算子都可以使用默认量化配置完成量化，有些算子明显具有更加复杂的量化逻辑
-            对于这种情况，你需要手动创建它们的量化配置信息。
+            对于这种情况，你需要在此函数中手动创建它们的量化配置信息。
         
         Initial your quantization configuration for each operation.
             (This function will be invoked by BaseQuantizer as an interface.)
@@ -113,7 +113,7 @@ class ExtQuantizer(BaseQuantizer):
             所有量化区的算子将被调度到这个设备上。
         
         Property target_platform is acquired by graph dispather.
-            It states where your quantized operation deploy.
+            It states where your quantized operation depoly.
         
         """
         return TargetPlatform.EXTENSION
@@ -125,7 +125,7 @@ class ExtQuantizer(BaseQuantizer):
             所有冲突区的算子将被调度到这个设备上。
         
         Property default_platform is acquired by graph dispather.
-            It states where non-quantable operation deploy.
+            It states where non-quantable operation depoly.
 
         """
         return TargetPlatform.FP32
@@ -136,10 +136,18 @@ class ExtQuantizer(BaseQuantizer):
         quant_operation_types 指明了所有可以被量化的算子类型。
         
         聪明的你可能想问了，如果我不是按类型进行量化，而是想特定去量化某几个算子怎么办。
-            我建议你通过手写一个调度表来实现这样的功能，只需要把其他算子调度到FP32上就行了。 
+            我建议你通过手写一个调度表来实现这样的功能，只需要把其他算子调度到FP32上就行了。
+        
+        请注意，并不是你写在这里的类型就一定会被量化，在量化之前还有调度器进行子图切分，
+            只有量化子图上的算子才可以被量化。 
         
         Property quant_operation_types contains all quantable operations' type.
         
+        Notice that PPQ has a dispatching logic before quantizer,
+            so to say quantizer is only in charge of quantable subgraph,
+            those operation within non-quantable subgraph will never be
+            quantized even their type is listed here.
+
         """
         return {
             'Conv', 'ConvTranspose', 'Gemm', 'Relu', 'PRelu',

@@ -329,6 +329,13 @@ class BlockwiseReconstructionSetting():
         self.scale_multiplier   = 2.0
 
 
+class WeightSplitSetting():
+    def __init__(self) -> None:
+        # computing layers which are intended to be splited
+        self.interested_layers = []
+        # the split will take effect only if loss decreases to this threshold of original loss
+        self.loss_reduce_thre  = 0.8
+
 
 class DispatchingTable():
     def __init__(self) -> None:
@@ -374,6 +381,9 @@ class QuantizationSetting():
         self.equalization                    = False
         self.equalization_setting            = EqualizationSetting()
         
+        self.weight_split                    = False
+        self.weight_split_setting            = WeightSplitSetting()
+
         # OCS channel split configuration
         self.channel_split                   = False
         self.channel_split_setting           = ChannelSplitSetting()
