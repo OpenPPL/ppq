@@ -72,9 +72,9 @@ __host__ Tensor QuantizeTensor_LT(
      * This function is tensor wise quantization function
      * All tensor share a same scale and offset
      */
-    CheckTensor(value, at::kFloat, "Value(FP32)");
-    CheckTensor(scale, at::kFloat, "Scale(FP32)");
-    CheckTensor(offset, at::kFloat, "Offset(FP32)");
+    CheckTensor(value, at::kFloat, "Value(Expect to be FP32)");
+    CheckTensor(scale, at::kFloat, "Scale(Expect to be FP32)");
+    CheckTensor(offset, at::kFloat, "Offset(Expect to be FP32)");
 
     Tensor quantized;
     if (dropout == 0) quantized = at::empty_like(value);
@@ -129,9 +129,9 @@ __host__ Tensor QuantizeTensor_LC(
      * This function is channel wise quantization function
      * Each channel has its own scale and offset.
      */
-    CheckTensor(value, at::kFloat, "Value(FP32)");
-    CheckTensor(scale, at::kFloat, "Scale(FP32)");
-    CheckTensor(offset, at::kFloat, "Offset(FP32)");
+    CheckTensor(value, at::kFloat, "Value(Expect to be FP32)");
+    CheckTensor(scale, at::kFloat, "Scale(Expect to be FP32)");
+    CheckTensor(offset, at::kFloat, "Offset(Expect to be FP32)");
 
     int element_per_channel = 1;
     const int num_of_channel = value.sizes()[channel_axis];
@@ -159,6 +159,7 @@ void _QuantizeTensor_LT_B(
     const float* scales,
     const float* offsets,
     const float* grad_y,
+    const float  grad_factor,
     const int clip_min,
     const int clip_max,
     float * grad_v,
@@ -171,18 +172,18 @@ void _QuantizeTensor_LT_B(
         float v = value[iter];
         
         /* Calculate grad for scales, offsets, alpha */
-        float partial_gard_s = ((quantized[iter] - v) / s) * grad_y[iter];
+        float partial_gard_s = ((quantized[iter] - v) / s) * grad_y[iter] * grad_factor;
         float partial_gard_o = 0.0f;
         float partial_gard_v = grad_y[iter];;
 
         if(v > s * (clip_max - o)) {
-            partial_gard_s = 1 * grad_y[iter];
-            partial_gard_o = -grad_y[iter] * s;
+            partial_gard_s = (clip_max - o) * partial_gard_v * grad_factor;
+            partial_gard_o = -partial_gard_v * s * grad_factor;
             partial_gard_v = 0;
         }
         else if(v < s * (clip_min - o)) {
-            partial_gard_s = -1 * grad_y[iter];
-            partial_gard_o = -grad_y[iter] * s;
+            partial_gard_s = (clip_min - o) * partial_gard_v * grad_factor;
+            partial_gard_o = -partial_gard_v * s * grad_factor;
             partial_gard_v = 0;
         }
         grad_v[iter] = partial_gard_v;
@@ -201,17 +202,17 @@ void _QuantizeTensor_LT_B(
 __host__ std::vector<Tensor> QuantizeTensor_LT_B(
     const Tensor &value, const Tensor &quantized, 
     const Tensor &scales, const Tensor &offsets, const Tensor &grad_y, 
-    const int clip_min, const int clip_max
+    const float grad_factor, const int clip_min, const int clip_max
 ){
     /** 
      * Gradient Bakcwrad for quantization
      * Solve grad_s, grad_o, grad_v at once.
      */
-    CheckTensor(value, at::kFloat, "Value(FP32)");
-    CheckTensor(quantized, at::kFloat, "Quantized(FP32)");
-    CheckTensor(scales, at::kFloat, "Scale(FP32)");
-    CheckTensor(offsets, at::kFloat, "Offset(FP32)");
-    CheckTensor(grad_y, at::kFloat, "Gard(FP32)");
+    CheckTensor(value, at::kFloat, "Value(Expect to be FP32)");
+    CheckTensor(quantized, at::kFloat, "Quantized(Expect to be FP32)");
+    CheckTensor(scales, at::kFloat, "Scale(Expect to be FP32)");
+    CheckTensor(offsets, at::kFloat, "Offset(Expect to be FP32)");
+    CheckTensor(grad_y, at::kFloat, "Gard(Expect to be FP32)");
 
     Tensor grad_v = at::zeros_like(value);
     Tensor grad_s = at::zeros_like(scales);
@@ -224,6 +225,7 @@ __host__ std::vector<Tensor> QuantizeTensor_LT_B(
         PTR<float>(scales),
         PTR<float>(offsets),
         PTR<float>(grad_y),
+        grad_factor,
         clip_min,
         clip_max,
         PTR<float>(grad_v),
@@ -243,6 +245,7 @@ void _QuantizeTensor_LC_B(
     const float* scales,
     const float* offsets,
     const float* grad_y,
+    const float  grad_factor,
     const int clip_min,
     const int clip_max,
     float * grad_v,
@@ -267,13 +270,13 @@ void _QuantizeTensor_LC_B(
         float partial_gard_v = g;
 
         if(value[iter + iter_offset] > s * (clip_max - o)) {
-            partial_gard_s = 1 * g;
-            partial_gard_o = -g * s;
+            partial_gard_s = (clip_max - o) * g * grad_factor;
+            partial_gard_o = -g * s * grad_factor;
             partial_gard_v = 0;
         }
         else if(value[iter + iter_offset] < s * (clip_min - o)) {
-            partial_gard_s = -1 * g;
-            partial_gard_o = -g * s;
+            partial_gard_s = (clip_min - o) * g * grad_factor;
+            partial_gard_o = -g * s * grad_factor;
             partial_gard_v = 0;
         }
 
@@ -293,18 +296,19 @@ void _QuantizeTensor_LC_B(
 
 __host__ std::vector<Tensor> QuantizeTensor_LC_B(
     const Tensor &value, const Tensor &quantized, 
-    const Tensor &scales, const Tensor &offsets, const Tensor &grad_y, 
-    const int clip_min, const int clip_max, const int channel_axis
+    const Tensor &scales, const Tensor &offsets, const Tensor &grad_y,
+    const float grad_factor, const int clip_min, const int clip_max, 
+    const int channel_axis
 ){
     /** 
      * Gradient Bakcwrad for quantization
      * Solve grad_s, grad_o, grad_v at once.
      */
-    CheckTensor(value, at::kFloat, "Value(FP32)");
-    CheckTensor(quantized, at::kFloat, "Quantized(FP32)");
-    CheckTensor(scales, at::kFloat, "Scale(FP32)");
-    CheckTensor(offsets, at::kFloat, "Offset(FP32)");
-    CheckTensor(grad_y, at::kFloat, "Gard(FP32)");
+    CheckTensor(value, at::kFloat, "Value(Expect to be FP32)");
+    CheckTensor(quantized, at::kFloat, "Quantized(Expect to be FP32)");
+    CheckTensor(scales, at::kFloat, "Scale(Expect to be FP32)");
+    CheckTensor(offsets, at::kFloat, "Offset(Expect to be FP32)");
+    CheckTensor(grad_y, at::kFloat, "Gard(Expect to be FP32)");
 
     Tensor grad_v = at::zeros_like(value);
     Tensor grad_s = at::zeros_like(scales);
@@ -327,6 +331,7 @@ __host__ std::vector<Tensor> QuantizeTensor_LC_B(
         PTR<float>(scales),
         PTR<float>(offsets),
         PTR<float>(grad_y),
+        grad_factor,
         clip_min,
         clip_max,
         PTR<float>(grad_v),
