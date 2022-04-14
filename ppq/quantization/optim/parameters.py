@@ -31,6 +31,7 @@ class PassiveParameterQuantizePass(QuantizationOptimizationPass):
 
         def check_state(state: QuantizationStates): 
             return state in {
+                QuantizationStates.SLAVE,
                 QuantizationStates.ACTIVATED,
                 QuantizationStates.BAKED,
                 QuantizationStates.OVERLAPPED
