@@ -36,7 +36,8 @@ if not USING_CUDA_KERNEL:
         @ staticmethod
         def forward(ctx, tensor: torch.Tensor, scales: torch.Tensor, 
                     offsets: torch.Tensor, quant_min: int, quant_max: int, 
-                    rounding: RoundingPolicy, dropout: float = 0) -> torch.Tensor:
+                    rounding: RoundingPolicy, dropout: float=0.0, 
+                    grad_factor: float=1e-2) -> torch.Tensor:
     
             tensor = ppq_tensor_round((tensor / scales), rounding) + offsets
             tensor = torch.clamp(tensor, quant_min, quant_max)
@@ -45,7 +46,7 @@ if not USING_CUDA_KERNEL:
 
         @ staticmethod
         def backward(ctx, dy: torch.Tensor):
-            return dy, None, None, None, None, None, None, None
+            return dy, None, None, None, None, None, None, None, None
     
     class ChannelwiseLinearQuantImpl(Function):
         """
@@ -64,7 +65,8 @@ if not USING_CUDA_KERNEL:
         def forward(ctx, tensor: torch.Tensor, scales: torch.Tensor, 
                     offsets: torch.Tensor, channel_axis: int, 
                     quant_min: int, quant_max: int, 
-                    rounding: RoundingPolicy, dropout: float = 0) -> torch.Tensor:
+                    rounding: RoundingPolicy, dropout: float=0.0, 
+                    grad_factor: float=1e-2) -> torch.Tensor:
             # generate a shape that likes [1, 1, -1, 1], the only -1 is at channel axe.
             shape = [1 if axis != channel_axis else -1 for axis in range(tensor.ndim)]
             scale, offset = scales.view(shape), offsets.view(shape)
@@ -76,7 +78,7 @@ if not USING_CUDA_KERNEL:
 
         @ staticmethod
         def backward(ctx, dy: torch.Tensor):
-            return dy, None, None, None, None, None, None, None, None
+            return dy, None, None, None, None, None, None, None, None, None
 
 
 else: # if USING_CUDA_KERNEL:
@@ -96,7 +98,8 @@ else: # if USING_CUDA_KERNEL:
         @ staticmethod
         def forward(ctx, tensor: torch.Tensor, scales: torch.Tensor, 
                     offsets: torch.Tensor, quant_min: int, quant_max: int, 
-                    rounding: RoundingPolicy, dropout: float) -> torch.Tensor:
+                    rounding: RoundingPolicy, dropout: float=0.0, 
+                    grad_factor: float = None) -> torch.Tensor:
             quantized = CUDA.LinearQuantize_T(
                 tensor=tensor,
                 scales=scales,
@@ -106,16 +109,19 @@ else: # if USING_CUDA_KERNEL:
                 rounding=rounding.value,
                 dropout=dropout
             )
+            if grad_factor is None: grad_factor = 1.0 / (tensor.numel() * quant_max) ** 0.5
             ctx.save_for_backward(tensor, quantized, scales, offsets)
-            ctx._quant_params = [quant_min, quant_max]
+            ctx._quant_params = [quant_min, quant_max, grad_factor]
             return quantized
 
         @ staticmethod
         def backward(ctx, dy: torch.Tensor):
             tensor, quantized, scales, offsets = ctx.saved_tensors
-            quant_min, quant_max = ctx._quant_params
-            dx, ds, do = CUDA.LinearQuantize_T_B(tensor, quantized, scales, offsets, dy, quant_min, quant_max)
-            return dx, ds, do, None, None, None, None, None
+            quant_min, quant_max, grad_factor = ctx._quant_params
+            dx, ds, do = CUDA.LinearQuantize_T_B(
+                tensor, quantized, scales, offsets, 
+                dy, grad_factor, quant_min, quant_max)
+            return dx, ds, do, None, None, None, None, None, None
     
     class ChannelwiseLinearQuantImpl(Function):
         """
@@ -134,7 +140,8 @@ else: # if USING_CUDA_KERNEL:
         def forward(ctx, tensor: torch.Tensor, scales: torch.Tensor, 
                     offsets: torch.Tensor, channel_axis: int, 
                     quant_min: int, quant_max: int, 
-                    rounding: RoundingPolicy, dropout: float) -> torch.Tensor:
+                    rounding: RoundingPolicy, dropout: float=0.0, 
+                    grad_factor: float = None) -> torch.Tensor:
             quantized = CUDA.LinearQuantize_C(
                 tensor=tensor,
                 scales=scales,
@@ -145,16 +152,19 @@ else: # if USING_CUDA_KERNEL:
                 rounding=rounding.value,
                 dropout=dropout
             )
+            if grad_factor is None: grad_factor = 1.0 / (tensor.numel() * quant_max) ** 0.5
             ctx.save_for_backward(tensor, quantized, scales, offsets)
-            ctx._quant_params = [quant_min, quant_max, channel_axis]
+            ctx._quant_params = [quant_min, quant_max, channel_axis, grad_factor]
             return quantized
 
         @ staticmethod
         def backward(ctx, dy: torch.Tensor):
             tensor, quantized, scales, offsets = ctx.saved_tensors
-            quant_min, quant_max, channel_axis = ctx._quant_params
-            dx, ds, do = CUDA.LinearQuantize_C_B(tensor, quantized, scales, offsets, dy, quant_min, quant_max, channel_axis)
-            return dx, ds, do, None, None, None, None, None
+            quant_min, quant_max, channel_axis, grad_factor = ctx._quant_params
+            dx, ds, do = CUDA.LinearQuantize_C_B(
+                tensor, quantized, scales, offsets, 
+                dy, grad_factor, quant_min, quant_max, channel_axis)
+            return dx, ds, do, None, None, None, None, None, None
 
 
 def PPQLinearQuantFunction(
@@ -175,6 +185,22 @@ def PPQLinearQuantFunction(
             tensor, config.scale, config.offset,
             config.quant_min, config.quant_max, config.rounding,
             dropout)
+
+
+def PPQLinearQuant_toInt(tensor: torch.Tensor, config: TensorQuantizationConfig, ) -> torch.Tensor:
+    if not config.policy.has_property(QuantizationProperty.LINEAR):
+        raise ValueError('Critical Quantization Error! Non-linear config detected.')
+    if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
+        assert isinstance(config, ChannelwiseTensorQuantizationConfig), (
+            'Critical Quantization Error! Except a ChannelwiseTensorQuantizationConfig.')
+        shape = [1 if axis != config.channel_axis else -1 for axis in range(tensor.ndim)]
+        scale, offset = config.scale.view(shape), config.offset.view(shape)
+        tensor = ppq_tensor_round((tensor / scale), config.rounding) + offset
+        tensor = torch.clamp(tensor, config.quant_min, config.quant_max)
+    elif config.policy.has_property(QuantizationProperty.PER_TENSOR):
+        tensor = ppq_tensor_round((tensor / config.scale), config.rounding) + config.offset
+        tensor = torch.clamp(tensor, config.quant_min, config.quant_max)
+    return tensor.type(dtype=torch.int32)
 
 
 class PPQLinearQuantize(torch.nn.Module):

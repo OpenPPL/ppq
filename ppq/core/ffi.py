@@ -88,13 +88,14 @@ class CUDA:
         scales: torch.Tensor,
         offsets: torch.Tensor,
         dy: torch.Tensor,
+        grad_factor: float,
         minimum: int,
         maximum: int
     ) -> torch.Tensor:
         if not tensor.is_contiguous(): tensor = tensor.contiguous()
         return __CUDA_EXTENTION__.QuantizeTensor_LT_B(
             tensor, quantized, scales, offsets, 
-            dy, minimum, maximum
+            dy, grad_factor, minimum, maximum
         )
 
     @ staticmethod
@@ -104,6 +105,7 @@ class CUDA:
         scales: torch.Tensor,
         offsets: torch.Tensor,
         dy: torch.Tensor,
+        grad_factor: float,
         minimum: int,
         maximum: int,
         channel_axis: int,
@@ -111,7 +113,7 @@ class CUDA:
         if not tensor.is_contiguous(): tensor = tensor.contiguous()
         return __CUDA_EXTENTION__.QuantizeTensor_LC_B(
             tensor, quantized, scales, offsets, 
-            dy, minimum, maximum, channel_axis
+            dy, grad_factor, minimum, maximum, channel_axis
         )
 
     @ staticmethod

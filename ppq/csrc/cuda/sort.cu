@@ -40,7 +40,7 @@ static void _cuda_order_preserving_observe(
 }
 
 __host__ Tensor Quantile_T(const Tensor &source, const float q){
-    CheckTensor(source, at::kFloat, "Value(FP32)");
+    CheckTensor(source, at::kFloat, "Value(Expect to be FP32)");
     const int64_t num_of_elements = NUM_OF_ELEMENT(source);
     
     Tensor dest = at::empty({2}, source.options());
@@ -102,8 +102,8 @@ __host__ void Histogram_T(
      * Say we have a float value f, and a float value hist_scale
      * We will select hist_bin = floor(f / hist_scale)
      */
-    CheckTensor(value, at::kFloat, "Value(FP32)");
-    CheckTensor(hist, at::kInt, "Histogram(INT32)");
+    CheckTensor(value, at::kFloat, "Value(Expect to be FP32)");
+    CheckTensor(hist, at::kInt, "Histogram(Expect to be INT32)");
 
     _Histogram_T<<<NUM_OF_BLOCK(NUM_OF_ELEMENT(value)), CUDA_NUM_THREADS, 0, at::cuda::getCurrentCUDAStream()>>>(
         NUM_OF_ELEMENT(value), NUM_OF_ELEMENT(hist), PTR<float>(value),
@@ -145,8 +145,8 @@ __host__ void Histogram_C(
      * Say we have a float value f, and a float value hist_scale
      * We will select hist_bin = floor(f / hist_scale)
      */
-    CheckTensor(value, at::kFloat, "Value(FP32)");
-    CheckTensor(hist, at::kInt, "Histogram(INT32)");
+    CheckTensor(value, at::kFloat, "Value(Expect to be FP32)");
+    CheckTensor(hist, at::kInt, "Histogram(Expect to be INT32)");
 
     int element_per_channel = 1;
     const int num_of_channel = value.sizes()[channel_axis];

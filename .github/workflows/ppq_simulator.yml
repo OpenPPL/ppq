@@ -1,0 +1,33 @@
+name: linux-x86-64
+
+on:
+  #push:
+  #  branches: [ master ]
+  #  paths-ignore: ['.**', 'docker/**', 'docs/**', 'samples/**', README.md]
+  pull_request:
+    branches: [ master ]
+    paths-ignore: ['.**', 'docker/**', 'docs/**', 'samples/**', README.md ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}--${{ github.head_ref || github.run_id }}--${{ github.ref }}--${{ github.event_name }}
+  cancel-in-progress: true
+
+jobs:
+  build_and_test:
+    runs-on: [self-hosted, linux, X64]
+
+    steps:
+      - name: Create Checkout Directory
+        run: |
+          echo "Create Checkout Directory: ${{ github.run_id }}."
+          [ -z "${{ github.run_id }}" ] || rm -rf ${{ github.run_id }}
+          mkdir ${{ github.run_id }}
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          path: ${{ github.run_id }}
+
+      - name: Test
+        run: |
+          cd ../../ && ./test_ppq.sh ${{ github.run_id }} 

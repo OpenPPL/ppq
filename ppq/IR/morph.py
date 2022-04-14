@@ -141,7 +141,6 @@ class GraphFormatter(GraphCommandProcesser):
             self.__add_constant_input(slice, convert_any_to_torch_tensor(ends))
             self.__add_constant_input(slice, convert_any_to_torch_tensor(axes))
             
-
     def format_pad(self) -> None:
         """
             对于不同的模型格式, pad 算子将有两种不同的输入格式：
@@ -515,6 +514,30 @@ class GraphMerger(GraphCommandProcesser):
             self.graph.append_variable(weight_var)
             self.graph.append_variable(bias_var)
 
+
+class GraphDecomposer(GraphCommandProcesser):
+    """
+    Since PPQ 0.6.4, GraphDecomposer is introduced to split some complex operations
+        For example, Gemm can be split with Matmul with Bias add
+        Gru can be split with Matmul, Sigmoid, Tanh
+
+    Operation decomposition is required for quantize complex operations, which can not be
+        correctly described by input & output tensor quant configurations.
+    By spliting operation into a series lower operations, we can have more quant configurations to
+        control its quantization logic
+    """
+    
+    def process(self, command: GraphCommand) -> Any:
+        return super().process(command)
+    
+    def _acceptable_command_types(self) -> List[GraphCommandType]:
+        return super()._acceptable_command_types
+
+    def decompose_gemm():
+        pass
+
+    def decompose_gru():
+        pass
 
 class GraphDeviceSwitcher(GraphCommandProcesser):
     """

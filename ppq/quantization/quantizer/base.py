@@ -259,6 +259,13 @@ class BaseQuantizer(metaclass = ABCMeta):
             grid_aware        = channel_split_setting.grid_aware
             ))
 
+        if setting.weight_split:
+            weight_split_setting = setting.weight_split_setting
+            list_of_passes.append(WeightSplitPass(
+                interested_layers = weight_split_setting.interested_layers,
+                loss_reduce_thre  = weight_split_setting.loss_reduce_thre
+            ))
+
         if setting.fusion:
             fusion_setting  = setting.fusion_setting
             if fusion_setting.refine_quantization:

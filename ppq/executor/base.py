@@ -51,7 +51,7 @@ class RuntimeHook(metaclass=ABCMeta):
     def __init__(self, operation: Operation, operation_meta: OperationMeta = None) -> None:
         self._hook_to = operation
         self._op_meta = operation_meta
-    
+
     def pre_forward_hook(self, inputs: list, **kwargs) -> list:
         """
             user-customized pre-processing procedure of input data

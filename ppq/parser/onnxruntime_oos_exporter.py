@@ -5,18 +5,11 @@ import onnx
 import torch
 from onnx import helper
 from enum import Enum
-from ppq.core import (
-    EXPORT_DEVICE_SWITCHER,
-    ORT_MICROSOFT_CONTRIB_LINEAR_OPS,
-    ORT_OOS_FUSE_START_OPS,
-    PPQ_NAME,
-    OperationMeta,
-    QuantizationProperty,
-    QuantizationStates,
-    TensorMeta,
-    TensorQuantizationConfig,
-    convert_any_to_torch_tensor,
-)
+from ppq.core import (EXPORT_DEVICE_SWITCHER, ORT_MICROSOFT_CONTRIB_LINEAR_OPS,
+                      ORT_OOS_FUSE_START_OPS, PPQ_NAME, DataType,
+                      OperationMeta, QuantizationProperty, QuantizationStates,
+                      TensorMeta, TensorQuantizationConfig,
+                      convert_any_to_torch_tensor)
 from ppq.IR import BaseGraph, Operation, QuantableVariable, Variable
 from ppq.IR.morph import GraphDeviceSwitcher
 from ppq.IR.quantize import QuantableOperation
@@ -566,7 +559,7 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
                 curr_meta_len = len(op.meta_data.input_metas)
                 expected_len = len(op.inputs)
                 for _ in range(expected_len - curr_meta_len):
-                    op.meta_data.input_metas.append(TensorMeta(None, None))
+                    op.meta_data.input_metas.append(TensorMeta(DataType.FP32, None))
                 self.permute_op_meta_order(op, curr_meta_len)
 
         # correct parameter meta data
@@ -575,8 +568,8 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
                 for op in var.dest_ops:
                     if op.meta_data is None:
                         op.meta_data = OperationMeta(
-                            [TensorMeta(None, None, v.name) for v in op.inputs],
-                            [TensorMeta(None, None, v.name) for v in op.outputs],
+                            [TensorMeta(DataType.FP32, None, v.name) for v in op.inputs],
+                            [TensorMeta(DataType.FP32, None, v.name) for v in op.outputs],
                             op.name,
                             op.type,
                             -1,
@@ -666,7 +659,7 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
                 and var.dest_ops[0].type in self.removed_activation_types
             ):
                 removed_activations.extend(var.dest_ops)
-        self.remove_activation(graph, removed_activations)
+        self.remove_activation_ops(graph, removed_activations)
 
         # Pass 2: insert QuantizeLinear & DequantizeLinear ops
         for var in quantable_vars:
@@ -738,7 +731,7 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
         self.correct_param_meta(graph)
 
         # Pass 5 transform other ops
-        self.transform_op(graph)
+        self.convert_operation_from_opset11_to_opset13(graph)
 
         name = graph._name
         if not name:
@@ -769,7 +762,7 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
             value_info=_value_infos,
         )
 
-        extra_opsets = self.required_opsets()
+        extra_opsets = self.required_opsets
 
         if "opsets" in graph._detail:
             opsets = []

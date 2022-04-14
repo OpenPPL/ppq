@@ -1052,6 +1052,12 @@ class AdvancedQuantOptimization(TrainingBasedPass):
         super().__init__(
             name='PPQ Advanced Optimization Procedure', 
             interested_outputs=interested_outputs, verbose=verbose)
+        
+        if not USING_CUDA_KERNEL:
+            raise PermissionError(
+                'Advanced Quant Optimization requires compliation of ppq cuda kernels. '
+                'This method is no longer available with pure torch execution Since PPQ 0.6.4, '
+                'set PPQ.USING_CUDA_KERNEL = True or use LSQ optimization instread.')
 
         self.lr                = lr
         self.collecting_device = collecting_device
@@ -1107,11 +1113,10 @@ class AdvancedQuantOptimization(TrainingBasedPass):
         shcduler  = torch.optim.lr_scheduler.LambdaLR(optimizer=optimizer, lr_lambda=lambda t: 1 / (1 << (t // 5000)))
         # register all quantization delegators
         for d in delegators: executor.register_quantize_delegate(d.config, d)
-        
+
         with tqdm(total=self.target_step) as t:
             while cur_iter < self.target_step:
                 qt_input, fp_output = dataset.pop()
-
                 qt_input, fp_output = qt_input.to(device), fp_output.to(device)
                 qt_output = executor.partial_graph_forward(
                     operations=block.rps, feed_dict={input_var.name: qt_input}, 
@@ -1133,7 +1138,7 @@ class AdvancedQuantOptimization(TrainingBasedPass):
                     t.set_description(desc=f'Block [{self._bidx + 1}/{self._num_of_blocks}]')
                     t.set_postfix(loss = loss_ema.pop())
                     t.update(50)
-        
+
         # finalize all delegates
         for delegator in delegators:
             assert isinstance(delegator, RQTDelegator)
@@ -1155,7 +1160,7 @@ class AdvancedQuantOptimization(TrainingBasedPass):
     def optimize(
         self, processer: GraphCommandProcesser, dataloader: Iterable,
         executor: TorchExecutor, collate_fn: Callable, **kwargs) -> None:
-        
+
         if self._interested_outputs is None:
             self._interested_outputs = [name for name in processer.graph.outputs]
 

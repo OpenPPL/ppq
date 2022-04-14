@@ -4,7 +4,7 @@ from .base import (QuantizationOptimizationPass,
 from .calibration import RuntimeCalibrationPass, RuntimePerlayerCalibrationPass, PPLDSPTIReCalibrationPass
 from .equalization import LayerwiseEqualizationPass
 from .extension import ExtensionPass
-from .morph import (ChannelSplitPass, MatrixFactorizationPass,
+from .morph import (ChannelSplitPass, WeightSplitPass, MatrixFactorizationPass,
                     NXPResizeModeChangePass)
 from .parameters import ParameterQuantizePass, PassiveParameterQuantizePass
 from .refine import (QuantAlignmentPass, InplaceQuantizationSettingPass,
