@@ -325,7 +325,7 @@ class EqualizationPair:
             return torch.max(torch.square(params), axis=aggerate_axis)[0]
 
         elif method is EqualizationMethod.SQUARE_MEAN:
-            return torch.mean(torch.abs(params), axis=aggerate_axis)
+            return torch.mean(torch.square(params), axis=aggerate_axis)
             
         else:
             raise NotImplementedError('Equalization method %s is not support.' % str(method))
