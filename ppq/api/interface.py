@@ -29,8 +29,9 @@ from .setting import *
 
 QUANTIZER_COLLECTION = {
     TargetPlatform.PPL_DSP_INT8: PPL_DSP_Quantizer,
-    TargetPlatform.PPL_DSP_TI_IN8: PPL_DSP_TI_Quantizer,
+    TargetPlatform.PPL_DSP_TI_INT8: PPL_DSP_TI_Quantizer,
     TargetPlatform.SNPE_INT8:    PPL_DSP_Quantizer,
+    TargetPlatform.QNN_DSP_INT8: PPL_DSP_Quantizer,
     TargetPlatform.TRT_INT8:     TensorRTQuantizer,
     TargetPlatform.NXP_INT8:     NXP_Quantizer,
     TargetPlatform.ORT_OOS_INT8: ORT_PerTensorQuantizer,
@@ -54,7 +55,8 @@ PARSERS = {
 
 EXPORTERS = {
     TargetPlatform.PPL_DSP_INT8:  PPLDSPCaffeExporter,
-    TargetPlatform.PPL_DSP_TI_IN8: PPLDSPTICaffeExporter,
+    TargetPlatform.PPL_DSP_TI_INT8: PPLDSPTICaffeExporter,
+    TargetPlatform.QNN_DSP_INT8:  QNNDSPExporter,
     TargetPlatform.PPL_CUDA_INT8: PPLBackendExporter,
     TargetPlatform.SNPE_INT8:     SNPECaffeExporter,
     TargetPlatform.NXP_INT8:      NxpExporter,
@@ -74,7 +76,8 @@ EXPORTERS = {
 # postfix for exporting model
 EXPORTING_POSTFIX = {
     TargetPlatform.PPL_DSP_INT8:  '.caffemodel',
-    TargetPlatform.PPL_DSP_TI_IN8:'.caffemodel',
+    TargetPlatform.PPL_DSP_TI_INT8:'.caffemodel',
+    TargetPlatform.QNN_DSP_INT8: '.onnx',
     TargetPlatform.PPL_CUDA_INT8: '.onnx',
     TargetPlatform.SNPE_INT8:     '.caffemodel',
     TargetPlatform.NXP_INT8:      '.caffemodel',

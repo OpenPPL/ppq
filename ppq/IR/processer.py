@@ -185,11 +185,9 @@ class GraphCommandProcesser(Callable, metaclass=ABCMeta):
 
 
 class DefaultGraphProcesser(GraphCommandProcesser):
-    def __init__(self, graph: BaseGraph, next_command_processer: Callable) -> None:
-        super().__init__(graph, next_command_processer=next_command_processer)
 
     def _acceptable_command_types(self) -> List[GraphCommandType]:
         return []
 
-    def _process(self, command: GraphCommand) -> Any:
-        return super().process(command)
+    def process(self, command: GraphCommand) -> Any:
+        pass

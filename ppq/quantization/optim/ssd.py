@@ -1,10 +1,9 @@
 from math import ceil
-from typing import Callable, Dict, Iterable, List, Set, Tuple
+from typing import Callable, Dict, Iterable, List, Tuple
 
 import torch
 import torch.nn.functional as F
-from ppq.core import (ChannelwiseTensorQuantizationConfig,
-                      QuantizationProperty, QuantizationStates)
+from ppq.core import QuantizationProperty, QuantizationStates
 from ppq.executor import BaseGraphExecutor
 from ppq.executor.base import GLOBAL_DISPATCHING_TABLE
 from ppq.IR import (GraphCommandProcesser, Operation, QuantableOperation,
@@ -192,10 +191,20 @@ class SSDEqualizationPass(QuantizationOptimizationPass):
             last_weight_range = last_computing_op_weight.abs().max(dim=1)[0]
     
         elif pair[-1].type == 'Gemm':
+            C_out = first_weight_range.shape[0]
             if pair[-1].attributes.get('transB', 0):
-                last_weight_range = last_computing_op_weight.abs().max(dim=0)[0]
+                if C_out != last_computing_op_weight.shape[1]:
+                    last_computing_op_weight = last_computing_op_weight.reshape(last_computing_op_weight.shape[0], C_out, -1)
+                    last_computing_op_weight = last_computing_op_weight.permute(1, 0, 2).contiguous().reshape(C_out, -1)
+                    last_weight_range = last_computing_op_weight.abs().max(dim=1)[0]
+                else:
+                    last_weight_range = last_computing_op_weight.abs().max(dim=0)[0]
             else:
-                last_weight_range = last_computing_op_weight.abs().max(dim=1)[0]
+                if C_out != last_computing_op_weight.shape[0]:
+                    last_computing_op_weight = last_computing_op_weight.reshape(C_out, -1)
+                    last_weight_range = last_computing_op_weight.abs().max(dim=1)[0]
+                else:
+                    last_weight_range = last_computing_op_weight.abs().max(dim=1)[0]
     
         elif pair[-1].type == 'ConvTranspose':
             C_in = last_computing_op_weight.shape[0]
@@ -238,9 +247,19 @@ class SSDEqualizationPass(QuantizationOptimizationPass):
 
         elif pair[-1].type == 'Gemm':
             if pair[-1].attributes.get('transB', 0):
-                pair[-1].parameters[0].value = last_computing_op_weight / scale.reshape(1, -1)
+                if scale.numel() != last_computing_op_weight.shape[1]:
+                    last_computing_op_weight = last_computing_op_weight.reshape(last_computing_op_weight.shape[0], scale.numel(), -1)
+                    last_computing_op_weight = last_computing_op_weight / scale.reshape(1, -1, 1)
+                    pair[-1].parameters[0].value = last_computing_op_weight.reshape(last_computing_op_weight.shape[0], -1)
+                else:
+                    pair[-1].parameters[0].value = last_computing_op_weight / scale.reshape(1, -1)
             else:
-                pair[-1].parameters[0].value = last_computing_op_weight / scale.reshape(-1, 1)
+                if scale.numel() != last_computing_op_weight.shape[0]:
+                    last_computing_op_weight = last_computing_op_weight.reshape(scale.numel(), -1, last_computing_op_weight.shape[-1])
+                    last_computing_op_weight = last_computing_op_weight / scale.reshape(-1, 1, 1)
+                    pair[-1].parameters[0].value = last_computing_op_weight.reshape(-1, last_computing_op_weight.shape[-1])
+                else:
+                    pair[-1].parameters[0].value = last_computing_op_weight / scale.reshape(-1, 1)
         
         elif pair[-1].type == 'ConvTranspose':
             pair[-1].parameters[0].value = last_computing_op_weight / scale.reshape(-1, 1, 1, 1)
@@ -486,6 +505,27 @@ class SSDEqualizationPass(QuantizationOptimizationPass):
         calib_steps: int,
         **kwargs
     ) -> None:
+        # restrain maximum img number used for loss checking
+        batchsize = 1
+        for data in dataloader:
+            if collate_fn is not None:
+                data = collate_fn(data)
+            if isinstance(data, torch.Tensor):
+                batchsize = data.shape[0]
+            elif isinstance(data, (list, tuple)):
+                for value in data:
+                    if isinstance(value, torch.Tensor):
+                        batchsize = value.shape[0]
+                        break
+            elif isinstance(data, dict):
+                for key, value in data.items():
+                    if isinstance(value, torch.Tensor):
+                        batchsize = value.shape[0]
+                        break
+            break
+
+        calib_steps = min(calib_steps, ceil(200 / batchsize))
+
         all_pairs = self.collect_all_pairs(processer.graph)
         if self.layer_norm:
             self.layer_weight_norm(all_pairs)
