@@ -73,8 +73,8 @@ class PPL_DSP_Quantizer(BaseQuantizer):
             'Conv', 'ConvTranspose', 'Gemm', 'Relu', 'PRelu',
             'Clip', 'Pad', 'Resize', 'MaxPool', 'AveragePool',
             'GlobalMaxPool', 'GlobalAveragePool', 'Softmax',
-            'Mul', 'Add', 'Max', 'Sub', 'Div',
-            'LeakyRelu', 'Concat', 'Sigmoid', 'Slice', 'Reshape'
+            'Mul', 'Add', 'Max', 'Sub', 'Div', 'Reshape',
+            'LeakyRelu', 'Concat', 'Sigmoid', 'Slice'
         }
 
     @ property
@@ -177,7 +177,7 @@ class PPL_DSP_TI_Quantizer(PPL_DSP_Quantizer):
 
     @ property
     def target_platform(self) -> TargetPlatform:
-        return TargetPlatform.PPL_DSP_TI_IN8
+        return TargetPlatform.PPL_DSP_TI_INT8
 
     @ property
     def default_platform(self) -> TargetPlatform:

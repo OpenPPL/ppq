@@ -539,6 +539,7 @@ class GraphDecomposer(GraphCommandProcesser):
     def decompose_gru():
         pass
 
+
 class GraphDeviceSwitcher(GraphCommandProcesser):
     """
     Graph Device Switcher insert necessary switcher operation for

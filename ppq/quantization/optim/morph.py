@@ -872,3 +872,80 @@ class MetaxGemmSplitPass(QuantizationOptimizationPass):
             if op.attributes.get('transB') == 1:
                 inserting_matmul.inputs[-1].value = torch.permute(inserting_matmul.inputs[-1].value, (1, 0))
 
+
+class GRUSplitPass(QuantizationOptimizationPass):
+    """
+        执行 GRU 算子分解，这个 Pass 将 GRU 算子分解为单步执行的形式
+    """
+    def __init__(self, name: str = 'Metax Gemm Split Pass') -> None:
+        super().__init__(name)
+    
+    # Implementation of Gemm Split will move to IR.morph soon.
+    def optimize(self, processer: GraphCommandProcesser, 
+                 dataloader: Iterable, executor: BaseGraphExecutor, 
+                 **kwargs) -> None:
+        graph, created_op = processer.graph, 1
+        morpher = GraphReplacer(processer)
+
+        interested_ops = []
+        for operation in processer.graph.operations.values():
+            if operation.type == 'GRU':
+                interested_ops.append(operation)
+
+        for op in interested_ops:
+            assert isinstance(op, Operation)
+            # fetch all related variables
+            rnn_input, rnn_w, rnn_r, rnn_b, rnn_h = op.inputs
+            
+            # create operations
+            op1 = Operation(name=f'GRU_Spilited_{created_op}_1', op_type='Gemm')
+            op2 = Operation(name=f'GRU_Spilited_{created_op}_2', op_type='Gemm')
+            op3 = Operation(name=f'GRU_Spilited_{created_op}_11', op_type='Add')
+            op4 = Operation(name=f'GRU_Spilited_{created_op}_3', op_type='Sigmoid')
+            op6 = Operation(name=f'GRU_Spilited_{created_op}_12', op_type='Slice')
+            op5 = Operation(name=f'GRU_Spilited_{created_op}_13', op_type='Slice')
+
+            op7 = graph.create_operation(name=f'GRU_Spilited_{created_op}_gemm_nh', op_type='Gemm')
+            op8 = graph.create_operation(name=f'GRU_Spilited_{created_op}_gemm_nx', op_type='Gemm')
+
+            op9 = Operation(name=f'GRU_Spilited_{created_op}_6', op_type='Mul')
+            op10 = Operation(name=f'GRU_Spilited_{created_op}_7', op_type='Mul')
+            op11  = Operation(name=f'GRU_Spilited_{created_op}_9', op_type='Sub')
+            op12 = graph.create_operation(name=f'GRU_Spilited_{created_op}_radd', op_type='Add')
+            op13 = Operation(name=f'GRU_Spilited_{created_op}_8', op_type='Mul')
+            op14 = graph.create_operation(name=f'GRU_Spilited_{created_op}_rtanh', op_type='Tanh')
+            op15  = Operation(name=f'GRU_Spilited_{created_op}_10', op_type='Add')
+
+            # weight variables
+            weight_of_gemm_hrz = Variable(name=f'GRU_LinkVar_{created_op}_1', is_parameter=True)
+            weight_of_gemm_xrz = Variable(name=f'GRU_LinkVar_{created_op}_3', is_parameter=True)
+
+            bias_of_gemm_hrz   = Variable(name=f'GRU_LinkVar_{created_op}_2', is_parameter=True)
+            bias_of_gemm_xrz   = Variable(name=f'GRU_LinkVar_{created_op}_4', is_parameter=True)
+
+            graph.append_variable(weight_of_gemm_hrz)
+            graph.append_variable(bias_of_gemm_hrz)
+            graph.append_variable(weight_of_gemm_xrz)
+            graph.append_variable(bias_of_gemm_xrz)
+
+            graph.create_link_with_op(variable=weight_of_gemm_hrz, upstream_op=None, downstream_op=op2)
+            graph.create_link_with_op(variable=weight_of_gemm_xrz, upstream_op=None, downstream_op=op1)
+            graph.create_link_with_op(variable=bias_of_gemm_hrz, upstream_op=None, downstream_op=op2)
+            graph.create_link_with_op(variable=bias_of_gemm_xrz, upstream_op=None, downstream_op=op1)
+            
+            graph.create_link_with_op(variable=graph.create_variable(), upstream_op=op1, downstream_op=op3)
+            graph.create_link_with_op(variable=graph.create_variable(), upstream_op=op2, downstream_op=op3)
+            graph.create_link_with_op(variable=graph.create_variable(), upstream_op=op3, downstream_op=op4)
+            graph.create_link_with_op(variable=graph.create_variable(), upstream_op=op4, downstream_op=op6)
+            graph.create_link_with_op(variable=graph.create_variable(), upstream_op=op4, downstream_op=op5)
+            graph.create_link_with_op(variable=graph.create_variable(), upstream_op=op5, downstream_op=op11)
+            graph.create_link_with_op(variable=graph.create_variable(), upstream_op=op5, downstream_op=op10)
+            graph.create_link_with_op(variable=graph.create_variable(), upstream_op=op6, downstream_op=op9)
+            graph.create_link_with_op(variable=graph.create_variable(), upstream_op=op7, downstream_op=op9)
+            graph.create_link_with_op(variable=graph.create_variable(), upstream_op=op8, downstream_op=op12)
+            graph.create_link_with_op(variable=graph.create_variable(), upstream_op=op9, downstream_op=op12)
+            graph.create_link_with_op(variable=graph.create_variable(), upstream_op=op10, downstream_op=op15)
+            graph.create_link_with_op(variable=graph.create_variable(), upstream_op=op11, downstream_op=op13)
+            graph.create_link_with_op(variable=graph.create_variable(), upstream_op=op12, downstream_op=op14)
+            graph.create_link_with_op(variable=graph.create_variable(), upstream_op=op13, downstream_op=op15)
+            graph.create_link_with_op(variable=graph.create_variable(), upstream_op=op14, downstream_op=op13)

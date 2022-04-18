@@ -249,6 +249,7 @@ class BaseGraph(Serializable):
         self._built_from = built_from
         self._detail        = {}
         self._num_of_generated_var = 0
+        self._num_of_generated_op  = 0
 
 
     @ property
@@ -531,6 +532,49 @@ class BaseGraph(Serializable):
         down_op.inputs[down_op.inputs.index(up_var)] = link_var
         self._num_of_generated_var += 1
 
+    def create_link_with_op(self, variable: Variable, upstream_op: Operation, downstream_op: Operation):
+        """
+        Create a link with given variable from upstream_op to downstream_op
+            variable will be appended to upstream_op's output and downstream_op's input
+        given variable must have empty source_op or its source_op == upstream_op
+        
+        Sometime you may want to link a single upstream_op to many downstream_ops with a same variable,
+            you are supposed to invoke this function for each downstream_op then.
+        
+        You can set upstream_op = None if your variable is a paramter variable.
+        
+        Example:
+            create_link_with_op(var1, op1, op2)
+            create_link_with_op(var1, op1, op3)
+        
+        Will makes:
+                  --> op2
+            op1 --|
+                  --> op3
+
+        Args:
+            link_variable (Variable): _description_
+            upstream_op (Operation): _description_
+            downstream_op (Operation): _description_
+        """
+        if variable.name not in self.variables:
+            raise KeyError(f'Can not find your variable {variable.name} in current graph.')
+        if upstream_op.name not in self.operations:
+            raise KeyError(f'Can not find your operation {upstream_op.name} in current graph.')
+        if downstream_op.name not in self.operations:
+            raise KeyError(f'Can not find your operation {downstream_op.name} in current graph.')
+        
+        if variable.source_op is None: variable.source_op = upstream_op
+        if variable.source_op != upstream_op:
+            raise PermissionError(f'Can not create link with variable {variable.name}, '
+                                  f'cause its source operations != {upstream_op.name}')
+
+        # For complex graph, following logic might have some error.
+        if variable not in upstream_op.outputs: upstream_op.outputs.append(variable)
+        if variable not in downstream_op.inputs: 
+            variable.dest_ops.append(downstream_op)
+            downstream_op.inputs.append(variable)
+
     def remove_operation(self, removing_op: Operation):
         """
         Remove opeartion from graph, this function will unlink removing operation from
@@ -586,6 +630,41 @@ class BaseGraph(Serializable):
 
         self.operations.pop(removing_op.name)
         self.variables.pop(removing_var.name)
+
+    def create_operation(self, op_type: str,  name: str = None, 
+        attributes: Dict[str, Any] = None, platform: TargetPlatform = TargetPlatform.UNSPECIFIED,
+        inputs: List[Variable] = None, outputs: List[Variable] = None, **kwargs) -> Operation:
+        if name is None:
+            name = f'PPQ_Operation_{self._num_of_generated_op}'
+            self._num_of_generated_op += 1
+
+        if attributes is None: attributes = {}
+        created = Operation(
+            name=name, 
+            op_type=op_type, 
+            attributes=attributes, 
+            platform=platform, 
+            inputs=inputs, 
+            outputs=outputs
+        )
+        self.append_operation(created)
+        return created
+    
+    def create_variable(self, name: str = None, value: Any = None, is_parameter: bool = False,
+        dest_ops: List[OperationBase] = None, source_op: OperationBase = None, **kwargs) -> Variable:
+        if name is None:
+            name = f'PPQ_Variable_{self._num_of_generated_var}'
+            self._num_of_generated_var += 1
+        
+        created = Variable(
+            name=name,
+            value=value,
+            is_parameter=is_parameter,
+            dest_ops=dest_ops,
+            source_op=source_op,
+        )
+        self.append_variable(created)
+        return created
 
     def __getstate__(self) -> dict:
         state = super().__getstate__()

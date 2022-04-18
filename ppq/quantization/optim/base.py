@@ -75,7 +75,7 @@ class QuantizationOptimizationPipeline(Container, Iterable):
         dataloader: Iterable, executor: BaseGraphExecutor, verbose: bool = False,
         **kwargs
     ) -> None:
-        if isinstance(graph, BaseGraph): processer = DefaultGraphProcesser(graph=graph)
+        if isinstance(graph, BaseGraph): processer = DefaultGraphProcesser(graph)
         else: processer = graph
         
         max_name_length = 0
