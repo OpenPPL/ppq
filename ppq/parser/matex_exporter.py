@@ -5,9 +5,10 @@ import onnx
 import torch
 from onnx import helper
 from ppq.core import (COMPELING_OP_TYPES, EXPORT_DEVICE_SWITCHER, PPQ_NAME,
-                      ChannelwiseTensorQuantizationConfig, OperationMeta,
-                      QuantizationProperty, QuantizationStates, TensorMeta,
-                      TensorQuantizationConfig, convert_any_to_torch_tensor)
+                      ChannelwiseTensorQuantizationConfig, DataType,
+                      OperationMeta, QuantizationProperty, QuantizationStates,
+                      TensorMeta, TensorQuantizationConfig,
+                      convert_any_to_torch_tensor)
 from ppq.IR import (BaseGraph, Operation, QuantableOperation,
                     QuantableVariable, Variable)
 from ppq.IR.base.command import GraphCommand, GraphCommandType
@@ -15,6 +16,7 @@ from ppq.IR.morph import GraphDeviceSwitcher, GraphFormatter
 from ppq.utils.round import ppq_tensor_round
 
 from .onnx_exporter import OnnxExporter
+
 
 # legacy exporter since ppq 0.6.4
 # use onnxruntime exporter instead.
@@ -150,8 +152,8 @@ class MetaxExporter(OnnxExporter):
             if var.is_parameter:
                 for op in var.dest_ops:
                     if op.meta_data is None:
-                        op.meta_data = OperationMeta([TensorMeta(None, None, v.name) for v in 
-                            op.inputs], [TensorMeta(None, None, v.name) for v in 
+                        op.meta_data = OperationMeta([TensorMeta(DataType.FP32, None, v.name) for v in 
+                            op.inputs], [TensorMeta(DataType.FP32, None, v.name) for v in
                             op.outputs], op.name, op.type, -1)
 
                     if torch.is_tensor(var.value):
@@ -227,13 +229,7 @@ class MetaxExporter(OnnxExporter):
 
     def required_opsets(self) -> Dict[str, int]:
         extra_domain_versions = [
-            ("ai.onnx", 13),
-            ("com.microsoft", 1),
-            ("com.microsoft.nchwc", 1),
-            ("ai.onnx.training", 1),
-            ("ai.onnx.preview.training", 1),
-            ("com.microsoft.experimental", 1),
-            ("ai.onnx.ml", 2)
+            ("ai.onnx", 13)
             ]
         return dict(extra_domain_versions)
 
@@ -296,22 +292,24 @@ class MetaxExporter(OnnxExporter):
                         raise AttributeError(f"quantization state of variable {var.name} is unexpected, \
                         please check if you have finished the whole quantization process")
                     elif cfg is not None and cfg.state not in {QuantizationStates.FP32, QuantizationStates.SOI}:
-                        quantable_vars.append(var)
+                        quantable_vars.append((cfg, var))
                         break
 
-        for var in quantable_vars:
+        for cfg, var in quantable_vars:
             assert isinstance(var, QuantableVariable)
+            assert isinstance(cfg, TensorQuantizationConfig)
             # assume parameter var is used by only one op
             if var.is_parameter:
                 if var.dest_ops[0].is_computing_op and var.dest_idx[0] > 1:
                     self.insert_dequant_param(graph, var, True)
                 else:
                     self.insert_dequant_param(graph, var, False)
-            elif not(var.source_op is not None and var.source_op.is_computing_op and\
-                len(var.dest_ops) == 1 and var.dest_ops[0].type in self.removed_activation_types):
-                self.insert_quant_dequant_on_var(graph, var)
-            else:
+            
+            elif len(var.dest_ops) == 1 and var.dest_ops[0].type in self.removed_activation_types and \
+                cfg.policy.has_property(QuantizationProperty.ASYMMETRICAL):
                 removed_activations.extend(var.dest_ops)
+            else:
+                self.insert_quant_dequant_on_var(graph, var)
 
         self.remove_activation(graph, removed_activations)
 

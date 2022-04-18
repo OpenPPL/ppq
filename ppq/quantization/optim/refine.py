@@ -550,8 +550,8 @@ class QuantAlignmentPass(QuantizationOptimizationPass):
         device = master_config.scale.device
         master_config._father_config = master_config
         master_config.state  = QuantizationStates.ACTIVATED
-        master_config.scale  = torch.tensor([scale], dtype=torch.float32, device=device)
-        master_config.offset = torch.tensor([offset], dtype=torch.float32, device=device)
+        master_config.scale  = torch.tensor(scale, dtype=torch.float32, device=device)
+        master_config.offset = torch.tensor(offset, dtype=torch.float32, device=device)
 
         for slave_config in op.config.input_quantization_config[1: ]:
             slave_config.set_master(master=master_config)
