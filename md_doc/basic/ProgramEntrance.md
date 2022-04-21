@@ -125,7 +125,7 @@ quantized = quantize(
 Note that *calib_steps* specifies how many batches of data in dataloader will be referred in calibration, 
 it should be in 8~512 in consideration of efficiency.
 
-## INFERENCE
+## Inference
 The quantized PPQ IR graph could be executed by *TorchExecutor*, which takes charge of graph execution in
 PPQ, if you want to run inferences after quantization
 
@@ -143,7 +143,7 @@ for op in quantized.operations().values(): # dequantize the graph, so that we ca
 Outputs = executor.forward(Input) # for fp32 mode
 ```
 
-## ANALYSIS
+## Analysis
 
 PPQ has provided powerful analysis tools to analyse precision degration in different layers of the quantized graph, 
 *graphwise_error_analysis* takes quantization error accumulation during execution into consideration while 
@@ -176,7 +176,7 @@ layerwise_error_analysis(
 )
 ```
 
-## EXPORT
+## Export
 
 To deploy your model on the target backend, appropriate format of quantized model and corresponding quantization
 parameters should be exported from the quantized PPQ IR graph. PPQ will designate different exporters for different
