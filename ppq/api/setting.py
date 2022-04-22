@@ -310,6 +310,9 @@ class LearningStepSizeSetting():
         # 1.0 when computing loss, but if you care some output more, you can make it weigh more by specifying
         # some larger value in loss_weights, i.e., self.loss_weights = {some_output_1:2.0, some_output_2 : 5.0, ...}
         self.loss_weights           = {}
+        
+        # turn this to cpu when you encounter a cuda OOM error or cuda is not available
+        self.collecting_device      = 'cuda'
 
 
 class BlockwiseReconstructionSetting():
@@ -327,6 +330,8 @@ class BlockwiseReconstructionSetting():
         self.lamda              = 1.0
         # scale multiplifer for bias(passive quantized param)
         self.scale_multiplier   = 2.0
+        # turn this to cpu when you encounter a cuda OOM error or cuda is not available
+        self.collecting_device  = 'cuda'
 
 
 class WeightSplitSetting():

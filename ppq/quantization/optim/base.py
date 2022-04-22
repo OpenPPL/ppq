@@ -24,9 +24,12 @@ class QuantizationOptimizationPass(metaclass = ABCMeta):
         dataloader: Iterable, executor: BaseGraphExecutor,
         **kwargs
     ) -> None:
+        if isinstance(processer, BaseGraph):
+            processer = DefaultGraphProcesser(processer)
         if not isinstance(processer, GraphCommandProcesser):
-            raise TypeError(f'Incorrect graph object input, expect one GraphCommandProcesser object, ' \
-            f'while {type(processer)} was given.')
+            raise TypeError(
+                f'Incorrect graph object input, expect one GraphCommandProcesser object, '
+                f'while {type(processer)} was given.')
         self.optimize(processer, dataloader=dataloader, executor=executor, **kwargs)
 
     @ abstractmethod

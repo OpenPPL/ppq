@@ -3,14 +3,15 @@ from typing import Any, List
 import numpy as np
 import torch
 from ppq.core import (DataType, TargetPlatform,
-                      convert_any_to_python_primary_type, ppq_warning)
+                      convert_any_to_python_primary_type,
+                      convert_any_to_torch_tensor, ppq_warning)
 from ppq.IR.quantize import DeviceSwitchOP
 from ppq.IR.search import SearchableGraph
-from ppq.core.data import convert_any_to_torch_tensor
 from ppq.scheduler import value_tracing_pattern
 
 from .base.command import (GraphCommand, GraphCommandType,
-                           ReplaceOperationCommand, ReplaceVariableCommand)
+                           ReplaceOperationCommand, ReplaceVariableCommand,
+                           TruncateGraphCommand)
 from .base.graph import Operation, Variable
 from .processer import GraphCommandProcesser
 
@@ -88,7 +89,8 @@ class GraphFormatter(GraphCommandProcesser):
             GraphCommandType.REPLACE_SUB,
             GraphCommandType.FORMAT_PARAMETERS,
             GraphCommandType.FORMAT_CONSTANT_INPUT,
-            GraphCommandType.FORMAT_SLICE
+            GraphCommandType.FORMAT_SLICE,
+            GraphCommandType.TRUNCATE_ON_VAR
         ]
 
     def process(self, command: GraphCommand) -> Any:
@@ -112,6 +114,9 @@ class GraphFormatter(GraphCommandProcesser):
             return self.format_constant_input()
         if command.command_type == GraphCommandType.FORMAT_SLICE:
             return self.format_slice()
+        if command.command_type == GraphCommandType.TRUNCATE_ON_VAR:
+            assert isinstance(command, TruncateGraphCommand), f'Use TruncateGraphCommand here.'
+            return self.truncate_on_var(command.var, command.mark_as_output)
 
     def format_slice(self) -> None:
         """
@@ -299,6 +304,41 @@ class GraphFormatter(GraphCommandProcesser):
             output_var.source_op = None
             self.graph.delete_operation(op_name=operation.name)
 
+    def truncate_on_var(self, var: Variable, mark_as_output: bool):
+        """
+        从一个指定位置将图截断
+
+        Args:
+            var (Variable): _description_
+            mark_as_output (bool): _description_
+
+        Raises:
+            TypeError: _description_
+            KeyError: _description_
+        """
+        graph = self.graph
+        if not isinstance(var, Variable):
+            raise TypeError(f'Except variable instance here, however {type(var)} was given.')
+        if var.name not in graph.variables:
+            raise KeyError(f'Can not find vairiable {var.name} in current graph')
+        
+        mark_to_delete, delete_queue, didx = set(), [], 0
+        delete_queue.extend(var.dest_ops)
+        while len(delete_queue) > 0:
+            first_op = delete_queue[didx]
+            if first_op not in mark_to_delete:
+                mark_to_delete.add(first_op)
+                delete_queue.extend(graph.get_downstream_operations(first_op))
+            didx += 1
+        
+        for operation in mark_to_delete:
+            graph.remove_operation(operation)
+        
+        if mark_as_output: 
+            graph.mark_variable_as_graph_output(var)
+        
+        self.delete_isolated()
+
     def delete_isolated(self):
         blacklist = [None]
         while len(blacklist) > 0:
@@ -312,8 +352,8 @@ class GraphFormatter(GraphCommandProcesser):
 
             for op in blacklist:
                 for var in op.outputs:
-                    self.graph.delete_variable(var.name, force_delete=True)
-                self.graph.delete_operation(op.name, force_delete=True)
+                    self.graph.remove_variable(var)
+                self.graph.remove_operation(op)
         
         var_blacklist = [None]
         while len(var_blacklist) > 0:
@@ -321,13 +361,19 @@ class GraphFormatter(GraphCommandProcesser):
             # delete all variables that links to invalid operations:
             for var in self.graph.variables.values():
                 if var.source_op is not None and var.source_op.name not in self.graph.operations:
-                    var_blacklist.add(var.name)
+                    var_blacklist.add(var)
                 for op in var.dest_ops:
                     if op.name not in self.graph.operations:
-                        var_blacklist.add(var.name)
+                        var_blacklist.add(var)
+
+                if var.source_op is None and var.name not in self.graph.inputs:
+                    if not var.is_parameter:
+                        var_blacklist.add(var)
+                
+                # 没有输出的不能删...会影响算子输出顺序...
     
             for var in var_blacklist:
-                self.graph.delete_variable(var, force_delete=True)
+                self.graph.remove_variable(var)
 
     def format_parameter_variables(self) -> None:
         vars = []
@@ -352,7 +398,7 @@ class GraphFormatter(GraphCommandProcesser):
                 var.dest_ops.remove(dest_op)
 
             # pop variable from graph
-            self.graph.delete_variable(var.name)
+            self.graph.remove_variable(var)
 
     def replace_substarction(self) -> None:
         substractions = []
@@ -402,7 +448,7 @@ class GraphFormatter(GraphCommandProcesser):
         input_var.dest_ops.pop(input_var.dest_ops.index(operation))
         operation.inputs.pop(input_idx)
         if len(input_var.dest_ops) == 0:
-            self.graph.delete_variable(input_var.name)
+            self.graph.remove_variable(input_var)
             self.graph.delete_operation(input_var.source_op.name)
 
     def __add_constant_input(self, op: Operation, value: torch.Tensor):
@@ -627,7 +673,10 @@ class GraphDeviceSwitcher(GraphCommandProcesser):
                 removing_collection.append(operation)
 
         for op in removing_collection:
+            assert isinstance(op, Operation)
+            input_var, output_var = op.inputs[0], op.outputs[0]
             self.graph.remove_operation(removing_op=op)
+            self.graph.create_link_with_var(upstream_variable=input_var, downstream_variable=output_var)
 
     def _acceptable_command_types(self) -> List[GraphCommandType]:
         return [

@@ -94,6 +94,8 @@ class GraphCommandType(Enum):
     FORMAT_CONSTANT_INPUT = 28
     # 将 opset1 的 slice 弄成 opset 11 的
     FORMAT_SLICE = 29
+    # 从一个指定位置将图截断
+    TRUNCATE_ON_VAR = 30
 
 class GraphCommand():
     def __init__(self, command_type: GraphCommandType, **kwargs) -> None:
@@ -140,3 +142,10 @@ class ReplaceVariableCommand(GraphCommand):
         super().__init__(command_type=GraphCommandType.REPLACE_VAR)
         self.op_name = var_name
         self.replace_to = replace_to
+        
+
+class TruncateGraphCommand(GraphCommand):
+    def __init__(self, var: Variable, mark_as_output: bool) -> None:
+        super().__init__(command_type=GraphCommandType.TRUNCATE_ON_VAR)
+        self.var = var
+        self.mark_as_output = mark_as_output

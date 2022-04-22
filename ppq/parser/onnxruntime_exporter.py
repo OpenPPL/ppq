@@ -9,7 +9,7 @@ from ppq.core import (EXPORT_DEVICE_SWITCHER, PPQ_NAME, DataType,
                       TensorMeta, TensorQuantizationConfig,
                       convert_any_to_torch_tensor)
 from ppq.IR import (BaseGraph, Operation, QuantableOperation,
-                    QuantableVariable, Variable)
+                    QuantableVariable)
 from ppq.IR.base.command import GraphCommand, GraphCommandType
 from ppq.IR.morph import GraphDeviceSwitcher, GraphFormatter
 from ppq.quantization.qfunction.linear import PPQLinearQuant_toInt
@@ -50,45 +50,9 @@ class ONNXRUNTIMExporter(OnnxExporter):
 
     def __init__(self, removed_activation_types: List[str] = ['Relu', 'Clip']) -> None:
         super().__init__()
-        self._num_of_generated_ops  = 1
-        self._num_of_generated_vars = 0
         self.removed_activation_types = removed_activation_types
-    
-    @ property
-    def num_of_generated_vars(self):
-        self._num_of_generated_vars += 1
-        return self._num_of_generated_vars
 
-    @ property
-    def num_of_generated_ops(self):
-        self._num_of_generated_ops += 1
-        return self._num_of_generated_ops
-
-    def insert_quant_dequant_on_variable(
-        self, graph: BaseGraph, var: QuantableVariable, 
-        config: TensorQuantizationConfig, related_op: Operation) -> None:
-        """insert quant and dequant op on common quantable variables, by default a pair of quant
-        and dequant ops will be inserted on var, i.e., all destinations of original var will be
-        replaced by output of dequant op, but you can also insert on single var--dest_op branch
-        by setting single_branch=True, in this case you should give the desired dest_op as the
-        destination op of dequant op 
-
-        Args:
-            graph (BaseGraph): PPQ IR graph.
-            var (Variable): quantable variables, parameters assumed.
-            config (TensorQuantizationConfig, optional): quantization config. Defaults to None.
-            single_branch (bool, optional): whether to insert on var(replace all destinations)
-                                            or insert on just single branch. Defaults to False.
-            dest_op (Operation, optional): shouldn't be None when single_branch is True. Defaults to None.
-        """
-        meta = var.meta
-
-        # For SYMMETRICAL Quantization:
-        #   offset - int8, quant value - int8
-        # For ASYMMETRICAL Quantization:
-        #   offset - uint8, quant value - uint8
-        # For Bias Quantization:
-        #   offset - int32, quant value - int32
+    def infer_qtype(self, config: TensorQuantizationConfig):
         offset_dtype, value_dtype = torch.int8, torch.int8 
         if config.policy.has_property(QuantizationProperty.ASYMMETRICAL): 
             offset_dtype = torch.uint8
@@ -96,58 +60,67 @@ class ONNXRUNTIMExporter(OnnxExporter):
         if config.num_of_bits > 16: 
             offset_dtype = torch.int32
             value_dtype  = torch.int32
+        return offset_dtype, value_dtype
+
+    def insert_quant_on_variable(
+        self, graph: BaseGraph, var: QuantableVariable,
+        config: TensorQuantizationConfig, related_op: Operation,
+        meta: TensorMeta = None) -> Operation:
+        if meta is None: meta = var.meta
+        offset_dtype, value_dtype = self.infer_qtype(config)
+        scale  = convert_any_to_torch_tensor(config.scale.clone(), dtype=torch.float32)
+        offset = ppq_tensor_round(config.offset.clone()).type(offset_dtype)
+
+        s_var = graph.create_variable(name=None, value=scale, is_parameter=True)
+        z_var = graph.create_variable(name=None, value=offset, is_parameter=True)
+        created = graph.create_operation(op_type='QuantizeLinear', attributes={})
         
-        scale  = convert_any_to_torch_tensor(config.scale, dtype=torch.float32)
-        offset = ppq_tensor_round(config.offset).type(offset_dtype)
+        if var in related_op.inputs:
+            graph.insert_op_between_var_and_op(created, up_var=var, down_op=related_op)
+        else: graph.insert_op_on_var(created, var=var.name)
+            
+        graph.create_link_with_op(variable=s_var, upstream_op=None, downstream_op=created)
+        graph.create_link_with_op(variable=z_var, upstream_op=None, downstream_op=created)
 
-        qt_svar = Variable(name=f'scale_{self.num_of_generated_vars}', value=scale, is_parameter=True)
-        qt_zvar = Variable(name=f'zeropoint_{self.num_of_generated_vars}', value=offset, is_parameter=True)
-        dq_svar = Variable(name=f'scale_{self.num_of_generated_vars}', value=scale, is_parameter=True)
-        dq_zvar = Variable(name=f'zeropoint_{self.num_of_generated_vars}', value=offset, is_parameter=True)
+        meta = OperationMeta(
+        input_metas    = [TensorMeta(dtype=DataType.FP32, shape=meta.shape), 
+                          TensorMeta(dtype=DataType.FP32, shape=config.scale.shape), 
+                          TensorMeta(dtype=DataType.convert_from_torch(offset_dtype), shape=config.offset.shape)],
+        output_metas   = [TensorMeta(dtype=DataType.convert_from_torch(value_dtype), shape=meta.shape)],
+        operation_name = created.name, operation_type=created.type, executing_order=-1)
+        created.meta_data = meta
+        return created
 
-        qt_op = Operation(name=f'Quantize_{self.num_of_generated_ops}', op_type='QuantizeLinear', attributes={})
-        dq_op = Operation(name=f'Dequantize_{self.num_of_generated_ops}', op_type='DequantizeLinear', attributes={})
+    def insert_dequant_on_variable(
+        self, graph: BaseGraph, var: QuantableVariable,
+        config: TensorQuantizationConfig, related_op: Operation,
+        meta: TensorMeta = None) -> Operation:
+        if meta is None: meta = var.meta
+        offset_dtype, value_dtype = self.infer_qtype(config)
+        scale  = convert_any_to_torch_tensor(config.scale.clone(), dtype=torch.float32)
+        offset = ppq_tensor_round(config.offset.clone()).type(offset_dtype)
+
+        s_var = graph.create_variable(name=None, value=scale.clone(), is_parameter=True)
+        z_var = graph.create_variable(name=None, value=offset.clone(), is_parameter=True)
+        created = graph.create_operation(op_type='DequantizeLinear', attributes={})
 
         if var in related_op.inputs:
-            graph.insert_op_between_var_and_op(dq_op, up_var=var, down_op=related_op)
-            graph.insert_op_between_var_and_op(qt_op, up_var=var, down_op=dq_op)
-        else:
-            graph.insert_op_on_var(dq_op, var=var.name)
-            graph.insert_op_on_var(qt_op, var=var.name)
+            graph.insert_op_between_var_and_op(created, up_var=var, down_op=related_op)
+        else: graph.insert_op_on_var(created, var=var.name)
 
-        qt_op.inputs.extend([qt_svar, qt_zvar])
-        dq_op.inputs.extend([dq_svar, dq_zvar])
+        graph.create_link_with_op(variable=s_var, upstream_op=None, downstream_op=created)
+        graph.create_link_with_op(variable=z_var, upstream_op=None, downstream_op=created)
 
-        qt_svar.dest_ops.append(qt_op)
-        qt_zvar.dest_ops.append(qt_op)
-        dq_svar.dest_ops.append(dq_op)
-        dq_zvar.dest_ops.append(dq_op)
-
-        graph.append_variable(qt_svar)
-        graph.append_variable(qt_zvar)
-        graph.append_variable(dq_svar)
-        graph.append_variable(dq_zvar)
-
-        qt_meta = OperationMeta(
-            input_metas    = [TensorMeta(dtype=DataType.FP32, shape=meta.shape), 
-                              TensorMeta(dtype=DataType.FP32, shape=config.scale.shape), 
-                              TensorMeta(dtype=DataType.convert_from_torch(offset_dtype), shape=config.offset.shape)],
-            output_metas   = [TensorMeta(dtype=DataType.convert_from_torch(value_dtype), shape=meta.shape)],
-            operation_name = qt_op.name, operation_type=qt_op.type, executing_order=-1)
         dq_meta = OperationMeta(
-            input_metas    = [TensorMeta(dtype=DataType.convert_from_torch(value_dtype), shape=meta.shape), 
-                              TensorMeta(dtype=DataType.FP32, shape=config.scale.shape), 
-                              TensorMeta(dtype=DataType.convert_from_torch(offset_dtype), shape=config.offset.shape)],
-            output_metas   = [TensorMeta(dtype=DataType.FP32, shape=meta.shape)],
-            operation_name = dq_op.name, operation_type=dq_op.type, executing_order=-1)
+        input_metas    = [TensorMeta(dtype=DataType.convert_from_torch(value_dtype), shape=meta.shape), 
+                          TensorMeta(dtype=DataType.FP32, shape=config.scale.shape), 
+                          TensorMeta(dtype=DataType.convert_from_torch(offset_dtype), shape=config.offset.shape)],
+        output_metas   = [TensorMeta(dtype=DataType.FP32, shape=meta.shape)],
+        operation_name = created.name, operation_type=created.type, executing_order=-1)
+        created.meta_data = dq_meta
+        return created
 
-        qt_op.meta_data = qt_meta
-        dq_op.meta_data = dq_meta
-
-        if var.is_parameter:
-            var.value = PPQLinearQuant_toInt(var.value, config=config)
-
-    def remove_activation_ops(self, graph: BaseGraph, activation_ops: List[Operation]) -> None:
+    def remove_activation_ops(self, graph: BaseGraph, activation_ops: List[Operation]) -> BaseGraph:
         """
         For Asymmetric Quantization Policy, Activations like Relu & Clip can be
             removed from your network safely. Their function can be replaced by
@@ -159,7 +132,6 @@ class ONNXRUNTIMExporter(OnnxExporter):
             graph (BaseGraph): Processing Graph
             activation_ops (List[Operation]): Removing activations.
         """
-        
         # Activation op can only be relu and clip,
         # so it is safe to access op.inputs[0], op.outputs[0] as their input and output.
         for op in activation_ops:
@@ -175,19 +147,16 @@ class ONNXRUNTIMExporter(OnnxExporter):
             if op.outputs[0].name in graph.outputs:
                 graph.outputs.pop(op.outputs[0].name)
                 graph.outputs[input_var.name] = input_var
-
-            if op.type == 'Clip':
-                for var in op.inputs[1:]:
-                    var.dest_ops.clear()
-                    graph.delete_variable(var.name)
-                while len(op.inputs) > 1:
-                    op.inputs.pop()
-
+            
+            input_var, output_var = op.inputs[0], op.outputs[0]
             graph.remove_operation(op)
+            graph.create_link_with_var(input_var, output_var)
+
         formater = GraphFormatter(graph)
         formater(GraphCommand(GraphCommandType.DELETE_ISOLATED))
+        return graph
 
-    def remove_duplicated_quant_op(self, graph: BaseGraph):
+    def remove_duplicated_quant_op(self, graph: BaseGraph) -> BaseGraph:
         """
         Some time there will be more than 1 quant operation inserted with a single variable.
         This function will remove duplicated quant operation from variable if it is possible.
@@ -221,7 +190,11 @@ class ONNXRUNTIMExporter(OnnxExporter):
                 assert len(graph.get_downstream_operations(qt_op)) == 1, 'Oops, that should never happen.'
                 mark_to_remove.add(graph.get_downstream_operations(qt_op)[0])
         
-        for op in mark_to_remove: graph.remove_operation(op)
+        for op in mark_to_remove:
+            assert isinstance(op, Operation)
+            input_var, output_var = op.inputs[0], op.outputs[0]
+            graph.remove_operation(op)
+            graph.create_link_with_var(input_var, output_var)
         return graph
 
     @ property
@@ -243,19 +216,22 @@ class ONNXRUNTIMExporter(OnnxExporter):
         for op in graph.operations.values():
             if op.type == 'ReduceSum' or op.type == 'Squeeze' or op.type == 'Unsqueeze':
                 axes = convert_any_to_torch_tensor(op.attributes.pop('axes'), dtype=torch.int64)
-                var = Variable(name=op.name+'_axes', value=axes, is_parameter=True, dest_ops=[op])
-                graph.append_variable(var)
-                op.inputs.append(var)
+                var = graph.create_variable(name=None, value=axes, is_parameter=True)
+                graph.create_link_with_op(variable=var, upstream_op=None, downstream_op=op)
                 op.meta_data.input_metas.append(TensorMeta.parsing_from_torch_tensor(var.value, var.name))
 
             elif op.type == 'Split':
                 split = convert_any_to_torch_tensor(op.attributes.pop('split'), dtype=torch.int64)
-                var = Variable(name=op.name+'_axes', value=split, is_parameter=True, dest_ops=[op])
-                graph.append_variable(var)
-                op.inputs.append(var)
+                var = graph.create_variable(name=None, value=split, is_parameter=True)
+                graph.create_link_with_op(variable=var, upstream_op=None, downstream_op=op)
                 op.meta_data.input_metas.append(TensorMeta.parsing_from_torch_tensor(var.value, var.name))
 
-    def prepare_graph(self, graph: BaseGraph) -> BaseGraph:
+    def prepare_graph(
+        self, graph: BaseGraph, 
+        process_activation: bool = True, 
+        process_parameter: bool = True, 
+        remove_activation_fn: bool = True,
+        quant_parameter_to_int: bool = True) -> BaseGraph:
         """
         Prepare your graph for exporting.
         
@@ -285,30 +261,51 @@ class ONNXRUNTIMExporter(OnnxExporter):
             if not isinstance(op, QuantableOperation): continue
             # collect quantable vars, where we need to insert quant and dequant op
             for config, var in op.config_with_variable:
-                if not QuantizationStates.is_activated(config.state): continue
+                meta = var.meta
                 if var.is_parameter: 
                     assert len(var.dest_ops) == 1, (
                     f'Can not export variable {var.name}, cause it has more than 1 destination operations. '
                     'PPQ require all parameters to have only 1 destination operation.')
 
+                    if not process_parameter: continue
+                    # override quantization state, so that we can export parameter correctly.
+                    if config.state == QuantizationStates.BAKED:
+                        config.state = QuantizationStates.ACTIVATED
+                    
                     if QuantizationStates.is_activated(config.state):
-                        self.insert_quant_dequant_on_variable(
-                            graph=graph, var=var, config=config, related_op=op)
+                        # if not quant parameter to int, all parameter should export as fp32.
+                        # needs insert both quant and dequant op for them
+                        if not quant_parameter_to_int:
+                            created = self.insert_quant_on_variable(
+                                graph=graph, var=var, config=config, related_op=op, meta=meta)
+                            var = created.outputs[0]
+                        
+                        self.insert_dequant_on_variable(
+                            graph=graph, var=var, config=config, related_op=op, meta=meta)
+                        if quant_parameter_to_int:
+                            var.value = PPQLinearQuant_toInt(tensor=var.value, config=config)
+                
+                else: 
+                    if not process_activation: continue
 
-                elif QuantizationStates.is_activated(config.state): 
-                    self.insert_quant_dequant_on_variable(
-                        graph=graph, var=var, config=config, related_op=op)
+                    if QuantizationStates.is_activated(config.state):
+                        created = self.insert_quant_on_variable(
+                            graph=graph, var=var, config=config, related_op=op, meta=meta)
+                        var = created.outputs[0]
+                        self.insert_dequant_on_variable(
+                            graph=graph, var=var, config=config, related_op=op, meta=meta)
 
-        removed_activations = []
-        for op in graph.operations.values(): 
-            if not isinstance(op, QuantableOperation): continue
-            if op.type in {'Relu', 'Clip'}:
-                # Only ASYMMETRICAL quantized activations can be safely removed.
-                if op.config.input_quantization_config[0].policy.has_property(QuantizationProperty.ASYMMETRICAL):
-                    removed_activations.append(op)
+        if remove_activation_fn:
+            removed_activations = []
+            for op in graph.operations.values(): 
+                if not isinstance(op, QuantableOperation): continue
+                if op.type in {'Relu', 'Clip'}:
+                    # Only ASYMMETRICAL quantized activations can be safely removed.
+                    if op.config.input_quantization_config[0].policy.has_property(QuantizationProperty.ASYMMETRICAL):
+                        removed_activations.append(op)
 
-        # remove useless activation.
-        self.remove_activation_ops(graph, removed_activations)
+            # remove useless activation.
+            self.remove_activation_ops(graph, removed_activations)
 
         return self.remove_duplicated_quant_op(graph)
 
@@ -341,12 +338,11 @@ class ONNXRUNTIMExporter(OnnxExporter):
             nodes=_nodes,
             inputs=_inputs,
             outputs=_outputs,
-            initializer=_initilizers,
-        )
+            initializer=_initilizers)
         extra_opsets = self.required_opsets
-
+        
+        opsets = []
         if 'opsets' in graph._detail:
-            opsets = []
             for opset in graph._detail['opsets']:
                 if opset['domain'] in extra_opsets or opset['domain'] == '':
                     continue
