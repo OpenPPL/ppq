@@ -460,9 +460,12 @@ class GraphMerger(GraphCommandProcesser):
 
             if computing_op.num_of_parameters == 1:
                 w = computing_op.parameters[0].value  # no bias.
-                if isinstance(w, torch.Tensor):
-                    b = torch.zeros(size=w.shape[0], dtype=torch.float, device=w.device)
-                if isinstance(w, np.ndarray):
+                assert isinstance(w, np.ndarray), 'values of parameters are assumed numpy arrays'
+                if computing_op.type == 'ConvTranspose':
+                    b = np.zeros(shape=w.shape[1] * computing_op.attributes.get('group', 1), dtype=np.float32)
+                elif computing_op.type == 'Gemm' and computing_op.attributes.get('transB', 0) == 0:
+                    b = np.zeros(shape=w.shape[1], dtype=np.float32)
+                else:
                     b = np.zeros(shape=w.shape[0], dtype=np.float32)
             else:
                 w, b = [var.value for var in computing_op.parameters[: 2]]  # has bias.
@@ -478,9 +481,20 @@ class GraphMerger(GraphCommandProcesser):
 
                 # calculate new weight and bias
                 scale = alpha / np.sqrt(var + epsilon)
-                w = w * scale.reshape([-1, 1])
+                if computing_op.attributes.get('transB', 0):
+                    w = w * scale.reshape([-1, 1])
+                else:
+                    w = w * scale.reshape([1, -1])
                 b = alpha * (b - mean) / np.sqrt(var + epsilon) + beta
+            
+            elif computing_op.type == 'ConvTranspose':
 
+                scale = alpha / np.sqrt(var + epsilon)
+                group = computing_op.attributes.get('group', 1)
+                scale = scale.reshape([group, 1, -1, 1, 1])
+                w = w.reshape([group, -1, w.shape[1], w.shape[2], w.shape[3]]) * scale
+                w = w.reshape([w.shape[0] * w.shape[1], w.shape[2], w.shape[3], w.shape[4]])
+                b = alpha * (b - mean) / np.sqrt(var + epsilon) + beta
             else:
                 raise TypeError(
                     f'Unexpected op type {computing_op.type}. '
