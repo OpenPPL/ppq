@@ -1056,6 +1056,11 @@ def Resize_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendC
             assert (len(sizes[2:]) == 2)
             mode = 'bicubic'
 
+    # PATCH 2022.04.22
+    # ONNX DO NOT HAVE BILINEAR MODE, FOR 4D INPUT, WE OVERRIDE MODE TO BILINEAR
+    if len(input_data.shape) == 4 and mode == 'linear':
+        mode = 'bilinear'
+
     trans_mode = op.attributes.get(
         'coordinate_transformation_mode', 'half_pixel')
     if trans_mode == 'align_corners':
