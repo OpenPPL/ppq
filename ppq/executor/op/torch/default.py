@@ -1573,6 +1573,19 @@ def Log_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
     return output
 
 
+def Mod_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
+    ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
+    ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=2, max_num_of_input=2)
+    fmod = op.attributes.get('fmod', 0)
+    if values[0].dtype in {torch.float, torch.float16, torch.float32, torch.float64}:
+        assert fmod, 'fmod must equals to 1 when operands are floats'
+    if fmod:
+        output = torch.fmod(values[0], values[1])
+    else:
+        output = torch.remainder(values[0], values[1])
+    return output
+
+
 def Floor_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
     input_data = values[0]
     output = torch.floor(input_data)
@@ -1918,6 +1931,7 @@ DEFAULT_BACKEND_TABLE = {
     'Max': Eltwise_forward,
     'MaxPool': MaxPool2d_forward,
     'Min': Eltwise_forward,
+    'Mod': Mod_forward,
     'Mul': Mul_forward,
     'NonMaxSuppression': _NMS_forward,
     'NonZero': NonZero_forward,
