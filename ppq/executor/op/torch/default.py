@@ -1591,6 +1591,14 @@ def Mod_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
     return output
 
 
+def Softplus_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
+    ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op, values=values)
+    ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
+    input_data = values[0]
+    output = torch.log(torch.exp(input_data) + 1)
+    return output
+
+
 def Floor_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
     input_data = values[0]
     output = torch.floor(input_data)
@@ -1957,6 +1965,7 @@ DEFAULT_BACKEND_TABLE = {
     'Sigmoid': UnaryEltwise_forward,
     'Slice': Slice_forward,
     'Softmax': Softmax_forward,
+    'Softplus': Softplus_forward,
     'Split': Split_forward,
     'Squeeze': Squeeze_forward,
     'Sub': Eltwise_forward,

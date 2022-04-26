@@ -136,7 +136,7 @@ executor = TorchExecutor(graph=quantized, device=EXECUTING_DEVICE)
 
 Outputs = executor.forward(Input) # quantized mode with quantization error
 
-for op in quantized.operations().values(): # dequantize the graph, so that we can run
+for op in quantized.operations.values(): # dequantize the graph, so that we can run
     if isinstance(op, QuantableOperation): # in fp32 mode with no precision loss
         op.dequantize()
 
