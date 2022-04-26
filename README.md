@@ -23,8 +23,9 @@ Watch video tutorial series on www.bilibili.com, following are links of PPQ tuto
 * 使用教程: [https://www.bilibili.com/video/BV1934y147p2](https://www.bilibili.com/video/BV1934y147p2 "PPQ User Guide") 
 * 基础知识：[https://www.bilibili.com/video/BV1gS4y1Y7KR](https://www.bilibili.com/video/BV1gS4y1Y7KR "Basic Theory") 
 * 网络性能分析：[https://www.bilibili.com/video/BV1oT4y1h73e](https://www.bilibili.com/video/BV1oT4y1h73e "Analysing Your Model") 
-* 量化计算原理(Part 1)：[https://www.bilibili.com/video/BV1fB4y1m7fJ](https://www.bilibili.com/video/BV1fB4y1m7fJ "What is quantize 1") 
-* 量化计算原理(Part 2)：[https://www.bilibili.com/video/BV1qA4y1Q7Uh](https://www.bilibili.com/video/BV1qA4y1Q7Uh "What is quantize 2") 
+* 量化计算原理(Part 1)：[https://www.bilibili.com/video/BV1fB4y1m7fJ](https://www.bilibili.com/video/BV1fB4y1m7fJ "Quantized Computing") 
+* 量化计算原理(Part 2)：[https://www.bilibili.com/video/BV1qA4y1Q7Uh](https://www.bilibili.com/video/BV1qA4y1Q7Uh "Quantized Computing") 
+* 图优化与量化模拟：[https://www.bilibili.com/video/BV1Kr4y1n7cy](https://www.bilibili.com/video/BV1Kr4y1n7cy "Graph Optimization & quantization simulating.") 
 
 * 其他教程: 等待缓慢更新...
 
