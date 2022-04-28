@@ -20,7 +20,7 @@ class NCNNQuantizer(BaseQuantizer):
 
         self._num_of_bits = 8
         self._quant_min = - 127
-        self._quant_max = + 128
+        self._quant_max = + 127
 
         super().__init__(graph=graph)
 
@@ -56,14 +56,15 @@ class NCNNQuantizer(BaseQuantizer):
                     )
                 base_quant_config.input_quantization_config[1].observer_algorithm = 'Minmax'
                 
+                group        = operation.attributes.get('group', 1)
                 dilations    = operation.attributes.get('dilations', [1, 1])
                 strides      = operation.attributes.get('strides', [1, 1])
                 kernel_shape = operation.attributes.get('kernel_shape')
-                if all([i == 1 for i in dilations]) and all([j == 1 for j in strides])\
+                if group == 1 and all([i == 1 for i in dilations]) and all([j == 1 for j in strides])\
                     and all([k == 3 for k in kernel_shape]):
                     base_quant_config.input_quantization_config[1].num_of_bits = 6
-                    base_quant_config.input_quantization_config[1].quant_max   = 31
-                    base_quant_config.input_quantization_config[1].quant_min   = -32
+                    base_quant_config.input_quantization_config[1].quant_max   = +31
+                    base_quant_config.input_quantization_config[1].quant_min   = -31
 
             elif operation.type == 'Gemm':
                 assert operation.attributes.get('transB', 0) and operation.attributes.get('alpha', 1.0) == 1.0 \
