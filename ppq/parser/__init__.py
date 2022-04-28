@@ -15,3 +15,4 @@ from .ppl import PPLBackendExporter
 from .tensorRT import TensorRTExporter
 from .matex_exporter import MetaxExporter
 from .qnn_exporter import QNNDSPExporter
+from .ncnn_exporter import NCNNExporter

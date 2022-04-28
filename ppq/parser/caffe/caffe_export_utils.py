@@ -469,8 +469,39 @@ class Resize(CaffeOpExporter):
 
 
 @register_class
-class ConvTranspose(Conv):
-    pass
+class ConvTranspose(CaffeOpExporter):
+    def set_attr(self):
+        kernel_h, kernel_w = refine_value(self.op.attributes.get('kernel_shape'))
+        stride_h, stride_w = refine_value(self.op.attributes.get('strides', [1, 1]))
+        dilations_h, dilations_w = refine_value(self.op.attributes.get('dilations', [1, 1]))
+        pads = refine_value(self.op.attributes.get('pads', [0, 0]))
+        if len(pads) == 2:
+            pad_h, pad_w = pads
+        elif len(pads) == 4:
+            begin_pad = pads[:2]
+            end_pad = pads[2:]
+            if begin_pad == end_pad:
+                pad_h, pad_w = begin_pad
+            else:
+                logger.error('Caffe only support begin_pad == end_pad in layer')
+        else:
+            logger.error(f'Unsupported pads attributes with the length of {len(pads)} in Caffe')
+
+        self.layer.convolution_param.num_output = self.op.parameters[0].value.shape[1] * self.op.attributes.get('group', 1)
+        self.layer.convolution_param.group = refine_value(self.op.attributes.get('group', 1))
+        self.layer.convolution_param.kernel_h = kernel_h
+        self.layer.convolution_param.kernel_w = kernel_w
+        self.layer.convolution_param.pad_h = pad_h
+        self.layer.convolution_param.pad_w = pad_w
+        self.layer.convolution_param.stride_h = stride_h
+        self.layer.convolution_param.stride_w = stride_w
+        self.layer.convolution_param.hole_h = dilations_h
+        self.layer.convolution_param.hole_w = dilations_w
+
+        if len(self.op.parameters) == 2:
+            self.layer.convolution_param.bias_term = True
+        else:
+            self.layer.convolution_param.bias_term = False
 
 
 @register_class
