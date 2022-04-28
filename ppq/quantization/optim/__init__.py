@@ -5,7 +5,7 @@ from .calibration import RuntimeCalibrationPass, RuntimePerlayerCalibrationPass,
 from .equalization import LayerwiseEqualizationPass
 from .extension import ExtensionPass
 from .morph import (ChannelSplitPass, WeightSplitPass, MatrixFactorizationPass,
-                    NXPResizeModeChangePass)
+                    NXPResizeModeChangePass, NCNNFormatGemmPass)
 from .parameters import ParameterQuantizePass, PassiveParameterQuantizePass
 from .refine import (QuantAlignmentPass, InplaceQuantizationSettingPass,
                      NxpInputRoundingRefinePass, NxpQuantizeFusionPass,

@@ -40,6 +40,28 @@ class NXPResizeModeChangePass(QuantizationOptimizationPass):
                 op.attributes['coordinate_transformation_mode'] = 'half_pixel'
 
 
+class NCNNFormatGemmPass(QuantizationOptimizationPass):
+    def __init__(self, name: str = 'NCNN Format Gemm Pass') -> None:
+        super().__init__(name)
+    
+    def optimize(self, processer: GraphCommandProcesser, dataloader: Iterable, 
+        executor: BaseGraphExecutor, **kwargs) -> None:
+        for op in processer.graph.operations.values():
+            if op.type == 'Gemm':
+                if op.attributes.get('transB', 0) == 0:
+                    op.attributes['transB'] = 1
+                    weight = op.parameters[0].value
+                    assert isinstance(weight, torch.Tensor)
+                    op.parameters[0].value = weight.transpose(1, 0).contiguous()
+                if  op.attributes.get('alpha', 1.0) != 1.0:
+                    op.parameters[0].value = op.parameters[0].value * op.attributes.get('alpha', 1.0)
+                    op.attributes['alpha'] = 1.0
+                if  op.attributes.get('beta', 1.0) != 1.0:
+                    if op.num_of_input > 2:
+                        op.parameters[1].value = op.parameters[1].value * op.attributes.get('beta', 1.0)
+                    op.attributes['beta'] = 1.0
+
+
 class MatrixFactorizationPass(QuantizationOptimizationPass):
     """
     Use Matrix Farctorization to minimize quantization error.
