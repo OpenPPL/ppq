@@ -23,8 +23,8 @@ from ppq.quantization.quantizer import (ACADEMIC_INT4_Quantizer,
                                         PPL_DSP_TI_Quantizer,
                                         PPLCUDA_INT4_Quantizer,
                                         PPLCUDAMixPrecisionQuantizer,
-                                        PPLCUDAQuantizer, TensorRTQuantizer,
-                                        FPGAQuantizer)
+                                        NCNNQuantizer, FPGAQuantizer,
+                                        PPLCUDAQuantizer, TensorRTQuantizer)
 from ppq.scheduler import DISPATCHER_TABLE, GraphDispatcher
 from torch.utils.data import DataLoader
 
@@ -36,6 +36,7 @@ QUANTIZER_COLLECTION = {
     TargetPlatform.SNPE_INT8:    PPL_DSP_Quantizer,
     TargetPlatform.QNN_DSP_INT8: PPL_DSP_Quantizer,
     TargetPlatform.TRT_INT8:     TensorRTQuantizer,
+    TargetPlatform.NCNN_INT8:    NCNNQuantizer,
     TargetPlatform.NXP_INT8:     NXP_Quantizer,
     TargetPlatform.ORT_OOS_INT8: ORT_PerTensorQuantizer,
     TargetPlatform.METAX_INT8_C: MetaxChannelwiseQuantizer,
@@ -74,6 +75,7 @@ EXPORTERS = {
     TargetPlatform.METAX_INT8_C:  MetaxExporter,
     TargetPlatform.METAX_INT8_T:  MetaxExporter,
     TargetPlatform.TRT_INT8:      TensorRTExporter,
+    TargetPlatform.NCNN_INT8:     NCNNExporter
 }
 
 # 为你的导出模型取一个好听的后缀名
