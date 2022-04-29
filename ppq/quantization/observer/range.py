@@ -122,9 +122,8 @@ class TorchHistObserver(TorchMinMaxObserver):
         elif self._phase == 'Collating Hist':
             if self._hist is None:
                 self._hist = torch.zeros(size=(self._hist_bins,), dtype=torch.int32, device=value.device)
-            if USING_CUDA_KERNEL: CUDA.Histogram_T(
-                tensor=value, histogram=self._hist, 
-                scale=self._hist_scale)
+            if USING_CUDA_KERNEL and value.is_cuda: 
+                CUDA.Histogram_T(tensor=value, histogram=self._hist, scale=self._hist_scale)
             else: 
                 hist = torch.histc(torch.abs(value), self._hist_bins, min=0, max=self._hist_scale * self._hist_bins)
                 self._hist += hist.int()
@@ -252,9 +251,10 @@ class TorchPercentileObserver(BaseTensorObserver):
         if self._quant_cfg.state == QuantizationStates.INITIAL:
             if value.numel() >= pow(2, 24) and not USING_CUDA_KERNEL:
                 raise Exception('You got a tensor with more than 16777216 values, '
-                    'torch.quantile can not handle such many values.')
+                    'torch.quantile can not handle such many values. '
+                    'Use other observe algorithm instead.')
             if self._quant_cfg.policy.has_property(QuantizationProperty.PER_TENSOR):
-                if not USING_CUDA_KERNEL:
+                if not USING_CUDA_KERNEL or (not value.is_cuda):
                     min = -(-value).flatten().quantile(q=self._percentile).view(1, -1)
                     max = value.flatten().quantile(q=self._percentile).view(1, -1)
                     self._percentile_collector.append(torch.cat([max, min], dim=-1))
