@@ -1,17 +1,18 @@
 from abc import ABCMeta, abstractmethod, abstractproperty
 from typing import Iterable, Union
+
 import torch
-from ppq.IR.base.graph import Operation
-from ppq.IR.quantize import QuantableVariable
 from ppq.api.setting import *
 from ppq.core import (OperationMeta, OperationQuantizationConfig,
                       QuantizationPolicy, QuantizationStates, RoundingPolicy,
                       TargetPlatform, TensorQuantizationConfig,
-                      empty_ppq_cache, ppq_debug_function)
+                      empty_ppq_cache)
 from ppq.executor import BaseGraphExecutor
 from ppq.IR import BaseGraph, QuantableGraph, QuantableOperation
 from ppq.IR.base.command import QuantizeOperationCommand
+from ppq.IR.base.graph import Operation
 from ppq.IR.morph import GraphReplacer
+from ppq.IR.quantize import QuantableVariable
 from ppq.IR.search import SearchableGraph
 from ppq.quantization.optim import *
 
@@ -145,6 +146,11 @@ class BaseQuantizer(metaclass = ABCMeta):
             target_platform  = operation_platforms[op_name]
 
             if TargetPlatform.is_quantized_platform(target_platform):
+                if op_name not in operation_quantization_configs:
+                    raise KeyError(f'Can not find quantization configuration for operation {op_name}, '
+                                   'if you are dispatching operations manually, '
+                                   'make sure all operations that you sent to quantized platform is '
+                                   'quantable and recognizable for your quantizer.')
                 quantization_config = operation_quantization_configs[op_name]
                 self._processer_chain(
                     QuantizeOperationCommand(
