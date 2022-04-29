@@ -46,8 +46,9 @@ ATTENTION: Make sure your Python version is >= 3.6.0. PPL Quantization Tool is w
 
     * For Windows User:
         * Download ninja.exe from [https://github.com/ninja-build/ninja/releases](https://github.com/ninja-build/ninja/releases), add it to Windows PATH Environment
-        * Download Visual Studio from [https://visualstudio.microsoft.com](https://visualstudio.microsoft.com/zh-hans/), if you already got a c++ compiler, you can skip this step.
-        * Add your c++ compiler to Windows PATH Environment, if you are using Visual Studio, it should be something like "C:\Program Files\Microsoft Visual Studio\2017\Community\VC\Tools\MSVC\14.16.27023\bin\Hostx86\x86"
+        * Download Visual Studio from [https://visualstudio.microsoft.com](https://visualstudio.microsoft.com/zh-hans/), if you already got a c++ compiler, you can skip this step. 
+        * Please Update Visual studio to 2019 or higher, otherwise there might be some compile error like: CxxFrameHandler4 unresolved, GSHandlerCheck unresolved.
+        * Add your c++ compiler to Windows PATH Environment, if you are using Visual Studio, it should be something like "C:\Program Files\Microsoft Visual Studio\2019\Community\VC\Tools\MSVC\14.16.27023\bin\Hostx86\x86"
 
 * Install PPQ from source:
 
