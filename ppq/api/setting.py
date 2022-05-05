@@ -281,11 +281,6 @@ class LearningStepSizeSetting():
         # optimized
         self.interested_layers      = []
 
-        # if set True, only operations in interested_layers will be tuned, and if set False, ops in
-        # the same subgraph(block) will be tuned, it's hard to say which one is better, you need to
-        # try yourself
-        self.interested_layers_only = False
-
         # num of training epochs, please adjust it to your needs
         self.epochs                 = 30
 
@@ -295,21 +290,6 @@ class LearningStepSizeSetting():
 
         # scale multiplifer for bias(passive quantized param)
         self.scale_multiplier       = 2.0
-
-        # global or local, if mode is set to global, you should make sure valid gradient could flow back
-        # to your parameters from variable specified in output_names, by default the graph outputs will be
-        # used for loss computing and gradient backward
-        self.mode                   = 'global'
-
-        # variable names to compute loss, if not given, the final output will be used
-        # in graphwise mode, be careful in aware of valid back propagation in your graph
-        self.output_names           = []
-
-        # only useful when mode is global, should be a dict specifying how much each output weighes when 
-        # multiple output names are given in graphwise mode, by default every output will weigh equally to 
-        # 1.0 when computing loss, but if you care some output more, you can make it weigh more by specifying
-        # some larger value in loss_weights, i.e., self.loss_weights = {some_output_1:2.0, some_output_2 : 5.0, ...}
-        self.loss_weights           = {}
 
 
 class BlockwiseReconstructionSetting():
