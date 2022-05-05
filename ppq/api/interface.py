@@ -8,7 +8,9 @@ from ppq.executor import TorchExecutor
 from ppq.IR import (BaseGraph, GraphCommand, GraphCommandType, GraphFormatter,
                     GraphMerger)
 from ppq.IR.morph import GraphDeviceSwitcher
+from ppq.executor.base import BaseGraphExecutor
 from ppq.parser import *
+from ppq.quantization.optim.base import QuantizationOptimizationPass
 from ppq.quantization.quantizer import (ACADEMIC_INT4_Quantizer,
                                         ACADEMIC_Mix_Quantizer,
                                         ACADEMICQuantizer, BaseQuantizer,
@@ -21,7 +23,8 @@ from ppq.quantization.quantizer import (ACADEMIC_INT4_Quantizer,
                                         PPL_DSP_TI_Quantizer,
                                         PPLCUDA_INT4_Quantizer,
                                         PPLCUDAMixPrecisionQuantizer,
-                                        PPLCUDAQuantizer, TensorRTQuantizer)
+                                        PPLCUDAQuantizer, TensorRTQuantizer,
+                                        FPGAQuantizer)
 from ppq.scheduler import DISPATCHER_TABLE, GraphDispatcher
 from torch.utils.data import DataLoader
 
@@ -44,7 +47,8 @@ QUANTIZER_COLLECTION = {
     TargetPlatform.PPL_CUDA_INT4: PPLCUDA_INT4_Quantizer,
     TargetPlatform.ACADEMIC_INT8: ACADEMICQuantizer,
     TargetPlatform.ACADEMIC_INT4: ACADEMIC_INT4_Quantizer,
-    TargetPlatform.ACADEMIC_MIX:  ACADEMIC_Mix_Quantizer
+    TargetPlatform.ACADEMIC_MIX:  ACADEMIC_Mix_Quantizer,
+    TargetPlatform.FPGA_INT8   :  FPGAQuantizer
 }
 
 PARSERS = {
@@ -77,7 +81,7 @@ EXPORTERS = {
 EXPORTING_POSTFIX = {
     TargetPlatform.PPL_DSP_INT8:  '.caffemodel',
     TargetPlatform.PPL_DSP_TI_INT8:'.caffemodel',
-    TargetPlatform.QNN_DSP_INT8: '.onnx',
+    TargetPlatform.QNN_DSP_INT8:  '.onnx',
     TargetPlatform.PPL_CUDA_INT8: '.onnx',
     TargetPlatform.SNPE_INT8:     '.caffemodel',
     TargetPlatform.NXP_INT8:      '.caffemodel',
@@ -454,6 +458,103 @@ def quantize_caffe_model(
     else:
         return quantizer._graph
 
+@ empty_ppq_cache
+def quantize_native_model(
+    model: BaseGraph,
+    calib_dataloader: DataLoader,
+    calib_steps: int,
+    input_shape: List[int],
+    input_dtype: torch.dtype = torch.float,
+    inputs: List[Any] = None,
+    setting: QuantizationSetting = None,
+    collate_fn: Callable = None,
+    platform: TargetPlatform = TargetPlatform.PPL_DSP_INT8,
+    device: str = 'cuda',
+    verbose: int = 0,
+    do_quantize: bool = True,
+) -> BaseGraph:
+    """
+        量化一个已经在内存中的 ppq 模型
+            输入一个量化前的 PPQ.IR.BaseGraph
+            返回一个量化后的 PPQ.IR.BaseGraph
+        quantize ppq model, input ppq graph and return quantized ppq graph
+
+    Args:
+        native (BaseGraph): 被量化的 ppq graph
+ 
+        calib_dataloader (DataLoader): 校准数据集 calibration data loader
+
+        calib_steps (int): 校准步数 calibration steps
+
+        collate_fn (Callable): 校准数据的预处理函数 batch collate func for preprocessing
+        
+        input_shape (List[int]): 模型输入尺寸，用于执行 jit.trace，对于动态尺寸的模型，输入一个模型可接受的尺寸即可。
+            如果模型存在多个输入，则需要使用 inputs 变量进行传参，此项设置为 None
+                                a list of ints indicating size of input, for multiple inputs, please use 
+                                keyword arg inputs for direct parameter passing and this should be set to None
+
+        input_dtype (torch.dtype): 模型输入数据类型，如果模型存在多个输入，则需要使用 inputs 变量进行传参，此项设置为 None
+                                the torch datatype of input, for multiple inputs, please use keyword arg inputs
+                                for direct parameter passing and this should be set to None
+
+        inputs (List[Any], optional): 对于存在多个输入的模型，在Inputs中直接指定一个输入List，从而完成模型的tracing。
+                                for multiple inputs, please give the specified inputs directly in the form of
+                                a list of arrays
+
+        setting (OptimSetting): 量化配置信息，用于配置量化的各项参数，设置为 None 时加载默认参数。
+                                Quantization setting, default setting will be used when set None
+
+        do_quantize (Bool, optional): 是否执行量化 whether to quantize the model, defaults to True.
+
+
+        platform (TargetPlatform, optional): 量化的目标平台 target backend platform, defaults to TargetPlatform.DSP_INT8.
+                                        
+        device (str, optional): 量化过程的执行设备 execution device, defaults to 'cuda'.
+
+        verbose (int, optional): 是否打印详细信息 whether to print details, defaults to 0.
+
+    Raises:
+        ValueError: 给定平台不可量化 the given platform doesn't support quantization
+        KeyError: 给定平台不被支持 the given platform is not supported yet
+
+    Returns:
+        BaseGraph: 量化后的IR，包含了后端量化所需的全部信息 
+                   The quantized IR, containing all information needed for backend execution
+    """
+    if not TargetPlatform.is_quantized_platform(platform=platform):
+        raise ValueError(f'Target Platform {platform} is an non-quantable platform.')
+    if platform not in QUANTIZER_COLLECTION:
+        raise KeyError(f'Target Platform {platform} is not supported by ppq right now.')
+    if do_quantize:
+        if calib_dataloader is None or calib_steps is None:
+            raise TypeError('Quantization needs a valid calib_dataloader and calib_steps setting.')
+
+    if setting is None:
+        setting = QuantizationSettingFactory.default_setting()
+    ppq_ir = dispatch_graph(graph=model, platform=platform, setting=setting)
+
+    if inputs is None:
+        dummy_input = torch.zeros(size=input_shape, device=device, dtype=input_dtype)
+    else: dummy_input = inputs
+
+    quantizer = QUANTIZER_COLLECTION[platform](graph=ppq_ir)
+
+    assert isinstance(quantizer, BaseQuantizer)
+    executor = TorchExecutor(graph=quantizer._graph, device=device)
+    if do_quantize:
+        quantizer.quantize(
+            inputs=dummy_input,
+            calib_dataloader=calib_dataloader,
+            executor=executor,
+            setting=setting,
+            calib_steps=calib_steps,
+            collate_fn=collate_fn
+        )
+        if verbose: quantizer.report()
+        return quantizer._graph
+    else:
+        return quantizer._graph
+
 
 def export_ppq_graph(
     graph: BaseGraph, 
@@ -543,7 +644,7 @@ def format_graph(graph: BaseGraph) -> BaseGraph:
     return graph
 
 
-def dispatch_graph(graph: BaseGraph, platform: TargetPlatform, setting: QuantizationSetting) -> DispatchingTable:
+def dispatch_graph(graph: BaseGraph, platform: TargetPlatform, setting: QuantizationSetting) -> BaseGraph:
     """
     
     这个函数执行图切分与调度，你的计算图将被切分成一系列子图，并被调度到不同设备上。
@@ -708,6 +809,31 @@ class UnbelievableUserFriendlyQuantizationSetting:
 def quantize(working_directory: str, setting: QuantizationSetting, model_type: NetworkFramework,
              executing_device: str, input_shape: List[int], target_platform: TargetPlatform,
              dataloader: DataLoader, calib_steps: int = 32) -> BaseGraph:
+    """
+    Helper function for quantize your model within working directory,
+        This function will do some check and redirect your requirement to: 
+            ppq.api.quantize_onnx_model
+            ppq.api.quantize_caffe_model
+    
+    see them for more information.
+    
+    Args:
+        working_directory (str): A path that indicates working directory.
+        setting (QuantizationSetting): Quantization setting
+        model_type (NetworkFramework): Onnx or Caffe
+        executing_device (str): 'cuda' or 'cpu'
+        input_shape (List[int]): sample input's shape
+        target_platform (TargetPlatform): Target deploy platform
+        dataloader (DataLoader): calibraiton dataloader
+        calib_steps (int, optional): Defaults to 32.
+
+    Raises:
+        FileNotFoundError: _description_
+        FileNotFoundError: _description_
+
+    Returns:
+        BaseGraph: _description_
+    """
     if model_type == NetworkFramework.ONNX:
         if not os.path.exists(os.path.join(working_directory, 'model.onnx')):
             raise FileNotFoundError(f'无法找到你的模型: {os.path.join(working_directory, "model.onnx")},'
@@ -730,6 +856,16 @@ def quantize(working_directory: str, setting: QuantizationSetting, model_type: N
 
 
 def export(working_directory: str, quantized: BaseGraph, platform: TargetPlatform, **kwargs):
+    """
+    Helper function to export your graph to working directory,
+        You should notice this function just redirect your invoking to export_ppq_graph.
+        see export_ppq_graph for more information.
+
+    Args:
+        working_directory (str): _description_
+        quantized (BaseGraph): _description_
+        platform (TargetPlatform): _description_
+    """
     export_ppq_graph(
         graph=quantized, platform=platform,
         graph_save_to=os.path.join(working_directory, 'quantized'),
@@ -738,8 +874,55 @@ def export(working_directory: str, quantized: BaseGraph, platform: TargetPlatfor
     )
 
 
+def manop(graph: BaseGraph, list_of_passes: List[QuantizationOptimizationPass], 
+          calib_dataloader: Iterable, executor: BaseGraphExecutor,
+          collate_fn: Callable = None, **kwargs) -> BaseGraph:
+    """
+    manop 是一个很方便的函数，你可以调用这个函数来手动地执行一些量化优化工作
+    你可以在默认量化逻辑之前或之后调用这个函数来自定义量化处理流程，相比于直接实现
+    Quantizer来修改量化逻辑的方式, 使用 manop 会更加灵活。
+    
+    MANOP (manually optimize) function is introduced since PPQ 0.6.4.
+    This function allows you to manually invoke 
+        QuantizationOptimizationPass before or after default quantization logic.
+    
+    We do not use function name like apply, optim, do ... 
+    Because they are so widely-used in other python libraries, 
+        and can easily conflict with each other.
+
+    Args:
+        graph (BaseGraph): processing graph.
+        list_of_passes (List[QuantizationOptimizationPass]): a collection of optimization logic.
+        calib_dataloader (Iterable): _description_
+        executor (BaseGraphExecutor): _description_
+        collate_fn (Callable): _description_
+
+    Raises:
+        TypeError: _description_
+        TypeError: _description_
+
+    Returns:
+        BaseGraph: processed graph
+    """
+    if isinstance(list_of_passes, QuantizationOptimizationPass):
+        list_of_passes = [list_of_passes]
+
+    if not (isinstance(list_of_passes, list) or isinstance(list_of_passes, tuple)):
+        raise TypeError('Can not apply optimization on your graph, '
+                        'expect a list of QuantizationOptimizationPass as input, '
+                        f'while {type(list_of_passes)} was given.')
+
+    for optim in list_of_passes:
+        if not isinstance(optim, QuantizationOptimizationPass):
+            raise TypeError('Invoking this function needs a list of QuantizationOptimizationPass, '
+                            f'however there is a/an {type(optim)} in your list')
+        optim.apply(graph, dataloader=calib_dataloader, executor=executor, collate_fn=collate_fn, **kwargs)
+    return graph
+
+
 __all__ = ['load_graph', 'load_onnx_graph', 'load_caffe_graph',
            'dispatch_graph', 'dump_torch_to_onnx', 'quantize_onnx_model', 
            'quantize_torch_model', 'quantize_caffe_model', 
            'export_ppq_graph', 'format_graph', 'quantize', 'export', 
-           'UnbelievableUserFriendlyQuantizationSetting']
+           'UnbelievableUserFriendlyQuantizationSetting', 'manop', 
+           'quantize_native_model']

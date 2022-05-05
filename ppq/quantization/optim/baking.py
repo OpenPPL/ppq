@@ -5,6 +5,7 @@ from ppq.core import QuantizationStates, empty_ppq_cache
 from ppq.executor import BaseGraphExecutor
 from ppq.IR import GraphCommandProcesser, Operation, QuantableOperation
 from ppq.quantization.qfunction import BaseQuantFunction
+from ppq.quantization.qfunction.linear import PPQLinearQuantFunction
 
 from .base import QuantizationOptimizationPass
 
@@ -32,9 +33,9 @@ class ParameterBakingPass(QuantizationOptimizationPass):
     Args:
         quantize_function (BaseQuantFunction): a BaseQuantFunction instance to quantize all parameters.
     """
-    def __init__(self, quantize_function: BaseQuantFunction) -> None:
+    def __init__(self) -> None:
         super().__init__(name='PPQ Parameter Baking Pass')
-        self._quantize_function = quantize_function
+        self._quantize_function = PPQLinearQuantFunction
 
     @ empty_ppq_cache
     def optimize(

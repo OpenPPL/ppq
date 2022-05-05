@@ -1,8 +1,9 @@
 from typing import Any, Callable, Dict, List, Union
 
 import numpy
-from ppq.core import (OperationMeta, QuantizationStates, TargetPlatform,
-                      TensorMeta, TensorQuantizationConfig, empty_ppq_cache)
+from ppq.core import (DataType, OperationMeta, QuantizationStates,
+                      TargetPlatform, TensorMeta, TensorQuantizationConfig,
+                      empty_ppq_cache, ppq_warning)
 from ppq.IR import BaseGraph, Operation, QuantableOperation, RunnableGraph
 from ppq.IR.base.command import GraphDeployCommand
 from ppq.quantization.qfunction.linear import PPQLinearQuantFunction
@@ -27,7 +28,16 @@ class TorchMetaDataTracingHook(RuntimeHook):
         self.input_metas, self.output_metas = [], []
         super().__init__(operation, operation_meta=None)
     def pre_forward_hook(self, inputs: list, **kwargs) -> list:
-        self.input_metas = [build_meta(tensor) for tensor in inputs]
+        # some operations got none as its input
+        # therefore we have to create meta for those none input value manually.
+        for tensor, var in zip(inputs, self._hook_to.inputs):
+            if tensor is None:
+                ppq_warning(
+                    f'Unexpected input value of operation {self._hook_to.name}, '
+                    f'recieving "None" at its input {self._hook_to.inputs.index(var)}')
+                self.input_metas.append(TensorMeta(dtype=DataType.NONETYPE, shape=None))
+            else:
+                self.input_metas.append(build_meta(tensor))
         return inputs
     def post_forward_hook(self, outputs: list, **kwargs) -> list:
         self.output_metas = [build_meta(tensor) for tensor in outputs]

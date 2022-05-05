@@ -67,6 +67,7 @@ class TargetPlatform(Enum):
     HOST_INT8 = 401
 
     NXP_INT8  = 501
+    FPGA_INT8 = 502
 
     ORT_OOS_INT8 = 601
 

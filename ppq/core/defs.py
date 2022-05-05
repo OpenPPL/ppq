@@ -35,20 +35,16 @@ class SingletonMeta(type):
         return cls._instances[cls]
 
 
-def ppq_legacy(version: str, adapt_to: str = None):
-    def wrapper(func: Callable):
-        if adapt_to is not None:
-            return
-            print(f'\033[31mfunction {func.__name__} is obsoleted since version {version}, '
-                f'use {adapt_to} function instead.\033[0m')
-        else:
-            return
-            print(f'\033[31mfunction {func.__name__} is obsoleted since version {version}, '
-                f'contact with system developer to get more information.\033[0m')
-        def _wrapper(*args, **kwargs):
-            return func(*args, **kwargs)
-        return _wrapper
-    return wrapper
+def ppq_legacy(func: str, version: str, adapt_to: str = None):
+    """
+    Mark an function as legacy function.
+
+    Args:
+        func (str): _description_
+        version (str): _description_
+        adapt_to (str, optional): _description_. Defaults to None.
+    """
+    print(f'{func} has been obsoleted since PPQ {version}, use {adapt_to} instead.')
 
 
 def empty_ppq_cache(func: Callable):

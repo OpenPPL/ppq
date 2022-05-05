@@ -7,11 +7,10 @@ from ppq.core import (NetworkFramework, OperationQuantizationConfig,
                       QuantizationStates, TensorMeta, TensorQuantizationConfig,
                       empty_ppq_cache, ppq_warning)
 from ppq.executor import BaseGraphExecutor, TorchExecutor
-from ppq.IR import BaseGraph, GraphCommandProcesser, Operation, Variable
+from ppq.IR import (BaseGraph, GraphCommandProcesser, GraphFormatter,
+                    GraphReplacer, Operation, Path, QuantableGraph,
+                    QuantableOperation, SearchableGraph, Variable)
 from ppq.IR.base.command import QuantizeOperationCommand
-from ppq.IR.morph import GraphReplacer
-from ppq.IR.quantize import QuantableGraph, QuantableOperation
-from ppq.IR.search import Path, SearchableGraph
 from ppq.log import NaiveLogger
 from ppq.quantization.observer import TensorObserverFactroy
 from tqdm import tqdm
@@ -837,7 +836,7 @@ class MetaxGemmSplitPass(QuantizationOptimizationPass):
     # Implementation of Gemm Split will move to IR.morph soon.
     def optimize(self, processer: GraphCommandProcesser, 
                  dataloader: Iterable, executor: BaseGraphExecutor, **kwargs) -> None:
-        morpher = GraphReplacer(processer)
+        graph, morpher = processer.graph, GraphReplacer(processer)
         interested_ops = []
         for operation in processer.graph.operations.values():
             if operation.type == 'Gemm':
@@ -845,47 +844,53 @@ class MetaxGemmSplitPass(QuantizationOptimizationPass):
 
         for op in interested_ops:
             assert isinstance(op, Operation)
-            if op.num_of_input == 2: # no bias gemm
-                inserting_matmul = Operation(name=f'{op.name}', op_type='Gemm')
-                morpher.replace_op(op_name=op.name, replace_to=inserting_matmul)
-            elif op.num_of_input == 3:
-                inserting_add      = Operation(name=f'{op.name}', op_type='Add', attributes={})
-                inserting_matmul   = Operation(name=f'{op.name}_matmul', op_type='MatMul', attributes={})
-                morpher.replace_op(op_name=op.name, replace_to=inserting_add)
+            output_var = op.outputs[0]
+            matmul = Operation(name=f'{op.name}', op_type='Gemm', attributes={})
+            morpher.replace_op(op_name=op.name, replace_to=matmul)
 
-                # process with matmul
-                weight_var = op.inputs[1]
-                inserting_add.inputs.remove(weight_var)
-                upstream_op = morpher.graph.get_upstream_operations(inserting_add)
-                assert len(upstream_op) == 1, 'Gemm is expected to have at most 1 income op.'
-                upstream_op = upstream_op[0]
+            if op.num_of_input == 3:
+                bias_add  = graph.create_operation(op_type='Add')
+                bias_var  = matmul.inputs[-1]
+
+                graph.create_link_with_op(
+                    variable=graph.create_variable(), 
+                    upstream_op=matmul, downstream_op=bias_add)
+
+                graph.create_link_with_op(
+                    variable=graph.create_variable(value=bias_var.value, is_parameter=True), 
+                    upstream_op=None, downstream_op=bias_add)
                 
-                morpher.graph.insert_op_between_ops(inserting_op=inserting_matmul, up_op=upstream_op, down_op=inserting_add)
-                op.inputs.remove(weight_var)
-                inserting_matmul.inputs.append(weight_var)
-                weight_var.dest_ops.clear()
-                weight_var.dest_ops.append(inserting_matmul)
-            else: raise ValueError(f'Operation {op.name} should contains 2-3 input, however {op.num_of_input} was given.')
-            
+                graph.remove_variable(bias_var)
+                output_var.source_op = bias_add
+                bias_add.outputs.append(output_var)
+                matmul.outputs.remove(output_var)
+
             if op.attributes.get('transA') == 1:
                 raise ValueError(f'Can not process with operation {op.name}, transA=1 is not allowed.')
             if op.attributes.get('transB') == 1:
-                inserting_matmul.inputs[-1].value = torch.permute(inserting_matmul.inputs[-1].value, (1, 0))
+                matmul.inputs[1].value = torch.permute(matmul.inputs[1].value, (1, 0))
 
 
 class GRUSplitPass(QuantizationOptimizationPass):
     """
         执行 GRU 算子分解，这个 Pass 将 GRU 算子分解为单步执行的形式
+        
+        请注意，对于 ONNX GRU 算子而言, 它有两个输出, 一个是完整的hidden vector, 另一个是单步的 last state
+        这个 pass 是针对单步执行而设计的，它将直接删除 hidden vector 之后的所有输出
     """
     def __init__(self, name: str = 'Metax Gemm Split Pass') -> None:
         super().__init__(name)
+    
+    def delete_hidden_vec(self, graph: BaseGraph, hidden_vec: Variable):
+        processer = GraphFormatter(graph)
+        processer.truncate_on_var(var=hidden_vec, mark_as_output=False)
     
     # Implementation of Gemm Split will move to IR.morph soon.
     def optimize(self, processer: GraphCommandProcesser, 
                  dataloader: Iterable, executor: BaseGraphExecutor, 
                  **kwargs) -> None:
-        graph, created_op = processer.graph, 1
-        morpher = GraphReplacer(processer)
+
+        graph = processer.graph
 
         interested_ops = []
         for operation in processer.graph.operations.values():
@@ -895,51 +900,73 @@ class GRUSplitPass(QuantizationOptimizationPass):
         for op in interested_ops:
             assert isinstance(op, Operation)
             # fetch all related variables
-            rnn_input, rnn_w, rnn_r, rnn_b, rnn_h = op.inputs
+            rnn_x, rnn_w, rnn_r, rnn_b, _, rnn_h = op.inputs
+            hidden_size = op.attributes['hidden_size']
             
+            # Take a further look at
+            # https://github.com/onnx/onnx/blob/main/docs/Operators.md#GRU
+            Wz = rnn_w.value[0, hidden_size * 0: hidden_size * 1]
+            Wr = rnn_w.value[0, hidden_size * 1: hidden_size * 2]
+            Wh = rnn_w.value[0, hidden_size * 2: hidden_size * 3]
+            
+            Rz = rnn_r.value[0, hidden_size * 0: hidden_size * 1]
+            Rr = rnn_r.value[0, hidden_size * 1: hidden_size * 2]
+            Rh = rnn_r.value[0, hidden_size * 2: hidden_size * 3]
+            
+            Wbz = rnn_b.value[0, hidden_size * 0: hidden_size * 1]
+            Wbr = rnn_b.value[0, hidden_size * 1: hidden_size * 2]
+            Wbh = rnn_b.value[0, hidden_size * 2: hidden_size * 3]
+
+            Rbz = rnn_b.value[0, hidden_size * 3: hidden_size * 4]
+            Rbr = rnn_b.value[0, hidden_size * 4: hidden_size * 5]
+            Rbh = rnn_b.value[0, hidden_size * 5: hidden_size * 6]
+
             # create operations
-            op1 = Operation(name=f'GRU_Spilited_{created_op}_1', op_type='Gemm')
-            op2 = Operation(name=f'GRU_Spilited_{created_op}_2', op_type='Gemm')
-            op3 = Operation(name=f'GRU_Spilited_{created_op}_11', op_type='Add')
-            op4 = Operation(name=f'GRU_Spilited_{created_op}_3', op_type='Sigmoid')
-            op6 = Operation(name=f'GRU_Spilited_{created_op}_12', op_type='Slice')
-            op5 = Operation(name=f'GRU_Spilited_{created_op}_13', op_type='Slice')
+            op1 = graph.create_operation(op_type='Gemm', attributes={'transB': 1})
+            op2 = graph.create_operation(op_type='Gemm', attributes={'transB': 1})
+            op3 = graph.create_operation(op_type='Add')
+            op4 = graph.create_operation(op_type='Sigmoid')
+            op5 = graph.create_operation(op_type='Slice')
+            op6 = graph.create_operation(op_type='Slice')
+            op7 = graph.create_operation(op_type='Gemm', attributes={'transB': 1})
+            op8 = graph.create_operation(op_type='Gemm', attributes={'transB': 1})
+            op9 = graph.create_operation(op_type='Mul')
+            op10 = graph.create_operation(op_type='Mul')
+            op11 = graph.create_operation(op_type='Sub')
+            op12 = graph.create_operation(op_type='Add')
+            op13 = graph.create_operation(op_type='Mul')
+            op14 = graph.create_operation(op_type='Tanh')
+            op15 = graph.create_operation(op_type='Add')
 
-            op7 = graph.create_operation(name=f'GRU_Spilited_{created_op}_gemm_nh', op_type='Gemm')
-            op8 = graph.create_operation(name=f'GRU_Spilited_{created_op}_gemm_nx', op_type='Gemm')
+            # create parameter variables
+            # 为了加速运算，我们将Wz, Wr合并成Wzr, Rzh等同理
+            # 参考 https://github.com/onnx/onnx/blob/main/docs/Operators.md#GRU
+            Wzr_var  = graph.create_variable(value=torch.cat([Wz, Wr]), is_parameter=True)
+            Rzr_var  = graph.create_variable(value=torch.cat([Rz, Rr]), is_parameter=True)
+            Wbzr_var = graph.create_variable(value=torch.cat([Wbz, Wbr]), is_parameter=True)
+            Rbzr_var = graph.create_variable(value=torch.cat([Rbz, Rbr]), is_parameter=True)
 
-            op9 = Operation(name=f'GRU_Spilited_{created_op}_6', op_type='Mul')
-            op10 = Operation(name=f'GRU_Spilited_{created_op}_7', op_type='Mul')
-            op11  = Operation(name=f'GRU_Spilited_{created_op}_9', op_type='Sub')
-            op12 = graph.create_operation(name=f'GRU_Spilited_{created_op}_radd', op_type='Add')
-            op13 = Operation(name=f'GRU_Spilited_{created_op}_8', op_type='Mul')
-            op14 = graph.create_operation(name=f'GRU_Spilited_{created_op}_rtanh', op_type='Tanh')
-            op15  = Operation(name=f'GRU_Spilited_{created_op}_10', op_type='Add')
+            Wh_var  = graph.create_variable(value=Wh, is_parameter=True)
+            Rh_var  = graph.create_variable(value=Rh, is_parameter=True)
+            Wbh_var = graph.create_variable(value=Wbh, is_parameter=True)
+            Rbh_var = graph.create_variable(value=Rbh, is_parameter=True)
 
-            # weight variables
-            weight_of_gemm_hrz = Variable(name=f'GRU_LinkVar_{created_op}_1', is_parameter=True)
-            weight_of_gemm_xrz = Variable(name=f'GRU_LinkVar_{created_op}_3', is_parameter=True)
-
-            bias_of_gemm_hrz   = Variable(name=f'GRU_LinkVar_{created_op}_2', is_parameter=True)
-            bias_of_gemm_xrz   = Variable(name=f'GRU_LinkVar_{created_op}_4', is_parameter=True)
-
-            graph.append_variable(weight_of_gemm_hrz)
-            graph.append_variable(bias_of_gemm_hrz)
-            graph.append_variable(weight_of_gemm_xrz)
-            graph.append_variable(bias_of_gemm_xrz)
-
-            graph.create_link_with_op(variable=weight_of_gemm_hrz, upstream_op=None, downstream_op=op2)
-            graph.create_link_with_op(variable=weight_of_gemm_xrz, upstream_op=None, downstream_op=op1)
-            graph.create_link_with_op(variable=bias_of_gemm_hrz, upstream_op=None, downstream_op=op2)
-            graph.create_link_with_op(variable=bias_of_gemm_xrz, upstream_op=None, downstream_op=op1)
+            constant_of_sub = graph.create_variable(value=torch.tensor(1.0).to(Wz.device), is_parameter=True)
             
+            # link variables
+            graph.create_link_with_op(variable=constant_of_sub, upstream_op=None, downstream_op=op11)
             graph.create_link_with_op(variable=graph.create_variable(), upstream_op=op1, downstream_op=op3)
             graph.create_link_with_op(variable=graph.create_variable(), upstream_op=op2, downstream_op=op3)
             graph.create_link_with_op(variable=graph.create_variable(), upstream_op=op3, downstream_op=op4)
-            graph.create_link_with_op(variable=graph.create_variable(), upstream_op=op4, downstream_op=op6)
-            graph.create_link_with_op(variable=graph.create_variable(), upstream_op=op4, downstream_op=op5)
-            graph.create_link_with_op(variable=graph.create_variable(), upstream_op=op5, downstream_op=op11)
-            graph.create_link_with_op(variable=graph.create_variable(), upstream_op=op5, downstream_op=op10)
+            
+            var = graph.create_variable()
+            graph.create_link_with_op(variable=var, upstream_op=op4, downstream_op=op5)
+            graph.create_link_with_op(variable=var, upstream_op=op4, downstream_op=op6)
+            
+            var = graph.create_variable()
+            graph.create_link_with_op(variable=var, upstream_op=op5, downstream_op=op11)
+            graph.create_link_with_op(variable=var, upstream_op=op5, downstream_op=op10)
+            
             graph.create_link_with_op(variable=graph.create_variable(), upstream_op=op6, downstream_op=op9)
             graph.create_link_with_op(variable=graph.create_variable(), upstream_op=op7, downstream_op=op9)
             graph.create_link_with_op(variable=graph.create_variable(), upstream_op=op8, downstream_op=op12)
@@ -949,3 +976,55 @@ class GRUSplitPass(QuantizationOptimizationPass):
             graph.create_link_with_op(variable=graph.create_variable(), upstream_op=op12, downstream_op=op14)
             graph.create_link_with_op(variable=graph.create_variable(), upstream_op=op13, downstream_op=op15)
             graph.create_link_with_op(variable=graph.create_variable(), upstream_op=op14, downstream_op=op13)
+
+            # mark h as graph input, link h to op2, op10 and op7
+            rnn_h.source_op.outputs.remove(rnn_h)
+            rnn_h.source_op = None
+            rnn_h.dest_ops.remove(op)
+            graph.mark_variable_as_graph_input(rnn_h)
+            graph.create_link_with_op(variable=rnn_h, upstream_op=None, downstream_op=op2)
+            graph.create_link_with_op(variable=rnn_h, upstream_op=None, downstream_op=op7)
+            graph.create_link_with_op(variable=rnn_h, upstream_op=None, downstream_op=op10)
+
+            # link x to op1 and op8
+            rnn_x.dest_ops.remove(op)
+            graph.create_link_with_op(variable=rnn_x, upstream_op=rnn_x.source_op, downstream_op=op1)
+            graph.create_link_with_op(variable=rnn_x, upstream_op=rnn_x.source_op, downstream_op=op8)
+
+            # create paramteres
+            graph.create_link_with_op(variable=Wzr_var, upstream_op=None, downstream_op=op1)
+            graph.create_link_with_op(variable=Rzr_var, upstream_op=None, downstream_op=op2)
+            graph.create_link_with_op(variable=Wh_var, upstream_op=None, downstream_op=op8)
+            graph.create_link_with_op(variable=Rh_var, upstream_op=None, downstream_op=op7)
+            graph.create_link_with_op(variable=Wbzr_var, upstream_op=None, downstream_op=op1)
+            graph.create_link_with_op(variable=Rbzr_var, upstream_op=None, downstream_op=op2)
+            graph.create_link_with_op(variable=Wbh_var, upstream_op=None, downstream_op=op8)
+            graph.create_link_with_op(variable=Rbh_var, upstream_op=None, downstream_op=op7)
+            
+            graph.create_link_with_op(variable=graph.create_variable(
+                value=torch.tensor([0]), is_parameter=True), upstream_op=None, downstream_op=op5)
+            graph.create_link_with_op(variable=graph.create_variable(
+                value=torch.tensor([hidden_size]), is_parameter=True), upstream_op=None, downstream_op=op5)
+            graph.create_link_with_op(variable=graph.create_variable(
+                value=torch.tensor([1]), is_parameter=True), upstream_op=None, downstream_op=op5)
+            graph.create_link_with_op(variable=graph.create_variable(
+                value=torch.tensor([1]), is_parameter=True), upstream_op=None, downstream_op=op5)
+            
+            graph.create_link_with_op(variable=graph.create_variable(
+                value=torch.tensor([hidden_size]), is_parameter=True), upstream_op=None, downstream_op=op6)
+            graph.create_link_with_op(variable=graph.create_variable(
+                value=torch.tensor([2 * hidden_size]), is_parameter=True), upstream_op=None, downstream_op=op6)
+            graph.create_link_with_op(variable=graph.create_variable(
+                value=torch.tensor([1]), is_parameter=True), upstream_op=None, downstream_op=op6)
+            graph.create_link_with_op(variable=graph.create_variable(
+                value=torch.tensor([1]), is_parameter=True), upstream_op=None, downstream_op=op6)
+
+            hidden_vec, last_state = op.outputs
+            last_state.source_op = op15
+            op15.outputs.append(last_state)
+
+            op.inputs.clear()
+            op.outputs.clear()
+            graph.remove_operation(op)
+            self.delete_hidden_vec(graph, hidden_vec)
+            

@@ -1,6 +1,6 @@
 from typing import List
 from ppq.IR import BaseGraph
-from ppq.IR.morph import GraphFormatter
+from ppq.IR import GraphFormatter
 
 
 def truncate_graph(graph: BaseGraph, outputs: List[str]):
@@ -24,19 +24,13 @@ def truncate_graph(graph: BaseGraph, outputs: List[str]):
     Returns:
         [type]: truncated graph
     """
-    graph.outputs.clear()
-    for name in outputs:
-        if name not in graph.variables:
-            raise KeyError(f'Output variable name {name} is not included in current graph.')
-        graph.outputs[name] = graph.variables[name]
-
-    delete_set = set()
-    for output_var in graph.outputs.values():
-        for dest_op in output_var.dest_ops:
-            delete_set.add(dest_op)
-
-    for op in delete_set:
-        graph.delete_operation(op_name=op.name, cascade=True, force_delete=True)
-    graph_formatter = GraphFormatter(graph)
-    graph_formatter.delete_isolated()
+    for output in outputs:
+        if output not in graph.variables:
+            raise KeyError(f'Can not find variable {output} in currect graph.')
+    processer = GraphFormatter(graph)
+    
+    for output in outputs:
+        output_var = graph.variables[output]
+        processer.truncate_on_var(output_var, mark_as_output=True)
+    processer.delete_isolated()
     return graph

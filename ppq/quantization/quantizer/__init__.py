@@ -9,3 +9,4 @@ from .ORTQuantizer import ORT_PerChannelQuantizer, ORT_PerTensorQuantizer
 from .PPLQuantizer import (PPLCUDA_INT4_Quantizer,
                            PPLCUDAMixPrecisionQuantizer, PPLCUDAQuantizer)
 from .TRTQuantizer import TensorRTQuantizer
+from .FPGAQuantizer import FPGAQuantizer

@@ -237,6 +237,8 @@ def PPQTensorClip(
 
 def PPQRoundingLoss(tensor: torch.Tensor,
                     config: TensorQuantizationConfig) -> torch.Tensor:
+    if not QuantizationStates.is_activated(config.state): 
+        return torch.sum(torch.zeros_like(tensor)).unsqueeze(0)
     if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
         assert isinstance(config, ChannelwiseTensorQuantizationConfig)
         return RoundingLoss_C.apply(
@@ -311,11 +313,13 @@ class RQTDelegator(TorchQuantizeDelegate):
             raise PermissionError(f'Can not create TrainableDelegate with variable {binding.name},'
                                   ' cause its value has been baked.')
         
-        limit_t = torch.clone(config.scale)
+        limit_t = None
         # create limit tensor
         if config.state == QuantizationStates.ACTIVATED:
+            limit_t = torch.clone(config.scale)
             limit_t = limit_t * limit
         if config.state == QuantizationStates.PASSIVE:
+            limit_t = torch.clone(config.scale)
             limit_t = limit_t.fill_(limit * (0.01) * torch.max(binding.value).item())
 
         self.reference = binding.value.clone()
@@ -335,48 +339,52 @@ class RQTDelegator(TorchQuantizeDelegate):
 
     def __call__(self, tensor: torch.Tensor, 
                  config: TensorQuantizationConfig) -> torch.Tensor:
+        if not QuantizationStates.is_activated(config.state): return tensor
         if self.limit == 0: return PPQLinearQuantFunction(tensor, config)
+        if not USING_CUDA_KERNEL: return PPQLinearQuantFunction(tensor, config)
+
         return PPQTensorClip(
             tensor=PPQLinearQuantFunction(tensor, config), 
-            reference=self.reference, limit=self.limit_t, config=config
-        )
+            reference=self.reference, limit=self.limit_t, config=config)
 
 
-class QDropDelegator(TorchQuantizeDelegate):
+class LSQDelegator(TorchQuantizeDelegate):
     """
-        QDrop function is an cuda implementation of quantization dropout.
-        With this function, optimizer can lower the variance of gradient estimations.
+        Lsq Delegator is an cuda implementation of learned step size quantization.
+        We apply Qdrop together with lsq to lower the variance of gradient estimations.
         
         With those features, we could directly finetune a quantized network
             from 32-bit to lower bit width, avoiding the risk of over-fitting.
         
         USE THIS FUNCTION TO REPLACE PPQ EXECUTOR'S QUANTIZATION LOGIC WITH
-            executor.register_quant_delegator(config, RQTDelegator())
+            executor.register_quant_delegator(config, LSQDelegator())
         
-        ATTENTION: QDROP FUNCTION IS AVAILABLE ONLY WITH USING_CUDA_KERNEL = True
+        ATTENTION: THIS FUNCTION IS AVAILABLE ONLY WITH USING_CUDA_KERNEL = True
     """
-    def __init__(
-        self, binding: Variable, 
-        config: TensorQuantizationConfig, 
-        dropout: float) -> None:
+    def __init__(self, binding: Variable, 
+                 config: TensorQuantizationConfig, dropout: float) -> None:
         if config.state in {QuantizationStates.BAKED, QuantizationStates.PASSIVE_BAKED}:
             raise PermissionError(f'Can not create TrainableDelegate with variable {binding.name},'
                                   ' cause its value has been baked.')
 
-        self.config    = config
-        self.binding   = binding
-        self.dropout   = dropout
+        self.config  = config
+        self.binding = binding
+        self.dropout = dropout
+        self.trainable_values = []
 
-        self.scale_backup         = self.config.scale.clone()
-        self.offset_backup        = self.config.offset.clone()
-
+        self.scale_backup  = self.config.scale.clone()
         self.config.scale.requires_grad  = True
+        self.trainable_values.append(self.config.scale)
+
         if self.config.policy.has_property(QuantizationProperty.ASYMMETRICAL):
+            self.offset_backup = self.config.offset.clone()
             self.config.offset.requires_grad = True
+            self.trainable_values.append(self.config.offset)
 
     def withdraw(self):
         self.config.scale  = self.scale_backup
-        self.config.offset = self.offset_backup
+        if self.config.policy.has_property(QuantizationProperty.ASYMMETRICAL):
+            self.config.offset = self.offset_backup
 
     def finalize(self):
         self.config.scale.requires_grad  = False
@@ -391,8 +399,6 @@ class QDropDelegator(TorchQuantizeDelegate):
 
     def __call__(self, tensor: torch.Tensor, 
                  config: TensorQuantizationConfig) -> torch.Tensor:
-        with torch.no_grad(): config.scale.copy_(torch.clamp(config.scale, min=1e-7, max=None))
-        with torch.no_grad(): config.offset.copy_(torch.clamp(config.offset, min=0, max=self.config.quant_max))
         return PPQLinearQuantFunction(tensor, config, dropout=self.dropout)
 
 

@@ -5,7 +5,6 @@ import torch
 from numpy import ceil
 from ppq.core import *
 from ppq.executor import BaseGraphExecutor, TorchExecutor
-from ppq.executor.base import GLOBAL_DISPATCHING_TABLE
 from ppq.IR import (BaseGraph, GraphCommandProcesser, Operation,
                     QuantableOperation)
 from ppq.log import NaiveLogger
@@ -35,7 +34,6 @@ def compute_loss(
 ) -> Dict[str, float]:
     """loss computing for fp32 and quantized graph outputs, used 
     in multiple training-based algorithms below
-
     Args:
         output_names (List[str]): output variable names
         graph (BaseGraph): ppq ir graph
@@ -43,7 +41,6 @@ def compute_loss(
         collate_fn (Callable): batch collate func
         executor (TorchExecutor): ppq torch executor
         loss_fn (Callable, optional): loss computing func. Defaults to torch_mean_square_error.
-
     Returns:
         Dict[str, float]: loss dict for variables specified in `output_names`
     """
@@ -64,10 +61,12 @@ def compute_loss(
         losses[name] /= (idx + 1)
     return losses
 
+
 def dequantize_graph(graph: BaseGraph, exceptions: List[Operation]=[]) -> None:
     for op in graph.operations.values():
         if isinstance(op, QuantableOperation) and op not in exceptions:
             op.dequantize(expire_device=None)
+
 
 def restore_quantization_state(graph: BaseGraph, exceptions: List[Operation]=[]) -> None:
     for op in graph.operations.values():
@@ -561,19 +560,15 @@ class BlockwiseReconstructionPass(TrainingBasedPass):
     """Blockwise Reconstruction Pass, blockwisely perform adaround, if you specify interested_layers in the setting, 
     then only block which containes any of operations specified in interested_layers will be optimized, otherwise all
     searched blocks will be optimized.
-
        A standard procedure is, first turn all training-based optimization passes off in your quantization setting and
     run a plain quantization, then use error analysis tool(provided by ppq) to analysis snr error or cosine similarities
     of every layer, choose names of those with significant snr or poor similarities as your interested_layers, then turn
     on this pass and do optimization. In case you have no idea which layers should be selected as interested_layers, simply
     leave it as blank and all blocks will be tuned.
-
        Note that you could control the maximum number of operations in a block by setting OPTIM_ADVOPT_GRAPH_MAXSIZE in
     ppq.core.common, and by default every block will be trained for 300 epochs, which takes certain long time. The optimization
     goal of every block is
-
                 Loss = LpNormLoss(y, y^) + lamda * rounding_loss(v)
-
     where y is the output of the current block running in fp32 mode, and y^ is the output of the current block running
     in quant mode, lamda is a hyperparameter adjusting scales of rounding loss, and v is the element-wise rounding
     parameter applied to weights of every computing op in the block.
@@ -834,7 +829,6 @@ class LearningStepSizeOptimization(TrainingBasedPass):
                 |     block-2                                      |       |
               _Relu____|_                                        _Relu_____|_
                 |                                                  |
-
         
         If `interested_layers` parameter is specified, then only blocks which contains operations specified in `interested_layers`
     will be tuned, otherwise all partitioned blocks will be tuned by default.
@@ -1081,14 +1075,14 @@ class AdvancedQuantOptimization(TrainingBasedPass):
         dataset = RandomMemDataset(data=[[qt, fp] for qt, fp in zip(quant_inputs, fp32_outputs)])
 
         # create trainable delegators for each parameter.
-        trainable_vars = []
+        trainable_params = []
         for operation in block.rps:
             if operation.is_computing_op and isinstance(operation, QuantableOperation):
                 for cfg, var in operation.config_with_variable:
                     if not var.is_parameter: continue
-                    trainable_vars.append((var, cfg))
+                    trainable_params.append((var, cfg))
     
-        delegators = [RQTDelegator(config=cfg, limit=self.limit, binding=var) for var, cfg in trainable_vars]     
+        delegators = [RQTDelegator(config=cfg, limit=self.limit, binding=var) for var, cfg in trainable_params]     
         optimizer = torch.optim.Adam(params=[d.binding.value for d in delegators], lr=self.lr)
         shcduler  = torch.optim.lr_scheduler.LambdaLR(optimizer=optimizer, lr_lambda=lambda t: 1 / (1 << (t // 5000)))
         # register all quantization delegators
@@ -1140,6 +1134,7 @@ class AdvancedQuantOptimization(TrainingBasedPass):
     def optimize(
         self, processer: GraphCommandProcesser, dataloader: Iterable,
         executor: TorchExecutor, collate_fn: Callable, **kwargs) -> None:
+        if self._verbose: self.report()
 
         if self._interested_outputs is None:
             self._interested_outputs = [name for name in processer.graph.outputs]
@@ -1225,6 +1220,19 @@ class AdvancedQuantOptimization(TrainingBasedPass):
             fp32_outputs.clear()
             quant_inputs.clear()
             empty_cache()
+
+    def report(self):
+        print('')
+        print('Check your Configuration Again, PPQ fine-tuning procedure will take a few minutes.')
+        print('-----------------------------------------')
+        print(f'Learning Rate:     {self.lr}')
+        print(f'Block Depth:       {OPTIM_ADVOPT_GRAPH_MAXDEPTH}')
+        print(f'Check Flag:        {self.check_flag}')
+        print(f'Training Steps:    {self.target_step}')
+        print(f'Interested Layers: {self.interested_layers}')
+        print(f'Finetune Limit:    {self.limit}')
+        print(f'Cache Device:      {self.collecting_device}')
+        print('-----------------------------------------')
 
 
 class LearningToCalibPass(TrainingBasedPass):

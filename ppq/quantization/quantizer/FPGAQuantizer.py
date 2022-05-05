@@ -1,18 +1,25 @@
 from typing import Union
 
 import torch
-from ppq.IR import Operation
+from ppq.api.setting import *
 from ppq.core import (ChannelwiseTensorQuantizationConfig,
                       OperationQuantizationConfig, QuantizationPolicy,
                       QuantizationProperty, QuantizationStates, RoundingPolicy,
                       TargetPlatform)
+from ppq.executor.base import BaseGraphExecutor
 from ppq.IR import BaseGraph, GraphCommandProcesser
+from ppq.IR.base.graph import Operation
+from ppq.quantization.optim import (NxpInputRoundingRefinePass,
+                                    NXPResizeModeChangePass,
+                                    QuantizationOptimizationPipeline)
+
 from .base import BaseQuantizer
 
 
-class TensorRTQuantizer(BaseQuantizer):
+class FPGAQuantizer(BaseQuantizer):
     def __init__(
-        self, graph: Union[BaseGraph, GraphCommandProcesser]
+        self,
+        graph: Union[BaseGraph, GraphCommandProcesser],
     ) -> Union[torch.Tensor, list, dict]:
 
         self._num_of_bits = 8
@@ -21,14 +28,18 @@ class TensorRTQuantizer(BaseQuantizer):
 
         super().__init__(graph=graph)
 
-    def init_quantize_config(
-        self, operation: Operation) -> OperationQuantizationConfig:
+    def build_quant_pipeline(
+        self, setting: QuantizationSetting, executor: BaseGraphExecutor) -> QuantizationOptimizationPipeline:
+        pipeline = super().build_quant_pipeline(setting, executor)
+        return pipeline
+    
+    def init_quantize_config(self, operation: Operation) -> OperationQuantizationConfig:
+
         base_quant_config = self.create_default_quant_config(
             policy=self.quantize_policy, rounding=self.rounding_policy,
-            operation_meta=operation.meta_data, num_of_bits=self._num_of_bits,
+            operation_meta=operation.meta_data, num_of_bits=self._num_of_bits, 
             quant_max=self._quant_max, quant_min=self._quant_min,
-            observer_algorithm='percentile'
-        )
+            observer_algorithm='percentile')
 
         if operation.type in {'Conv', 'ConvTranspose', 'Gemm'}:
             # set all parameters within Conv, ConvTranspose, Gemm to per-channel quant-config.
@@ -41,12 +52,13 @@ class TensorRTQuantizer(BaseQuantizer):
                 conv_weight_config.policy = QuantizationPolicy(
                     QuantizationProperty.SYMMETRICAL +
                     QuantizationProperty.LINEAR +
-                    QuantizationProperty.PER_CHANNEL
+                    QuantizationProperty.PER_TENSOR +
+                    QuantizationProperty.POWER_OF_2
                 )
                 base_quant_config.input_quantization_config[1] = \
                     ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
                         convert_from = conv_weight_config,
-                        offsets = None, scales  = None, channel_axis = 0
+                        offsets = None, scales = None, channel_axis = 0
                     )
                 base_quant_config.input_quantization_config[1].observer_algorithm = 'Minmax'
             # first parameter must exits, for gemm layer it will be gemm_weight
@@ -56,23 +68,45 @@ class TensorRTQuantizer(BaseQuantizer):
                 gemm_weight_config.policy = QuantizationPolicy(
                     QuantizationProperty.SYMMETRICAL +
                     QuantizationProperty.LINEAR +
-                    QuantizationProperty.PER_CHANNEL
+                    QuantizationProperty.PER_TENSOR +
+                    QuantizationProperty.POWER_OF_2
                 )
                 base_quant_config.input_quantization_config[1] = \
                     ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
                         convert_from = gemm_weight_config,
-                        offsets = None, scales  = None, channel_axis = 0
+                        offsets = None, scales = None, channel_axis = 0
                     )
                 base_quant_config.input_quantization_config[1].observer_algorithm = 'Minmax'
             # if operation has bias
             if operation.num_of_input > 2:
                 bias_config = base_quant_config.input_quantization_config[-1]
-                bias_config.state = QuantizationStates.FP32
+                bias_config.policy = QuantizationPolicy(
+                    QuantizationProperty.SYMMETRICAL +
+                    QuantizationProperty.LINEAR +
+                    QuantizationProperty.PER_TENSOR +
+                    QuantizationProperty.POWER_OF_2
+                )
+                
+                # Xilinx FPGA bias 并不是 32 位的！
+                bias_config.num_of_bits = 30
+                bias_config.quant_max = + int(pow(2, 29))
+                bias_config.quant_min = - int(pow(2, 29))
+                bias_config.state = QuantizationStates.PASSIVE_INIT
+                base_quant_config.input_quantization_config[-1] = \
+                    ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
+                        convert_from = bias_config, offsets = None,
+                        scales = None, channel_axis = 0)
+                base_quant_config.input_quantization_config[-1].observer_algorithm = 'Minmax'
+
+        if operation.type in PASSIVE_OPERATIONS:
+            # Those op are not active op.
+            base_quant_config.is_active_quant_op = False
+        
         return base_quant_config
 
     @ property
     def target_platform(self) -> TargetPlatform:
-        return TargetPlatform.TRT_INT8
+        return TargetPlatform.FPGA_INT8
 
     @ property
     def default_platform(self) -> TargetPlatform:
@@ -81,8 +115,11 @@ class TensorRTQuantizer(BaseQuantizer):
     @ property
     def quant_operation_types(self) -> set:
         return {
-            'Conv', 'Gemm', 'ConvTranspose', 
-            'AveragePool', 'GlobalAveragePool'
+            'Conv', 'ConvTranspose', 'Gemm', 'Relu', 'PRelu', 
+            'Clip', 'Pad', 'Resize', 'MaxPool', 'AveragePool',
+            'GlobalMaxPool', 'GlobalAveragePool',
+            'Mul', 'Add', 'Max', 'Sub', 'Div',
+            'LeakyRelu', 'Concat', 'Sigmoid', 'Slice'
         }
 
     @ property
@@ -90,9 +127,10 @@ class TensorRTQuantizer(BaseQuantizer):
         return QuantizationPolicy(
             QuantizationProperty.SYMMETRICAL +
             QuantizationProperty.LINEAR +
-            QuantizationProperty.PER_TENSOR
+            QuantizationProperty.PER_TENSOR +
+            QuantizationProperty.POWER_OF_2
         )
 
     @ property
-    def rounding_policy(self) -> RoundingPolicy:
+    def rounding_policy(self):
         return RoundingPolicy.ROUND_HALF_EVEN
