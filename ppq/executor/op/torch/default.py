@@ -956,7 +956,7 @@ def Slice_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCo
     slice_args = list(zip(starts, ends, steps))
     if axes is not None and all([_ != 0 for _ in axes]):
         assert len(axes) == len(slice_args)
-        new_axes = [x if x >= 0 else len(data.dim()) + x for x in axes]
+        new_axes = [x if x >= 0 else data.dim() + x for x in axes]
         full_axes = [i for i in range(data.dim())]
         slice_args = [slice_args[new_axes.index(i)] if i in new_axes else (None,) for i in full_axes]
 
