@@ -49,7 +49,7 @@ def process_attribute(attr, input_shape, kernel_shape=None, op_type=None):
         # onnx pads attribute cannot be used simultaneously with auto_pad attribute
         attr.pop('auto_pad')
 
-@ ppq_legacy(version='0.6.2')
+
 def preprocess_attr(attr, op_type=None):
     processed_attribute = {}
     if 'kernel_shape' in attr and op_type == 'Pooling':

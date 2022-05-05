@@ -28,7 +28,7 @@ class ExtensionPass(QuantizationOptimizationPass):
         super().__init__(name='PPQ Extension Pass')
 
     def optimize(
-        self, 
+        self,
         processer: GraphCommandProcesser,
         dataloader: Iterable,
         executor: BaseGraphExecutor,

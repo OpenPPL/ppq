@@ -2,9 +2,10 @@ from abc import ABCMeta, abstractmethod, abstractproperty
 from collections import deque
 from typing import Any, Dict, List
 
+import torch
 from ppq.core import (COMPUTING_OP, LINEAR_ACTIVATIONS, SOI_OP,
                       NetworkFramework, OperationMeta, Serializable,
-                      SingletonMeta, TargetPlatform, TensorMeta)
+                      SingletonMeta, TargetPlatform, TensorMeta, ppq_warning)
 
 
 class OperationBase(metaclass=ABCMeta):
@@ -86,11 +87,11 @@ class Variable(Serializable):
         return self._name
 
     @ property
-    def value(self) -> Any:
+    def value(self) -> torch.Tensor:
         return self._value
 
     @ value.setter
-    def value(self, value) -> None:
+    def value(self, value):
         self._value = value
 
     @ property
@@ -129,7 +130,8 @@ class Variable(Serializable):
             if dest_op.meta_data is None: return None
             return dest_op.meta_data.input_metas[dest_idx]
         else:
-            raise RuntimeError(f'Seems you got an isolated variable {self.name}, '\
+            raise RuntimeError(
+                f'Seems you got an isolated variable {self.name}, '
                 'PPQ is not able to infer its meta data yet.')
 
     def __hash__(self) -> int:
@@ -269,6 +271,8 @@ class BaseGraph(Serializable):
         return self._graph_outputs
 
     def delete_operation(self, op_name: str, cascade: bool = False, force_delete: bool = False):
+        # legacy function since ppq 0.6.4
+        # do not use, use graph.remove_variable instead.
         if not isinstance(op_name, str): 
             raise TypeError(f'This function needs a operation name as parameter, '\
                 f'while {type(op_name)} was given')
@@ -282,7 +286,7 @@ class BaseGraph(Serializable):
             input_var.dest_ops.pop(dest_idx)
             # once variable is isolated, delete it.
             if len(input_var.dest_ops) == 0 and input_var.name not in self.outputs:
-                self.delete_variable(input_var.name, force_delete=force_delete)
+                self.remove_variable(input_var)
         self.operations.pop(operation.name)
 
         if cascade:
@@ -291,6 +295,8 @@ class BaseGraph(Serializable):
                     self.delete_operation(cascade_op.name, cascade=True, force_delete=force_delete)
 
     def delete_variable(self, var_name: str, force_delete: bool = False):
+        # legacy function since ppq 0.6.4
+        # do not use, use graph.remove_variable instead.
         if not isinstance(var_name, str): 
             raise TypeError(f'This function need a variable name to delete variable from graph, '\
                 f'while {type(var_name)} was given')
@@ -387,6 +393,12 @@ class BaseGraph(Serializable):
         """
         Insert one operation to current graph.
             Inserting operation will replace var.dest_ops and automatically connect to inserting_op.
+        
+        Before insertion:
+            op1 -> var -> op2
+        
+        After insertion:
+            op1 -> var -> inserting_op -> link_var(generated) -> op2
 
         ATTENTION: Inserting opeartion must be an empty opeartion with no input and output variables linked to it.
 
@@ -401,16 +413,18 @@ class BaseGraph(Serializable):
             raise KeyError(f'Can not inserting operation at variable {var}, variable not found.')
         if len(inserting_op.inputs) != 0 or len(inserting_op.outputs) != 0:
             raise PermissionError('Can only insert operation with no input and output variables.')
+        
         variable = self.variables[var]
+
         # add to graph.
-        self.append_operation(inserting_op)
+        if inserting_op.name not in self.operations.keys(): 
+            self.append_operation(inserting_op)
 
         # create all links.
-        link_var = Variable(name=f'PPQ_Generated_Var_{self._num_of_generated_var}', 
-                            dest_ops=variable.dest_ops.copy(), 
-                            source_op=inserting_op)
-        self.append_variable(link_var)
-
+        link_var = self.create_variable(
+            name=None, value=None, is_parameter=False, 
+            dest_ops=variable.dest_ops.copy(), source_op=inserting_op)
+        
         inserting_op.inputs.append(variable)
         inserting_op.outputs.append(link_var)
 
@@ -419,12 +433,10 @@ class BaseGraph(Serializable):
         
         for op in link_var.dest_ops:
             op.inputs[op.inputs.index(variable)] = link_var
-        
+
         if var in self.outputs:
             self.outputs.pop(var)
             self.outputs[link_var.name] = link_var
-
-        self._num_of_generated_var += 1
 
     def insert_op_between_ops(self, inserting_op: Operation, up_op: Operation, down_op: Operation):
         """
@@ -471,21 +483,20 @@ class BaseGraph(Serializable):
         [variable] = variables
         
         # add to graph.
-        self.append_operation(inserting_op)
+        if inserting_op.name not in self.operations.keys():
+            self.append_operation(inserting_op)
 
         # create all links.
-        link_var = Variable(name=f'PPQ_Generated_Var_{self._num_of_generated_var}', 
-                            dest_ops=[down_op], 
-                            source_op=inserting_op)
-        self.append_variable(link_var)
-
+        link_var = self.create_variable(
+            name=None, value=None, is_parameter=False, 
+            dest_ops=[down_op], source_op=inserting_op)
+        
         inserting_op.inputs.append(variable)
         inserting_op.outputs.append(link_var)
 
         assert isinstance(variable, Variable)
         variable.dest_ops[variable.dest_ops.index(down_op)] = inserting_op
         down_op.inputs[down_op.inputs.index(variable)] = link_var
-        self._num_of_generated_var += 1
 
     def insert_op_between_var_and_op(self, inserting_op: Operation, up_var: Variable, down_op: Operation):
         """
@@ -517,20 +528,19 @@ class BaseGraph(Serializable):
                                      ' graph is too complex.')
         
         # add to graph.
-        self.append_operation(inserting_op)
+        if inserting_op.name not in self.operations.keys():
+            self.append_operation(inserting_op)
 
         # create all links.
-        link_var = Variable(name=f'PPQ_Generated_Var_{self._num_of_generated_var}', 
-                            dest_ops=[down_op], 
-                            source_op=inserting_op)
-        self.append_variable(link_var)
+        link_var = self.create_variable(
+            name=None, value=None, is_parameter=False,
+            dest_ops=[down_op], source_op=inserting_op)
 
         inserting_op.inputs.append(up_var)
         inserting_op.outputs.append(link_var)
 
         up_var.dest_ops[up_var.dest_ops.index(down_op)] = inserting_op
         down_op.inputs[down_op.inputs.index(up_var)] = link_var
-        self._num_of_generated_var += 1
 
     def create_link_with_op(self, variable: Variable, upstream_op: Operation, downstream_op: Operation):
         """
@@ -559,81 +569,149 @@ class BaseGraph(Serializable):
         """
         if variable.name not in self.variables:
             raise KeyError(f'Can not find your variable {variable.name} in current graph.')
-        if upstream_op.name not in self.operations:
+        if upstream_op is not None and upstream_op.name not in self.operations:
             raise KeyError(f'Can not find your operation {upstream_op.name} in current graph.')
         if downstream_op.name not in self.operations:
             raise KeyError(f'Can not find your operation {downstream_op.name} in current graph.')
         
         if variable.source_op is None: variable.source_op = upstream_op
         if variable.source_op != upstream_op:
-            raise PermissionError(f'Can not create link with variable {variable.name}, '
-                                  f'cause its source operations != {upstream_op.name}')
+            raise PermissionError(f'Can not create link with variable {variable}, '
+                                  f'cause its source operations != {upstream_op}')
 
         # For complex graph, following logic might have some error.
-        if variable not in upstream_op.outputs: upstream_op.outputs.append(variable)
+        if  upstream_op is not None and variable not in upstream_op.outputs: 
+            upstream_op.outputs.append(variable)
         if variable not in downstream_op.inputs: 
             variable.dest_ops.append(downstream_op)
             downstream_op.inputs.append(variable)
+        else: ppq_warning(f'You are trying to link variable with operation, '
+                          f'however Variable {variable.name} has already linked with downstream op {downstream_op.name}')
+
+    def create_link_with_var(self, upstream_variable: Variable, downstream_variable: Variable):
+        """
+        connect upstream_variable.source_op with downstream_variable.dest_ops,
+            downstream variable will be eliminated by this function.
+
+        downstream_variable must have None as its source_op.
+
+        Args:
+            upstream_variable (_type_): _description_
+            downstream_variable (_type_): _description_
+        """
+        if downstream_variable.source_op is not None:
+            raise PermissionError(
+                f'Can not create link with variable {upstream_variable.name} & {downstream_variable.name}, '
+                'Cause downstream variable has a non-empty source op')
+        
+        dest_ops = downstream_variable.dest_ops
+        for dest_op in dest_ops:
+            dest_op.inputs[dest_op.inputs.index(downstream_variable)] = upstream_variable
+            upstream_variable.dest_ops.append(dest_op)
+        downstream_variable.dest_ops.clear()
+        self.remove_variable(downstream_variable)
+        return self
 
     def remove_operation(self, removing_op: Operation):
         """
         Remove opeartion from graph, this function will unlink removing operation from
-            current graph, and delete it from graph.
-
-        removing operation is supposed to have only 
-            1 input variable;
-            n parameter variable;
-            1 output variable;
-
-            its output variable should not be the output of current graph. 
-        Otherwise errors will be thrown by this function.
-
-        This function will auto link the source variable of removing operation to all 
-            downstream operations(as their input instead).
-
-        removing operation and its output variable will be deleted from current graph.
+            current graph, pop it from graph.operations, and remove it from all its input and output variables.
+        
+        Parameters of this removing operations will be removed from graph by this function, without warning.
 
         Args:
             removing_op (Operation): [description]
         """
         if removing_op.name not in self.operations:
             raise KeyError(f'Can not remove operation {removing_op.name}, operation not found.')
-        if len(removing_op.outputs) != 1 or len([var for var in removing_op.inputs if not var.is_parameter]) != 1:
-            raise PermissionError(f'Can not remove operation {removing_op.name},'
-                                  ' it has more than 1 input or output variable.')
-        if removing_op.outputs[0].name in self._graph_outputs:
-            raise PermissionError(f'Can not remove operation {removing_op.name},'
-                        ' its output variable is listed in graph output.')
-        assert not removing_op.inputs[0].is_parameter, (
-            f'Removing operation got a parameter variable as its first input.')
 
         # removing all parameters first.
-        for parameter in removing_op.inputs:
+        for parameter in removing_op.inputs.copy():
             if parameter.is_parameter:
+                
                 parameter.dest_ops.clear()
-                parameter.value = None # clear memory
+                parameter.value = None # clear memory.
+                removing_op.inputs.remove(parameter)
+                
                 self.variables.pop(parameter.name)
 
-        removing_var = removing_op.outputs[0]
-        input_var    = removing_op.inputs[0]
-        downstream_ops = self.get_downstream_operations(removing_op)
-
-        input_var.dest_ops.remove(removing_op)
-        input_var.dest_ops.extend(downstream_ops)
-
-        removing_op.inputs.clear()
+        # remove operation from its output variables
+        for output_var in removing_op.outputs:
+            output_var.source_op = None
         removing_op.outputs.clear()
-
-        removing_var.dest_ops.clear()
-        for downstream_op in downstream_ops:
-            downstream_op.inputs[downstream_op.inputs.index(removing_var)] = input_var
+        
+        # remove operation from its input variables
+        for input_var in removing_op.inputs:
+            input_var.dest_ops.remove(removing_op)
+        removing_op.inputs.clear()
 
         self.operations.pop(removing_op.name)
+        return self
+
+    def remove_variable(self, removing_var: Variable):
+        """
+        Remove variable from graph, this function will unlink removing variable from
+            current graph, pop it from graph.variables, and remove it from its source op and dest ops
+
+        Args:
+            removing_var (Variable): [description]
+        """
+        if removing_var.name not in self.variables:
+            raise KeyError(f'Can not remove variable {removing_var.name}, variable not found.')
+        
+        # remove from source operation
+        source_op = removing_var.source_op
+        if source_op is not None:
+            assert isinstance(source_op, Operation), (
+                f'Can not remove variable {removing_var.name}, it links to a unexpected source operation.')
+            if removing_var in source_op.outputs:
+                source_op.outputs.remove(removing_var)
+            removing_var.source_op = None
+        
+        # remove from all dest ops
+        for dest_op in removing_var.dest_ops:
+            assert isinstance(dest_op, Operation), (
+                f'Can not remove variable {removing_var.name}, it links to a unexpected dest operation.')
+            if removing_var in dest_op.inputs:
+                dest_op.inputs.remove(removing_var)
+        removing_var.dest_ops.clear()
+
+        if removing_var.name in self.outputs:
+            self.outputs.pop(removing_var.name)
+
+        if removing_var.name in self.inputs:
+            self.inputs.pop(removing_var.name)
+
         self.variables.pop(removing_var.name)
+        return self
 
     def create_operation(self, op_type: str,  name: str = None, 
         attributes: Dict[str, Any] = None, platform: TargetPlatform = TargetPlatform.UNSPECIFIED,
         inputs: List[Variable] = None, outputs: List[Variable] = None, **kwargs) -> Operation:
+        """
+        Create an operation and attach it it current graph.
+        op_type is mandatory here, however op_name is not required.
+        PPQ will automatically generates a name for your operation: PPQ_Operation_{self._num_of_generated_op}.
+
+        Use this function carefully, cause once your network is quantized, 
+            simply create an operation via this function might cause unexpected error.
+        Beawre that operation created by this function has no meta data and quantization info, 
+            which is needed to export and executing your graph.
+
+        Do not set inputs and outputs via this function, 
+            to link your operation with others, use graph.create_link_with_var instead.
+
+        Args:
+            op_type (str): _description_
+            name (str, optional): _description_. Defaults to None.
+            attributes (Dict[str, Any], optional): _description_. Defaults to None.
+            platform (TargetPlatform, optional): _description_. Defaults to TargetPlatform.UNSPECIFIED.
+            inputs (List[Variable], optional): _description_. Defaults to None.
+            outputs (List[Variable], optional): _description_. Defaults to None.
+
+        Returns:
+            Operation: _description_
+        """
         if name is None:
             name = f'PPQ_Operation_{self._num_of_generated_op}'
             self._num_of_generated_op += 1
@@ -649,9 +727,30 @@ class BaseGraph(Serializable):
         )
         self.append_operation(created)
         return created
-    
+
     def create_variable(self, name: str = None, value: Any = None, is_parameter: bool = False,
         dest_ops: List[OperationBase] = None, source_op: OperationBase = None, **kwargs) -> Variable:
+        """
+        Create a variable and attach it it current graph.
+        PPQ will automatically generates a name for your variable: PPQ_Variable_{self._num_of_generated_op}.
+
+        Use this function carefully, cause once your network is quantized, 
+            simply create an variable via this function might cause unexpected error.
+        You'd better invoke this function before running your quantizer.
+
+        Do not set dest_ops and source_op via this function, 
+            to link this variable with others, use graph.create_link_with_var instead.
+
+        Args:
+            name (str, optional): _description_. Defaults to None.
+            value (Any, optional): _description_. Defaults to None.
+            is_parameter (bool, optional): _description_. Defaults to False.
+            dest_ops (List[OperationBase], optional): _description_. Defaults to None.
+            source_op (OperationBase, optional): _description_. Defaults to None.
+
+        Returns:
+            Variable: _description_
+        """
         if name is None:
             name = f'PPQ_Variable_{self._num_of_generated_var}'
             self._num_of_generated_var += 1
@@ -665,6 +764,28 @@ class BaseGraph(Serializable):
         )
         self.append_variable(created)
         return created
+
+    def mark_variable_as_graph_input(self, var: Variable):
+        if not isinstance(var, Variable):
+            raise TypeError(f'Except a variable here, however {type(var)} was given.')
+        var_name = var.name
+        if var_name not in self.variables:
+            raise KeyError(f'Can not find variable {var_name} within current graph.')
+        if var_name in self.inputs: return
+        if var_name in self.outputs:
+            raise KeyError(f'Can not mark variable {var_name} as graph input, cause it is graph output.')
+        self.inputs[var_name] = self.variables[var_name]
+
+    def mark_variable_as_graph_output(self, var: Variable):
+        if not isinstance(var, Variable):
+            raise TypeError(f'Except a variable here, however {type(var)} was given.')
+        var_name = var.name
+        if var_name not in self.variables:
+            raise KeyError(f'Can not find variable {var_name} within current graph.')
+        if var_name in self.outputs: return
+        if var_name in self.inputs:
+            raise KeyError(f'Can not mark variable {var_name} as graph output, cause it is graph input.')
+        self.outputs[var_name] = self.variables[var_name]
 
     def __getstate__(self) -> dict:
         state = super().__getstate__()
@@ -702,3 +823,8 @@ class GraphBuilder(metaclass=SingletonMeta):
 class GraphExporter(metaclass=SingletonMeta):
     @ abstractmethod
     def export(self, file_path: str, graph: BaseGraph, config_path: str = None, **kwargs): pass
+
+
+class OperationExporter(metaclass=SingletonMeta):
+    @ abstractmethod
+    def export(self, operation:Operation, graph: BaseGraph, **kwargs) -> Operation: pass

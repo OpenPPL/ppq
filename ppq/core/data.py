@@ -42,6 +42,7 @@ class DataType(Enum):
     BOOL = 9  # Onnx.TensorProto.DataType.BOOL
     COMPLEX128 = 15 # Onnx.TensorProto.DataType.COMPLEX128
     COMPLEX64 = 14 # Onnx.TensorProto.DataType.COMPLEX64
+    NONETYPE  = 0 # Onnx.TensorProto.DataType.UNSPECIFIED
 
     @ classmethod
     def convert_from_numpy(cls, dtype: np_type):

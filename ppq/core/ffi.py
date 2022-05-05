@@ -7,6 +7,7 @@
 """
 
 import os
+import traceback
 
 import torch
 from torch.utils.cpp_extension import load
@@ -15,18 +16,21 @@ from torch.cuda import synchronize
 from .defs import ppq_warning
 
 ppq_warning('Compling CUDA Kernels. Please wait...')
-__CUDA_EXTENTION__ = load(
-    name='PPQ_Cuda_Impls',
-    sources=[
-        os.path.join(os.path.dirname(os.path.dirname(__file__)), 'csrc/cuda/export.cc'),
-        os.path.join(os.path.dirname(os.path.dirname(__file__)), 'csrc/cuda/linear.cu'),
-        os.path.join(os.path.dirname(os.path.dirname(__file__)), 'csrc/cuda/sort.cu'),
-        os.path.join(os.path.dirname(os.path.dirname(__file__)), 'csrc/cuda/train.cu'),
-    ],
-    build_directory=os.path.join(os.path.dirname(os.path.dirname(__file__)), 'csrc/build/'),
-    with_cuda=True,
-    extra_cflags=['-O3']
-)
+try:
+    __CUDA_EXTENTION__ = load(
+        name='PPQ_Cuda_Impls',
+        sources=[
+            os.path.join(os.path.dirname(os.path.dirname(__file__)), 'csrc/cuda/export.cc'),
+            os.path.join(os.path.dirname(os.path.dirname(__file__)), 'csrc/cuda/linear.cu'),
+            os.path.join(os.path.dirname(os.path.dirname(__file__)), 'csrc/cuda/sort.cu'),
+            os.path.join(os.path.dirname(os.path.dirname(__file__)), 'csrc/cuda/train.cu'),
+        ],
+        build_directory=os.path.join(os.path.dirname(os.path.dirname(__file__)), 'csrc/build/'),
+        with_cuda=True,
+        extra_cflags=['-O3'])
+except Exception as e:
+    raise SystemError('PPQ can not complie cuda extensions, please check your complier and system environment, '
+                      'or simply set ppq.core.config.USING_CUDA_KERNEL = False.')
 
 # helper class for calling cuda methods.
 class CUDA:

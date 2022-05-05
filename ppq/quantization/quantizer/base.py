@@ -14,6 +14,7 @@ from ppq.IR.base.graph import Operation
 from ppq.IR.morph import GraphReplacer
 from ppq.IR.quantize import QuantableVariable
 from ppq.IR.search import SearchableGraph
+from ppq.executor.torch import TorchExecutor
 from ppq.quantization.optim import *
 
 
@@ -366,8 +367,7 @@ class BaseQuantizer(metaclass = ABCMeta):
         )
         if setting.quantize_parameter:
             if param_setting.baking_parameter:
-                list_of_passes.append(ParameterBakingPass(
-                    quantize_function=executor.quantize_function))
+                list_of_passes.append(ParameterBakingPass())
             
         if setting.extension:
             list_of_passes.append(ExtensionPass(

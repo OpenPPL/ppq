@@ -224,7 +224,7 @@ class QuantizationFusionSetting():
         #   保证其能表示所有输入的最小值与所有输入的最大值。
         # 选择对齐方式 - Align to Output, 则所有输入量化信息将全部等同于算子输出的量化信息
         # 设置 force_alignment_overlap 为 True, 则强制覆盖算子的上游量化信息，对于特殊结构的网络，这可能导致大范围的合并。
-        
+
         # For Operations like Add, Concat, hardware requires their inputs share a same quantization config.
         # So that we implements 2 alignment method here for simulating hardware behaviour:
         # Align to Large: all input variables will merge their quantization range to a larger one.

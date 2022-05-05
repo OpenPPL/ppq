@@ -10,7 +10,7 @@ from ppq.utils import process_attribute
 
 import torch
 import torch.nn.functional as F
-
+from torch import _VF
 from .base import *
 
 # Reference:
@@ -1460,15 +1460,14 @@ def Gemm_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
         # reshape A from [n, c, h, w] to [n, chw]
         A = A.reshape(A.shape[0], -1)
     C = values[2] if len(values) > 2 else 0
-    alpha = op.attributes.get('alpha', 1.0)
-    beta = op.attributes.get('beta', 1.0)
+    alpha  = op.attributes.get('alpha', 1.0)
+    beta   = op.attributes.get('beta', 1.0)
     transA = op.attributes.get('transA', 0)
     transB = op.attributes.get('transB', 0)
     A = A.transpose(0, 1) if transA else A
     B = B.transpose(0, 1) if transB else B
 
     output = alpha * torch.matmul(A, B) + beta * C
-
     return output
 
 def MatMul_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
@@ -1552,7 +1551,7 @@ def Pad_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
     elif len(pads) == 4:
         pads = [pads[1], pads[3], pads[0], pads[2]]
     elif len(pads) == 8:  # inception v3, i don't kown if the order is correct.
-        pads = [pads[2], pads[3], pads[6], pads[7]]
+        pads = [pads[3], pads[7], pads[2], pads[6]]
 
     if mode == 'constant':
         constant_value = values[-1] if len(values) == 3 else 0
@@ -1858,6 +1857,221 @@ def HardSwish_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
     return F.hardswish(value)
 
 
+def GRU_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
+    """
+    Computes an one-layer GRU. This operator is usually supported via some custom implementation such as CuDNN.
+    
+    只支持 pytorch 导出来的 GRU 啊亲; 必须要 6 个输入 Variable
+
+    Notations:
+
+        X - input tensor
+
+        z - update gate
+
+        r - reset gate
+
+        h - hidden gate
+
+        t - time step (t-1 means previous time step)
+
+        W[zrh] - W parameter weight matrix for update, reset, and hidden gates
+
+        R[zrh] - R recurrence weight matrix for update, reset, and hidden gates
+
+        Wb[zrh] - W bias vectors for update, reset, and hidden gates
+
+        Rb[zrh] - R bias vectors for update, reset, and hidden gates
+
+        WB[zrh] - W parameter weight matrix for backward update, reset, and hidden gates
+
+        RB[zrh] - R recurrence weight matrix for backward update, reset, and hidden gates
+
+        WBb[zrh] - W bias vectors for backward update, reset, and hidden gates
+
+        RBb[zrh] - R bias vectors for backward update, reset, and hidden gates
+
+        H - Hidden state
+
+        num_directions - 2 if direction == bidirectional else 1
+
+    Activation functions:
+
+        Relu(x)                - max(0, x)
+
+        Tanh(x)                - (1 - e^{-2x})/(1 + e^{-2x})
+
+        Sigmoid(x)             - 1/(1 + e^{-x})
+
+    (NOTE: Below are optional)
+
+        Affine(x)              - alpha*x + beta
+
+        LeakyRelu(x)           - x if x >= 0 else alpha * x
+
+        ThresholdedRelu(x)     - x if x >= alpha else 0
+
+        ScaledTanh(x)          - alpha*Tanh(beta*x)
+
+        HardSigmoid(x)         - min(max(alpha*x + beta, 0), 1)
+
+        Elu(x)                 - x if x >= 0 else alpha*(e^x - 1)
+
+        Softsign(x)            - x/(1 + |x|)
+
+        Softplus(x)            - log(1 + e^x)
+    
+    Equations (Default: f=Sigmoid, g=Tanh):
+
+        - zt = f(Xt*(Wz^T) + Ht-1*(Rz^T) + Wbz + Rbz)
+
+        - rt = f(Xt*(Wr^T) + Ht-1*(Rr^T) + Wbr + Rbr)
+
+        - ht = g(Xt*(Wh^T) + (rt (.) Ht-1)*(Rh^T) + Rbh + Wbh) # default, when linear_before_reset = 0
+
+        - ht = g(Xt*(Wh^T) + (rt (.) (Ht-1*(Rh^T) + Rbh)) + Wbh) # when linear_before_reset != 0
+
+        - Ht = (1 - zt) (.) ht + zt (.) Ht-1
+    
+    This operator has optional inputs/outputs. See the doc for more details about the representation of optional arguments. 
+    An empty string may be used in the place of an actual argument's name to indicate a missing argument. 
+    Trailing optional arguments (those not followed by an argument that is present) may also be simply omitted.
+
+    Version
+    This version of the operator has been available since version 14 of the default ONNX operator set.
+
+    Other versions of this operator: 1, 3, 7
+
+    Attributes
+        activation_alpha : list of floats
+            Optional scaling values used by some activation functions. 
+            The values are consumed in the order of activation functions, 
+            for example (f, g, h) in LSTM. 
+            
+            Default values are the same as of corresponding ONNX operators.For example with LeakyRelu, 
+            the default alpha is 0.01.
+        
+        activation_beta : list of floats
+            Optional scaling values used by some activation functions. 
+            The values are consumed in the order of activation functions, 
+            for example (f, g, h) in LSTM. 
+            
+            Default values are the same as of corresponding ONNX operators.
+        
+        activations : list of strings
+            A list of 2 (or 4 if bidirectional) activation functions for update, reset, and hidden gates. 
+            The activation functions must be one of the activation functions specified above. 
+            Optional: See the equations for default if not specified.
+        
+        clip : float
+            Cell clip threshold. 
+            Clipping bounds the elements of a tensor in the range of [-threshold, +threshold] 
+            and is applied to the input of activations. No clip if not specified.
+        
+        direction : string (default is forward)
+            Specify if the RNN is forward, reverse, or bidirectional.
+            Must be one of forward (default), reverse, or bidirectional.
+        
+        hidden_size : int
+            Number of neurons in the hidden layer
+        
+        layout : int (default is 0)
+            The shape format of inputs X, initial_h and outputs Y, Y_h. 
+
+            If 0, the following shapes are expected: 
+                X.shape = [seq_length, batch_size, input_size], 
+                Y.shape = [seq_length, num_directions, batch_size, hidden_size], 
+                initial_h.shape = Y_h.shape = [num_directions, batch_size, hidden_size]. 
+
+            If 1, the following shapes are expected: 
+                X.shape = [batch_size, seq_length, input_size], 
+                Y.shape = [batch_size, seq_length, num_directions, hidden_size], 
+                initial_h.shape = Y_h.shape = [batch_size, num_directions, hidden_size].
+        
+        linear_before_reset : int (default is 0)
+            When computing the output of the hidden gate, 
+            apply the linear transformation before multiplying by the output of the reset gate.
+    
+    Inputs (3 - 6)
+        X (differentiable) : T
+            The input sequences packed (and potentially padded) into one 3-D tensor with the shape of 
+            `[seq_length, batch_size, input_size]`.
+    
+        W (differentiable) : T
+            The weight tensor for the gates. 
+            Concatenation of `W[zrh]` and `WB[zrh]` (if bidirectional) along dimension 0. 
+            This tensor has shape `[num_directions, 3*hidden_size, input_size]`.
+    
+        R (differentiable) : T
+            The recurrence weight tensor. 
+            Concatenation of `R[zrh]` and `RB[zrh]` (if bidirectional) along dimension 0. 
+            This tensor has shape `[num_directions, 3*hidden_size, hidden_size]`.
+        
+        B (optional, differentiable) : T
+            The bias tensor for the gates. 
+            Concatenation of `[Wb[zrh], Rb[zrh]]` and `[WBb[zrh], RBb[zrh]]` (if bidirectional) along dimension 0. 
+            This tensor has shape `[num_directions, 6*hidden_size]`. Optional: If not specified - assumed to be 0
+    
+        sequence_lens (optional, non-differentiable) : T1
+            Optional tensor specifying lengths of the sequences in a batch. 
+            If not specified - assumed all sequences in the batch to have length `seq_length`. 
+            It has shape `[batch_size]`.
+    
+        initial_h (optional, non-differentiable) : T
+            Optional initial value of the hidden. 
+            If not specified - assumed to be 0. 
+            It has shape `[num_directions, batch_size, hidden_size]`.
+    
+    Outputs (0 - 2)
+        Y (optional, differentiable) : T
+            A tensor that concats all the intermediate output values of the hidden. 
+            It has shape `[seq_length, num_directions, batch_size, hidden_size]`.
+    
+        Y_h (optional, differentiable) : T
+            The last output value of the hidden. 
+            It has shape `[num_directions, batch_size, hidden_size]`.
+    
+    Type Constraints
+        T : tensor(float16), tensor(float), tensor(double)
+    
+    Constrain input and output types to float tensors.
+        T1 : tensor(int32)
+    
+    Constrain seq_lens to integer tensor.
+
+    """
+    ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=6, max_num_of_input=6)
+    direction = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='direction', default='forward')
+    if direction == 'reverse': raise NotImplementedError('GRU do not support reverse mode now.')
+    if direction == 'bidirectional': raise NotImplementedError('PPQ do not support bidirectional gru now.')
+    linear_before_reset = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='linear_before_reset', default=0)
+    if linear_before_reset == 0: raise NotImplementedError('PPQ do not support linear_before_reset = 0')
+    x, w, r, b, _, h = values
+    num_of_elements = b.numel() // 6
+    # _VF.gru needs following arugments:
+    # input_x, batchsize, hidden_state, flatten_weights, need_bias(bool),
+    # num_of_layer, dropout, is_training(bool), is_bidirectional(bool)
+    w = torch.cat([
+        w[0][num_of_elements * 1: num_of_elements * 2],
+        w[0][num_of_elements * 0: num_of_elements * 1],
+        w[0][num_of_elements * 2: num_of_elements * 3]], dim=0).contiguous()
+    r = torch.cat([
+        r[0][num_of_elements * 1: num_of_elements * 2],
+        r[0][num_of_elements * 0: num_of_elements * 1],
+        r[0][num_of_elements * 2: num_of_elements * 3]], dim=0).contiguous()
+    b1 = torch.cat([
+        b[0, num_of_elements * 1: num_of_elements * 2],
+        b[0, num_of_elements * 0: num_of_elements * 1],
+        b[0, num_of_elements * 2: num_of_elements * 3]]).contiguous()
+    b2 = torch.cat([
+        b[0, num_of_elements * 4: num_of_elements * 5],
+        b[0, num_of_elements * 3: num_of_elements * 4],
+        b[0, num_of_elements * 5: num_of_elements * 6]]).contiguous()
+    hidden_vector, last_state = _VF.gru(
+        x, h, (w, r, b1, b2), True, 1, 0.0, False, False, False)
+    return hidden_vector.unsqueeze(1), last_state
+
+
 def Neg_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
     """
     Neg takes one input data (Tensor) and produces one output data (Tensor) 
@@ -1912,6 +2126,11 @@ def PPQDeviceSwitch_forward(op: Operation, values: List[torch.Tensor], ctx: Torc
     return value.to(ctx.executing_device)
 
 
+def Identity_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
+    ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
+    ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
+    return values[0]
+
 
 DEFAULT_BACKEND_TABLE = {
     'Add': Add_forward,
@@ -1944,7 +2163,6 @@ DEFAULT_BACKEND_TABLE = {
     'Max': Eltwise_forward,
     'MaxPool': MaxPool2d_forward,
     'Min': Eltwise_forward,
-    'Mod': Mod_forward,
     'Mul': Mul_forward,
     'NonMaxSuppression': _NMS_forward,
     'NonZero': NonZero_forward,
@@ -1993,5 +2211,7 @@ DEFAULT_BACKEND_TABLE = {
     'HardSigmoid': HardSigmoid_forward,
     'HardSwish': HardSwish_forward,
     'Neg': Neg_forward,
-    'PPQDeviceSwitch': PPQDeviceSwitch_forward
+    'GRU': GRU_forward,
+    'PPQDeviceSwitch': PPQDeviceSwitch_forward,
+    'Identity': Identity_forward
 }

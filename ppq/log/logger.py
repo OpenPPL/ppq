@@ -1,9 +1,7 @@
-import os
 import sys
 import time
 from enum import Enum
 from typing import Union
-
 
 R_BEGIN = "\033[38;5;1m"
 G_BEGIN = "\033[38;5;2m"

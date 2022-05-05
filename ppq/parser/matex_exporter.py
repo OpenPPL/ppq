@@ -103,13 +103,12 @@ class MetaxExporter(OnnxExporter):
         scale  = convert_any_to_torch_tensor(config.scale, dtype=torch.float32)
         offset = convert_any_to_torch_tensor(config.offset, dtype=offset_dtype)
         
-        qt_svar = Variable(name=var.name + '_qt_scale', value=scale.clone(), is_parameter=True)
-        qt_zvar = Variable(name=var.name + '_qt_zeropoint', value=offset.clone(), is_parameter=True)
-        dq_svar = Variable(name=var.name + '_dq_scale', value=scale.clone(), is_parameter=True)
-        dq_zvar = Variable(name=var.name + '_dq_zeropoint', value=offset.clone(), is_parameter=True)
-        
-        qt_op = Operation(name=var.name + '_QuantizeLinear', op_type='QuantizeLinear', attributes={})
-        dq_op = Operation(name=var.name + '_DequantizeLinear', op_type='DequantizeLinear', attributes={})
+        qt_svar = graph.create_variable(name=None, value=scale.clone(), is_parameter=True)
+        qt_zvar = graph.create_variable(name=None, value=offset.clone(), is_parameter=True)
+        dq_svar = graph.create_variable(name=None, value=scale.clone(), is_parameter=True)
+        dq_zvar = graph.create_variable(name=None, value=offset.clone(), is_parameter=True)
+        qt_op   = graph.create_operation(op_type='QuantizeLinear', attributes={})
+        dq_op   = graph.create_operation(op_type='DequantizeLinear', attributes={})
         
         if single_branch:
             upstream_op, downstream_op = var.source_op, dest_op
@@ -120,31 +119,23 @@ class MetaxExporter(OnnxExporter):
             graph.insert_op_on_var(dq_op, var=var.name)
             graph.insert_op_on_var(qt_op, var=var.name)
 
-        qt_op.inputs.extend([qt_svar, qt_zvar])
-        dq_op.inputs.extend([dq_svar, dq_zvar])
-
-        qt_svar.dest_ops.append(qt_op)
-        qt_zvar.dest_ops.append(qt_op)
-        dq_svar.dest_ops.append(dq_op)
-        dq_zvar.dest_ops.append(dq_op)
-
-        graph.append_variable(qt_svar)
-        graph.append_variable(qt_zvar)
-        graph.append_variable(dq_svar)
-        graph.append_variable(dq_zvar)
-
+        graph.create_link_with_op(variable=qt_svar, upstream_op=None, downstream_op=qt_op)
+        graph.create_link_with_op(variable=qt_zvar, upstream_op=None, downstream_op=qt_op)
+        
+        graph.create_link_with_op(variable=dq_svar, upstream_op=None, downstream_op=dq_op)
+        graph.create_link_with_op(variable=dq_zvar, upstream_op=None, downstream_op=dq_op)
 
     def insert_dequant_param(self, graph: BaseGraph, var: Variable, is_bias: bool) -> None:
         # apply inplace quantization for parameters and only insert dequant op
         # on pre-quant var
         scale, offset, axis = self.inplace_quantization(var, is_bias)
-        dequant_op = Operation(name=var.name + '_DequantizeLinear', op_type='DequantizeLinear', attributes={'axis':axis})
+        dequant_op = graph.create_operation(op_type='DequantizeLinear', attributes={'axis':axis})
         graph.insert_op_on_var(dequant_op, var.name)
-        scale = Variable(name=var.name + '_scale', value=scale, is_parameter=True, dest_ops=[dequant_op])
-        offset = Variable(name=var.name + '_zero_point', value=offset, is_parameter=True, dest_ops=[dequant_op])
-        graph.append_variable(scale)
-        graph.append_variable(offset)
-        dequant_op.inputs.extend([scale, offset])
+        
+        dq_svar = graph.create_variable(name=None, value=scale.clone(), is_parameter=True)
+        dq_zvar = graph.create_variable(name=None, value=offset.clone(), is_parameter=True)
+        graph.create_link_with_op(dq_svar, upstream_op=None, downstream_op=dequant_op)
+        graph.create_link_with_op(dq_zvar, upstream_op=None, downstream_op=dequant_op)
 
     def correct_param_meta(self, graph: BaseGraph) -> None:
         # correct parameter meta data
@@ -157,11 +148,11 @@ class MetaxExporter(OnnxExporter):
                             op.outputs], op.name, op.type, -1)
 
                     if torch.is_tensor(var.value):
-                        op.meta_data.input_metas[op.inputs.index(var)] = \
-                            TensorMeta.parsing_from_torch_tensor(var.value, var.name)
+                        op.meta_data.input_metas[op.inputs.index(var)] = (
+                            TensorMeta.parsing_from_torch_tensor(var.value, var.name))
                     else:
-                        op.meta_data.input_metas[op.inputs.index(var)] = \
-                            TensorMeta.parsing_from_numpy_ndarray(var.value, var.name)
+                        op.meta_data.input_metas[op.inputs.index(var)] = (
+                            TensorMeta.parsing_from_numpy_ndarray(var.value, var.name))
 
         # add variable meta info in topo order
         for op in graph.topological_sort():
@@ -217,13 +208,10 @@ class MetaxExporter(OnnxExporter):
                 graph.outputs.pop(op.outputs[0].name)
                 graph.outputs[input_var.name] = input_var
 
-            if op.type == 'Clip':
-                for var in op.inputs[1:]:
-                    var.dest_ops.clear()
-                    graph.delete_variable(var.name)
-                while len(op.inputs) > 1:
-                    op.inputs.pop()
+            input_var, output_var = op.inputs[0], op.outputs[0]
             graph.remove_operation(op)
+            graph.create_link_with_var(input_var, output_var)
+
         formater = GraphFormatter(graph)
         formater(GraphCommand(GraphCommandType.DELETE_ISOLATED))
 
@@ -238,16 +226,14 @@ class MetaxExporter(OnnxExporter):
         for op in graph.operations.values():
             if op.type == 'ReduceSum' or op.type == 'Squeeze' or op.type == 'Unsqueeze':
                 axes = convert_any_to_torch_tensor(op.attributes.pop('axes'), dtype=torch.int64)
-                var = Variable(name=op.name+'_axes', value=axes, is_parameter=True, dest_ops=[op])
-                graph.append_variable(var)
-                op.inputs.append(var)
+                var = graph.create_variable(name=None, value=axes, is_parameter=True)
+                graph.create_link_with_op(variable=var, upstream_op=None, downstream_op=op)
                 op.meta_data.input_metas.append(TensorMeta.parsing_from_torch_tensor(var.value, var.name))
 
             elif op.type == 'Split':
                 split = convert_any_to_torch_tensor(op.attributes.pop('split'), dtype=torch.int64)
-                var = Variable(name=op.name+'_axes', value=split, is_parameter=True, dest_ops=[op])
-                graph.append_variable(var)
-                op.inputs.append(var)
+                var = graph.create_variable(name=None, value=split, is_parameter=True)
+                graph.create_link_with_op(variable=var, upstream_op=None, downstream_op=op)
                 op.meta_data.input_metas.append(TensorMeta.parsing_from_torch_tensor(var.value, var.name))
 
     def collect_compel_pair(self, graph: BaseGraph) -> None:
@@ -353,8 +339,8 @@ class MetaxExporter(OnnxExporter):
 
         extra_opsets = self.required_opsets()
 
+        opsets = []
         if 'opsets' in graph._detail:
-            opsets = []
             for opset in graph._detail['opsets']:
                 if opset['domain'] in extra_opsets or opset['domain'] == '':
                     continue

@@ -7,6 +7,7 @@ from ppq.core import (COMPELING_OP_TYPES, LINEAR_ACTIVATIONS,
                       QuantizationProperty, QuantizationStates, RoundingPolicy,
                       TargetPlatform, TensorQuantizationConfig,
                       empty_ppq_cache)
+from ppq.core.defs import ppq_warning
 from ppq.executor import BaseGraphExecutor
 from ppq.IR import GraphCommandProcesser, QuantableOperation, Variable
 from ppq.IR.base.graph import Operation
@@ -601,3 +602,82 @@ class QuantAlignmentPass(QuantizationOptimizationPass):
                         for cfg, var in up_op.config_with_variable:
                             if operation in var.dest_ops: 
                                 cfg.set_master(master=master_config, recursive=False)
+
+
+class SwishFusionPass(QuantizationOptimizationPass):
+    def __init__(self) -> None:
+        super().__init__('Swish Fusion')
+        
+    def optimize(self, processer: GraphCommandProcesser, 
+                 dataloader: Iterable, executor: BaseGraphExecutor, **kwargs) -> None:
+        graph = processer.graph
+        search_engine = SearchableGraph(graph)
+        patterns = search_engine.pattern_matching(
+            patterns = [lambda x: x.is_computing_op, 'Sigmoid', 'Mul'],
+            edges = [[0, 1], [1, 2], [0, 2]],
+            exclusive = True)
+
+        for pattern in patterns:
+            if any([not isinstance(op, QuantableOperation) for op in pattern]): 
+                ppq_warning(f'There is a pattern of swish activation in your network start from {pattern[0]}, '
+                            'however part of your swish activation is not quantable, '
+                            'so that graph fusion can not merge their quantization configuration.')
+                continue
+            if any([op.platform != pattern[0].platform for op in pattern]):
+                ppq_warning(f'There is a pattern of swish activation in your network start from {pattern[0]}, '
+                            'however part of your swish activation is not quantable, '
+                            'so that graph fusion can not merge their quantization configuration.')
+                continue
+            computing, sigmoid, mul = pattern
+            
+            assert isinstance(computing, QuantableOperation)
+            assert isinstance(sigmoid, QuantableOperation)
+            assert isinstance(mul, QuantableOperation)
+            
+            master_config = mul.config.output_quantization_config[0]
+            computing.config.output_quantization_config[0].dominated_by = master_config
+            sigmoid.config.input_quantization_config[0].dominated_by    = master_config
+            sigmoid.config.output_quantization_config[0].dominated_by   = master_config
+            mul.config.input_quantization_config[0].dominated_by        = master_config
+            mul.config.input_quantization_config[1].dominated_by        = master_config
+
+
+class MishFusionPass(QuantizationOptimizationPass):
+    def __init__(self) -> None:
+        super().__init__('Mish Fusion')
+
+    def optimize(self, processer: GraphCommandProcesser, 
+                 dataloader: Iterable, executor: BaseGraphExecutor, **kwargs) -> None:
+        graph = processer.graph
+        search_engine = SearchableGraph(graph)
+        patterns = search_engine.pattern_matching(
+            patterns = [lambda x: x.is_computing_op, 'Softplus', 'Tanh', 'Mul'],
+            edges = [[0, 1], [1, 2], [2, 3], [0, 3]],
+            exclusive = True)
+
+        for pattern in patterns:
+            if any([not isinstance(op, QuantableOperation) for op in pattern]): 
+                ppq_warning(f'There is a pattern of mish activation in your network start from {pattern[0]}, '
+                            'however part of your mish activation is not quantable, '
+                            'so that graph fusion can not merge their quantization configuration.')
+                continue
+            if any([op.platform != pattern[0].platform for op in pattern]):
+                ppq_warning(f'There is a pattern of mish activation in your network start from {pattern[0]}, '
+                            'however part of your mish activation is not quantable, '
+                            'so that graph fusion can not merge their quantization configuration.')
+                continue
+            computing, softplus, tanh, mul = pattern
+            
+            assert isinstance(computing, QuantableOperation)
+            assert isinstance(softplus, QuantableOperation)
+            assert isinstance(tanh, QuantableOperation)
+            assert isinstance(mul, QuantableOperation)
+            
+            master_config = mul.config.output_quantization_config[0]
+            computing.config.output_quantization_config[0].dominated_by = master_config
+            tanh.config.input_quantization_config[0].dominated_by       = master_config
+            tanh.config.output_quantization_config[0].dominated_by      = master_config
+            softplus.config.input_quantization_config[0].dominated_by   = master_config
+            softplus.config.output_quantization_config[0].dominated_by  = master_config
+            mul.config.input_quantization_config[0].dominated_by        = master_config
+            mul.config.input_quantization_config[1].dominated_by        = master_config

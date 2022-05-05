@@ -27,7 +27,7 @@ from ppq.utils.round import ppq_tensor_round
 try:
     import tensorrt as trt
 except ImportError:
-    pass
+    ppq_warning('TensorRT is not installed, TRT Exporter is disabled.')
 
 from .onnxruntime_exporter import ONNXRUNTIMExporter
 
@@ -70,10 +70,10 @@ class TensorRTExporter(ONNXRUNTIMExporter):
 
         qt_op = Operation(name=f'{op.name}_{var.name}' + '_QuantizeLinear', op_type='QuantizeLinear', attributes={})
         dq_op = Operation(name=f'{op.name}_{var.name}' + '_DequantizeLinear', op_type='DequantizeLinear', attributes={})
-        
+
         graph.insert_op_between_var_and_op(dq_op, up_var=var, down_op=op)
         graph.insert_op_between_var_and_op(qt_op, up_var=var, down_op=dq_op)
-        
+
         qt_op.inputs.extend([qt_svar, qt_zvar])
         dq_op.inputs.extend([dq_svar, dq_zvar])
 
@@ -86,7 +86,7 @@ class TensorRTExporter(ONNXRUNTIMExporter):
         graph.append_variable(qt_zvar)
         graph.append_variable(dq_svar)
         graph.append_variable(dq_zvar)
-        
+
         # create meta data for qt_op, dq_op
         qt_meta = OperationMeta(
             input_metas    = [TensorMeta(dtype=DataType.FP32, shape=meta.shape), 
@@ -165,7 +165,7 @@ class TensorRTExporter(ONNXRUNTIMExporter):
 
     @ property
     def required_opsets(self) -> Dict[str, int]:
-        extra_domain_versions = [("ai.onnx", 11)]
+        extra_domain_versions = [("ai.onnx", 11)] # must be opset 11
         return dict(extra_domain_versions)
 
     def export(self, file_path: str, graph: BaseGraph, 

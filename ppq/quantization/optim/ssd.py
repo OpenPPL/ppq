@@ -352,7 +352,7 @@ class SSDEqualizationPass(QuantizationOptimizationPass):
                 if calib_step >= calib_steps:
                     break
 
-    def calibration_passive_param(self, pair: List[Operation], scale_multiplier: float=2.0):
+    def calibration_passive_param(self, pair: List[Operation], scale_multiplier: float=1.0):
         for op in pair:
             if not isinstance(op, QuantableOperation): continue
             if op.type in {'Conv', 'ConvTranspose', 'Gemm'}:
