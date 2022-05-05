@@ -14,9 +14,9 @@ PPQ 使用量化计算图(QIR)描述量化细节，即便在网络极度复杂�
 PyTorch | TensorFlow | Caffe | ONNX | MMlab
 
 ### Deploy Platform:
-TensorRT | OpenPPL-CUDA | OpenPPL-DSP | SNPE(Qualcomm) | NXP | Metax | Tengine(Developing)
-
-# Tutorial(Bilibili 视频教程)
+TensorRT | OpenPPL-CUDA | OpenPPL-DSP | SNPE(Qualcomm) | NXP | Metax | Tengine(Developing) | Ncnn(Developing)
+ | 
+# Video Tutorial(Bilibili 视频教程)
 Watch video tutorial series on www.bilibili.com, following are links of PPQ tutorial links(Only Chinese version).
 
 * 安装教程: [https://www.bilibili.com/video/BV1WS4y1N7Kn](https://www.bilibili.com/video/BV1WS4y1N7Kn "PPQ Installation Tutorial") 
@@ -26,6 +26,7 @@ Watch video tutorial series on www.bilibili.com, following are links of PPQ tuto
 * 量化计算原理(Part 1)：[https://www.bilibili.com/video/BV1fB4y1m7fJ](https://www.bilibili.com/video/BV1fB4y1m7fJ "Quantized Computing") 
 * 量化计算原理(Part 2)：[https://www.bilibili.com/video/BV1qA4y1Q7Uh](https://www.bilibili.com/video/BV1qA4y1Q7Uh "Quantized Computing") 
 * 图优化与量化模拟：[https://www.bilibili.com/video/BV1Kr4y1n7cy](https://www.bilibili.com/video/BV1Kr4y1n7cy "Graph Optimization & quantization simulating.") 
+* 图调度与模式匹配：[https://www.bilibili.com/video/BV1xY411A7ea](https://www.bilibili.com/video/BV1xY411A7ea "Graph Dispatching & Pattern Matching.") 
 
 * 其他教程: 等待缓慢更新...
 
@@ -47,7 +48,7 @@ ATTENTION: Make sure your Python version is >= 3.6.0. PPL Quantization Tool is w
     * For Windows User:
         * Download ninja.exe from [https://github.com/ninja-build/ninja/releases](https://github.com/ninja-build/ninja/releases), add it to Windows PATH Environment
         * Download Visual Studio from [https://visualstudio.microsoft.com](https://visualstudio.microsoft.com/zh-hans/), if you already got a c++ compiler, you can skip this step. 
-        * Please Update Visual studio to 2019 or higher, otherwise there might be some compile error like: CxxFrameHandler4 unresolved, GSHandlerCheck unresolved.
+        * Please Update Visual studio to 2019, otherwise there might be some compile error like: CxxFrameHandler4 unresolved, GSHandlerCheck unresolved.
         * Add your c++ compiler to Windows PATH Environment, if you are using Visual Studio, it should be something like "C:\Program Files\Microsoft Visual Studio\2019\Community\VC\Tools\MSVC\14.16.27023\bin\Hostx86\x86"
 
 * Install PPQ from source:
@@ -71,7 +72,7 @@ python setup.py install
 python3 -m pip install ppq
 ``` 
 
-# Tutorials and Examples
+# Tutorials and Running Examples
 
 1. User guide, system design doc can be found at /doc/pages/instructions of this repository, PPL Quantization Tool documents are written with pure html5.
 2. Examples can be found at /ppq/samples.
