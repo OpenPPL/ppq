@@ -291,6 +291,11 @@ class LearningStepSizeSetting():
         # scale multiplifer for bias(passive quantized param)
         self.scale_multiplier       = 2.0
 
+        # collecting device for block input and output
+        # turn this to cpu if CUDA OOM Error
+        self.collecting_device      = 'cuda'
+
+
 
 class BlockwiseReconstructionSetting():
      def __init__(self) -> None:
@@ -307,6 +312,10 @@ class BlockwiseReconstructionSetting():
         self.lamda              = 1.0
         # scale multiplifer for bias(passive quantized param)
         self.scale_multiplier   = 2.0
+
+        # collecting device for block input and output
+        # turn this to cpu if CUDA OOM Error
+        self.collecting_device  = 'cuda'
 
 
 class WeightSplitSetting():

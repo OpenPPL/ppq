@@ -326,6 +326,7 @@ class BaseQuantizer(metaclass = ABCMeta):
                 epochs                 = lsq_setting.epochs,
                 lr                     = lsq_setting.lr,
                 scale_multiplier       = lsq_setting.scale_multiplier,
+                collecting_device      = lsq_setting.collecting_device
             )
         )
         
@@ -337,7 +338,8 @@ class BaseQuantizer(metaclass = ABCMeta):
                 epochs            = brecq_setting.epochs,
                 lr                = brecq_setting.lr,
                 lamda             = brecq_setting.lamda,
-                scale_multiplier  = brecq_setting.scale_multiplier
+                scale_multiplier  = brecq_setting.scale_multiplier,
+                collecting_device = brecq_setting.collecting_device
             )
         )
 
