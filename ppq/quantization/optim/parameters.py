@@ -22,7 +22,7 @@ class PassiveParameterQuantizePass(QuantizationOptimizationPass):
     if there is any parameter that can not be quantized with current quantization configuration(
         if their positive counterparts have not been properly quantized), an error will be thrown.
     """
-    def __init__(self, bias_scale_multiplier=2):
+    def __init__(self, bias_scale_multiplier=1):
         self.scale_multiplier = bias_scale_multiplier
         super().__init__(name='PPQ Passive Parameter Quantization')
 
