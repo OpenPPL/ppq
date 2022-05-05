@@ -150,26 +150,7 @@ class PPL_DSP_TI_Quantizer(PPL_DSP_Quantizer):
             # if operation has bias
             if operation.num_of_input > 2:
                 bias_config = base_quant_config.input_quantization_config[-1]
-                bias_config.policy = QuantizationPolicy(
-                    QuantizationProperty.SYMMETRICAL +
-                    QuantizationProperty.LINEAR +
-                    QuantizationProperty.PER_CHANNEL
-                )
-                # bias should be quantized with 32 bits
-                # in python3, int indicates long long in C++
-                # so that it has enough precision to represent a number like 2^32
-                # however, it may cause a scale underflow
-                # here we give bias a 30 bits precision, which is pettery enough in all cases
-                bias_config.num_of_bits = 30
-                bias_config.quant_max = int(pow(2, bias_config.num_of_bits)) - 1
-                bias_config.quant_min = - int(pow(2, bias_config.num_of_bits)) + 1
-                bias_config.state = QuantizationStates.PASSIVE_INIT
-                base_quant_config.input_quantization_config[-1] = \
-                    ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
-                        convert_from = bias_config, offsets = None,
-                        scales = None, channel_axis = 0
-                    )
-                base_quant_config.input_quantization_config[-1].observer_algorithm = 'Minmax'
+                bias_config.state = QuantizationStates.FP32
 
         if operation.type in PASSIVE_OPERATIONS:
             # Those op are not active op.

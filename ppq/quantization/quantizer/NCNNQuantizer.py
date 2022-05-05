@@ -2,7 +2,7 @@ from typing import Union
 
 import torch
 from ppq.api.setting import QuantizationSetting
-from ppq.core import (ChannelwiseTensorQuantizationConfig, OperationMeta,
+from ppq.core import (ChannelwiseTensorQuantizationConfig, PASSIVE_OPERATIONS,
                       OperationQuantizationConfig, QuantizationPolicy,
                       QuantizationProperty, QuantizationStates, RoundingPolicy,
                       TargetPlatform)
@@ -86,9 +86,9 @@ class NCNNQuantizer(BaseQuantizer):
             if operation.num_of_input > 2:
                 bias_config = base_quant_config.input_quantization_config[-1]
                 bias_config.state = QuantizationStates.FP32
-            # don't quantize output
-            output_config = base_quant_config.output_quantization_config[0]
-            output_config.state = QuantizationStates.FP32
+            
+            if operation.type in PASSIVE_OPERATIONS:
+                base_quant_config.is_active_quant_op = False
         return base_quant_config
 
     @ property
@@ -102,7 +102,7 @@ class NCNNQuantizer(BaseQuantizer):
     @ property
     def quant_operation_types(self) -> set:
         return {
-            'Conv', 'Gemm'
+            'Conv', 'Gemm', 'Split'
         }
 
     @ property
