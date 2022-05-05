@@ -323,13 +323,9 @@ class BaseQuantizer(metaclass = ABCMeta):
             lsq_setting = setting.lsq_optimization_setting
             list_of_passes.append(LearningStepSizeOptimization(
                 interested_layers      = lsq_setting.interested_layers,
-                interested_layers_only = lsq_setting.interested_layers_only,
-                output_names           = lsq_setting.output_names,
-                loss_weights           = lsq_setting.loss_weights,
                 epochs                 = lsq_setting.epochs,
                 lr                     = lsq_setting.lr,
                 scale_multiplier       = lsq_setting.scale_multiplier,
-                mode                   = lsq_setting.mode
             )
         )
         
