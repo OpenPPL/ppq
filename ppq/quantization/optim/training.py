@@ -110,6 +110,38 @@ def find_all_blocks(graph: BaseGraph,
             blocks.append(block)
     return blocks
 
+def collect_block_input_output(
+    block: TrainableBlock,
+    executor: TorchExecutor,
+    dataloader: Iterable,
+    collate_fn: Callable,
+    collecting_device: str
+) -> List[Tuple[List[torch.Tensor], torch.Tensor]]:
+    """Collect training quant input and fp32 output values for block
+
+    Args:
+        block (TrainableBlock): the trainable block
+        executor (TorchExecutor): ppq graph executor
+        dataloader (Iterable): calibration dataloader
+        collate_fn (Callable): batch collate func
+        collecting_device (str): device to collect, cpu or cuda
+
+    Returns:
+        List[Tuple[List[torch.Tensor], torch.Tensor]]: collected block quant input and fp32 output tensors
+    """
+    block_input = []
+    for data in dataloader:
+        if collate_fn is not None:
+            data = collate_fn(data)
+        dequantize_graph(executor._graph)
+        fp_outputs = executor.forward(data, [var.name for var in block.ep.outputs])
+        restore_quantization_state(executor._graph)
+        quant_input = executor.forward(data, [block.sp.inputs[0].name])[0]
+        if collecting_device == 'cpu':
+            fp_outputs = [output.to(collecting_device) for output in fp_outputs]
+            quant_input = quant_input.to(collecting_device)
+        block_input.append((fp_outputs, quant_input))
+    return block_input
 
 class TrainingBasedPass(QuantizationOptimizationPass):
     """
@@ -553,7 +585,8 @@ class BlockwiseReconstructionPass(TrainingBasedPass):
                 epochs: int = 300,
                 lr: float = 1e-3,
                 lamda: float = 1.0,
-                scale_multiplier: float = 2.0
+                scale_multiplier: float = 2.0,
+                collecting_device: str ='cuda'
     ) -> None:
         super().__init__(name = name)
         self.interested_layers = interested_layers
@@ -562,6 +595,7 @@ class BlockwiseReconstructionPass(TrainingBasedPass):
         self.lr                = lr
         self.lamda             = lamda
         self.scale_multuplier  = scale_multiplier
+        self.collecting_device = collecting_device
 
 
     def initiate_block_params(self,
@@ -656,6 +690,7 @@ class BlockwiseReconstructionPass(TrainingBasedPass):
         graph = processer.graph
         all_blocks = find_all_blocks(graph, executor._executing_order)
         for blk_idx, block in enumerate(all_blocks):
+            block_dataloader = collect_block_input_output(block, executor, dataloader, collate_fn, self.collecting_device)
             # if interested_layers are not empty, we only optimize block which contains
             # desired ops specified in interested_layers
             if len(self.interested_layers) > 0 and all([op.name not in self.interested_layers for op in block.rps]):
@@ -701,13 +736,15 @@ class BlockwiseReconstructionPass(TrainingBasedPass):
             for epoch in tqdm(range(self.epochs), desc=f'Optimize block {blk_idx + 1}/{len(all_blocks)}', total=self.epochs):
                 epoch_rounding_loss = 0.0
                 epoch_reconstruction_loss = {name: 0.0 for name in output_names}
-                for idx, data in enumerate(dataloader):
-                    if collate_fn is not None:
-                        data = collate_fn(data)
-                    dequantize_graph(graph)
-                    fp_outputs = executor.forward(data, output_names)
-                    restore_quantization_state(graph)
-                    quant_outputs = executor.forward_with_gradient(data, output_names)
+                for idx, data in enumerate(block_dataloader):
+                    fp_outputs, quant_input = data
+                    if str(executor._device) != self.collecting_device:
+                        quant_input = quant_input.to(executor._device)
+                        fp_outputs  = [output.to(executor._device) for output in fp_outputs]
+
+                    quant_outputs = executor.partial_graph_forward(block.rps, \
+                        {block.sp.inputs[0].name: quant_input}, output_names)
+
                     reconstruction_loss = 0.0
                     for (name, fp_output, quant_output) in zip(output_names, fp_outputs, quant_outputs):
                         loss = Lp_norm(fp_output, quant_output)
@@ -810,13 +847,15 @@ class LearningStepSizeOptimization(TrainingBasedPass):
                 interested_layers: List[str] = [],
                 epochs: int = 30,
                 lr: float = 5e-5,
-                scale_multiplier: float = 2.0
+                scale_multiplier: float = 2.0,
+                collecting_device: str = 'cuda'
     ) -> None:
         super().__init__(name=name)
         self.interested_layers = interested_layers
         self.epochs = epochs
         self.lr = lr
         self.scale_multiplier = scale_multiplier
+        self.collecting_device = collecting_device
     
     def initiate_param(self,
                     block: TrainableBlock,
@@ -886,6 +925,7 @@ class LearningStepSizeOptimization(TrainingBasedPass):
                 executor: TorchExecutor
     ) -> None:
         for blk_idx, blk in enumerate(blocks):
+            block_dataloader = collect_block_input_output(blk, executor, dataloader, collate_fn, self.collecting_device)
             output_names = [var.name for var in blk.ep.outputs]
             logger.info(f'Optimizing block {blk.sp.name} --> ... --> {blk.ep.name}, total {len(blk.rps)} ops')
             logger.info('Computing Original Loss ...')
@@ -906,13 +946,12 @@ class LearningStepSizeOptimization(TrainingBasedPass):
 
             for _ in tqdm(range(self.epochs), total=self.epochs, desc=f'Optimize block {blk_idx + 1}/{len(blocks)}'):
                 epoch_loss = {name: 0.0 for name in output_names}
-                for idx,data in enumerate(dataloader):
-                    if collate_fn is not None:
-                        data = collate_fn(data)
-                    dequantize_graph(graph)
-                    fp_outputs = executor.forward(data, output_names)
-                    restore_quantization_state(graph)
-                    quant_outputs = executor.forward_with_gradient(data, output_names)
+                for idx,data in enumerate(block_dataloader):
+                    fp_outputs, quant_input = data
+                    quant_outputs = executor.partial_graph_forward(blk.rps, {blk.sp.inputs[0].name: quant_input}, output_names)
+                    if str(executor._device) != self.collecting_device:
+                        quant_input = quant_input.to(executor._device)
+                        fp_outputs  = [output.to(executor._device) for output in fp_outputs]
                     optimizer.zero_grad()
                     batch_loss = 0.0
                     for name, fp_output, quant_output in zip(output_names, fp_outputs, quant_outputs):
