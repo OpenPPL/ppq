@@ -3,7 +3,7 @@ import sys
 import time
 from enum import Enum
 from typing import Union
-import warnings
+
 
 R_BEGIN = "\033[38;5;1m"
 G_BEGIN = "\033[38;5;2m"
@@ -51,7 +51,7 @@ class Handler:
 
     def process(self, msg: str, level: LEVEL) -> None:
         if self._level <= level:
-            self._fd.write(msg + '\n')
+            self._fd.write('\r' + msg + '\n')
             self._fd.flush()
 
     def set_level(self, level: LEVEL) -> None:
