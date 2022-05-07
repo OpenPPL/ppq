@@ -14,7 +14,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Dict, List
+from typing import Dict
 
 import torch
 from ppq.core import (EXPORT_DEVICE_SWITCHER, DataType, OperationMeta,
@@ -92,13 +92,13 @@ class TensorRTExporter(ONNXRUNTIMExporter):
         qt_meta = OperationMeta(
             input_metas    = [TensorMeta(dtype=DataType.FP32, shape=meta.shape), 
                               TensorMeta(dtype=DataType.FP32, shape=config.scale.shape), 
-                              TensorMeta(dtype=DataType.FP32, shape=config.offset.shape)],
+                              TensorMeta(dtype=DataType.INT8, shape=config.offset.shape)],
             output_metas   = [TensorMeta(dtype=DataType.INT8, shape=meta.shape)],
             operation_name = qt_op.name, operation_type=qt_op.type, executing_order=-1)
         dq_meta = OperationMeta(
             input_metas    = [TensorMeta(dtype=DataType.INT8, shape=meta.shape), 
                               TensorMeta(dtype=DataType.FP32, shape=config.scale.shape), 
-                              TensorMeta(dtype=DataType.FP32, shape=config.offset.shape)],
+                              TensorMeta(dtype=DataType.INT8, shape=config.offset.shape)],
             output_metas   = [TensorMeta(dtype=DataType.FP32, shape=meta.shape)],
             operation_name = dq_op.name, operation_type=dq_op.type, executing_order=-1)
 
