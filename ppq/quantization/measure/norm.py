@@ -39,7 +39,7 @@ def torch_snr_error(y_pred: torch.Tensor, y_real: torch.Tensor, reduction: str='
     
     noise_power  = torch.pow(y_pred - y_real, 2).sum(dim=-1)
     signal_power = torch.pow(y_real, 2).sum(dim=-1)
-    snr = noise_power / signal_power
+    snr = (noise_power) / (signal_power + 1e-7)
 
     if reduction == 'mean':
         return torch.mean(snr)

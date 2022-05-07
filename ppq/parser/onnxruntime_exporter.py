@@ -4,12 +4,12 @@ from typing import Dict, List
 import onnx
 import torch
 from onnx import helper
-from ppq.core import (EXPORT_DEVICE_SWITCHER, PPQ_NAME, DataType,
-                      OperationMeta, QuantizationProperty, QuantizationStates,
-                      TensorMeta, TensorQuantizationConfig,
+from ppq.core import (EXPORT_DEVICE_SWITCHER, PPQ_NAME,
+                      ChannelwiseTensorQuantizationConfig, DataType,
+                      OperationMeta, QuantizationProperty,
+                      QuantizationStates, TensorMeta, TensorQuantizationConfig,
                       convert_any_to_torch_tensor)
-from ppq.IR import (BaseGraph, Operation, QuantableOperation,
-                    QuantableVariable)
+from ppq.IR import BaseGraph, Operation, QuantableOperation, QuantableVariable
 from ppq.IR.base.command import GraphCommand, GraphCommandType
 from ppq.IR.morph import GraphDeviceSwitcher, GraphFormatter
 from ppq.quantization.qfunction.linear import PPQLinearQuant_toInt
@@ -56,7 +56,7 @@ class ONNXRUNTIMExporter(OnnxExporter):
         offset_dtype, value_dtype = torch.int8, torch.int8 
         if config.policy.has_property(QuantizationProperty.ASYMMETRICAL): 
             offset_dtype = torch.uint8
-            value_dtype  = torch.int8
+            value_dtype  = torch.uint8
         if config.num_of_bits > 16: 
             offset_dtype = torch.int32
             value_dtype  = torch.int32
@@ -75,7 +75,11 @@ class ONNXRUNTIMExporter(OnnxExporter):
         z_var = graph.create_variable(name=None, value=offset, is_parameter=True)
         created = graph.create_operation(op_type='QuantizeLinear', attributes={})
         
-        if var in related_op.inputs:
+        if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
+            assert isinstance(config, ChannelwiseTensorQuantizationConfig)
+            created.attributes['axis'] = config.channel_axis
+        
+        if related_op is not None and var in related_op.inputs:
             graph.insert_op_between_var_and_op(created, up_var=var, down_op=related_op)
         else: graph.insert_op_on_var(created, var=var.name)
             
@@ -103,6 +107,9 @@ class ONNXRUNTIMExporter(OnnxExporter):
         s_var = graph.create_variable(name=None, value=scale.clone(), is_parameter=True)
         z_var = graph.create_variable(name=None, value=offset.clone(), is_parameter=True)
         created = graph.create_operation(op_type='DequantizeLinear', attributes={})
+        if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
+            assert isinstance(config, ChannelwiseTensorQuantizationConfig)
+            created.attributes['axis'] = config.channel_axis
 
         if var in related_op.inputs:
             graph.insert_op_between_var_and_op(created, up_var=var, down_op=related_op)

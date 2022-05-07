@@ -40,8 +40,8 @@ class ORT_PerTensorQuantizer(BaseQuantizer):
                 # so that it has enough precision to represent a number like 2^32
                 # however, it may cause a scale underflow
                 # here we give bias a 30 bits precision, which is pettery enough in all cases
-                bias_config.num_of_bits = 30
-                bias_config.quant_max = int(pow(2, 30 - 1) - 1)
+                bias_config.num_of_bits = 32
+                bias_config.quant_max = int(pow(2, 30 - 1))
                 bias_config.quant_min = - int(pow(2, 30 - 1))
                 bias_config.policy = QuantizationPolicy(
                     QuantizationProperty.SYMMETRICAL +
@@ -66,12 +66,12 @@ class ORT_PerTensorQuantizer(BaseQuantizer):
 
     @ property
     def quant_operation_types(self) -> set:
-        return {
+        ONNX_OOS_OPSET = {
             'Conv', 'GlobalAveragePool', 'AveragePool',
             'Relu', 'Add', 'Mul', 'Clip', 'Sigmoid',
-            'MatMul', 'ReduceMean', 'Gemm', 'Concat',
-            'LeakyRelu',
-        }
+            'MatMul', 'Gemm', 'Concat', 'LeakyRelu'}
+        ONNX_OOS_OPSET.update(PASSIVE_OPERATIONS) 
+        return ONNX_OOS_OPSET
 
     @ property
     def quantize_policy(self) -> QuantizationPolicy:
@@ -101,9 +101,8 @@ class ORT_PerChannelQuantizer(BaseQuantizer):
             policy=self.quantize_policy, rounding=self.rounding_policy,
             operation_meta=operation.meta_data, num_of_bits=self._num_of_bits,
             quant_max=self._quant_max, quant_min=self._quant_min,
-            observer_algorithm='percentile'
-        )
-        
+            observer_algorithm='percentile')
+
         if operation.type in {'Conv', 'MatMul'}:
             # set all parameters within Conv, ConvTranspose, Gemm to per-channel quant-config.
             assert operation.num_of_input > 0, 'Seems you got a Conv layer with no parameters.'
@@ -178,12 +177,12 @@ class ORT_PerChannelQuantizer(BaseQuantizer):
 
     @ property
     def quant_operation_types(self) -> set:
-        return {
+        ONNX_OOS_OPSET = {
             'Conv', 'GlobalAveragePool', 'AveragePool',
             'Relu', 'Add', 'Mul', 'Clip', 'Sigmoid',
-            'MatMul', 'ReduceMean', 'Gemm', 'Concat', 
-            'LeakyRelu'
-        }
+            'MatMul', 'Gemm', 'Concat', 'LeakyRelu'}
+        ONNX_OOS_OPSET.update(PASSIVE_OPERATIONS) 
+        return ONNX_OOS_OPSET
 
     @ property
     def quantize_policy(self) -> QuantizationPolicy:

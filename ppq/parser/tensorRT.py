@@ -174,7 +174,11 @@ class TensorRTExporter(ONNXRUNTIMExporter):
         super().export(file_path=file_path, graph=graph, config_path=None)
 
         # step 2, convert onnx file to tensorRT engine.
-        TRT_LOGGER = trt.Logger(trt.Logger.INFO)
+        try: 
+            TRT_LOGGER = trt.Logger(trt.Logger.INFO)
+        except Exception as e:
+            raise Exception('TensorRT is not successfully loaded, therefore ppq can not export tensorRT engine directly, '
+                            f'a model named {file_path} has been created so that you can send it to tensorRT manually.')
         network_flags = 1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)
         network_flags = network_flags | (1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_PRECISION))
         
