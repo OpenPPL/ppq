@@ -17,10 +17,11 @@
 from typing import Dict, List
 
 import torch
-from ppq.core import (DataType, OperationMeta, TensorMeta,
-                      TensorQuantizationConfig, convert_any_to_torch_tensor,
-                      ppq_warning)
+from ppq.core import (EXPORT_DEVICE_SWITCHER, DataType, OperationMeta,
+                      TensorMeta, TensorQuantizationConfig,
+                      convert_any_to_torch_tensor, ppq_warning)
 from ppq.IR import BaseGraph, Operation, Variable
+from ppq.IR.morph import GraphDeviceSwitcher
 from ppq.IR.quantize import QuantableOperation, QuantableVariable
 from ppq.utils.round import ppq_tensor_round
 
@@ -132,6 +133,10 @@ class TensorRTExporter(ONNXRUNTIMExporter):
         
         ATTENTION: MUST USE TENSORRT QUANTIZER TO GENERATE A TENSORRT MODEL.
         """
+        # remove switchers.
+        if not EXPORT_DEVICE_SWITCHER:
+            processer = GraphDeviceSwitcher(graph)
+            processer.remove_switcher()
         
         # find all quantable operations:
         for operation in [op for op in graph.operations.values()]:
