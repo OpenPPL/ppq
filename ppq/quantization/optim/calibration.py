@@ -275,14 +275,12 @@ class PPLDSPTIReCalibrationPass(RuntimeCalibrationPass):
             downstream_ops = processer.graph.get_downstream_operations(operation)
             if len(downstream_ops) == 1 and downstream_ops[0].type in {'Relu', 'Clip'}\
                 and isinstance(downstream_ops[0], QuantableOperation):
-                if output_cfg.dominated_by == downstream_ops[0].config.output_quantization_config[0]:
-                    # we have to register hooks before observe a different op
-                    if len(observe_table) > 0:
-                        hooks[operation.name] = CalibrationHook(operation, observe_table)
-                        observe_table = {}
-                    master_cfg = downstream_ops[0].config.output_quantization_config[0]
-                    master_operation = downstream_ops[0]
-                    master_var = downstream_ops[0].outputs[0]
+                if len(observe_table) > 0:
+                    hooks[operation.name] = CalibrationHook(operation, observe_table)
+                    observe_table = {}
+                master_cfg = downstream_ops[0].config.output_quantization_config[0]
+                master_operation = downstream_ops[0]
+                master_var = downstream_ops[0].outputs[0]
             
             master_cfg_per_channel = ChannelwiseTensorQuantizationConfig(
                 policy=QuantizationPolicy(
@@ -316,7 +314,7 @@ class PPLDSPTIReCalibrationPass(RuntimeCalibrationPass):
                 cfg = observer._quant_cfg.detail['consumer']
                 assert isinstance(cfg, TensorQuantizationConfig)
                 assert isinstance(observer, TorchMinMaxObserver)
-                # asym cfg for graph input
+
                 if observer._quant_cfg.policy.has_property(QuantizationProperty.PER_CHANNEL):
                     min_vals = torch.min(torch.cat(observer._min_val_collector, dim=-1), dim=-1, keepdim=False)[0].cpu().numpy()
                     max_vals = torch.max(torch.cat(observer._max_val_collector, dim=-1), dim=-1, keepdim=False)[0].cpu().numpy()
