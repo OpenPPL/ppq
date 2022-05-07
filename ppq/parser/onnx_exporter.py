@@ -34,11 +34,28 @@ class InterpExporter(OperationExporter):
         operation.attributes.pop('input_shape')
         return operation
 
+class OOSExporter(OperationExporter):
+    def export(self, operation: Operation, graph: BaseGraph, **kwargs) -> Operation:
+        # MMCV operation must have a domain attribute.
+        operation.attributes['domain'] = 'com.microsoft'
+        return operation
+
 OPERATION_EXPORTERS = {
     'ConstantOfShape': ConstantOfShapeExporter,
     'MMCVRoiAlign': MMCVExporter,
     'grid_sampler': MMCVExporter,
     'Interp': InterpExporter,
+    'QAttention': OOSExporter,
+    'QGemm': OOSExporter,
+    'QLinearAdd': OOSExporter,
+    'QLinearAveragePool': OOSExporter,
+    'QLinearConcat': OOSExporter,
+    'QLinearConv': OOSExporter,
+    'QLinearGlobalAveragePool': OOSExporter,
+    'QLinearLeakyRelu': OOSExporter,
+    'QLinearMul': OOSExporter,
+    'QLinearReduceMean': OOSExporter,
+    'QLinearSigmoid': OOSExporter,
 }
 
 def convert_value(value: Union[int, float, np.ndarray, torch.Tensor]) -> str:
