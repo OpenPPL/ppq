@@ -15,8 +15,11 @@ from ppq.quantization.measure import (torch_cosine_similarity,
                                       torch_KL_divergence,
                                       torch_mean_square_error, torch_snr_error)
 from ppq.quantization.optim import (AdaRoundPass, BiasCorrectionPass,
+                                    ChannelSplitPass, GRUSplitPass,
                                     InplaceQuantizationSettingPass,
                                     LayerwiseEqualizationPass,
+                                    MatrixFactorizationPass,
+                                    MetaxGemmSplitPass, MishFusionPass,
                                     NxpInputRoundingRefinePass,
                                     NxpQuantizeFusionPass,
                                     NXPResizeModeChangePass,
@@ -26,7 +29,8 @@ from ppq.quantization.optim import (AdaRoundPass, BiasCorrectionPass,
                                     QuantizationOptimizationPipeline,
                                     QuantizeFusionPass, QuantizeReducePass,
                                     QuantizeRefinePass, RuntimeCalibrationPass,
-                                    RuntimePerlayerCalibrationPass)
+                                    RuntimePerlayerCalibrationPass,
+                                    SwishFusionPass, WeightSplitPass)
 from ppq.quantization.qfunction import BaseQuantFunction
 from ppq.quantization.qfunction.linear import PPQLinearQuantFunction
 from ppq.quantization.quantizer import (BaseQuantizer, NXP_Quantizer,
