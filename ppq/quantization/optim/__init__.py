@@ -7,7 +7,7 @@ from .equalization import LayerwiseEqualizationPass
 from .extension import ExtensionPass
 from .morph import (ChannelSplitPass, GRUSplitPass, MatrixFactorizationPass,
                     MetaxGemmSplitPass, NXPResizeModeChangePass,
-                    WeightSplitPass)
+                    WeightSplitPass, NCNNFormatGemmPass)
 from .parameters import ParameterQuantizePass, PassiveParameterQuantizePass
 from .refine import (InplaceQuantizationSettingPass, MishFusionPass,
                      NxpInputRoundingRefinePass, NxpQuantizeFusionPass,
