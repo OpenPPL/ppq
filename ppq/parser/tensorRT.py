@@ -20,9 +20,10 @@ import torch
 from ppq.core import (EXPORT_DEVICE_SWITCHER, DataType, OperationMeta,
                       TensorMeta, TensorQuantizationConfig,
                       convert_any_to_torch_tensor, ppq_warning)
-from ppq.IR import BaseGraph, Operation, Variable
+from ppq.IR import BaseGraph
 from ppq.IR.morph import GraphDeviceSwitcher
 from ppq.IR.quantize import QuantableOperation, QuantableVariable
+from ppq.core.quant import ChannelwiseTensorQuantizationConfig, QuantizationProperty
 from ppq.utils.round import ppq_tensor_round
 
 try:
@@ -75,6 +76,11 @@ class TensorRTExporter(ONNXRUNTIMExporter):
         graph.create_link_with_op(graph.create_variable(value=scale, is_parameter=True), upstream_op=None, downstream_op=dq_op)
         graph.create_link_with_op(graph.create_variable(value=offset, is_parameter=True), upstream_op=None, downstream_op=dq_op)
         
+        if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
+            assert isinstance(config, ChannelwiseTensorQuantizationConfig)
+            qt_op.attributes['axis'] = config.channel_axis
+            dq_op.attributes['axis'] = config.channel_axis
+        
         # create meta data for qt_op, dq_op
         qt_meta = OperationMeta(
             input_metas    = [TensorMeta(dtype=DataType.FP32, shape=meta.shape), 
@@ -120,6 +126,8 @@ class TensorRTExporter(ONNXRUNTIMExporter):
         
         ATTENTION: MUST USE TENSORRT QUANTIZER TO GENERATE A TENSORRT MODEL.
         """
+        self.convert_operation_from_opset11_to_opset13(graph)
+        
         # remove switchers.
         if not EXPORT_DEVICE_SWITCHER:
             processer = GraphDeviceSwitcher(graph)
@@ -155,11 +163,6 @@ class TensorRTExporter(ONNXRUNTIMExporter):
                             'This operation is expected to run with fp32 mode') 
         return graph
 
-    @ property
-    def required_opsets(self) -> Dict[str, int]:
-        extra_domain_versions = [("ai.onnx", 11)] # must be opset 11
-        return dict(extra_domain_versions)
-
     def export(self, file_path: str, graph: BaseGraph, 
                config_path: str = None, input_shapes: Dict[str, list] = None) -> None:
         # step 1, export onnx file.
@@ -190,7 +193,7 @@ class TensorRTExporter(ONNXRUNTIMExporter):
                     return None
 
             config = builder.create_builder_config()
-            config.max_workspace_size = 1 << 30
+            config.max_workspace_size = 2 << 30
             config.flags = config.flags | 1 << int(trt.BuilderFlag.INT8)
             
             profile = builder.create_optimization_profile()
