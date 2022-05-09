@@ -81,7 +81,7 @@ if TARGET_PLATFORM in {TargetPlatform.PPL_DSP_INT8,                 # 这些平�
                        TargetPlatform.SNPE_INT8, 
                        TargetPlatform.METAX_INT8_T, 
                        TargetPlatform.FPGA_INT8}:
-    QS.equalization_setting = True                                  # per tensor 量化平台需要做 equalization
+    QS.equalization = True                                          # per tensor 量化平台需要做 equalization
 
 if TARGET_PLATFORM in {TargetPlatform.ACADEMIC_INT8,                # 把量化的不太好的算子送回 FP32
                        TargetPlatform.PPL_CUDA_INT8,                # 注意做这件事之前你需要确保你的执行框架具有混合精度执行的能力，以及浮点计算的能力
