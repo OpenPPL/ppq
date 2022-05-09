@@ -154,7 +154,7 @@ class TrainingBasedPass(QuantizationOptimizationPass):
         takes no effects.
 
     Choose interested_outputs carefully, cause we compare loss only with those output variables.
-        If interested_outputs is None, all graph output variables will be choosen.
+        If interested_outputs is None, all graph output variables will be chosen.
 
     YOUR SHOULD NOTICE THAT SNR REFERS TO: POWER OF NOISE / POWER OF SIGNAL IN PPQ.
 
@@ -1031,7 +1031,7 @@ class AdvancedQuantOptimization(TrainingBasedPass):
             raise PermissionError(
                 'Advanced Quant Optimization requires compliation of ppq cuda kernels. '
                 'This method is no longer available with pure torch execution Since PPQ 0.6.4, '
-                'set PPQ.USING_CUDA_KERNEL = True or use LSQ optimization instread.')
+                'set PPQ.USING_CUDA_KERNEL = True or use LSQ optimization instead.')
 
         self.lr                = lr
         self.collecting_device = collecting_device

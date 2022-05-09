@@ -113,7 +113,7 @@ class TensorRTEngine():
             feed_list = [None for _ in input_names]
             for name, value in inputs.itesm():
                 if name not in input_names:
-                    raise KeyError(f'Can not feed value of varaible: {name}, '
+                    raise KeyError(f'Can not feed value of variable: {name}, '
                     'can not find it in tensorRT engine.')
                 feed_list[input_names.index(name)] = convert_any_to_numpy(value)
         else:

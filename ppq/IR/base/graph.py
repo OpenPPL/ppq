@@ -279,7 +279,7 @@ class BaseGraph(Serializable):
         if op_name not in self.operations: return
         operation = self.operations[op_name]
         if len(operation.outputs) != 0 and not cascade and not force_delete:
-            raise PermissionError(f'It is not safe to delete opeartion {op_name}, '\
+            raise PermissionError(f'It is not safe to delete operation {op_name}, '\
                 f'cause it still has output variable(s) {[str(output_var) for output_var in operation.outputs]}')
         for input_var in operation.inputs:
             dest_idx = input_var.dest_ops.index(operation)
@@ -400,7 +400,7 @@ class BaseGraph(Serializable):
         After insertion:
             op1 -> var -> inserting_op -> link_var(generated) -> op2
 
-        ATTENTION: Inserting opeartion must be an empty opeartion with no input and output variables linked to it.
+        ATTENTION: Inserting operation must be an empty operation with no input and output variables linked to it.
 
         Args:
             inserting_op (Operation): [description]
@@ -457,7 +457,7 @@ class BaseGraph(Serializable):
                                       |
                                       --- Conv4
 
-        ATTENTION: Inserting opeartion must be an empty opeartion with no input and output variables linked to it.
+        ATTENTION: Inserting operation must be an empty operation with no input and output variables linked to it.
 
         Args:
             inserting_op (Operation): [description]
@@ -478,7 +478,7 @@ class BaseGraph(Serializable):
         for var in down_op.inputs:
             if var.source_op == up_op:
                 variables.append(var)
-        assert len(variables) == 1, (f'Can not insert opeartion between {up_op.name} and {down_op.name},'
+        assert len(variables) == 1, (f'Can not insert operation between {up_op.name} and {down_op.name},'
                                      ' graph is too complex.')
         [variable] = variables
         
@@ -503,7 +503,7 @@ class BaseGraph(Serializable):
         Insert one operation to current graph.
             Inserting operation will just between up_var and down_op.
 
-        ATTENTION: Inserting opeartion must be an empty opeartion with no input and output variables linked to it.
+        ATTENTION: Inserting operation must be an empty operation with no input and output variables linked to it.
 
         Args:
             inserting_op (Operation): [description]
@@ -524,7 +524,7 @@ class BaseGraph(Serializable):
         for var in down_op.inputs:
             if var == up_var:
                 variables.append(var)
-        assert len(variables) == 1, (f'Can not insert opeartion between {var.name} and {down_op.name},'
+        assert len(variables) == 1, (f'Can not insert operation between {var.name} and {down_op.name},'
                                      ' graph is too complex.')
         
         # add to graph.
@@ -614,7 +614,7 @@ class BaseGraph(Serializable):
 
     def remove_operation(self, removing_op: Operation):
         """
-        Remove opeartion from graph, this function will unlink removing operation from
+        Remove operation from graph, this function will unlink removing operation from
             current graph, pop it from graph.operations, and remove it from all its input and output variables.
         
         Parameters of this removing operations will be removed from graph by this function, without warning.

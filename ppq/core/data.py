@@ -120,7 +120,7 @@ class TensorMeta:
         self, dtype: DataType, shape: List[int],
         tensor_name: str = None) -> None:
         """
-        TensorMeta sturcture described metadata of a tensor.
+        TensorMeta structure described metadata of a tensor.
             Which includes tensor's data type and shape.
         TensorMeta is necessary to initialize quantization configuration and hooks,
         and is needed to compute the number of input channels.
@@ -175,7 +175,7 @@ class OperationMeta:
         input_metas: List[TensorMeta], output_metas: List[TensorMeta],
         operation_name: str, operation_type: str, executing_order: int) -> None:
         """
-        OperationMeta sturcture describes all related tensor metadata of an operation.
+        OperationMeta structure describes all related tensor metadata of an operation.
             It naturally is a collection of TensorMeta.
         Take a look at TensorMeta to get more information.
         Args:

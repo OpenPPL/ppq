@@ -53,7 +53,7 @@ def graphwise_error_analyse(
 
     if verbose is set as True, this function will display error report at last.
     
-    The key of the dictionary is an opeartion name while the value of corresponding key 
+    The key of the dictionary is an operation name while the value of corresponding key 
         is the difference between quantized output and float output of this operation.
     
     Result {'operation name 1': 0.933} means that quantized graph and fp32 graph have a difference
@@ -113,7 +113,7 @@ def graphwise_error_analyse(
         if isinstance(operation, QuantableOperation):
             operation.dequantize()
 
-    # run for each quantable opeartions:
+    # run for each quantable operations:
     for idx, batch in tqdm(enumerate(dataloader), 
                            desc='Analysing Graphwise Quantization Error(Phrase 1):', 
                            total=(min(len(dataloader), steps))):
@@ -131,7 +131,7 @@ def graphwise_error_analyse(
         if isinstance(operation, QuantableOperation):
             operation.restore_quantize_state()
 
-    # run for each quantable opeartions:
+    # run for each quantable operations:
     for idx, batch in tqdm(enumerate(dataloader), 
                            desc='Analysing Graphwise Quantization Error(Phrase 2):',
                            total=(min(len(dataloader), steps))):

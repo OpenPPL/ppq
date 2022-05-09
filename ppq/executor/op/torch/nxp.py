@@ -8,7 +8,7 @@ NXP_BACKEND_TABLE = DEFAULT_BACKEND_TABLE.copy()
 
 def Resize_forward(op, input_value, device=None):
     """
-    NXP Platform has a custimized resize opeartion implementation,
+    NXP Platform has a custimized resize operation implementation,
         which gives different result from torch.nn.Resize.
     To correctly simulate hardware beviour and have the same result with NXP,
         it is necessary to force resize to run with nearest mode.

@@ -448,7 +448,7 @@ class GraphFormatter(GraphCommandProcesser):
             raise KeyError(f'Operation {op_name} not in current graph.')
         operation = self._graph.operations[op_name]
         assert input_idx < len(operation.inputs), 'Trying to delete an out-of-range input variable, '\
-                f'has graph been manully changed? Error at Opeartion {op_name}, input_idx: {input_idx}'
+                f'has graph been manually changed? Error at Opeartion {op_name}, input_idx: {input_idx}'
         input_var = operation.inputs[input_idx]
         if input_var.source_op.type != 'Constant':
             raise ValueError(f'Trying to delete an non-const input, '\
@@ -650,7 +650,7 @@ class GraphDeviceSwitcher(GraphCommandProcesser):
             assert isinstance(operation, Operation)
             for var in operation.outputs:
                 if all([can_pass_shape(operation, op) for op in var.dest_ops]): continue
-                # else there is at least one opeartion needs a device converter.
+                # else there is at least one operation needs a device converter.
 
                 if all([not can_pass_shape(operation, op) for op in var.dest_ops]):
                     boundary_op = DeviceSwitchOP(name=var.name + '_Switcher')

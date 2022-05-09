@@ -98,10 +98,10 @@ class ParameterQuantizePass(QuantizationOptimizationPass):
         all non-parameter tensors will be excluded from this pass by temporary dequantization.
 
     Then, operation observers will be established automatically to record necessary statistics,
-        observers are aslo responsible for rendering quantization configuration (computing scale and offset). 
+        observers are also responsible for rendering quantization configuration (computing scale and offset). 
 
     This pass needs no data, however it uses fake data to finish a dummy forward process.
-    see aslo: TorchExecutor.dummy_forward function
+    see also: TorchExecutor.dummy_forward function
     """
     def __init__(self, method: str = None):
         self._method = method
@@ -129,7 +129,7 @@ class ParameterQuantizePass(QuantizationOptimizationPass):
                     config.observer_algorithm = self._method
 
             observer = OperationObserver(
-                opeartion=executor._graph.operations[op_name], 
+                operation=executor._graph.operations[op_name], 
                 monitor_outputs=False, monitor_inputs=False)
             observers[op_name] = observer
             hooks[op_name]     = observer.hook

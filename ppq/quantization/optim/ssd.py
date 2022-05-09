@@ -327,7 +327,7 @@ class SSDEqualizationPass(QuantizationOptimizationPass):
         observers = {}
         for operation in pair:
             if not isinstance(operation, QuantableOperation): continue
-            observer = OperationObserver(opeartion=operation)
+            observer = OperationObserver(operation=operation)
             observers[operation] = observer
         return observers
 

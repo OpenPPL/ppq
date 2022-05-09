@@ -59,7 +59,7 @@ for operation in quantized.operations.values():
         # input and output of this operation will be quantized since now.
         operation.restore_quantize_state()
 
-# manully dequantize an operation:
+# manually dequantize an operation:
 for operation in quantized.operations.values():
     if isinstance(operation, QuantableOperation):
         for cfg, var in operation.config_with_variable:

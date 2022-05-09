@@ -149,7 +149,7 @@ class LayerwiseEqualizationPass(QuantizationOptimizationPass):
 
             if not valid_flag: continue
             
-            # consturct a new equalization pair.
+            # construct a new equalization pair.
             if len(upstream_ops) > 0 and len(downstream_ops) > 0:
                 pairs.append(EqualizationPair(
                     all_upstream_layers=list(upstream_ops), 

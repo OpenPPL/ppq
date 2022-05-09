@@ -99,7 +99,7 @@ def SOI_receivers(graph: BaseGraph) -> Set[Operation]:
             #       An input tensor.
             #   shape (non-differentiable) : tensor(int64)
             #       Specified shape for output.
-            # see aslo https://github.com/onnx/onnx/blob/master/docs/Operators.md#Reshape
+            # see also https://github.com/onnx/onnx/blob/master/docs/Operators.md#Reshape
             _ret_collection.add(operation.inputs[-1].source_op)
 
         if operation.type == 'Slice':
@@ -116,7 +116,7 @@ def SOI_receivers(graph: BaseGraph) -> Set[Operation]:
             #   steps (optional, non-differentiable) : Tind
             #       1-D tensor of slice step of corresponding axis in `axes`. 
             #       Negative value means slicing backward. 'steps' cannot be 0. Defaults to 1.
-            # see aslo https://github.com/onnx/onnx/blob/master/docs/Changelog.md#Slice-11
+            # see also https://github.com/onnx/onnx/blob/master/docs/Changelog.md#Slice-11
             for shape_var in operation.inputs[1: ]:
                 _ret_collection.add(shape_var.source_op)
 

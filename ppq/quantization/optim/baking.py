@@ -54,7 +54,7 @@ class ParameterBakingPass(QuantizationOptimizationPass):
 
 class ConstantBakingPass(QuantizationOptimizationPass):
     def __init__(self, quantize_function: BaseQuantFunction) -> None:
-        super().__init__(name='PPQ Contant Baking Pass')
+        super().__init__(name='PPQ Constant Baking Pass')
         self._quantize_function = quantize_function
 
     @ empty_ppq_cache
@@ -70,9 +70,9 @@ class ConstantBakingPass(QuantizationOptimizationPass):
             assert torch.is_tensor(operation.attributes['value']), \
                 'Constant Baking Pass needs all constants to be torch.tensor.'
 
-            # check if all down-stream opeartions are Quantable Operations
-            # up-stream constant can be pre-quantized only if all down-stream opeartions are Quantable.
-            # And all down-stream opeartions should share a same quant_config.
+            # check if all down-stream operations are Quantable Operations
+            # up-stream constant can be pre-quantized only if all down-stream operations are Quantable.
+            # And all down-stream operations should share a same quant_config.
             down_stream_ops = operation.outputs[0].dest_ops
             down_stream_idx = operation.outputs[0].dest_idx
             quant_configs, quant_flag = [], True
@@ -83,7 +83,7 @@ class ConstantBakingPass(QuantizationOptimizationPass):
                     if not QuantizationStates.is_activated(quant_config.state): quant_flag = False
                     quant_configs.append(quant_config)
             if len(down_stream_ops) == 0: raise ValueError(
-                'Oops, isolated constant operation can not go through PPQ Contant Baking Pass')
+                'Oops, isolated constant operation can not go through PPQ Constant Baking Pass')
 
             # ready for constant baking.
             if all([config == quant_configs[0] for config in quant_configs]) and quant_flag:

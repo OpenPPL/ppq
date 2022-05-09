@@ -251,7 +251,7 @@ class ReduceMean(CaffeOpExporter):
         if isinstance(axis, list):
             assert len(axis) == 1, (
                 'You are trying to dump a RuduceMean op to caffe, '
-                f'however caffe support 1 axis only, your mean opeartion has {len(axis)} working axis')
+                f'however caffe support 1 axis only, your mean operation has {len(axis)} working axis')
             axis = axis[0]
         self.layer.reduce_param.axis = axis
 

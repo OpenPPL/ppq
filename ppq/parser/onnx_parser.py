@@ -33,7 +33,7 @@ class OnnxParser(GraphBuilder):
                 graph.outputs[var_name] = graph.variables[var_name]
         except KeyError as e:
             raise KeyError(
-                'seems you got an input/output variable that is not linked to any opeartion.')
+                'seems you got an input/output variable that is not linked to any operation.')
 
         # build operation inputs, outputs variables.
         for op in graph.operations.values():
@@ -102,7 +102,7 @@ class OnnxParser(GraphBuilder):
         op_inputs_dict, op_outputs_dict = {}, {}
         for node in model_pb.node:
             op_name = node.name
-            if len(op_name) == 0: # some opeartion do not have a name, we just generate one.
+            if len(op_name) == 0: # some operation do not have a name, we just generate one.
                 op_name = 'generated_name_' + str(_rand_seed)
                 _rand_seed += 1
             

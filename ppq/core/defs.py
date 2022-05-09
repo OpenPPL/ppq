@@ -19,7 +19,7 @@ class SingletonMeta(type):
         possible methods include: base class, decorator, metaclass. We will use the
         metaclass because it is best suited for this purpose.
 
-    see aslo: https://refactoring.guru/design-patterns/singleton/python/example
+    see also: https://refactoring.guru/design-patterns/singleton/python/example
     """
 
     _instances = {}

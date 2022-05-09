@@ -8,7 +8,7 @@ from tqdm import tqdm
 from ppq import *
 from ppq.api import *
 from ppq.api import quantize_caffe_model
-from ppq.quantization.analyise.util import MeasurePrinter, MeasureRecorder
+from ppq.quantization.analyse.util import MeasurePrinter, MeasureRecorder
 from ppq.utils.fetch import tensor_random_fetch
 
 
