@@ -80,7 +80,13 @@ class QuantizeReducePass(QuantizationOptimizationPass):
             if source_op is None: continue # input variables in network, they do not have a source
             if not isinstance(source_op, QuantableOperation): continue
             source_config = source_op.config.output_quantization_config[source_op.outputs.index(variable)]
-
+            
+            if source_config.state in {
+                QuantizationStates.FP32, 
+                QuantizationStates.SOI, 
+                QuantizationStates.DEACTIVATED}: 
+                continue # if source config does not have a valid state, skip it.
+            
             for downstream_op, dest_idx in zip(variable.dest_ops, variable.dest_idx):
                 if downstream_op is None: continue # output variables in network, they do not have a destination
                 if not isinstance(downstream_op, QuantableOperation): continue

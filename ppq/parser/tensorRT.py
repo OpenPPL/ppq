@@ -64,30 +64,17 @@ class TensorRTExporter(ONNXRUNTIMExporter):
         scale  = convert_any_to_torch_tensor(config.scale, dtype=torch.float32)
         offset = ppq_tensor_round(config.offset).type(torch.int8)
 
-        qt_svar = Variable(name=f'{op.name}_{var.name}' + '_qt_scale', value=scale, is_parameter=True)
-        qt_zvar = Variable(name=f'{op.name}_{var.name}' + '_qt_zeropoint', value=offset, is_parameter=True)
-        dq_svar = Variable(name=f'{op.name}_{var.name}' + '_dq_scale', value=scale, is_parameter=True)
-        dq_zvar = Variable(name=f'{op.name}_{var.name}' + '_dq_zeropoint', value=offset, is_parameter=True)
-
-        qt_op = Operation(name=f'{op.name}_{var.name}' + '_QuantizeLinear', op_type='QuantizeLinear', attributes={})
-        dq_op = Operation(name=f'{op.name}_{var.name}' + '_DequantizeLinear', op_type='DequantizeLinear', attributes={})
-
+        qt_op = graph.create_operation(op_type='QuantizeLinear', attributes={})
+        dq_op = graph.create_operation(op_type='DequantizeLinear', attributes={})
+        
         graph.insert_op_between_var_and_op(dq_op, up_var=var, down_op=op)
         graph.insert_op_between_var_and_op(qt_op, up_var=var, down_op=dq_op)
 
-        qt_op.inputs.extend([qt_svar, qt_zvar])
-        dq_op.inputs.extend([dq_svar, dq_zvar])
-
-        qt_svar.dest_ops.append(qt_op)
-        qt_zvar.dest_ops.append(qt_op)
-        dq_svar.dest_ops.append(dq_op)
-        dq_zvar.dest_ops.append(dq_op)
-
-        graph.append_variable(qt_svar)
-        graph.append_variable(qt_zvar)
-        graph.append_variable(dq_svar)
-        graph.append_variable(dq_zvar)
-
+        graph.create_link_with_op(graph.create_variable(value=scale, is_parameter=True), upstream_op=None, downstream_op=qt_op)
+        graph.create_link_with_op(graph.create_variable(value=offset, is_parameter=True), upstream_op=None, downstream_op=qt_op)
+        graph.create_link_with_op(graph.create_variable(value=scale, is_parameter=True), upstream_op=None, downstream_op=dq_op)
+        graph.create_link_with_op(graph.create_variable(value=offset, is_parameter=True), upstream_op=None, downstream_op=dq_op)
+        
         # create meta data for qt_op, dq_op
         qt_meta = OperationMeta(
             input_metas    = [TensorMeta(dtype=DataType.FP32, shape=meta.shape), 
@@ -165,7 +152,7 @@ class TensorRTExporter(ONNXRUNTIMExporter):
 
             else:
                 ppq_warning(f'Do not support export quantized operation {operation.name} to TensorRT, '
-                            'This operation is expected run with fp32 mode') 
+                            'This operation is expected to run with fp32 mode') 
         return graph
 
     @ property

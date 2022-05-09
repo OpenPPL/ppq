@@ -29,7 +29,8 @@ class TensorRTQuantizer(BaseQuantizer):
             quant_max=self._quant_max, quant_min=self._quant_min,
             observer_algorithm='percentile'
         )
-
+        base_quant_config.output_quantization_config[0].state = QuantizationStates.FP32
+        
         if operation.type in {'Conv', 'ConvTranspose', 'Gemm'}:
             # set all parameters within Conv, ConvTranspose, Gemm to per-channel quant-config.
             assert operation.num_of_input > 0, 'Seems you got a Conv layer with no parameters.'
