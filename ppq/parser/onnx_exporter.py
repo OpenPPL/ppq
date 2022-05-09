@@ -168,7 +168,7 @@ class OnnxExporter(GraphExporter):
 
     def export(self, file_path: str, graph: BaseGraph, config_path: str = None):
         # during export we will remove all boundary operations from graph.
-        # we do not want to change the sturcture of original graph,
+        # we do not want to change the structure of original graph,
         # so there have to take a clone of it.
         # graph = graph.copy()
         # remove switchers.

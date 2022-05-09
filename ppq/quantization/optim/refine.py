@@ -73,15 +73,15 @@ class QuantizeReducePass(QuantizationOptimizationPass):
     ) -> None:
 
         graph = processer.graph
-        for _, varaible in graph.variables.items():
-            assert isinstance(varaible, Variable)
-            source_op = varaible.source_op
+        for _, variable in graph.variables.items():
+            assert isinstance(variable, Variable)
+            source_op = variable.source_op
 
             if source_op is None: continue # input variables in network, they do not have a source
             if not isinstance(source_op, QuantableOperation): continue
-            source_config = source_op.config.output_quantization_config[source_op.outputs.index(varaible)]
+            source_config = source_op.config.output_quantization_config[source_op.outputs.index(variable)]
 
-            for downstream_op, dest_idx in zip(varaible.dest_ops, varaible.dest_idx):
+            for downstream_op, dest_idx in zip(variable.dest_ops, variable.dest_idx):
                 if downstream_op is None: continue # output variables in network, they do not have a destination
                 if not isinstance(downstream_op, QuantableOperation): continue
                 
@@ -134,7 +134,7 @@ class QuantizeRefinePass(QuantizationOptimizationPass):
                     #       An input tensor.
                     #   shape (non-differentiable) : tensor(int64)
                     #       Specified shape for output.
-                    # see aslo https://github.com/onnx/onnx/blob/master/docs/Operators.md#Reshape
+                    # see also https://github.com/onnx/onnx/blob/master/docs/Operators.md#Reshape
                     assert len(operation.config.input_quantization_config) == 2, f'Reshape Operation {operation.name} should have exact 2 inputs, '\
                         f'while {len(operation.config.input_quantization_config)} was given, is graph defination different from onnx opset 11?'
                     operation.config.input_quantization_config[-1].state = QuantizationStates.SOI
@@ -154,7 +154,7 @@ class QuantizeRefinePass(QuantizationOptimizationPass):
                     #   steps (optional, non-differentiable) : Tind
                     #       1-D tensor of slice step of corresponding axis in `axes`. 
                     #       Negative value means slicing backward. 'steps' cannot be 0. Defaults to 1.
-                    # see aslo https://github.com/onnx/onnx/blob/master/docs/Changelog.md#Slice-11
+                    # see also https://github.com/onnx/onnx/blob/master/docs/Changelog.md#Slice-11
                     assert len(operation.config.input_quantization_config) in {3, 4, 5}, f'Reshape {operation.name} Operation should have 3 - 5 inputs, '\
                         f'while {len(operation.config.input_quantization_config)} was given, is graph defination different from onnx opset 11?'
                     for config in  operation.config.input_quantization_config[1: ]:
@@ -185,7 +185,7 @@ class QuantizeRefinePass(QuantizationOptimizationPass):
                     #   max (optional) : T
                     #       Maximum value, above which element is replaced by max. 
                     #       It must be a scalar(tensor of empty shape).
-                    # see aslo https://github.com/onnx/onnx/blob/master/docs/Changelog.md#Clip-11
+                    # see also https://github.com/onnx/onnx/blob/master/docs/Changelog.md#Clip-11
                     assert len(operation.config.input_quantization_config) in {1, 2, 3}, f'Clip Operation {operation.name} should have 1 - 3 inputs, '\
                         f'while {len(operation.config.input_quantization_config)} was given, is graph defination different from onnx opset 11?'
                     for config in  operation.config.input_quantization_config[1: ]:
@@ -353,7 +353,7 @@ class QuantizeFusionPass(QuantizationOptimizationPass):
         graph = processer.graph
         processer = SearchableGraph(processer)
 
-        # fuse computing opeartions and its following activation.
+        # fuse computing operations and its following activation.
         if self.fuse_activation:
 
             # find all activation operations
@@ -437,8 +437,8 @@ class PPLCudaAddConvReluMerge(QuantizationOptimizationPass):
                 if upstream_ops[0] in merged: return True
             return False
 
-        def retrospect(opeartion: QuantableOperation) -> QuantableOperation:
-            if not isinstance(opeartion, QuantableOperation): return None
+        def retrospect(operation: QuantableOperation) -> QuantableOperation:
+            if not isinstance(operation, QuantableOperation): return None
             if len(graph.get_upstream_operations(operation)) != 1: return None
             
             parent = graph.get_upstream_operations(operation)[0]
@@ -562,7 +562,7 @@ class QuantAlignmentPass(QuantizationOptimizationPass):
     def align_to_output(self, op: QuantableOperation) -> TensorQuantizationConfig:
         """
         Align quant scale and offset to output config.
-            All input configs wiil share a same scale and offset with output config.
+            All input configs would share a same scale and offset with output config.
             (as a slave to output config)
 
         Any change to slave config will be rejected since then.
@@ -580,7 +580,7 @@ class QuantAlignmentPass(QuantizationOptimizationPass):
         for operation in processer.graph.operations.values():
             if isinstance(operation, QuantableOperation) and operation.type in COMPELING_OP_TYPES:
                 assert operation.config.output_quantization_config[0].state != QuantizationStates.INITIAL, (
-                    f'Can not modify quantization state of opeartion {operation.name}, '
+                    f'Can not modify quantization state of operation {operation.name}, '
                     'cause it has not been correctly quantized.')
                 
                 method = self.elementwise_merge_method if operation.type != 'Concat' else self.concat_merge_method

@@ -11,16 +11,16 @@ class GraphFormatSetting():
         self.format_constant_op = True
         
         # 融合Conv和Batchnorm
-        # Fuse Conv and Batchnorm Layer. This pass is necessary and curicial.
+        # Fuse Conv and Batchnorm Layer. This pass is necessary and crucial.
         self.fuse_conv_bn       = True
         
         # 将所有的parameter variable进行分裂，使得每个variable具有至多一个输出算子
         # Split all parameter variables, making all variable has at most 1 output operation. 
-        # This pass is necessary and curicial.
+        # This pass is necessary and crucial.
         self.format_paramters   = True
         
         # 一个你必须要启动的 Pass
-        # This pass is necessary and curicial.
+        # This pass is necessary and crucial.
         self.format_cast        = True
         
         # 尝试从网络中删除所有与输出无关的算子和 variable
@@ -102,7 +102,7 @@ class ChannelSplitSetting():
         # 要分裂多少 channel，数值越高则越多 channel 会被分裂
         # ratio of newly added channels
         self.expand_ratio      =  0.1
-        # 还没看，我也不知道是什么
+        # https://arxiv.org/abs/1901.09504 扩充 channel，为结果不变，需要新旧 channel 数值减半。不要修改此参数
         # value split ratio 
         self.split_ratio       =  0.5
         # 是否添加一个小偏移项用来使得量化后的结果尽可能与浮点对齐。
@@ -214,7 +214,7 @@ class QuantizationFusionSetting():
         self.fuse_activation = True
         
         # 省略被动算子的定点，保持算子前后定点信息一致
-        # skip passive opeartion's input and output quantization, keep them with a same quantization scale and offset.
+        # skip passive operation's input and output quantization, keep them with a same quantization scale and offset.
         self.fuse_passive_op = True
         
         # 对多输入算子执行定点对齐

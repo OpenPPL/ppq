@@ -32,7 +32,7 @@ def layerwise_error_analyse(
 
     if verbose is set as True, this function will display error report at last.
     
-    The key of the dictionary is an opeartion name while the value of corresponding key 
+    The key of the dictionary is an operation name while the value of corresponding key 
         is the difference between quantized output and float output of this operation.
     
     Result {'operation name 1': 0.933} means quantizing operation 1 
@@ -96,7 +96,7 @@ def layerwise_error_analyse(
         if isinstance(operation, QuantableOperation):
             recorders[operation.name] = MeasureRecorder(measurement=method)
 
-    # run for each quantable opeartions:
+    # run for each quantable operations:
     for operation in tqdm(quantable_operations, desc='Analysing Layerwise quantization error:'):
         assert isinstance(operation, QuantableOperation)
         recorder = recorders[operation.name]

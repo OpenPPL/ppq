@@ -104,7 +104,7 @@ class RunnableGraph(GraphCommandProcesser):
                                 'share a same target platform, split this variable first.')
             platform = platforms[-1]
 
-            # if all downstream operations are shape related opeartions, send value to cpu
+            # if all downstream operations are shape related operations, send value to cpu
             if platform == TargetPlatform.SHAPE_OR_INDEX:
                 variable.value = convert_any_to_torch_tensor(
                     variable.value, accepet_none=True).to('cpu')

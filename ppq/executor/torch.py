@@ -97,7 +97,7 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
 
             rounding_policy (RoundingPolicy)
                 rounding_policy takes responsibility for quantizing input/output/parameters during graph executing.
-                Notice that all quantizer will possess a paltform specified rounding_policy (within BaseQuantizer._quant_function),
+                Notice that all quantizer will possess a platform specified rounding_policy (within BaseQuantizer._quant_function),
                 you are supposed to pass BaseQuantizer._quant_function._rounding_policy
                     to initilize this executor whenever you have a quantizer.
 
@@ -345,7 +345,7 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
                 operation_runtime_hook = hooks[operation.name] if (hooks is not None) and (operation.name in hooks) else None
                 inputs = [var.value for var in operation.inputs]
                 
-                # if opeartion is an QuantableOperation, we have to quant its inputs and outputs at first.
+                # if operation is an QuantableOperation, we have to quant its inputs and outputs at first.
                 if isinstance(operation, QuantableOperation):
                     input_configs = [_ for _ in operation.config.input_quantization_config]
                     inputs = [self.quantize_function(input, config) for input, config in zip(inputs, input_configs)]
@@ -463,7 +463,7 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
             See also: ppq.quantization.optim.ParameterQuantizePass
         
         This function fakes some input tensors via operation metadata.
-            ATTENTION: opeartion must have metadata before invoking this function.
+            ATTENTION: operation must have metadata before invoking this function.
 
         Args:
             hooks (Dict[str, RuntimeHook], optional): 

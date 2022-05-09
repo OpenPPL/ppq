@@ -21,7 +21,7 @@ PPQ_OBSERVER_TABLE = {
 class TensorObserverFactroy():
     def __init__(self) -> None:
         raise NotImplementedError(
-            'Observer Factory can not be initilized, use TensorObserverFactroy.build_observer instead.')
+            'Observer Factory can not be initialized, use TensorObserverFactroy.build_observer instead.')
 
     @ classmethod
     def build_observer(cls, variable: Variable, config: TensorQuantizationConfig) -> BaseTensorObserver:
@@ -71,17 +71,17 @@ class CalibrationHook(QuantOPRuntimeHook):
 class OperationObserver(metaclass=ABCMeta):
     def __init__(
         self, 
-        opeartion: QuantableOperation,
+        operation: QuantableOperation,
         monitor_parameter: bool = True,
         monitor_outputs  : bool = True,
         monitor_inputs   : bool = True
     ) -> None:
 
-        if not isinstance(opeartion, QuantableOperation):
+        if not isinstance(operation, QuantableOperation):
             raise TypeError(f'Only QuantableOP instance can apply an Observer, '\
-                f'while {type(opeartion)} was given.')
+                f'while {type(operation)} was given.')
 
-        self._operation = opeartion
+        self._operation = operation
         self._hook = self.build_hook(
             monitor_parameter = monitor_parameter, 
             monitor_outputs   = monitor_outputs, 

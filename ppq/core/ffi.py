@@ -29,7 +29,7 @@ try:
         with_cuda=True,
         extra_cflags=['-O3'])
 except Exception as e:
-    raise SystemError('PPQ can not complie cuda extensions, please check your complier and system environment, '
+    raise SystemError('PPQ can not complie cuda extensions, please check your compiler and system environment, '
                       'or simply set ppq.core.config.USING_CUDA_KERNEL = False.')
 
 # helper class for calling cuda methods.

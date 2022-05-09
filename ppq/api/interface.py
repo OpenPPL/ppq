@@ -129,7 +129,7 @@ def load_caffe_graph(prototxt_path: str, caffemodel_path: str) -> BaseGraph:
         load caffe graph from the specified location
     Args:
         prototxt_path (str): caffe prototxt的保存位置 the specified location of caffe prototxt
-        caffemodel_path (str): caffe weight的保存位置 the specified lcoation of caffe weight
+        caffemodel_path (str): caffe weight的保存位置 the specified location of caffe weight
 
     Returns:
         BaseGraph: 解析 caffe 获得的 ppq 计算图对象 the parsed ppq IR graph

@@ -26,7 +26,7 @@ if not USING_CUDA_KERNEL:
             All quantization within PPQ will invoke this function to quantize its value.
             Any modification of this function will greatly affects system behaviour.
         
-        This is a torch implemention of quantization itself.
+        This is a torch implementation of quantization itself.
         Notice that if ppq.config.USING_CUDA_KERNAL = True, 
             then all quantization will bypass this function by using ffi.CUDA instead.
 
@@ -54,7 +54,7 @@ if not USING_CUDA_KERNEL:
             All quantization within PPQ will invoke this function to quantize its value.
             Any modification of this function will greatly affects system behaviour.
         
-        This is a torch implemention of quantization itself.
+        This is a torch implementation of quantization itself.
         Notice that if ppq.config.USING_CUDA_KERNAL = True, 
             then all quantization will bypass this function by using ffi.CUDA instead.
 
@@ -88,7 +88,7 @@ else: # if USING_CUDA_KERNEL:
             All quantization within PPQ will invoke this function to quantize its value.
             Any modification of this function will greatly affects system behaviour.
         
-        This is a torch implemention of quantization itself.
+        This is a torch implementation of quantization itself.
         Notice that if ppq.config.USING_CUDA_KERNAL = True, 
             then all quantization will bypass this function by using ffi.CUDA instead.
 
@@ -129,7 +129,7 @@ else: # if USING_CUDA_KERNEL:
             All quantization within PPQ will invoke this function to quantize its value.
             Any modification of this function will greatly affects system behaviour.
         
-        This is a torch implemention of quantization itself.
+        This is a torch implementation of quantization itself.
         Notice that if ppq.config.USING_CUDA_KERNAL = True, 
             then all quantization will bypass this function by using ffi.CUDA instead.
 

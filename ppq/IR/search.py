@@ -60,7 +60,7 @@ class OperationSet(set):
     
     def add(self, element: Operation):
         if not isinstance(element, Operation):
-            raise TypeError('Operation Set can only contains opeartion instance.')
+            raise TypeError('Operation Set can only contains operation instance.')
         super().add(element)
         return self
 
@@ -102,7 +102,7 @@ class TraversalCommand(GraphCommand):
                 ep_expr = lamdba x: x.type == 'Conv'
                 limitation = None
                 direction = 'down'
-            this Command searchs paths which starts with any 
+            this Command searches paths which starts with any 
             Conv op, visits any number of Relu ops, and finally
             ends with any Conv op
         Args:
@@ -309,7 +309,7 @@ class TreePatternMatcher:
         """
         TreePatternMatcher offers you a really powerful pattern matching tool that helps
         you finding specific structure from your graph. Define your network structure with
-        pattern tree --- an internal data sturcture of PPQ, then extract corresponding graph 
+        pattern tree --- an internal data structure of PPQ, then extract corresponding graph 
             structures from ppq graph via TreePatternMatcher.
         
         This feature will benifits you a lot when dealing with graph fusion and graph editing.

@@ -27,7 +27,7 @@ def convert_type(platform: TargetPlatform) -> str:
     if platform == TargetPlatform.FP32: return None
     raise TypeError(f'Unsupported platform type. ({str(platform)})')
 
-OPEARTION_PLATFROM_FORMAT = \
+OPEARTION_PLATFORM_FORMAT = \
 """
 {name}:(
     platform:\t{platform},
@@ -224,7 +224,7 @@ class SNPECaffeExporter(CaffeExporter):
         
         caffe_model, caffe_proto = self.prepare_model(graph, input_shapes)
         
-        # can not edit sturcture of protobuf with python, have to edit it as pure string.
+        # can not edit structure of protobuf with python, have to edit it as pure string.
         caffe_proto, str_buffer = str(caffe_proto), ''
         lines = caffe_proto.split('\n')
         for idx in range(len(lines)):

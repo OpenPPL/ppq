@@ -7,7 +7,7 @@ import torch
 from ppq.core import *
 from ppq.executor import TorchExecutor
 from ppq.IR import BaseGraph, QuantableVariable
-from ppq.quantization.analyise.util import MeasurePrinter, MeasureRecorder
+from ppq.quantization.analyse.util import MeasurePrinter, MeasureRecorder
 from ppq.utils.fetch import tensor_random_fetch
 from tqdm import tqdm
 

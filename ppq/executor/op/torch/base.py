@@ -15,7 +15,7 @@ def ASSERT_ALL_TENSORS_AT_CPU(op: Operation, values: List[torch.Tensor], force_c
 
     This function will check all inputs tensors' device, and move all cuda tensor to cpu(if force_convert is true).
     ATTENTION: do not set force_convert as True if not necessary. PPQ will automatically move
-        opeartions to proper platform, there should not be any input tensor deployed at cuda
+        operations to proper platform, there should not be any input tensor deployed at cuda
         when invoking a dynamic shape operation. 
 
     IF THERE IS ANY CUDA INPUT TENSOR FOR DYNAMIC SHAPE OPERATION, THERE PROBABLY ARE SOME SYSTEM FAILURES.
@@ -60,8 +60,8 @@ def ASSERT_NUM_OF_INPUT(op: Operation, values: List[torch.Tensor],
 
 def GET_ATTRIBUTE_FROM_OPERATION(op: Operation, attribute: str, compulsive: bool = False, default: Any = None):
     """
-    Try to get an attribute from opeartion.
-    If an attribute is compulsive, then opeartion must give a value of it, otherwise an error will be thrown.
+    Try to get an attribute from operation.
+    If an attribute is compulsive, then operation must give a value of it, otherwise an error will be thrown.
     If an attribute is not compulsive, a default value will be given if operation.attributes do not holds a
         value of requesting attribute.
 
@@ -77,7 +77,7 @@ def GET_ATTRIBUTE_FROM_OPERATION(op: Operation, attribute: str, compulsive: bool
         if compulsive:
             raise KeyError(
                 f'Opeartion {op.name} is supposed to have a value of attribute {attribute}. ',
-                'However this value is missing from currecnt opeartion.')
+                'However this value is missing from currecnt operation.')
         else:
             return default
 

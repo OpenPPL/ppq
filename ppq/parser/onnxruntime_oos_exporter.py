@@ -106,7 +106,7 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
         """
         if op.type in self.ONNX_QUANTABLE_TABLE:
             if op.type == 'Concat': return
-            # Those operation can convert to onnx opeartion-oriented quantized op.
+            # Those operation can convert to onnx operation-oriented quantized op.
 
             inputs, input_metas = self.conversion_preprocess(op)
             bias, bias_meta, bias_config = None, None, None
@@ -187,7 +187,7 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
                 
                 bias_config.state = QuantizationStates.ACTIVATED
                 if bias_config.num_of_bits <= 16:
-                    ppq_warning(f'Bias vector of opeartion {op.name} is quantized with {bias_config.num_of_bits} bits, '
+                    ppq_warning(f'Bias vector of operation {op.name} is quantized with {bias_config.num_of_bits} bits, '
                                 'however onnx need it to be 32-bit quantized.')
                 bias.value = PPQLinearQuant_toInt(tensor=bias.value, config=bias_config).to(vtype)
                 graph.create_link_with_op(variable=bias, upstream_op=None, downstream_op=op)

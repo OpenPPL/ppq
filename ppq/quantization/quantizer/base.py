@@ -46,7 +46,7 @@ class BaseQuantizer(metaclass = ABCMeta):
         self._processer_chain = SearchableGraph(QuantableGraph(GraphReplacer(self._graph)))
 
         # step - 2, prequant pipeline:
-        # prequant pipeline will change your network sturcture and float value.
+        # prequant pipeline will change your network structure and float value.
         prequant_pipeline = self.build_prequant_pipeline(
             setting, executor=executor)
         prequant_pipeline.optimize(                
@@ -59,9 +59,9 @@ class BaseQuantizer(metaclass = ABCMeta):
         # step - 3, quantize all operation(need meta data.)
         executor.load_graph(self._graph)
         executor.tracing_operation_meta(inputs=inputs)
-        self.quantize_operations(quantable_opeartion_types=self.quant_operation_types)
+        self.quantize_operations(quantable_operation_types=self.quant_operation_types)
 
-        # quantize operation will modify network sturcture
+        # quantize operation will modify network structure
         # it is necessary calling self._executor before further execution
         # step - 4, calling graph optimization pipeline
         executor.load_graph(self._graph)
@@ -86,14 +86,14 @@ class BaseQuantizer(metaclass = ABCMeta):
                     operation.config.output_quantization_config:
                     if QuantizationStates.can_export(config.state) and False:
                         raise RuntimeError(
-                            f'Quantize point of opeartion {name} has not been initilized, '\
+                            f'Quantize point of operation {name} has not been initilized, '\
                             'All quantize points must got processed during your optim passes.'
                         )
 
     @ empty_ppq_cache
     def quantize_operations(
         self,
-        quantable_opeartion_types: set,
+        quantable_operation_types: set,
         operation_platforms: dict = None,
         operation_quantization_configs: dict = None,
     ) -> None:
@@ -106,7 +106,7 @@ class BaseQuantizer(metaclass = ABCMeta):
             # some operation has a predefined platform, just skip.
             if operation.platform != TargetPlatform.UNSPECIFIED:
                 operation_platforms[op_name] = operation.platform
-            elif operation.type in quantable_opeartion_types:
+            elif operation.type in quantable_operation_types:
                 operation_platforms[op_name] = self.target_platform
             else: operation_platforms[op_name] = self.default_platform
 
@@ -116,8 +116,8 @@ class BaseQuantizer(metaclass = ABCMeta):
 
         # build operation_quantization_configs
         # every quantable op MUST have a quantization config
-        # if operation.type is listed in quantable_opeartion_types while a operation_quantization_configs is given
-        # it will override the setting of quantable_opeartion_types
+        # if operation.type is listed in quantable_operation_types while a operation_quantization_configs is given
+        # it will override the setting of quantable_operation_types
         for op_name, operation in self._graph.operations.items():
             if not TargetPlatform.is_quantized_platform(operation_platforms[op_name]): continue
             # operation information is tracing data, which created in self.__init__
@@ -125,7 +125,7 @@ class BaseQuantizer(metaclass = ABCMeta):
             if operation.meta_data is None:
                 raise ValueError(f'Operation {op_name} has no meta data yet. calling executor.tracing_meta')
 
-            if operation.type in quantable_opeartion_types:
+            if operation.type in quantable_operation_types:
                 if op_name in operation_quantization_configs: continue
                 else: operation_quantization_configs[op_name] = (
                     self.init_quantize_config(operation=operation)

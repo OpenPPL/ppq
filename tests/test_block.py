@@ -47,5 +47,5 @@ for scheme in TEST_SCHEMES:
                     graph_save_to='tworkingspace/export',
                     config_save_to='tworkingspace/export.json')
         except NotImplementedError as e:
-            print(f'{time.strftime("%Y-%m-%d %H:%M:%S")} | Error occured: {e}')
+            print(f'{time.strftime("%Y-%m-%d %H:%M:%S")} | Error occurred: {e}')
             sys.exit(1)

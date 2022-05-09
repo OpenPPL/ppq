@@ -248,7 +248,7 @@ class QuantableGraph(GraphCommandProcesser):
         # calling other chain responser to replace operation with quantized one.
         if self._next_command_processer is None:
             raise RuntimeError(
-                'To replace a opeartion, your processer chain must have a GraphMorpher Processer.')
+                'To replace a operation, your processer chain must have a GraphMorpher Processer.')
         self._next_command_processer(ReplaceOperationCommand(operation_name, quantized_operation))
 
         # replace all related variable with quantable one.
@@ -262,7 +262,7 @@ class QuantableGraph(GraphCommandProcesser):
             )
         quantized_operation.store_parameter_value()
 
-    def dequantize_opeartion(
+    def dequantize_operation(
         self,
         operation_name: str
     ) -> Operation:

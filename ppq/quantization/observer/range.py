@@ -171,7 +171,7 @@ class TorchHistObserver(TorchMinMaxObserver):
         # now we should normalize both distributions, after that we can compute KL_divergence
         # P /= sum(P) Q /= sum(Q)
         # result = KL_divergence(P, Q)
-        # see aslo 
+        # see also 
         # https://github.com/NVIDIA/TensorRT/blob/3835424af081db4dc8cfa3ff3c9f4a8b89844421/tools/pytorch-quantization/pytorch_quantization/calib/histogram.py#L147
  
         losses, quant_bins = [], 2 ** (config.num_of_bits - 1)

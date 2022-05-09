@@ -8,7 +8,7 @@ from ppq import layerwise_error_analyse
 import sys
 
 DEVICE = 'cuda'
-PLATFROM = TargetPlatform.ORT_OOS_INT8
+PLATFORM = TargetPlatform.ORT_OOS_INT8
 
 for case in TORCH_TEST_CASES:
     try:
@@ -21,7 +21,7 @@ for case in TORCH_TEST_CASES:
             calib_dataloader=dataset,
             calib_steps=8,
             input_shape=case.input_generator().shape,
-            platform=PLATFROM,
+            platform=PLATFORM,
             setting=QuantizationSettingFactory.default_setting())
 
         executor = TorchExecutor(quantized)
@@ -48,7 +48,7 @@ for case in TORCH_TEST_CASES:
         print(f'Simulating Error: {error: .4f}%')
         assert error < 1
     except NotImplementedError as e:
-        print(f'{time.strftime("%Y-%m-%d %H:%M:%S")} | Error occured: {e}')
+        print(f'{time.strftime("%Y-%m-%d %H:%M:%S")} | Error occurred: {e}')
         sys.exit(1)
 
 for case in TORCH_TEST_CASES:
@@ -62,7 +62,7 @@ for case in TORCH_TEST_CASES:
             calib_dataloader=dataset,
             calib_steps=8,
             input_shape=case.input_generator().shape,
-            platform=PLATFROM,
+            platform=PLATFORM,
             setting=QuantizationSettingFactory.default_setting())
 
         '''
@@ -97,5 +97,5 @@ for case in TORCH_TEST_CASES:
         # assert error < 1
 
     except NotImplementedError as e:
-        print(f'{time.strftime("%Y-%m-%d %H:%M:%S")} | Error occured: {e}')
+        print(f'{time.strftime("%Y-%m-%d %H:%M:%S")} | Error occurred: {e}')
         sys.exit(1)

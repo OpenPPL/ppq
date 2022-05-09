@@ -71,7 +71,7 @@ class MatrixFactorizationPass(QuantizationOptimizationPass):
 
         Where W = BA
 
-    However i do not konw how to minimize quant loss until now.
+    However i do not know how to minimize quant loss until now.
 
     Args:
         QuantizationOptimizationPass ([type]): [description]
@@ -171,7 +171,7 @@ class MatrixFactorizationPass(QuantizationOptimizationPass):
                 else: raise ValueError(f'Invalid method {self.method}, only support training and svd now.')
                 a = a.transpose(0, 1).unsqueeze(-1).unsqueeze(-1)
                 b = b.transpose(0, 1).unsqueeze(-1).unsqueeze(-1)
-            else: raise TypeError(f'Unsupported opeartion type {operation.type}.')
+            else: raise TypeError(f'Unsupported operation type {operation.type}.')
             operation.parameters[0].value = a
 
             # create new operation & dirty work

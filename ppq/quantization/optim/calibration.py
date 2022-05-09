@@ -106,7 +106,7 @@ class RuntimeCalibrationPass(QuantizationOptimizationPass):
                     config.observer_algorithm = self._method
 
             observer = OperationObserver(
-                opeartion=executor._graph.operations[op_name], 
+                operation=executor._graph.operations[op_name], 
                 monitor_parameter=False)
             self._observers[op_name] = observer
             hooks[op_name]           = observer.hook
@@ -125,7 +125,7 @@ class RuntimeCalibrationPass(QuantizationOptimizationPass):
         # -------------------------------------------------
         # There are some two-phase observer in ppq,
         # which means they have to be calibrated for a second time.
-        #   see aslo: TorchHistObserver 
+        #   see also: TorchHistObserver 
         # -------------------------------------------------
 
         # remove one-phase observer from hook dict.
@@ -196,7 +196,7 @@ class RuntimePerlayerCalibrationPass(RuntimeCalibrationPass):
                     config.observer_algorithm = self._method
 
             observer = OperationObserver(
-                opeartion=operation, 
+                operation=operation, 
                 monitor_parameter=False)
             
             self.calibrate(desc=f'Runtime Calibration for {operation.name}', 

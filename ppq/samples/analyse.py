@@ -10,7 +10,7 @@ from ppq import (QuantizationSettingFactory, TargetPlatform,
 from ppq.api import quantize_torch_model
 from torch.utils.data import DataLoader
 
-from ppq.quantization.analyise.layerwise import layerwise_error_analyse, parameter_analyse
+from ppq.quantization.analyse.layerwise import layerwise_error_analyse, parameter_analyse
 
 BATCHSIZE = 32
 INPUT_SHAPE = [3, 224, 224]
