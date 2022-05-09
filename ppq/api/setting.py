@@ -472,6 +472,20 @@ class QuantizationSettingFactory:
         return default_setting
 
     @ staticmethod
+    def fpga_setting() -> QuantizationSetting:
+        default_setting = QuantizationSetting()
+        default_setting.equalization = True
+        default_setting.equalization_setting.including_bias = True
+        default_setting.fusion_setting.fuse_conv_add = False
+        return default_setting
+
+    @staticmethod
+    def trt_setting() -> QuantizationSetting:
+        default_setting = QuantizationSetting()
+        default_setting.fusion = False # 我也不知道对不对
+        return default_setting
+
+    @ staticmethod
     def from_json(json_obj: Union[str, dict]) -> QuantizationSetting:
         setting = QuantizationSetting()
         if isinstance(json_obj, str):

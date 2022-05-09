@@ -230,7 +230,6 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
         
         # might have some error...
         for op in [op for op in quantize_extension]:
-            print(op.name, op.is_boundary, TargetPlatform.is_quantized_platform(op.platform), op.type)
             if op.type in FP32_ONLY_TYPES:
                 var       = op.inputs[0]
                 source_op = var.source_op
