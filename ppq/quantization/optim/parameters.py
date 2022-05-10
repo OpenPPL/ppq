@@ -4,7 +4,7 @@ import torch
 from ppq.core import (ChannelwiseTensorQuantizationConfig,
                       QuantizationProperty, QuantizationStates)
 from ppq.executor import BaseGraphExecutor, TorchExecutor
-from ppq.IR import GraphCommandProcesser, QuantableOperation
+from ppq.IR import GraphCommandProcessor, QuantableOperation
 from ppq.quantization.observer import OperationObserver
 
 from .base import QuantizationOptimizationPass
@@ -26,10 +26,10 @@ class PassiveParameterQuantizePass(QuantizationOptimizationPass):
         self.scale_multiplier = bias_scale_multiplier
         super().__init__(name='PPQ Passive Parameter Quantization')
 
-    def optimize(self, processer: GraphCommandProcesser, 
+    def optimize(self, processor: GraphCommandProcessor,
         dataloader: Iterable, executor: BaseGraphExecutor, **kwargs) -> None:
 
-        def check_state(state: QuantizationStates): 
+        def check_state(state: QuantizationStates):
             return state in {
                 QuantizationStates.SLAVE,
                 QuantizationStates.ACTIVATED,
@@ -37,7 +37,7 @@ class PassiveParameterQuantizePass(QuantizationOptimizationPass):
                 QuantizationStates.OVERLAPPED
             }
 
-        graph = processer.graph
+        graph = processor.graph
         for op in graph.operations.values():
             if not isinstance(op, QuantableOperation): continue
             if op.type in {'Conv', 'ConvTranspose', 'Gemm'}:
@@ -63,7 +63,7 @@ class PassiveParameterQuantizePass(QuantizationOptimizationPass):
             if op.type in {'Clip'}:
                 # inputs are [input value, min[optional], max[optional]]
                 i_cfg = op.config.input_quantization_config[0]
-                
+
                 if not check_state(i_cfg.state):
                     raise PermissionError(f'Can not quantize clip value of layer {op.name}, '
                         'cause input has not been correctly quantized.')
@@ -80,7 +80,7 @@ class PassiveParameterQuantizePass(QuantizationOptimizationPass):
                 if op.num_of_input != 3: continue
                 i_cfg = op.config.input_quantization_config[0]
                 if i_cfg.state != QuantizationStates.PASSIVE_INIT: continue
-                
+
                 if not check_state(i_cfg.state):
                     raise PermissionError(f'Can not quantize pad value of layer {op.name}, '
                         'cause input has not been correctly quantized.')
@@ -98,7 +98,7 @@ class ParameterQuantizePass(QuantizationOptimizationPass):
         all non-parameter tensors will be excluded from this pass by temporary dequantization.
 
     Then, operation observers will be established automatically to record necessary statistics,
-        observers are also responsible for rendering quantization configuration (computing scale and offset). 
+        observers are also responsible for rendering quantization configuration (computing scale and offset).
 
     This pass needs no data, however it uses fake data to finish a dummy forward process.
     see also: TorchExecutor.dummy_forward function
@@ -108,17 +108,17 @@ class ParameterQuantizePass(QuantizationOptimizationPass):
         super().__init__(name='PPQ Parameter Quantization Pass')
 
     def optimize(
-        self, 
-        processer: GraphCommandProcesser,
+        self,
+        processor: GraphCommandProcessor,
         dataloader: Iterable,
         executor: BaseGraphExecutor,
         **kwargs
     ) -> None:
         # build observer and hook for each quantable operation
         hooks, observers, state_records = {}, {}, {}
-        for op_name, operation in processer.graph.operations.items():
+        for op_name, operation in processor.graph.operations.items():
             if not isinstance(operation, QuantableOperation): continue
-            
+
             for config, var in operation.config_with_variable:
                 # deactivate non-parameter variable quantization just for now
                 if not var.is_parameter:
@@ -129,18 +129,18 @@ class ParameterQuantizePass(QuantizationOptimizationPass):
                     config.observer_algorithm = self._method
 
             observer = OperationObserver(
-                operation=executor._graph.operations[op_name], 
+                operation=executor._graph.operations[op_name],
                 monitor_outputs=False, monitor_inputs=False)
             observers[op_name] = observer
             hooks[op_name]     = observer.hook
 
-        # dummy forward, quant all parameter. 
+        # dummy forward, quant all parameter.
         assert isinstance(executor, TorchExecutor), \
             'ParameterQuantizePass Only support TorchExecutor now.'
         executor.dummy_forward(hooks=hooks)
 
         # render quantization config, restore non-parameter quantization state
-        for op_name, operation in processer.graph.operations.items():
+        for op_name, operation in processor.graph.operations.items():
             if not isinstance(operation, QuantableOperation): continue
 
             for cfg, var in operation.config_with_variable:

@@ -1,5 +1,5 @@
 """
-    PPQ Core Decorator & MetaClass definations
+    PPQ Core Decorator & MetaClass definitions
     PPQ 核心装饰器、元类型定义
 
     You are not allowed to modify this

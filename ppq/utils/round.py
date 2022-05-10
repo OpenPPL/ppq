@@ -6,12 +6,12 @@ import torch
 from ppq.core import RoundingPolicy
 
 
-def ppq_numerical_round(value: float, 
+def ppq_numerical_round(value: float,
     policy: RoundingPolicy=RoundingPolicy.ROUND_HALF_EVEN) -> int:
     """
         reference: https://en.wikipedia.org/wiki/Rounding
-        
-        decimal defination:
+
+        decimal definition:
             - decimal.ROUND_CEILING (towards Infinity)
             - decimal.ROUND_DOWN (towards zero)
             - decimal.ROUND_FLOOR (towards -Infinity)
@@ -52,7 +52,7 @@ def ppq_numerical_round(value: float,
     else:
         raise ValueError('Unexpected rounding policy found.')
 
-def ppq_tensor_round(value: torch.Tensor, 
+def ppq_tensor_round(value: torch.Tensor,
     policy:RoundingPolicy=RoundingPolicy.ROUND_HALF_EVEN) -> torch.Tensor:
     """
         reference: https://en.wikipedia.org/wiki/Rounding
@@ -88,7 +88,7 @@ def ppq_tensor_round(value: torch.Tensor,
     else:
         raise ValueError('Unexpected rounding policy found.')
 
-def ppq_round_to_power_of_2(value: Union[float, int], 
+def ppq_round_to_power_of_2(value: Union[float, int],
     policy: RoundingPolicy=RoundingPolicy.ROUND_UP) -> float:
     if value == 0: return 0
     sign = 1 if value >= 0 else -1

@@ -33,13 +33,13 @@ GLOBAL_DISPATCHING_TABLE[TargetPlatform.ACADEMIC_INT8] = ACADEMIC_BACKEND_TABLE
 
 GLOBAL_DISPATCHING_TABLE[TargetPlatform.EXTENSION] = EXTENSION_BACKEND_TABLE
 
-def register_operation_handler(hanlder: Callable, operation_type: str, platform: TargetPlatform):
+def register_operation_handler(handler: Callable, operation_type: str, platform: TargetPlatform):
     if platform not in GLOBAL_DISPATCHING_TABLE:
         raise ValueError('Unknown Platform detected, Please check your platform setting.')
     if operation_type in GLOBAL_DISPATCHING_TABLE[platform]:
         raise ValueError(f'Platform: {platform.name}, operation type: {operation_type} \
-            already been registed in dispatching table')
-    GLOBAL_DISPATCHING_TABLE[platform][operation_type] = hanlder
+            already been registered in dispatching table')
+    GLOBAL_DISPATCHING_TABLE[platform][operation_type] = handler
 
 
 class RuntimeHook(metaclass=ABCMeta):
@@ -64,7 +64,7 @@ class RuntimeHook(metaclass=ABCMeta):
             list: a list includes all input data(processed).
         """
         return inputs
-    
+
     def post_forward_hook(self, outputs: list, **kwargs) -> list:
         """
             user-customized post-processing procedure of output data
@@ -141,26 +141,26 @@ class BaseGraphExecutor(Callable, metaclass=ABCMeta):
             assert len(inputs_dictionary) == 1, \
                 'Graph needs more than one input, while only one tensor was given.'
             return {list(inputs_dictionary.keys())[0]: inputs}
-        
+
         elif isinstance(inputs, list):
             assert len(inputs_dictionary) == len(inputs), \
                 f'Inputs format misunderstood. Given inputs has '\
                 f'{len(inputs)} elements, while graph needs {len(inputs_dictionary)}'
             return {key: inputs[idx] for idx, key in enumerate(inputs_dictionary)}
-        
+
         elif isinstance(inputs, dict):
             assert len(inputs_dictionary) == len(inputs), \
                 f'Inputs format misunderstood. Given inputs has '\
                 f'{len(inputs)} elements, while graph needs {len(inputs_dictionary)}'
             return inputs
-        
+
         else:
             raise Exception('Oops, you can never reach here.')
 
     @ abstractmethod
     def forward(
-        self, 
-        inputs: Union[dict, list, torch.Tensor], 
+        self,
+        inputs: Union[dict, list, torch.Tensor],
         output_names:List[str] = None,
         hooks: Dict[str, RuntimeHook] = None,
     ) -> List[torch.Tensor]:
@@ -169,14 +169,14 @@ class BaseGraphExecutor(Callable, metaclass=ABCMeta):
     @ abstractmethod
     def tracing_operation_meta(
         self,
-        inputs: Union[dict, list, torch.Tensor], 
+        inputs: Union[dict, list, torch.Tensor],
         output_names:List[str] = None
     ) -> None:
         raise NotImplementedError('Please implement this function first.')
 
     def __call__(
-        self, 
-        inputs: Union[dict, torch.Tensor], 
+        self,
+        inputs: Union[dict, torch.Tensor],
         output_names:List[str] = None
     ) -> List[torch.Tensor]:
         return self.forward(inputs=inputs, output_names=output_names)

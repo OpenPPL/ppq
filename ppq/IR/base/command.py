@@ -19,7 +19,7 @@ class GraphCommandType(Enum):
     DEPLOY_TO_NUMPY = 3
 
     # 量化一个指定OP，同时将所有关联的 variable 转换为量化 variable
-    # quantize a specified operation, and converts all connected 
+    # quantize a specified operation, and converts all connected
     # variables to quantable variables
     QUANTIZE_OPERATION = 5
 
@@ -28,7 +28,7 @@ class GraphCommandType(Enum):
     # and deactivated all related variables
     DISABLE_OPERATION_QUANTIZATION = 6
     # 将一个OP的量化状态恢复
-    # restore quantization state of a dequantized op 
+    # restore quantization state of a dequantized op
     RESTORE_OPERATION_QUANTIZATION = 7
 
     # 格式化 CLIP 算子，将不同行为的 CLIP 行为统一
@@ -78,14 +78,14 @@ class GraphCommandType(Enum):
     # Concat 匹配
     # Concat op matching
     CONCAT_MATCHING = 23
-    
+
     # 插入 Device Switcher
     # insert switcher
     INSERT_SWITCHER = 25
     # 移除 Device Switcher
     # remove switcher
     REMOVE_SWITCHER = 26
-    
+
     # 融合图中的 计算层 与 BN
     # fuse Computing layer and BN
     FUSE_BN = 27
@@ -100,7 +100,7 @@ class GraphCommandType(Enum):
 class GraphCommand():
     def __init__(self, command_type: GraphCommandType, **kwargs) -> None:
         assert isinstance(command_type, GraphCommandType), \
-            f'Command Type must be a GraphCommandType object, but {type(command_type)} recieved.'
+            f'Command Type must be a GraphCommandType object, but {type(command_type)} received.'
         self.command_type = command_type
         self.kwargs = kwargs
 
@@ -142,7 +142,7 @@ class ReplaceVariableCommand(GraphCommand):
         super().__init__(command_type=GraphCommandType.REPLACE_VAR)
         self.op_name = var_name
         self.replace_to = replace_to
-        
+
 
 class TruncateGraphCommand(GraphCommand):
     def __init__(self, var: Variable, mark_as_output: bool) -> None:

@@ -79,7 +79,7 @@ SETTING = UnbelievableUserFriendlyQuantizationSetting(
     platform = TARGET_PLATFORM,   # target platform to deploy your model
     finetune_steps = 2500,        # number of total iterations in AdavancedOptimization algorithm
     finetune_lr = 1e-3,           # learning rate in AdavancedOptimization algorithm
-    calibration = 'percentile',   # calibration algorithm controling computation of quantization parameters
+    calibration = 'percentile',   # calibration algorithm controlling computation of quantization parameters
     equalization = True,          # whether to perform data free quantization equalization 
     non_quantable_op = None       # concrete operations which need fp32 precision and shouldn't be quantized
 )
@@ -145,7 +145,7 @@ Outputs = executor.forward(Input) # for fp32 mode
 
 ## Analysis
 
-PPQ has provided powerful analysis tools to analyse precision degration in different layers of the quantized graph, 
+PPQ has provided powerful analysis tools to analyse precision degradation in different layers of the quantized graph, 
 *graphwise_error_analysis* takes quantization error accumulation during execution into consideration while 
 *layerwise_error_analysis* considers quantization error layer-separetely, if you want to know the global performance 
 of quantized graph by analysing the signal noise ratio of fp32 outputs and quantized outputs of different layers.

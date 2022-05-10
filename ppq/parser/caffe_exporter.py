@@ -53,15 +53,15 @@ class CaffeExporter(GraphExporter):
                         continue
 
                 if config.state in {
-                    QuantizationStates.SOI, 
-                    QuantizationStates.DEACTIVATED, 
-                    QuantizationStates.DEQUANTIZED, 
+                    QuantizationStates.SOI,
+                    QuantizationStates.DEACTIVATED,
+                    QuantizationStates.DEQUANTIZED,
                     QuantizationStates.FP32
                 }: continue
-                # Simply override recorder is acceptable here, 
-                # we do not support mix presicion quantization for CUDA backend now.
+                # Simply override recorder is acceptable here,
+                # we do not support mix precision quantization for CUDA backend now.
                 # All configurations for this variable should keep identical towards each other.
-                
+
                 if config.state == QuantizationStates.SLAVE and var.name in var_quant_info_recorder: continue
                 var_quant_info_recorder[var.name] = config
 
@@ -101,8 +101,8 @@ class CaffeExporter(GraphExporter):
     def prepare_model(self, graph: BaseGraph, input_shapes: List[List[int]]):
         # remove device switcher if necessary
         if not EXPORT_DEVICE_SWITCHER:
-            processer = GraphDeviceSwitcher(graph)
-            processer.remove_switcher()
+            processor = GraphDeviceSwitcher(graph)
+            processor.remove_switcher()
 
         # trace model for exporting.
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -118,27 +118,27 @@ class CaffeExporter(GraphExporter):
             inputs = [torch.randn(*shape, device=device) for shape in input_shapes]
         tracer = TorchExecutor(graph, device=device)
         tracer.tracing_operation_meta(inputs, list(graph.outputs.keys()))
-        
+
         # build caffe protobuf
         caffe_model = ppl_caffe_pb2.NetParameter()
         caffe_model.name = graph._name if graph._name else 'PPQ Exported Caffe Model'
-        
+
         # add caffe input info
         for name, var in graph.inputs.items():
             caffe_model.input.append(name)
             input_shape = ppl_caffe_pb2.BlobShape()
             input_shape.dim.extend(var.meta.shape)
             caffe_model.input_shape.extend([input_shape])
-        
+
         # export op
         for op in graph.operations.values():
             if op.type not in caffe_export_map:
                 raise NotImplementedError(
                     f'{op.type} converted to Caffe OP is not supported in PPQ export parser yet')
-            
+
             caffe_op = caffe_export_map[op.type](op)
             assert isinstance(caffe_op, CaffeOpExporter)
-            
+
             layer = caffe_op.parse()
             if not isinstance(layer, (list, tuple)):
                 layer = [layer]
@@ -147,12 +147,12 @@ class CaffeExporter(GraphExporter):
         caffe_model = optimize_for_export(caffe_model)
         caffe_proto = deepcopy(caffe_model)
         for layer in caffe_proto.layer: del layer.blobs[:]
-        
+
         return caffe_model, caffe_proto
 
-    def dump_to_file(self, caffe_model: ppl_caffe_pb2.NetParameter, 
+    def dump_to_file(self, caffe_model: ppl_caffe_pb2.NetParameter,
                      caffe_proto: ppl_caffe_pb2.NetParameter, file_path: str):
-        
+
         # it's stupid but for keeping api the same
         # 就是说 caffemodel 总是要保存两个东西出来，但是我们的 api 只留了一个地方
         # 所以我们就只能这样了
@@ -168,7 +168,7 @@ class CaffeExporter(GraphExporter):
         # dump config
         if config_path is not None:
             self.export_quantization_config(config_path=config_path, graph=graph)
-        
+
         # dump model
         caffe_model, caffe_proto = self.prepare_model(graph, input_shapes)
         self.dump_to_file(caffe_model = caffe_model,
@@ -193,13 +193,13 @@ class SNPECaffeExporter(CaffeExporter):
                         continue
 
                 if config.state in {
-                    QuantizationStates.SOI, 
-                    QuantizationStates.DEACTIVATED, 
-                    QuantizationStates.DEQUANTIZED, 
+                    QuantizationStates.SOI,
+                    QuantizationStates.DEACTIVATED,
+                    QuantizationStates.DEQUANTIZED,
                     QuantizationStates.FP32
                 }: continue
-                # Simply override recorder is acceptable here, 
-                # we do not support mix presicion quantization for CUDA backend now.
+                # Simply override recorder is acceptable here,
+                # we do not support mix precision quantization for CUDA backend now.
                 # All configurations for this variable should keep identical towards each other.
                 if config.state == QuantizationStates.SLAVE and var.name in var_quant_info_recorder: continue
                 var_quant_info_recorder[var.name] = config
@@ -221,9 +221,9 @@ class SNPECaffeExporter(CaffeExporter):
         # dump config
         if config_path is not None:
             self.export_quantization_config(config_path=config_path, graph=graph)
-        
+
         caffe_model, caffe_proto = self.prepare_model(graph, input_shapes)
-        
+
         # can not edit structure of protobuf with python, have to edit it as pure string.
         caffe_proto, str_buffer = str(caffe_proto), ''
         lines = caffe_proto.split('\n')
@@ -232,7 +232,7 @@ class SNPECaffeExporter(CaffeExporter):
             # snpe do not want hole and ceil_mode
             if "hole" in line or "ceil_mode" in line: continue
             # snpe do not want quantize_param
-            if "quantize_param" in line: 
+            if "quantize_param" in line:
                 idx += 4
                 continue
             str_buffer = (str_buffer + line) + '\n'
@@ -252,7 +252,7 @@ class PPLDSPCaffeExporter(CaffeExporter):
         for idx in range(len(caffe_proto.layer)):
             layer = caffe_proto.layer[idx]
             layer_name = layer.name
-            
+
             assert isinstance(layer, ppl_caffe_pb2.LayerParameter)
             assert isinstance(layer_name, str)
             # layer is a caffe data structure, corresponding to operation in ppq.
@@ -294,7 +294,7 @@ class PPLDSPCaffeExporter(CaffeExporter):
 
             op = graph.operations[layer_name]
             if not isinstance(op, QuantableOperation): continue
-            
+
             # step - 2, dump parameter quantization config
             if layer.type in {'Convolution', 'Deconvolution'}:
                 for cfg, var in op.config_with_variable:
@@ -317,12 +317,12 @@ class PPLDSPCaffeExporter(CaffeExporter):
                         p.type = 'filter'
                         p.range_min = qt_min
                         p.range_max = qt_max
-            
+
             if layer.type == 'InnerProduct':
                 for cfg, var in op.config_with_variable:
                     if not var.is_parameter: continue
                     if cfg.num_of_bits > 8: continue # skip bias
-                    
+
                     if cfg.policy.has_property(QuantizationProperty.PER_CHANNEL):
                         qt_min = convert_value(cfg.scale * (cfg.quant_min - cfg.offset), False, DataType.FP32)
                         qt_max = convert_value(cfg.scale * (cfg.quant_max - cfg.offset), False, DataType.FP32)
@@ -395,7 +395,7 @@ class PPLDSPTICaffeExporter(CaffeExporter):
         for idx in range(len(caffe_proto.layer)):
             layer = caffe_proto.layer[idx]
             layer_name = layer.name
-            
+
             assert isinstance(layer, ppl_caffe_pb2.LayerParameter)
             assert isinstance(layer_name, str)
             # layer is a caffe data structure, corresponding to operation in ppq.
@@ -437,7 +437,7 @@ class PPLDSPTICaffeExporter(CaffeExporter):
 
             op = graph.operations[layer_name]
             if not isinstance(op, QuantableOperation): continue
-            
+
             # don't dump by default
             if write_weight:
                 if layer.type in {'Convolution', 'Deconvolution'}:
@@ -461,12 +461,12 @@ class PPLDSPTICaffeExporter(CaffeExporter):
                             p.type = 'filter'
                             p.range_min = qt_min
                             p.range_max = qt_max
-                
+
                 if layer.type == 'InnerProduct':
                     for cfg, var in op.config_with_variable:
                         if not var.is_parameter: continue
                         if cfg.num_of_bits > 8: continue # skip bias
-                        
+
                         if cfg.policy.has_property(QuantizationProperty.PER_CHANNEL):
                             qt_min = convert_value(cfg.scale * (cfg.quant_min - cfg.offset), False, DataType.FP32)
                             qt_max = convert_value(cfg.scale * (cfg.quant_max - cfg.offset), False, DataType.FP32)
@@ -535,7 +535,7 @@ class PPLDSPTICaffeExporter(CaffeExporter):
                         qt_min = convert_value(cfg.scale * (cfg.quant_min - cfg.offset), True, DataType.FP32)
                         qt_max = convert_value(cfg.scale * (cfg.quant_max - cfg.offset), True, DataType.FP32)
                         layer.quantize_param.add(type='top', range_min=qt_min, range_max=qt_max)
-                    
+
                     if op.is_computing_op:
                         for _min, _max in zip(cfg.detail['range_min'], cfg.detail['range_max']):
                             layer.quantize_param.add(type='topperchannel', range_min=_min, range_max=_max)

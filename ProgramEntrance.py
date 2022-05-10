@@ -16,7 +16,7 @@
     quantized model will be generated at: ~/working/quantized.onnx
 """
 from ppq import *
-from ppq.IR.processer import GraphCommandProcesser
+from ppq.IR.processor import GraphCommandProcessor
 from ppq.api import *
 import os
 
@@ -75,11 +75,11 @@ else:
     QS.lsq_optimization = True                                      # 启动网络再训练过程，降低量化误差
     QS.lsq_optimization_setting.epochs = 30                         # 再训练轮数，影响训练时间，30轮大概几分钟
     QS.lsq_optimization_setting.collecting_device = 'cuda'          # 缓存数据放在那，cuda 就是放在gpu，如果显存超了你就换成 'cpu'
- 
+
 if TARGET_PLATFORM in {TargetPlatform.PPL_DSP_INT8,                 # 这些平台是 per tensor 量化的
-                       TargetPlatform.HEXAGON_INT8, 
-                       TargetPlatform.SNPE_INT8, 
-                       TargetPlatform.METAX_INT8_T, 
+                       TargetPlatform.HEXAGON_INT8,
+                       TargetPlatform.SNPE_INT8,
+                       TargetPlatform.METAX_INT8_T,
                        TargetPlatform.FPGA_INT8}:
     QS.equalization = True                                          # per tensor 量化平台需要做 equalization
 
@@ -101,9 +101,9 @@ print(f'CALIBRATION BATCHSIZE: {CALIBRATION_BATCHSIZE}')
 # 当前这个函数的数据将从 WORKING_DIRECTORY/data 文件夹中进行数据加载
 # -------------------------------------------------------------------
 dataloader = load_calibration_dataset(
-    directory    = WORKING_DIRECTORY, 
+    directory    = WORKING_DIRECTORY,
     input_shape  = NETWORK_INPUTSHAPE,
-    batchsize    = CALIBRATION_BATCHSIZE, 
+    batchsize    = CALIBRATION_BATCHSIZE,
     input_format = INPUT_LAYOUT)
 
 # -------------------------------------------------------------------
@@ -115,9 +115,9 @@ dataloader = load_calibration_dataset(
 class CustimizedPass(QuantizationOptimizationPass):
     def __init__(self) -> None:
         super().__init__('Custimized Optimization Pass')
-    def optimize(self, processer: GraphCommandProcesser, 
+    def optimize(self, processor: GraphCommandProcessor,
                  dataloader: Iterable, executor: TorchExecutor, **kwargs) -> None:
-        graph = processer.graph
+        graph = processor.graph
 
 # -----------------------------------------------------------------
 # 我们允许你在标准量化流程之前添加自定义量化逻辑，通常在标准量化流程之前添加的逻辑用于：
@@ -134,8 +134,8 @@ class CustimizedPass(QuantizationOptimizationPass):
 # ChannelSplitPass          -- 用于执行通道分裂，降低量化误差
 # -------------------------------------------------------------------
 custimized_prequant_passes = [CustimizedPass()]
-manop(graph=graph, list_of_passes=custimized_prequant_passes, 
-      calib_dataloader=dataloader, executor=TorchExecutor(graph, device=EXECUTING_DEVICE), 
+manop(graph=graph, list_of_passes=custimized_prequant_passes,
+      calib_dataloader=dataloader, executor=TorchExecutor(graph, device=EXECUTING_DEVICE),
       collate_fn=None)
 
 print('网络正量化中，根据你的量化配置，这将需要一段时间:')
@@ -148,7 +148,7 @@ quantized = quantize_native_model(
     collate_fn=None,                # collate_fn 跟 torch dataloader 的 collate fn 是一样的，用于数据预处理，
                                     # 你当然也可以用 torch dataloader 的那个，然后设置这个为 None
     platform=TARGET_PLATFORM,
-    device=EXECUTING_DEVICE, 
+    device=EXECUTING_DEVICE,
     do_quantize=True)
 
 # -----------------------------------------------------------------
@@ -165,8 +165,8 @@ quantized = quantize_native_model(
 # LearningStepSizeOptimization  -- 用于再训练网络，降低量化误差
 # -------------------------------------------------------------------
 custimized_postquant_passes = [CustimizedPass()]
-manop(graph=graph, list_of_passes=custimized_postquant_passes, 
-      calib_dataloader=dataloader, executor=TorchExecutor(graph, device=EXECUTING_DEVICE), 
+manop(graph=graph, list_of_passes=custimized_postquant_passes,
+      calib_dataloader=dataloader, executor=TorchExecutor(graph, device=EXECUTING_DEVICE),
       collate_fn=None)
 
 # -------------------------------------------------------------------
@@ -187,7 +187,7 @@ if DUMP_RESULT:
         dump_dir=WORKING_DIRECTORY, executing_device=EXECUTING_DEVICE)
 
 # -------------------------------------------------------------------
-# PPQ 计算量化误差时，使用信噪比的倒数作为指标，即噪声能量 / 信号能量 
+# PPQ 计算量化误差时，使用信噪比的倒数作为指标，即噪声能量 / 信号能量
 # 量化误差 0.1 表示在整体信号中，量化噪声的能量约为 10%
 # 你应当注意，在 graphwise_error_analyse 分析中，我们衡量的是累计误差
 # 网络的最后一层往往都具有较大的累计误差，这些误差是其前面的所有层所共同造成的
@@ -202,7 +202,7 @@ for op, snr in reports.items():
 
 if REQUIRE_ANALYSE:
     print('正计算逐层量化误差(SNR)，每一层的独立量化误差应小于 0.1 以保证量化精度:')
-    layerwise_error_analyse(graph=quantized, running_device=EXECUTING_DEVICE, 
+    layerwise_error_analyse(graph=quantized, running_device=EXECUTING_DEVICE,
                             interested_outputs=None,
                             dataloader=dataloader, collate_fn=lambda x: x.to(EXECUTING_DEVICE))
 
@@ -216,7 +216,7 @@ if REQUIRE_ANALYSE:
 # 如果你选择 tengine 作为导出平台，他们还在写接口来读取ppq的输入，所以好像也不能执行；
 # 如果你选择 nxp 作为导出格式，量化参数将被写入onnx，nxp可以直接运行；
 # 如果你选择 onnxruntime 作为导出格式，我们将在网络中插入quant以及dequant节点，onnxruntime可以直接运行。
-# 如果你选择 onnxruntime OOS 作为导出格式，我们将会弄出一些 com.mircosoft 定义量化算子，onnxruntime可以直接运行。
+# 如果你选择 onnxruntime OOS 作为导出格式，我们将会弄出一些 com.microsoft 定义量化算子，onnxruntime可以直接运行。
 # 如果你选择 onnx 作为导出格式，我们将导出一个ppq原生的格式，这个格式只是用来debug的。
 
 # 如果你想最快速的看到结果，选择onnxruntime作为导出格式即可，你就可以在导出的onnx中看到量化结果。

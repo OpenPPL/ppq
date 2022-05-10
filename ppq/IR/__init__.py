@@ -3,7 +3,7 @@ from .base.graph import (BaseGraph, GraphBuilder, GraphExporter, Operation,
                          OperationExporter, Variable)
 from .deploy import RunnableGraph
 from .morph import GraphFormatter, GraphMerger, GraphReplacer
-from .processer import DefaultGraphProcesser, GraphCommandProcesser
+from .processer import DefaultGraphProcessor, GraphCommandProcessor
 from .quantize import (DeviceSwitchOP, QuantableGraph, QuantableOperation,
                        QuantableVariable)
 from .search import (PatternTree, SearchableGraph, TraversalCommand,

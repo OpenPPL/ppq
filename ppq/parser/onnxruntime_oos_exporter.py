@@ -26,7 +26,7 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
     @property
     def ONNX_QUANTABLE_TABLE(self):
         """
-        Quantable operations for com.microsoft scope, 
+        Quantable operations for com.microsoft scope,
         see https://github.com/microsoft/onnxruntime/blob/master/docs/ContribOperators.md for detail.
 
         com.microsoft.QAttention
@@ -76,8 +76,8 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
         return inputs, input_metas
 
 
-    def convert_operation(self, graph: BaseGraph, op: QuantableOperation, 
-                          process_activation: bool, process_parameter: bool, 
+    def convert_operation(self, graph: BaseGraph, op: QuantableOperation,
+                          process_activation: bool, process_parameter: bool,
                           quant_param_to_int: bool):
         """
         Convert an operation to onnx operator oriented format.
@@ -85,13 +85,13 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
 
         Operator Oriented. All the quantized operators have their own ONNX definitions,
             like QLinearConv, MatMulInteger and etc.
-        
-        Tensor Oriented, aka Quantize and DeQuantize (QDQ). 
-            This format uses DQ(Q(tensor)) to simulate the quantize and dequantize process, 
-            and QuantizeLinear and DeQuantizeLinear operators also carry the quantization parameters. 
-            
+
+        Tensor Oriented, aka Quantize and DeQuantize (QDQ).
+            This format uses DQ(Q(tensor)) to simulate the quantize and dequantize process,
+            and QuantizeLinear and DeQuantizeLinear operators also carry the quantization parameters.
+
         Quantization-Aware training (QAT) models converted from Tensorflow or exported from PyTorch.
-        
+
         Quantized models converted from tflite and other framework.
 
         Args:
@@ -110,11 +110,11 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
 
             inputs, input_metas = self.conversion_preprocess(op)
             bias, bias_meta, bias_config = None, None, None
-            
+
             if op.type == 'Gemm':
-                if op.attributes.get('alpha') != 1: 
+                if op.attributes.get('alpha') != 1:
                     raise ValueError(f'Can not export gemm {op.name} with alpha != 1')
-                if op.attributes.get('beta') != 1: 
+                if op.attributes.get('beta') != 1:
                     raise ValueError(f'Can not export gemm {op.name} with beta != 1')
                 op.attributes.pop('alpha')
                 op.attributes.pop('beta')
@@ -130,10 +130,10 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
                 otype, vtype = self.infer_qtype(config)
                 scale  = convert_any_to_torch_tensor(config.scale.clone(), dtype=torch.float32)
                 offset = ppq_tensor_round(config.offset.clone()).type(otype)
-                
+
                 if var.is_parameter:
                     if config.state not in {
-                        QuantizationStates.ACTIVATED, QuantizationStates.PASSIVE, 
+                        QuantizationStates.ACTIVATED, QuantizationStates.PASSIVE,
                         QuantizationStates.PASSIVE_BAKED, QuantizationStates.BAKED}:
                         raise PermissionError(
                             f'Can not export operation {op.name} in onnx operator oriented quantize format, '
@@ -149,14 +149,14 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
 
                 graph.create_link_with_op(variable=var, upstream_op=var.source_op, downstream_op=op)
                 graph.create_link_with_op(
-                    variable=graph.create_variable(value=scale, is_parameter=True), 
+                    variable=graph.create_variable(value=scale, is_parameter=True),
                     upstream_op=None, downstream_op=op)
                 graph.create_link_with_op(
-                    variable=graph.create_variable(value=offset, is_parameter=True), 
+                    variable=graph.create_variable(value=offset, is_parameter=True),
                     upstream_op=None, downstream_op=op)
                 op.meta_data.input_metas.extend([
-                    TensorMeta(dtype=DataType.convert_from_torch(vtype), shape=meta.shape), 
-                    TensorMeta(dtype=DataType.FP32, shape=config.scale.shape), 
+                    TensorMeta(dtype=DataType.convert_from_torch(vtype), shape=meta.shape),
+                    TensorMeta(dtype=DataType.FP32, shape=config.scale.shape),
                     TensorMeta(dtype=DataType.convert_from_torch(otype), shape=config.offset.shape)])
 
             # process output
@@ -167,24 +167,24 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
             offset = ppq_tensor_round(config.offset.clone()).type(otype)
 
             graph.create_link_with_op(
-                variable=graph.create_variable(value=scale, is_parameter=True), 
+                variable=graph.create_variable(value=scale, is_parameter=True),
                 upstream_op=None, downstream_op=op)
             graph.create_link_with_op(
-                variable=graph.create_variable(value=offset, is_parameter=True), 
+                variable=graph.create_variable(value=offset, is_parameter=True),
                 upstream_op=None, downstream_op=op)
             op.meta_data.input_metas.extend([
-                TensorMeta(dtype=DataType.FP32, shape=config.scale.shape), 
+                TensorMeta(dtype=DataType.FP32, shape=config.scale.shape),
                 TensorMeta(dtype=DataType.convert_from_torch(otype), shape=config.offset.shape)])
-            op.meta_data.output_metas = [TensorMeta(DataType.convert_from_torch(vtype), 
+            op.meta_data.output_metas = [TensorMeta(DataType.convert_from_torch(vtype),
                                                     shape=op.meta_data.output_metas[0].shape)]
-            
+
             # process bias
             if bias is not None:
                 assert isinstance(bias_config, TensorQuantizationConfig), 'Unexpected bias quantization configuration type.'
-                if bias_config.state not in {QuantizationStates.ACTIVATED, QuantizationStates.PASSIVE, 
+                if bias_config.state not in {QuantizationStates.ACTIVATED, QuantizationStates.PASSIVE,
                                              QuantizationStates.BAKED, QuantizationStates.PASSIVE_BAKED}:
                     raise ValueError(f'Can not export operation {op.name} cause its bias is not correctly quantized.')
-                
+
                 bias_config.state = QuantizationStates.ACTIVATED
                 if bias_config.num_of_bits <= 16:
                     ppq_warning(f'Bias vector of operation {op.name} is quantized with {bias_config.num_of_bits} bits, '
@@ -192,7 +192,7 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
                 bias.value = PPQLinearQuant_toInt(tensor=bias.value, config=bias_config).to(vtype)
                 graph.create_link_with_op(variable=bias, upstream_op=None, downstream_op=op)
                 op.meta_data.input_metas.extend([TensorMeta(dtype=DataType.INT32, shape=bias_meta.shape)])
-                
+
                 # reorder input.
                 if op.type == 'Gemm':
                     meta = op.meta_data.input_metas
@@ -201,33 +201,33 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
 
             # convert op type.
             op.type = self.ONNX_QUANTABLE_TABLE[op.type]
-        
+
         else:
             # If operation is passive, skip it is safe.
             pass
 
 
-    def prepare_graph(self, graph: BaseGraph, process_activation: bool = True, 
-                      process_parameter: bool = True, remove_activation_fn: bool = True, 
+    def prepare_graph(self, graph: BaseGraph, process_activation: bool = True,
+                      process_parameter: bool = True, remove_activation_fn: bool = True,
                       quant_parameter_to_int: bool = True) -> BaseGraph:
-        super().prepare_graph(graph, process_activation, process_parameter, 
+        super().prepare_graph(graph, process_activation, process_parameter,
                               remove_activation_fn, quant_parameter_to_int)
-        FP32_ONLY_TYPES = {'Add', 'Mul', 'Relu', 'Clip', 'Gemm', 'Conv', 'AveragePool', 
+        FP32_ONLY_TYPES = {'Add', 'Mul', 'Relu', 'Clip', 'Gemm', 'Conv', 'AveragePool',
                            'GlobalAveragePool', 'Matmul', 'LeakyRelu', 'Sigmoid', 'ReduceMean'}
         quantized_op = set()
         for op in graph.operations.values():
-            if op.type in {'QGemm', 'QLinearConv', 'QLinearMatmul', 'QuantizeLinear', 
-                           'QLinearAdd', 'QLinearAveragePool', 'QLinearConcat', 'QLinearGlobalAveragePool', 
+            if op.type in {'QGemm', 'QLinearConv', 'QLinearMatmul', 'QuantizeLinear',
+                           'QLinearAdd', 'QLinearAveragePool', 'QLinearConcat', 'QLinearGlobalAveragePool',
                            'QLinearLeakyRelu', 'QLinearMul', 'QLinearReduceMean', 'QLinearSigmoid'}:
                 quantized_op.add(op)
 
-        processer = SearchableGraph(graph)
+        processor = SearchableGraph(graph)
         # 执行子图遍历，将 int8 节点染色
-        quantize_extension = processer.opset_matching(
+        quantize_extension = processor.opset_matching(
             sp_expr=lambda x: x in quantized_op,
             rp_expr=lambda x, y: y.type not in FP32_ONLY_TYPES and TargetPlatform.is_quantized_platform(y.platform),
-            ep_expr=lambda x: x.type in FP32_ONLY_TYPES or (not TargetPlatform.is_quantized_platform(x.platform)) or x.is_boundary) 
-        
+            ep_expr=lambda x: x.type in FP32_ONLY_TYPES or (not TargetPlatform.is_quantized_platform(x.platform)) or x.is_boundary)
+
         # might have some error...
         for op in [op for op in quantize_extension]:
             if op.type in FP32_ONLY_TYPES:
@@ -236,10 +236,10 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
                 assert isinstance(source_op, QuantableOperation)
                 qconfig   = source_op.config.output_quantization_config[source_op.outputs.index(var)]
                 self.insert_dequant_on_variable(
-                    graph=graph, var=op.inputs[0], 
+                    graph=graph, var=op.inputs[0],
                     config=qconfig, related_op=op)
                 quantize_extension.remove(op)
-        
+
         for op in quantize_extension:
             for input_var in op.inputs:
                 if input_var.is_parameter: continue
@@ -247,16 +247,16 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
                     assert isinstance(op, QuantableOperation)
                     qconfig = op.config.input_quantization_config[op.inputs.index(input_var)]
                     self.insert_quant_on_variable(
-                        graph=graph, var=input_var, 
+                        graph=graph, var=input_var,
                         config=qconfig, related_op=op)
-        
+
         for output_var in graph.outputs.values():
             if output_var.source_op in quantize_extension:
                 meta = output_var.meta
-                
+
                 assert isinstance(output_var.source_op, QuantableOperation)
                 qconfig = output_var.source_op.config.output_quantization_config[output_var.src_idx]
-                
+
                 op = graph.create_operation(op_type='Temp')
                 graph.create_link_with_op(output_var, upstream_op=output_var.source_op, downstream_op=op)
                 self.insert_dequant_on_variable(

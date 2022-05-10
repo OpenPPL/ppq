@@ -276,7 +276,7 @@ class Mul(CaffeOpExporter):
             value = convert_any_to_numpy(var.value)
             if value.size != 1:
                 raise AttributeError(f'Now don\'t support Mul op with initializer in shape {value.shape} convert to caffe')
-            # Mul olny has two inputs, thus in this loop means the bottom has only one item
+            # Mul only has two inputs, thus in this loop means the bottom has only one item
             self.layer.eltwise_param.coeff.append(value.item())
 
         return self.layer
