@@ -128,7 +128,7 @@ quantizer.quantize(
         inputs=dummy_input,               # some random input tensor, should be list or dict for multiple inputs
         calib_dataloader=dataloader,      # calibration dataloader
         executor=executor,                # executor in charge of everywhere graph execution is needed
-        setting=setting,                  # quantization seting
+        setting=setting,                  # quantization setting
         calib_steps=calib_steps,          # number of batch data needed in calibration, 8~512
         collate_fn=lambda x: x.to('cuda') # final processing of batched data tensor
 )

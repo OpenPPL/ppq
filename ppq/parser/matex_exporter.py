@@ -27,13 +27,13 @@ class MetaxExporter(OnnxExporter):
     quantization scales and offset. For parameters, we pre-quantize the value and only insert DequantizeLinear op, both per-layer/per-channel
     and asym/sym quantizations are supported for export, the exported onnx model is tested to align with PPQ monitor when CUDAExecutionProvider
     is applied in onnxruntime-gpu >= 1.8.1, i.e., to run the model correctly if you have gpu and onnxruntime-gpu version installed
-    
+
     X     W      b             X        quant(W)   quant(b)
     \     |     /               \         |          /
      \    |    /                quant    dequant  dequant
         Conv             ->       \       |        /
-          |                      dequant  |       / 
-          |                         \     |      / 
+          |                      dequant  |       /
+          |                         \     |      /
                                          Conv
                                           |
                                         quant
@@ -74,7 +74,7 @@ class MetaxExporter(OnnxExporter):
             var.value = tensor.type(torch.uint8)
         else:
             var.value = tensor.type(torch.int8)
-        return (convert_any_to_torch_tensor(config.scale, dtype=torch.float32), 
+        return (convert_any_to_torch_tensor(config.scale, dtype=torch.float32),
             convert_any_to_torch_tensor(config.offset, dtype=var.value.dtype), axis)
 
     def insert_quant_dequant_on_var(
@@ -85,7 +85,7 @@ class MetaxExporter(OnnxExporter):
         and dequant ops will be inserted on var, i.e., all destinations of original var will be
         replaced by output of dequant op, but you can also insert on single var--dest_op branch
         by setting single_branch=True, in this case you should give the desired dest_op as the
-        destination op of dequant op 
+        destination op of dequant op
         Args:
             graph (BaseGraph): PPQ IR graph.
             var (Variable): quantable variables, parameters assumed.
@@ -98,18 +98,18 @@ class MetaxExporter(OnnxExporter):
             configs = [cfg for cfg in [var.source_op_config] + var.dest_op_configs if cfg is not None]
             config = configs[0]
 
-        offset_dtype = torch.int8 
-        if config.policy.has_property(QuantizationProperty.ASYMMETRICAL): offset_dtype = torch.uint8 
+        offset_dtype = torch.int8
+        if config.policy.has_property(QuantizationProperty.ASYMMETRICAL): offset_dtype = torch.uint8
         scale  = convert_any_to_torch_tensor(config.scale, dtype=torch.float32)
         offset = convert_any_to_torch_tensor(config.offset, dtype=offset_dtype)
-        
+
         qt_svar = graph.create_variable(name=None, value=scale.clone(), is_parameter=True)
         qt_zvar = graph.create_variable(name=None, value=offset.clone(), is_parameter=True)
         dq_svar = graph.create_variable(name=None, value=scale.clone(), is_parameter=True)
         dq_zvar = graph.create_variable(name=None, value=offset.clone(), is_parameter=True)
         qt_op   = graph.create_operation(op_type='QuantizeLinear', attributes={})
         dq_op   = graph.create_operation(op_type='DequantizeLinear', attributes={})
-        
+
         if single_branch:
             upstream_op, downstream_op = var.source_op, dest_op
             graph.insert_op_between_ops(qt_op, up_op=upstream_op, down_op=downstream_op)
@@ -121,7 +121,7 @@ class MetaxExporter(OnnxExporter):
 
         graph.create_link_with_op(variable=qt_svar, upstream_op=None, downstream_op=qt_op)
         graph.create_link_with_op(variable=qt_zvar, upstream_op=None, downstream_op=qt_op)
-        
+
         graph.create_link_with_op(variable=dq_svar, upstream_op=None, downstream_op=dq_op)
         graph.create_link_with_op(variable=dq_zvar, upstream_op=None, downstream_op=dq_op)
 
@@ -131,7 +131,7 @@ class MetaxExporter(OnnxExporter):
         scale, offset, axis = self.inplace_quantization(var, is_bias)
         dequant_op = graph.create_operation(op_type='DequantizeLinear', attributes={'axis':axis})
         graph.insert_op_on_var(dequant_op, var.name)
-        
+
         dq_svar = graph.create_variable(name=None, value=scale.clone(), is_parameter=True)
         dq_zvar = graph.create_variable(name=None, value=offset.clone(), is_parameter=True)
         graph.create_link_with_op(dq_svar, upstream_op=None, downstream_op=dequant_op)
@@ -143,7 +143,7 @@ class MetaxExporter(OnnxExporter):
             if var.is_parameter:
                 for op in var.dest_ops:
                     if op.meta_data is None:
-                        op.meta_data = OperationMeta([TensorMeta(DataType.FP32, None, v.name) for v in 
+                        op.meta_data = OperationMeta([TensorMeta(DataType.FP32, None, v.name) for v in
                             op.inputs], [TensorMeta(DataType.FP32, None, v.name) for v in
                             op.outputs], op.name, op.type, -1)
 
@@ -171,7 +171,7 @@ class MetaxExporter(OnnxExporter):
                 dest_op = var.dest_ops[0]
                 dest_idx = var.dest_idx[0]
                 meta = dest_op.meta_data.input_metas[dest_idx]
-                # meta can't be None itself because we have built TensorMeta 
+                # meta can't be None itself because we have built TensorMeta
                 # for every input when we correct param meta
                 while meta.shape is None or meta.dtype is None:
                     assert isinstance(dest_op, Operation)
@@ -212,8 +212,8 @@ class MetaxExporter(OnnxExporter):
             graph.remove_operation(op)
             graph.create_link_with_var(input_var, output_var)
 
-        formater = GraphFormatter(graph)
-        formater(GraphCommand(GraphCommandType.DELETE_ISOLATED))
+        formatter = GraphFormatter(graph)
+        formatter(GraphCommand(GraphCommandType.DELETE_ISOLATED))
 
     def required_opsets(self) -> Dict[str, int]:
         extra_domain_versions = [
@@ -256,8 +256,8 @@ class MetaxExporter(OnnxExporter):
     def export(self, file_path: str, graph: BaseGraph, config_path: str = None) -> None:
         # remove switchers.
         if not EXPORT_DEVICE_SWITCHER:
-            processer = GraphDeviceSwitcher(graph)
-            processer.remove_switcher()
+            processor = GraphDeviceSwitcher(graph)
+            processor.remove_switcher()
 
         # if a valid config path is given, export quantization config to there.
         if config_path is not None:
@@ -267,7 +267,7 @@ class MetaxExporter(OnnxExporter):
         compel_pairs = self.collect_compel_pair(graph)
 
         # collect quantable vars, where we need to insert quant and dequant op
-        # note that we assume all quantization configs of the same variable maintained 
+        # note that we assume all quantization configs of the same variable maintained
         # by different ops are actually the same
         quantable_vars,removed_activations = [], []
         for var in graph.variables.values():
@@ -290,7 +290,7 @@ class MetaxExporter(OnnxExporter):
                     self.insert_dequant_param(graph, var, True)
                 else:
                     self.insert_dequant_param(graph, var, False)
-            
+
             elif len(var.dest_ops) == 1 and var.dest_ops[0].type in self.removed_activation_types and \
                 cfg.policy.has_property(QuantizationProperty.ASYMMETRICAL):
                 removed_activations.extend(var.dest_ops)
@@ -314,8 +314,8 @@ class MetaxExporter(OnnxExporter):
 
         name = graph._name
         if not name: name = 'PPL Quantization Tool - Onnx Export'
-        
-        # Ready to export onnx graph defination.
+
+        # Ready to export onnx graph definition.
         _inputs, _outputs, _initilizers, _nodes = [], [], [], []
         for operation in graph.topological_sort():
             _nodes.append(super().export_operation(operation))

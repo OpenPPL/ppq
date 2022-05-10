@@ -24,8 +24,8 @@ class DataType(Enum):
         System maintainers and modifier are supposed to keep this corresponding.
         Cause OnnxExporter directly use this value to export PPQ graph towards Onnx.
     """
-    INT4   = -1 # Onnx doesn't have this defination
-    UINT4  = -2 # Onnx doesn't have this defination
+    INT4   = -1 # Onnx doesn't have this definition
+    UINT4  = -2 # Onnx doesn't have this definition
     INT8   = 3  # Onnx.TensorProto.DataType.INT8
     UINT8  = 2  # Onnx.TensorProto.DataType.UINT8
     INT16  = 5  # Onnx.TensorProto.DataType.INT16
@@ -163,7 +163,7 @@ class TensorMeta:
             fill_value).type(dtype=DataType.to_torch(self.dtype)).to(device)
 
     def create_ndarray(self, fill_value: Any = 0):
-        return ndarray(shape=self.shape, 
+        return ndarray(shape=self.shape,
             dtype=DataType.to_numpy(self.dtype)).fill(fill_value)
 
     def __str__(self) -> str:
@@ -171,7 +171,7 @@ class TensorMeta:
 
 
 class OperationMeta:
-    def __init__(self, 
+    def __init__(self,
         input_metas: List[TensorMeta], output_metas: List[TensorMeta],
         operation_name: str, operation_type: str, executing_order: int) -> None:
         """
@@ -237,7 +237,7 @@ def convert_any_to_python_primary_type(
 
 
 def convert_any_to_numpy(
-    x: Union[torch.Tensor, np.ndarray, int, float, list, tuple], 
+    x: Union[torch.Tensor, np.ndarray, int, float, list, tuple],
     accepet_none: bool=True) -> np.ndarray:
     if x is None and accepet_none: return None
     if x is None and not accepet_none: raise ValueError('Trying to convert an empty value.')
@@ -255,7 +255,7 @@ def convert_any_to_numpy(
 
 
 def convert_any_to_torch_tensor(
-    x: Union[torch.Tensor, np.ndarray, int, float, list, tuple], 
+    x: Union[torch.Tensor, np.ndarray, int, float, list, tuple],
     accepet_none: bool=True, dtype: torch.dtype=None, device='cpu') -> torch.Tensor:
     if x is None and accepet_none: return None
     if x is None and not accepet_none: raise ValueError('Trying to convert an empty value.')
@@ -273,7 +273,7 @@ def convert_any_to_torch_tensor(
         if dtype is not None: x = x.type(dtype)
         if device is not None: x = x.to(device)
         return x
-    elif isinstance(x, np.ndarray): 
+    elif isinstance(x, np.ndarray):
         if dtype is None:
             dtype = DataType.convert_from_numpy(x.dtype)
             dtype = DataType.to_torch(dtype)

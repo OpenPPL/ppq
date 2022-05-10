@@ -9,12 +9,12 @@ from .base.command import (GraphCommand, GraphCommandType,
                            QuantizeOperationCommand, ReplaceOperationCommand,
                            ReplaceVariableCommand)
 from .base.graph import Operation, Variable
-from .processer import GraphCommandProcesser
+from .processer import GraphCommandProcessor
 
 
 class QuantableOperation(Operation):
     def __init__(
-        self, 
+        self,
         convert_from: Operation,
         quantize_config: OperationQuantizationConfig,
         platform: TargetPlatform
@@ -74,7 +74,7 @@ class QuantableOperation(Operation):
         return self
 
     def store_parameter_value(self):
-        for var, _ in zip(self.inputs + self.outputs, 
+        for var, _ in zip(self.inputs + self.outputs,
             self.config.input_quantization_config + self.config.output_quantization_config):
             if var.is_parameter:
                 assert isinstance(var, QuantableVariable), 'Unexpected error.'
@@ -86,7 +86,7 @@ class QuantableOperation(Operation):
 
     def dequantize(self, parameter_only: bool = False, expire_device: str = 'cpu'):
         if self._dequantized: return self
-        for var, quant_config in zip(self.inputs + self.outputs, 
+        for var, quant_config in zip(self.inputs + self.outputs,
             self.config.input_quantization_config + self.config.output_quantization_config):
             if parameter_only and not var.is_parameter: continue
             quant_config.detail['Stored State'] = quant_config.state
@@ -105,7 +105,7 @@ class QuantableOperation(Operation):
 
     def restore_quantize_state(self, expire_device: str = 'cpu'):
         if not self._dequantized: return self
-        for var, quant_config in zip(self.inputs + self.outputs, 
+        for var, quant_config in zip(self.inputs + self.outputs,
             self.config.input_quantization_config + self.config.output_quantization_config):
             if 'Stored State' in quant_config.detail:
                 quant_config.state = quant_config.detail['Stored State']
@@ -154,7 +154,7 @@ class QuantableVariable(Variable):
     @ property
     def stored_value(self) -> Any:
         return self._fp32_value
-    
+
     @ stored_value.setter
     def stored_value(self, value: Any):
         self._fp32_value = value
@@ -196,13 +196,13 @@ class DeviceSwitchOP(Operation):
     """
     DeviceSwitch is a PPQ internal operation.
         This operation is inserted at platfrom's boundary
-        for transfering data between devices.
+        for transferring data between devices.
 
     Args:
         Operation ([type]): [description]
     """
     def __init__(self, name: str,
-                 inputs: List[Variable] = None, 
+                 inputs: List[Variable] = None,
                  outputs: List[Variable] = None) -> None:
         super().__init__(
             attributes={},
@@ -211,7 +211,7 @@ class DeviceSwitchOP(Operation):
             inputs=inputs, outputs=outputs)
 
 
-class QuantableGraph(GraphCommandProcesser):
+class QuantableGraph(GraphCommandProcessor):
     def process(self, command: GraphCommand) -> Any:
         if command.command_type == GraphCommandType.QUANTIZE_OPERATION:
             assert isinstance(command, QuantizeOperationCommand)
@@ -222,9 +222,9 @@ class QuantableGraph(GraphCommandProcesser):
         return [
             GraphCommandType.QUANTIZE_OPERATION,
         ]
-    
+
     def quantize_operation(
-        self, 
+        self,
         operation_name: str,
         target_platform: TargetPlatform,
         quantization_config: OperationQuantizationConfig
@@ -245,18 +245,18 @@ class QuantableGraph(GraphCommandProcesser):
             platform=target_platform,
         )
 
-        # calling other chain responser to replace operation with quantized one.
-        if self._next_command_processer is None:
+        # calling other chain responder to replace operation with quantized one.
+        if self._next_command_processor is None:
             raise RuntimeError(
-                'To replace a operation, your processer chain must have a GraphMorpher Processer.')
-        self._next_command_processer(ReplaceOperationCommand(operation_name, quantized_operation))
+                'To replace a operation, your processor chain must have a GraphMorpher Processor.')
+        self._next_command_processor(ReplaceOperationCommand(operation_name, quantized_operation))
 
         # replace all related variable with quantable one.
         for var in quantized_operation.inputs + quantized_operation.outputs:
             if isinstance(var, QuantableVariable): continue
-            self._next_command_processer(
+            self._next_command_processor(
                 ReplaceVariableCommand(
-                    var_name=var.name, 
+                    var_name=var.name,
                     replace_to=QuantableVariable(convert_from=var)
                 )
             )
@@ -279,7 +279,7 @@ class QuantableGraph(GraphCommandProcesser):
         for operation in self.graph.operations.values():
             if isinstance(operation, QuantableOperation):
                 operation.dequantize()
-    
+
     def restore_quantize_state(self):
         """
             一个方便懒人的函数

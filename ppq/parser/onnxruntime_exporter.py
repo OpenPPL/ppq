@@ -25,13 +25,13 @@ class ONNXRUNTIMExporter(OnnxExporter):
     quantization scales and offset. For parameters, we pre-quantize the value and only insert DequantizeLinear op, both per-layer/per-channel
     and asym/sym quantizations are supported for export, the exported onnx model is tested to align with PPQ monitor when CUDAExecutionProvider
     is applied in onnxruntime-gpu >= 1.8.1, i.e., to run the model correctly if you have gpu and onnxruntime-gpu version installed
-    
+
     X     W      b             X        quant(W)   quant(b)
     \     |     /               \         |          /
      \    |    /                quant    dequant  dequant
         Conv             ->       \       |        /
-          |                      dequant  |       / 
-          |                         \     |      / 
+          |                      dequant  |       /
+          |                         \     |      /
                                          Conv
                                           |
                                         quant
@@ -53,11 +53,11 @@ class ONNXRUNTIMExporter(OnnxExporter):
         self.removed_activation_types = removed_activation_types
 
     def infer_qtype(self, config: TensorQuantizationConfig):
-        offset_dtype, value_dtype = torch.int8, torch.int8 
-        if config.policy.has_property(QuantizationProperty.ASYMMETRICAL): 
+        offset_dtype, value_dtype = torch.int8, torch.int8
+        if config.policy.has_property(QuantizationProperty.ASYMMETRICAL):
             offset_dtype = torch.uint8
             value_dtype  = torch.uint8
-        if config.num_of_bits > 16: 
+        if config.num_of_bits > 16:
             offset_dtype = torch.int32
             value_dtype  = torch.int32
         return offset_dtype, value_dtype
@@ -74,21 +74,21 @@ class ONNXRUNTIMExporter(OnnxExporter):
         s_var = graph.create_variable(name=None, value=scale, is_parameter=True)
         z_var = graph.create_variable(name=None, value=offset, is_parameter=True)
         created = graph.create_operation(op_type='QuantizeLinear', attributes={})
-        
+
         if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
             assert isinstance(config, ChannelwiseTensorQuantizationConfig)
             created.attributes['axis'] = config.channel_axis
-        
+
         if related_op is not None and var in related_op.inputs:
             graph.insert_op_between_var_and_op(created, up_var=var, down_op=related_op)
         else: graph.insert_op_on_var(created, var=var.name)
-            
+
         graph.create_link_with_op(variable=s_var, upstream_op=None, downstream_op=created)
         graph.create_link_with_op(variable=z_var, upstream_op=None, downstream_op=created)
 
         meta = OperationMeta(
-        input_metas    = [TensorMeta(dtype=DataType.FP32, shape=meta.shape), 
-                          TensorMeta(dtype=DataType.FP32, shape=config.scale.shape), 
+        input_metas    = [TensorMeta(dtype=DataType.FP32, shape=meta.shape),
+                          TensorMeta(dtype=DataType.FP32, shape=config.scale.shape),
                           TensorMeta(dtype=DataType.convert_from_torch(offset_dtype), shape=config.offset.shape)],
         output_metas   = [TensorMeta(dtype=DataType.convert_from_torch(value_dtype), shape=meta.shape)],
         operation_name = created.name, operation_type=created.type, executing_order=-1)
@@ -119,8 +119,8 @@ class ONNXRUNTIMExporter(OnnxExporter):
         graph.create_link_with_op(variable=z_var, upstream_op=None, downstream_op=created)
 
         dq_meta = OperationMeta(
-        input_metas    = [TensorMeta(dtype=DataType.convert_from_torch(value_dtype), shape=meta.shape), 
-                          TensorMeta(dtype=DataType.FP32, shape=config.scale.shape), 
+        input_metas    = [TensorMeta(dtype=DataType.convert_from_torch(value_dtype), shape=meta.shape),
+                          TensorMeta(dtype=DataType.FP32, shape=config.scale.shape),
                           TensorMeta(dtype=DataType.convert_from_torch(offset_dtype), shape=config.offset.shape)],
         output_metas   = [TensorMeta(dtype=DataType.FP32, shape=meta.shape)],
         operation_name = created.name, operation_type=created.type, executing_order=-1)
@@ -132,7 +132,7 @@ class ONNXRUNTIMExporter(OnnxExporter):
         For Asymmetric Quantization Policy, Activations like Relu & Clip can be
             removed from your network safely. Their function can be replaced by
             quant & dequant operations.
-        
+
         So to say those activation is unnecessary for Asymmetric quantized network.
 
         Args:
@@ -140,13 +140,13 @@ class ONNXRUNTIMExporter(OnnxExporter):
             activation_ops (List[Operation]): Removing activations.
         """
         removed_activations = []
-        for op in graph.operations.values(): 
+        for op in graph.operations.values():
             if not isinstance(op, QuantableOperation): continue
             if op.type in {'Relu', 'Clip'}:
                 # Only ASYMMETRICAL quantized activations can be safely removed.
                 if op.config.input_quantization_config[0].policy.has_property(QuantizationProperty.ASYMMETRICAL):
                     removed_activations.append(op)
-        
+
         # Activation op can only be relu and clip,
         # so it is safe to access op.inputs[0], op.outputs[0] as their input and output.
         for op in removed_activations:
@@ -162,20 +162,20 @@ class ONNXRUNTIMExporter(OnnxExporter):
             if op.outputs[0].name in graph.outputs:
                 graph.outputs.pop(op.outputs[0].name)
                 graph.outputs[input_var.name] = input_var
-            
+
             input_var, output_var = op.inputs[0], op.outputs[0]
             graph.remove_operation(op)
             graph.create_link_with_var(input_var, output_var)
 
-        formater = GraphFormatter(graph)
-        formater(GraphCommand(GraphCommandType.DELETE_ISOLATED))
+        formatter = GraphFormatter(graph)
+        formatter(GraphCommand(GraphCommandType.DELETE_ISOLATED))
         return graph
 
     def remove_duplicated_quant_op(self, graph: BaseGraph) -> BaseGraph:
         """
         Some time there will be more than 1 quant operation inserted with a single variable.
         This function will remove duplicated quant operation from variable if it is possible.
-        
+
         If inserted quant operations do not share a same zeropoint and scale,
         Then there is no way to remove any one of them.
 
@@ -204,7 +204,7 @@ class ONNXRUNTIMExporter(OnnxExporter):
                 mark_to_remove.add(qt_op)
                 assert len(graph.get_downstream_operations(qt_op)) == 1, 'Oops, that should never happen.'
                 mark_to_remove.add(graph.get_downstream_operations(qt_op)[0])
-        
+
         for op in mark_to_remove:
             assert isinstance(op, Operation)
             input_var, output_var = op.inputs[0], op.outputs[0]
@@ -220,7 +220,7 @@ class ONNXRUNTIMExporter(OnnxExporter):
     def convert_operation_from_opset11_to_opset13(self, graph:BaseGraph) -> None:
         """
         Convert your network from opset 11 standard towards opset 13
-        With Onnx defination, per-channel quant operation requires opset 13.
+        With Onnx definition, per-channel quant operation requires opset 13.
 
         Args:
             graph (BaseGraph): Processing graph.
@@ -239,8 +239,8 @@ class ONNXRUNTIMExporter(OnnxExporter):
                 graph.create_link_with_op(variable=var, upstream_op=None, downstream_op=op)
                 op.meta_data.input_metas.append(TensorMeta.parsing_from_torch_tensor(var.value, var.name))
 
-    def convert_operation(self, graph: BaseGraph, op: QuantableOperation, 
-                          process_activation: bool, process_parameter: bool, 
+    def convert_operation(self, graph: BaseGraph, op: QuantableOperation,
+                          process_activation: bool, process_parameter: bool,
                           quant_param_to_int: bool):
         """
         Convert an operation to onnx quant & dequant format by inserting necessary quant & dequant op around it.
@@ -248,13 +248,13 @@ class ONNXRUNTIMExporter(OnnxExporter):
 
         Operator Oriented. All the quantized operators have their own ONNX definitions,
             like QLinearConv, MatMulInteger and etc.
-        
-        Tensor Oriented, aka Quantize and DeQuantize (QDQ). 
-            This format uses DQ(Q(tensor)) to simulate the quantize and dequantize process, 
-            and QuantizeLinear and DeQuantizeLinear operators also carry the quantization parameters. 
-            
+
+        Tensor Oriented, aka Quantize and DeQuantize (QDQ).
+            This format uses DQ(Q(tensor)) to simulate the quantize and dequantize process,
+            and QuantizeLinear and DeQuantizeLinear operators also carry the quantization parameters.
+
         Quantization-Aware training (QAT) models converted from Tensorflow or exported from PyTorch.
-        
+
         Quantized models converted from tflite and other framework.
 
         Args:
@@ -267,7 +267,7 @@ class ONNXRUNTIMExporter(OnnxExporter):
         # collect quantable vars, where we need to insert quant and dequant op
         for config, var in op.config_with_variable:
             meta = var.meta
-            if var.is_parameter: 
+            if var.is_parameter:
                 assert len(var.dest_ops) == 1, (
                 f'Can not export variable {var.name}, cause it has more than 1 destination operations. '
                 'PPQ require all parameters to have only 1 destination operation.')
@@ -286,13 +286,13 @@ class ONNXRUNTIMExporter(OnnxExporter):
                         created = self.insert_quant_on_variable(
                             graph=graph, var=var, config=config, related_op=op, meta=meta)
                         var = created.outputs[0]
-                    
+
                     self.insert_dequant_on_variable(
                         graph=graph, var=var, config=config, related_op=op, meta=meta)
                     if quant_param_to_int:
                         var.value = PPQLinearQuant_toInt(tensor=var.value, config=config)
-            
-            else: 
+
+            else:
                 if not process_activation: continue
 
                 if QuantizationStates.is_activated(config.state):
@@ -303,20 +303,20 @@ class ONNXRUNTIMExporter(OnnxExporter):
                         graph=graph, var=var, config=config, related_op=op, meta=meta)
 
     def prepare_graph(
-        self, graph: BaseGraph, 
-        process_activation: bool = True, 
-        process_parameter: bool = True, 
+        self, graph: BaseGraph,
+        process_activation: bool = True,
+        process_parameter: bool = True,
         remove_activation_fn: bool = True,
         quant_parameter_to_int: bool = True) -> BaseGraph:
         """
         Prepare your graph for exporting.
-        
+
         There are many works to do with your graph:
 
             1. Insert Quant and Dequant operation within your graph.
-            
+
             2. Remove all unnecessary activations.
-            
+
             3. Quantize all parameters of your graph, convert them to int8.
 
         Args:
@@ -329,9 +329,9 @@ class ONNXRUNTIMExporter(OnnxExporter):
 
         # remove switchers.
         if not EXPORT_DEVICE_SWITCHER:
-            processer = GraphDeviceSwitcher(graph)
-            processer.remove_switcher()
-        
+            processor = GraphDeviceSwitcher(graph)
+            processor.remove_switcher()
+
         # remove activations
         if remove_activation_fn:
             # remove useless activation.
@@ -341,24 +341,24 @@ class ONNXRUNTIMExporter(OnnxExporter):
         for op in [op for op in graph.operations.values()]:
             if not isinstance(op, QuantableOperation): continue
             self.convert_operation(
-                graph=graph, op=op, 
-                process_activation=process_activation, 
-                process_parameter=process_parameter, 
+                graph=graph, op=op,
+                process_activation=process_activation,
+                process_parameter=process_parameter,
                 quant_param_to_int=quant_parameter_to_int)
 
         return self.remove_duplicated_quant_op(graph)
 
     def export(self, file_path: str, graph: BaseGraph, config_path: str = None) -> None:
         graph = self.prepare_graph(graph)
-        
+
         # if a valid config path is given, export quantization config to there.
         if config_path is not None:
             super().export_quantization_config(config_path, graph)
-        
+
         name = graph._name
         if not name: name = 'PPL Quantization Tool - Onnx Export'
 
-        # Ready to export onnx graph defination.
+        # Ready to export onnx graph definition.
         _inputs, _outputs, _initilizers, _nodes = [], [], [], []
         for operation in graph.topological_sort():
             _nodes.append(super().export_operation(operation))
@@ -379,7 +379,7 @@ class ONNXRUNTIMExporter(OnnxExporter):
             outputs=_outputs,
             initializer=_initilizers)
         extra_opsets = self.required_opsets
-        
+
         opsets = []
         if 'opsets' in graph._detail:
             for opset in graph._detail['opsets']:

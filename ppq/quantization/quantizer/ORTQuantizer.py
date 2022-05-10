@@ -3,7 +3,7 @@ from typing import Union
 from ppq.core import (PASSIVE_OPERATIONS, OperationQuantizationConfig, ChannelwiseTensorQuantizationConfig,
                       QuantizationPolicy, QuantizationProperty,
                       QuantizationStates, RoundingPolicy, TargetPlatform)
-from ppq.IR import BaseGraph, GraphCommandProcesser
+from ppq.IR import BaseGraph, GraphCommandProcessor
 from ppq.IR.base.graph import Operation
 
 from .base import BaseQuantizer
@@ -13,7 +13,7 @@ import torch
 class ORT_PerTensorQuantizer(BaseQuantizer):
     def __init__(
         self,
-        graph: Union[BaseGraph, GraphCommandProcesser]
+        graph: Union[BaseGraph, GraphCommandProcessor]
     ) -> Union[torch.Tensor, list, dict]:
 
         self._num_of_bits = 8
@@ -70,7 +70,7 @@ class ORT_PerTensorQuantizer(BaseQuantizer):
             'Conv', 'GlobalAveragePool', 'AveragePool',
             'Relu', 'Add', 'Mul', 'Clip', 'Sigmoid',
             'MatMul', 'Gemm', 'Concat', 'LeakyRelu'}
-        ONNX_OOS_OPSET.update(PASSIVE_OPERATIONS) 
+        ONNX_OOS_OPSET.update(PASSIVE_OPERATIONS)
         return ONNX_OOS_OPSET
 
     @ property
@@ -87,7 +87,7 @@ class ORT_PerTensorQuantizer(BaseQuantizer):
 
 class ORT_PerChannelQuantizer(BaseQuantizer):
     def __init__(
-        self, graph: Union[BaseGraph, GraphCommandProcesser]
+        self, graph: Union[BaseGraph, GraphCommandProcessor]
     ) -> Union[torch.Tensor, list, dict]:
 
         self._num_of_bits = 8
@@ -181,7 +181,7 @@ class ORT_PerChannelQuantizer(BaseQuantizer):
             'Conv', 'GlobalAveragePool', 'AveragePool',
             'Relu', 'Add', 'Mul', 'Clip', 'Sigmoid',
             'MatMul', 'Gemm', 'Concat', 'LeakyRelu'}
-        ONNX_OOS_OPSET.update(PASSIVE_OPERATIONS) 
+        ONNX_OOS_OPSET.update(PASSIVE_OPERATIONS)
         return ONNX_OOS_OPSET
 
     @ property

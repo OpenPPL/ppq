@@ -3,7 +3,7 @@ from typing import Iterable
 import torch
 from ppq.core import QuantizationStates, empty_ppq_cache
 from ppq.executor import BaseGraphExecutor
-from ppq.IR import GraphCommandProcesser, Operation, QuantableOperation
+from ppq.IR import GraphCommandProcessor, Operation, QuantableOperation
 from ppq.quantization.qfunction import BaseQuantFunction
 from ppq.quantization.qfunction.linear import PPQLinearQuantFunction
 
@@ -40,13 +40,13 @@ class ParameterBakingPass(QuantizationOptimizationPass):
     @ empty_ppq_cache
     def optimize(
         self,
-        processer: GraphCommandProcesser,
+        processor: GraphCommandProcessor,
         dataloader: Iterable,
         executor: BaseGraphExecutor,
         **kwargs
     ) -> None:
 
-        graph = processer.graph
+        graph = processor.graph
         for _, operation in graph.operations.items():
             if not isinstance(operation, QuantableOperation): continue
             operation.baking_parameters(self._quantize_function)
@@ -58,11 +58,11 @@ class ConstantBakingPass(QuantizationOptimizationPass):
         self._quantize_function = quantize_function
 
     @ empty_ppq_cache
-    def optimize(self, processer: GraphCommandProcesser, dataloader: Iterable, 
+    def optimize(self, processor: GraphCommandProcessor, dataloader: Iterable,
         executor: BaseGraphExecutor, **kwargs) -> None:
         raise NotImplementedError('This pass has been removed from current PPQ version.')
-    
-        graph = processer.graph
+
+        graph = processor.graph
         for _, operation in graph.operations.items():
             assert isinstance(operation, Operation)
 

@@ -9,7 +9,7 @@ from .base import BaseQuantizer
 
 
 class ACADEMICQuantizer(BaseQuantizer):
-    """ACADEMICQuantizer applys a loose quantization scheme where only input variables of
+    """ACADEMICQuantizer applies a loose quantization scheme where only input variables of
     computing ops are quantized(symmetrical per-tensor for weight and asymmetrical per-tensor
     for activation). This setting doesn't align with any kind of backend for now and it's designed
     only for purpose of paper reproducing and algorithm verification.
@@ -19,25 +19,25 @@ class ACADEMICQuantizer(BaseQuantizer):
         self._quant_min = 0
         self._quant_max = 255
         super().__init__(graph, verbose)
-    
+
 
     def init_quantize_config(self, operation: Operation) -> OperationQuantizationConfig:
 
-        # create a basic quantization configration.
+        # create a basic quantization configuration.
         config = self.create_default_quant_config(
             operation_meta=operation.meta_data, num_of_bits=self._num_of_bits,
             quant_max=self._quant_max, quant_min=self._quant_min,
             observer_algorithm='percentile', policy=self.quantize_policy,
             rounding=self.rounding_policy,
         )
-        
+
         # actually usually only support quantization of inputs of computing
         # ops in academic settings
         if operation.type in {'Conv', 'Gemm', 'ConvTranspose'}:
 
             W_config = config.input_quantization_config[1]
             output_config = config.output_quantization_config[0]
-            
+
             W_config.quant_max = int(pow(2, self._num_of_bits - 1) - 1)
             W_config.quant_min = - int(pow(2, self._num_of_bits - 1))
             W_config.policy = QuantizationPolicy(

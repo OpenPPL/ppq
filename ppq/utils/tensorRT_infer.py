@@ -1,7 +1,7 @@
 # This file contains a helper class for tensorRT engine inference.
-#   usage:     
+#   usage:
 #       engine = TensorRTEngine('trt.engine')
-#       print(engine.forward(torch.zeros(1, 3, 224, 224))[0].shape) 
+#       print(engine.forward(torch.zeros(1, 3, 224, 224))[0].shape)
 
 from typing import List, Union
 
@@ -36,7 +36,7 @@ class TensorRTEngine():
     """
         TensorRT Engine is a helper class for tensorRT engine inference.
         it wraps tensorRT Engine as a normal torch module.
-        
+
         ATTENTION: you can not use this class together with other pytorch function.
             it will cause some unexpected CUDNN errors.
     """
@@ -61,12 +61,12 @@ class TensorRTEngine():
             # Allocate host and device buffers
             host_mem = cuda.pagelocked_empty(size, dtype)
 
-            # host_mem = [0. 0. 0. ... 0. 0. 0.], 
+            # host_mem = [0. 0. 0. ... 0. 0. 0.],
             device_mem = cuda.mem_alloc(host_mem.nbytes)
 
             # Append the device buffer to device bindings.
             bindings.append(int(device_mem))
-            
+
             # Append to the appropriate list.
             if self._engine.binding_is_input(binding):
                 inputs.append(HostDeviceMem(host_mem, device_mem))
@@ -74,7 +74,7 @@ class TensorRTEngine():
                 outputs.append(HostDeviceMem(host_mem, device_mem))
         return inputs, outputs, bindings
 
-    def inference(self, inputs: List[HostDeviceMem], bindings: List[int], 
+    def inference(self, inputs: List[HostDeviceMem], bindings: List[int],
         outputs: List[HostDeviceMem], context) -> List[numpy.ndarray]:
         """
         Inputs and outputs are expected to be lists of HostDeviceMem objects.
@@ -111,14 +111,14 @@ class TensorRTEngine():
                 feed_list.append(convert_any_to_numpy(value))
         elif isinstance(inputs, dict):
             feed_list = [None for _ in input_names]
-            for name, value in inputs.itesm():
+            for name, value in inputs.items():
                 if name not in input_names:
                     raise KeyError(f'Can not feed value of variable: {name}, '
                     'can not find it in tensorRT engine.')
                 feed_list[input_names.index(name)] = convert_any_to_numpy(value)
         else:
             raise TypeError('Can not parse feeding value.')
-        
+
         return feed_list
 
     def forward(self, inputs: Union[torch.Tensor, list, dict]) -> List[torch.Tensor]:
@@ -129,7 +129,7 @@ class TensorRTEngine():
             # feed value towards host memory
             for input_mem, input_value in zip(inputs_mem, inputs):
                 input_mem.host = numpy.ascontiguousarray(input_value)
-            
+
             # do inference
             result = self.inference(inputs=inputs_mem, bindings=bindings, outputs=outputs_mem, context=context)
             return [convert_any_to_torch_tensor(value) for value in result]

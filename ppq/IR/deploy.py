@@ -5,10 +5,10 @@ from ppq.core import (TargetPlatform, convert_any_to_numpy,
 
 from .base.command import GraphCommand, GraphCommandType, GraphDeployCommand
 from .base.graph import BaseGraph, Operation, Variable
-from .processer import GraphCommandProcesser
+from .processer import GraphCommandProcessor
 
 
-class RunnableGraph(GraphCommandProcesser):
+class RunnableGraph(GraphCommandProcessor):
     def __init__(self, graph: BaseGraph, device: str = None):
         """
             RunnableGraph object aims at dealing things related with graph executing.
@@ -17,7 +17,7 @@ class RunnableGraph(GraphCommandProcesser):
         Args:
             graph (BaseGraph): BaseGraph instance.
             device (str, optional): This attribute is only used by with RunnableGraph(graph, device) syntactic.
-            next_command_processer (Callable, optional): next processer in processing chain.
+            next_command_processor (Callable, optional): next processor in processing chain.
         """
         super().__init__(graph_or_processor=graph)
         self._device = device  # only used in "with RunnableGraph(graph, device):"
@@ -35,13 +35,13 @@ class RunnableGraph(GraphCommandProcesser):
                 return self.deploy('cuda')
 
         elif command.command_type == GraphCommandType.DEPLOY_TO_NUMPY:
-            return self.retrive()
+            return self.retrieve()
 
     def __enter__(self):
         self.deploy(self._device)
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.retrive()
+        self.retrieve()
 
     def _acceptable_command_types(self) -> List[GraphCommandType]:
         return [
@@ -50,12 +50,12 @@ class RunnableGraph(GraphCommandProcesser):
             GraphCommandType.DEPLOY_TO_NUMPY
         ]
 
-    def retrive(self):
+    def retrieve(self):
 
         for _, operator in self._graph.operations.items():
 
             assert isinstance(operator, Operation), \
-                f'Failed to retrive graph to numpy, incorrect operator {operator} found.'
+                f'Failed to retrieve graph to numpy, incorrect operator {operator} found.'
 
             # in onnx format, some constant values are warpped with operation's attributes['value']
             # To move those constant value from numpy to device,

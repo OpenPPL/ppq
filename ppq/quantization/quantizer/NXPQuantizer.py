@@ -7,7 +7,7 @@ from ppq.core import (ChannelwiseTensorQuantizationConfig,
                       QuantizationProperty, QuantizationStates, RoundingPolicy,
                       TargetPlatform)
 from ppq.executor.base import BaseGraphExecutor
-from ppq.IR import BaseGraph, GraphCommandProcesser
+from ppq.IR import BaseGraph, GraphCommandProcessor
 from ppq.IR.base.graph import Operation
 from ppq.quantization.optim import (NxpInputRoundingRefinePass,
                                     NXPResizeModeChangePass,
@@ -19,7 +19,7 @@ from .base import BaseQuantizer
 class NXP_Quantizer(BaseQuantizer):
     def __init__(
         self,
-        graph: Union[BaseGraph, GraphCommandProcesser],
+        graph: Union[BaseGraph, GraphCommandProcessor],
     ) -> Union[torch.Tensor, list, dict]:
 
         self._num_of_bits = 8
@@ -34,12 +34,12 @@ class NXP_Quantizer(BaseQuantizer):
         pipeline.append_optimization_to_pipeline(NXPResizeModeChangePass(), at_front=True)
         pipeline.append_optimization_to_pipeline(NxpInputRoundingRefinePass(), at_front=True)
         return pipeline
-    
+
     def init_quantize_config(self, operation: Operation) -> OperationQuantizationConfig:
 
         base_quant_config = self.create_default_quant_config(
             policy=self.quantize_policy, rounding=self.rounding_policy,
-            operation_meta=operation.meta_data, num_of_bits=self._num_of_bits, 
+            operation_meta=operation.meta_data, num_of_bits=self._num_of_bits,
             quant_max=self._quant_max, quant_min=self._quant_min,
             observer_algorithm='percentile')
 
@@ -103,7 +103,7 @@ class NXP_Quantizer(BaseQuantizer):
         if operation.type in PASSIVE_OPERATIONS:
             # Those op are not active op.
             base_quant_config.is_active_quant_op = False
-        
+
         return base_quant_config
 
     @ property
@@ -117,7 +117,7 @@ class NXP_Quantizer(BaseQuantizer):
     @ property
     def quant_operation_types(self) -> set:
         return {
-            'Conv', 'ConvTranspose', 'Gemm', 'Relu', 'PRelu', 
+            'Conv', 'ConvTranspose', 'Gemm', 'Relu', 'PRelu',
             'Clip', 'Pad', 'Resize', 'MaxPool', 'AveragePool',
             'GlobalMaxPool', 'GlobalAveragePool',
             'Mul', 'Add', 'Max', 'Sub', 'Div',

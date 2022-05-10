@@ -5,7 +5,7 @@ from ppq.core import (PASSIVE_OPERATIONS, ChannelwiseTensorQuantizationConfig,
                       OperationQuantizationConfig, QuantizationPolicy,
                       QuantizationProperty, QuantizationStates, RoundingPolicy,
                       TargetPlatform)
-from ppq.IR import BaseGraph, GraphCommandProcesser
+from ppq.IR import BaseGraph, GraphCommandProcessor
 from ppq.IR.base.graph import Operation, Variable
 from ppq.core.quant import TensorQuantizationConfig
 
@@ -14,7 +14,7 @@ from .base import BaseQuantizer
 
 class PPLCUDAQuantizer(BaseQuantizer):
     def __init__(
-        self, graph: Union[BaseGraph, GraphCommandProcesser]
+        self, graph: Union[BaseGraph, GraphCommandProcessor]
     ) -> Union[torch.Tensor, list, dict]:
 
         self._num_of_bits = 8
@@ -30,7 +30,7 @@ class PPLCUDAQuantizer(BaseQuantizer):
             quant_max=self._quant_max, quant_min=self._quant_min,
             observer_algorithm='percentile'
         )
-        
+
         if operation.type in {'Conv', 'ConvTranspose', 'Gemm'}:
             # set all parameters within Conv, ConvTranspose, Gemm to per-channel quant-config.
             assert operation.num_of_input > 0, 'Seems you got a Conv layer with no parameters.'
@@ -101,7 +101,7 @@ class PPLCUDAQuantizer(BaseQuantizer):
     def quant_operation_types(self) -> set:
         return {
             'Conv', 'Relu', 'PRelu', 'Clip', 'Gemm',
-            'Resize', 'MaxPool', 'AveragePool', 
+            'Resize', 'MaxPool', 'AveragePool',
             'GlobalMaxPool', 'GlobalAveragePool',
             'Mul', 'Add', 'LeakyRelu', 'Split', 'Concat',
             'Transpose', 'Slice', 'Reshape', 'Flatten',
@@ -123,7 +123,7 @@ class PPLCUDAQuantizer(BaseQuantizer):
 
 class PPLCUDAMixPrecisionQuantizer(PPLCUDAQuantizer):
     def __init__(
-        self, graph: Union[BaseGraph, GraphCommandProcesser]
+        self, graph: Union[BaseGraph, GraphCommandProcessor]
     ) -> Union[torch.Tensor, list, dict]:
         super().__init__(graph=graph)
 
@@ -140,12 +140,12 @@ class PPLCUDAMixPrecisionQuantizer(PPLCUDAQuantizer):
 
 class PPLCUDA_INT4_Quantizer(PPLCUDAQuantizer):
     def __init__(
-        self, graph: Union[BaseGraph, GraphCommandProcesser]
+        self, graph: Union[BaseGraph, GraphCommandProcessor]
     ) -> Union[torch.Tensor, list, dict]:
         super().__init__(graph=graph)
 
     def __init__(
-        self, graph: Union[BaseGraph, GraphCommandProcesser]
+        self, graph: Union[BaseGraph, GraphCommandProcessor]
     ) -> Union[torch.Tensor, list, dict]:
 
         super().__init__(graph=graph)

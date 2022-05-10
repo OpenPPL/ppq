@@ -49,7 +49,7 @@ class HessianDispatcher:
             if op.is_computing_op:
                 all_computing_ops.add(op)
         return all_computing_ops, last_computing_ops
-    
+
 
     def enable_gradient(self, graph: BaseGraph) -> None:
         for op in graph.operations.values():
@@ -152,13 +152,13 @@ class HessianDispatcher:
 
         def is_passive(op: Operation) -> bool:
             return op.type in PASSIVE_OPERATIONS
-        
+
         def is_root(op: Operation) -> bool:
             for var in op.inputs:
                 if var.source_op is not None and var.source_op.name not in computing_op_platforms:
                     return False
             return True
-    
+
         def recursive_mark(pre_operation: Operation, cur_operation: Operation) -> None:
             if pre_operation is not None:
                 if not available(cur_operation):
@@ -166,12 +166,12 @@ class HessianDispatcher:
 
                 if is_activation(cur_operation) and not pre_operation.is_computing_op\
                     and not is_passive(cur_operation):
-                    computing_op_platforms[cur_operation.name] = TargetPlatform.PPL_CUDA_INT8 
+                    computing_op_platforms[cur_operation.name] = TargetPlatform.PPL_CUDA_INT8
                 else:
                     computing_op_platforms[cur_operation.name] = computing_op_platforms[pre_operation.name]
             for op in graph.get_downstream_operations(cur_operation):
                 recursive_mark(cur_operation, op)
-        
+
         def trace_binary(pre_operation: Operation, cur_operation: Operation) -> None:
             if pre_operation is None:
                 for var in cur_operation.inputs:
@@ -221,7 +221,7 @@ class HessianDispatcher:
         all_computing_ops, last_computing_ops = self.find_all_computing_ops(graph)
         output_names = [op.outputs[0].name for op in last_computing_ops]
         params, _ = self.get_params_grad(all_computing_ops)
-        eigenvalues = [None for i in range(len(params))] 
+        eigenvalues = [None for i in range(len(params))]
         dispatching_table = {}
 
         v = [torch.randn(p.size()).to(self.device) for p in params]
@@ -272,9 +272,9 @@ class HessianDispatcher:
 class PPLNNMixPrecisionDispatcher:
     @staticmethod
     def dispatch(
-        graph: BaseGraph, 
-        quant_platform: TargetPlatform, 
-        fp32_platform: TargetPlatform, 
+        graph: BaseGraph,
+        quant_platform: TargetPlatform,
+        fp32_platform: TargetPlatform,
         SOI_platform: TargetPlatform,
         INT4_COMPUTING_OPS: List[str],
         **kwargs
@@ -292,7 +292,7 @@ class PPLNNMixPrecisionDispatcher:
         Returns:
             Dict[str, TargetPlatform]: final dispatching table
         """
-        
+
         # whether dispatched to quant platform by pplnn dispatcher
         def pplnn_permit(op: Operation) -> bool:
             return pplnn_dispatching_table[op.name] == quant_platform
@@ -304,18 +304,18 @@ class PPLNNMixPrecisionDispatcher:
         # whether it's activation op
         def is_activation(op: Operation) -> bool:
             return op.type in PPLCUDA_ACTIVATIONS or op.type in LINEAR_ACTIVATIONS
-        
+
         # whether it's passive op
         def is_passive(op: Operation) -> bool:
             return op.type in PASSIVE_OPERATIONS
-        
-        # wether it's root op, i.e., platforms of input ops all identified 
+
+        # whether it's root op, i.e., platforms of input ops all identified
         def is_root(op: Operation) -> bool:
             for var in op.inputs:
                 if var.source_op is not None and var.source_op.name not in computing_op_platforms:
                     return False
             return True
-        
+
         # start from computing ops, recursively mark subsequent ops
         def recursive_mark(pre_operation: Operation, cur_operation: Operation) -> None:
             if pre_operation is not None:
@@ -324,12 +324,12 @@ class PPLNNMixPrecisionDispatcher:
 
                 if is_activation(cur_operation) and not pre_operation.is_computing_op\
                     and not is_passive(cur_operation):
-                    computing_op_platforms[cur_operation.name] = TargetPlatform.PPL_CUDA_INT8 
+                    computing_op_platforms[cur_operation.name] = TargetPlatform.PPL_CUDA_INT8
                 else:
                     computing_op_platforms[cur_operation.name] = computing_op_platforms[pre_operation.name]
             for op in graph.get_downstream_operations(cur_operation):
                 recursive_mark(cur_operation, op)
-        
+
         # start from binary ops, recursively mark and add newly discovered root op
         def trace_binary(pre_operation: Operation, cur_operation: Operation) -> None:
             if pre_operation is None:
@@ -387,8 +387,8 @@ class PPLNNMixPrecisionDispatcher:
             op = queue.popleft()
             trace_binary(None, op)
 
-        for name in computing_op_platforms: 
+        for name in computing_op_platforms:
             if computing_op_platforms[name] == TargetPlatform.PPL_CUDA_INT4:
                 pplnn_dispatching_table[name] = TargetPlatform.PPL_CUDA_INT4
-        
+
         return pplnn_dispatching_table

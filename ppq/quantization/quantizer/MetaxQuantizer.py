@@ -7,7 +7,7 @@ from ppq.core import (PASSIVE_OPERATIONS, ChannelwiseTensorQuantizationConfig,
                       QuantizationProperty, QuantizationStates, RoundingPolicy,
                       TargetPlatform)
 from ppq.executor.base import BaseGraphExecutor
-from ppq.IR import BaseGraph, GraphCommandProcesser
+from ppq.IR import BaseGraph, GraphCommandProcessor
 from ppq.IR.base.graph import Operation
 from ppq.quantization.optim.base import QuantizationOptimizationPipeline
 from ppq.quantization.optim.morph import MetaxGemmSplitPass
@@ -18,7 +18,7 @@ from .base import BaseQuantizer
 class MetaxTensorwiseQuantizer(BaseQuantizer):
     def __init__(
         self,
-        graph: Union[BaseGraph, GraphCommandProcesser]
+        graph: Union[BaseGraph, GraphCommandProcessor]
     ) -> Union[torch.Tensor, list, dict]:
 
         self._num_of_bits = 8
@@ -73,10 +73,10 @@ class MetaxTensorwiseQuantizer(BaseQuantizer):
     def quant_operation_types(self) -> set:
         return {
             'Conv', 'Relu', 'PRelu', 'Clip', 'Gemm',
-            'Resize', 'MaxPool', 'AveragePool', 
+            'Resize', 'MaxPool', 'AveragePool',
             'GlobalMaxPool', 'GlobalAveragePool',
             'Mul', 'Add', 'LeakyRelu', 'Split', 'Concat',
-            'Transpose', 'Slice', 'Reshape', 'Flatten', 
+            'Transpose', 'Slice', 'Reshape', 'Flatten',
             'MatMul'}
 
     @ property
@@ -98,7 +98,7 @@ class MetaxTensorwiseQuantizer(BaseQuantizer):
 
 class MetaxChannelwiseQuantizer(BaseQuantizer):
     def __init__(
-        self, graph: Union[BaseGraph, GraphCommandProcesser]
+        self, graph: Union[BaseGraph, GraphCommandProcessor]
     ) -> Union[torch.Tensor, list, dict]:
 
         self._num_of_bits = 8
@@ -114,7 +114,7 @@ class MetaxChannelwiseQuantizer(BaseQuantizer):
             quant_max=self._quant_max, quant_min=self._quant_min,
             observer_algorithm='percentile'
         )
-        
+
         if operation.type in {'Conv', 'MatMul'}:
             # set all parameters within Conv, ConvTranspose, Gemm to per-channel quant-config.
             assert operation.num_of_input > 0, 'Seems you got a Conv layer with no parameters.'
@@ -189,10 +189,10 @@ class MetaxChannelwiseQuantizer(BaseQuantizer):
     def quant_operation_types(self) -> set:
         return {
             'Conv', 'Relu', 'PRelu', 'Clip', 'Gemm',
-            'Resize', 'MaxPool', 'AveragePool', 
+            'Resize', 'MaxPool', 'AveragePool',
             'GlobalMaxPool', 'GlobalAveragePool',
             'Mul', 'Add', 'LeakyRelu', 'Split', 'Concat',
-            'Transpose', 'Slice', 'Reshape', 'Flatten', 
+            'Transpose', 'Slice', 'Reshape', 'Flatten',
             'MatMul'}
 
     @ property
