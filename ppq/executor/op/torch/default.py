@@ -37,77 +37,77 @@ __all__ = [
 logger = NaiveLogger.get_logger('PPQ')
 
 def Conv_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    """
-    The convolution operator consumes an input tensor and a filter, and computes the output.
+    """The convolution operator consumes an input tensor and a filter, and
+    computes the output.
 
     Attributes
         auto_pad : string (default is NOTSET)
-            auto_pad must be either NOTSET, SAME_UPPER, SAME_LOWER or VALID. Where default value is NOTSET, 
-            which means explicit padding is used. 
-            
-            SAME_UPPER or SAME_LOWER mean pad the input so that 
+            auto_pad must be either NOTSET, SAME_UPPER, SAME_LOWER or VALID. Where default value is NOTSET,
+            which means explicit padding is used.
+
+            SAME_UPPER or SAME_LOWER mean pad the input so that
                 `output_shape[i] = ceil(input_shape[i] / strides[i])` for each axis `i`.
-            The padding is split between the two sides equally or almost equally 
+            The padding is split between the two sides equally or almost equally
                 (depending on whether it is even or odd).
-            In case the padding is an odd number, 
+            In case the padding is an odd number,
                 the extra padding is added at the end for SAME_UPPER and at the beginning for SAME_LOWER.
-    
+
         dilations : list of ints
-            dilation value along each spatial axis of the filter. 
+            dilation value along each spatial axis of the filter.
             If not present, the dilation defaults is 1 along each spatial axis.
-    
+
         group : int (default is 1)
             number of groups input channels and output channels are divided into.
-    
+
         kernel_shape : list of ints
             The shape of the convolution kernel. If not present, should be inferred from input W.
-    
+
         pads : list of ints
-            Padding for the beginning and ending along each spatial axis, 
-            it can take any value greater than or equal to 0. 
-            
+            Padding for the beginning and ending along each spatial axis,
+            it can take any value greater than or equal to 0.
+
             The value represent the number of pixels added to the beginning and end part of the corresponding axis.
             `pads` format should be as follow [x1_begin, x2_begin...x1_end, x2_end,...],
             where xi_begin the number of pixels added at the beginning of axis `i` and xi_end,
             the number of pixels added at the end of axis `i`.
-            
+
             This attribute cannot be used simultaneously with auto_pad attribute.
             If not present, the padding defaults to 0 along start and end of each spatial axis.
-    
+
         strides : list of ints
             Stride along each spatial axis. If not present, the stride defaults is 1 along each spatial axis.
-    
+
     Inputs (2 - 3)
         X (differentiable) : T
             Input data tensor from previous layer;
             has size (N x C x H x W), where N is the batch size,
             C is the number of channels, and H and W are the height and width.
             Note that this is for the 2D image. Otherwise the size is (N x C x D1 x D2 ... x Dn).
-            
-            Optionally, if dimension denotation is in effect, 
-            the operation expects input data tensor to arrive 
+
+            Optionally, if dimension denotation is in effect,
+            the operation expects input data tensor to arrive
                 with the dimension denotation of [DATA_BATCH, DATA_CHANNEL, DATA_FEATURE, DATA_FEATURE ...].
-        
+
         W (differentiable) : T
-            The weight tensor that will be used in the convolutions; 
+            The weight tensor that will be used in the convolutions;
             has size (M x C/group x kH x kW), where C is the number of channels,
-            and kH and kW are the height and width of the kernel, 
-            and M is the number of feature maps. For more than 2 dimensions, 
+            and kH and kW are the height and width of the kernel,
+            and M is the number of feature maps. For more than 2 dimensions,
             the kernel shape will be (M x C/group x k1 x k2 x ... x kn),
                 where (k1 x k2 x ... kn) is the dimension of the kernel.
             Optionally, if dimension denotation is in effect,
                 the operation expects the weight tensor to arrive with the dimension
                 denotation of [FILTER_OUT_CHANNEL, FILTER_IN_CHANNEL, FILTER_SPATIAL, FILTER_SPATIAL ...].
-            
+
             Assuming zero based indices for the shape array,
             X.shape[1] == (W.shape[1] * group) == C and W.shape[0] mod G == 0.
-            
-            Or in other words FILTER_IN_CHANNEL multiplied by the number of groups should be 
+
+            Or in other words FILTER_IN_CHANNEL multiplied by the number of groups should be
             equal to DATA_CHANNEL and the number of feature maps M should be a multiple of the number of groups G.
-        
+
         B (optional, differentiable) : T
             Optional 1D bias to be added to the convolution, has size of M.
-    
+
     Outputs
         Y (differentiable) : T
             Output data tensor that contains the result of the convolution.
@@ -124,15 +124,15 @@ def Conv_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
     ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=2, max_num_of_input=3)
     process_attribute(op.attributes, values[0].shape[2:], values[1].shape[2:])
-    
+
     groups    = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='group', default=1)
     padding   = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='pads', default=0)
     dilation  = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='dilations', default=1)
     stride    = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='strides', default=1)
-    
+
     x, w = values[: 2]
     b = values[2] if len(values) > 2 else None
-    
+
     # onnx pads format[top, left, bottom, right] to torch pads format[left, right, top, bottom]
     if isinstance(padding, list) and len(padding) == 4:
         p_left, p_right, p_top, p_bottom = padding[1], padding[3], padding[0], padding[2]
@@ -142,44 +142,43 @@ def Conv_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
         else:
             x = F.pad(x, pad=[p_left, p_right, p_top, p_bottom])
             padding = 0
-    
-    output = F.conv2d(input=x, weight=w, bias=b, groups=groups, padding=padding, 
+
+    output = F.conv2d(input=x, weight=w, bias=b, groups=groups, padding=padding,
                       dilation=dilation, stride=stride)
     return output
 
 
 def ConvTranspose_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    """
-    
-    The convolution transpose operator consumes an input tensor and a filter, and computes the output.
+    """The convolution transpose operator consumes an input tensor and a
+    filter, and computes the output.
 
     If the pads parameter is provided the shape of the output is calculated via the following equation:
 
         output_shape[i] = stride[i] * (input_size[i] - 1) + output_padding[i] + ((kernel_shape[i] - 1) * dilations[i] + 1) - pads[start_i] - pads[end_i]
-        output_shape can also be explicitly specified in which case pads values are 
+        output_shape can also be explicitly specified in which case pads values are
             auto generated using these equations:
 
     total_padding[i] = stride[i] * (input_size[i] - 1) + output_padding[i] + ((kernel_shape[i] - 1) * dilations[i] + 1) - output_shape[i]
 
-    If (auto_pads == SAME_UPPER): 
-        pads[start_i] = total_padding[i]/2; 
+    If (auto_pads == SAME_UPPER):
+        pads[start_i] = total_padding[i]/2;
         pads[end_i] = total_padding[i] - (total_padding[i]/2)
-    Else: 
-        pads[start_i] = total_padding[i] - (total_padding[i]/2); 
+    Else:
+        pads[start_i] = total_padding[i] - (total_padding[i]/2);
         pads[end_i] = (total_padding[i]/2).
 
     Attributes
         auto_pad : string (default is NOTSET)
         auto_pad must be either NOTSET, SAME_UPPER, SAME_LOWER or VALID. Where default value is NOTSET,
-            which means explicit padding is used. SAME_UPPER or SAME_LOWER mean pad the input so that 
-            `output_shape[i] = input_shape[i] * strides[i]` for each axis `i`. 
-        The padding is split between the two sides equally or almost equally 
-            (depending on whether it is even or odd). 
-        In case the padding is an odd number, 
+            which means explicit padding is used. SAME_UPPER or SAME_LOWER mean pad the input so that
+            `output_shape[i] = input_shape[i] * strides[i]` for each axis `i`.
+        The padding is split between the two sides equally or almost equally
+            (depending on whether it is even or odd).
+        In case the padding is an odd number,
             the extra padding is added at the end for SAME_UPPER and at the beginning for SAME_LOWER.
 
         dilations : list of ints
-        dilation value along each spatial axis of the filter. 
+        dilation value along each spatial axis of the filter.
             If not present, the dilation defaults to 1 along each spatial axis.
 
         group : int (default is 1)
@@ -189,29 +188,29 @@ def ConvTranspose_forward(op: Operation, values: List[torch.Tensor], ctx: TorchB
         The shape of the convolution kernel. If not present, should be inferred from input W.
 
         output_padding : list of ints
-        Additional elements added to the side with higher coordinate indices in the output. 
-            Each padding value in "output_padding" must be less than the corresponding stride/dilation dimension. 
-            By default, this attribute is a zero vector. 
-        Note that this attribute doesn't directly affect the computed output values. 
-            It only controls the selection of the computed values, 
-            so changing this attribute only adds or removes output elements. 
-        If "output_shape" is explicitly provided, 
-            "output_padding" does not contribute additional size to "output_shape" 
-            but participates in the computation of the needed padding amount. 
+        Additional elements added to the side with higher coordinate indices in the output.
+            Each padding value in "output_padding" must be less than the corresponding stride/dilation dimension.
+            By default, this attribute is a zero vector.
+        Note that this attribute doesn't directly affect the computed output values.
+            It only controls the selection of the computed values,
+            so changing this attribute only adds or removes output elements.
+        If "output_shape" is explicitly provided,
+            "output_padding" does not contribute additional size to "output_shape"
+            but participates in the computation of the needed padding amount.
             This is also called adjs or adjustment in some frameworks.
 
         output_shape : list of ints
-        The shape of the output can be explicitly set which will cause pads values to be auto generated. 
+        The shape of the output can be explicitly set which will cause pads values to be auto generated.
         If output_shape is specified pads values are ignored. See doc for details for equations to generate pads
 
         pads : list of ints
-        Padding for the beginning and ending along each spatial axis, 
-            it can take any value greater than or equal to 0. 
-        The value represent the number of pixels added to the beginning and end part of the corresponding axis. 
-        `pads` format should be as follow [x1_begin, x2_begin...x1_end, x2_end,...], 
-            where xi_begin the number of pixels added at the beginning of axis `i` and xi_end, 
-            the number of pixels added at the end of axis `i`. 
-        This attribute cannot be used simultaneously with auto_pad attribute. 
+        Padding for the beginning and ending along each spatial axis,
+            it can take any value greater than or equal to 0.
+        The value represent the number of pixels added to the beginning and end part of the corresponding axis.
+        `pads` format should be as follow [x1_begin, x2_begin...x1_end, x2_end,...],
+            where xi_begin the number of pixels added at the beginning of axis `i` and xi_end,
+            the number of pixels added at the end of axis `i`.
+        This attribute cannot be used simultaneously with auto_pad attribute.
         If not present, the padding defaults to 0 along start and end of each spatial axis.
 
         strides : list of ints
@@ -219,29 +218,29 @@ def ConvTranspose_forward(op: Operation, values: List[torch.Tensor], ctx: TorchB
 
     Inputs (2 - 3)
         X (differentiable) : T
-        Input data tensor from previous layer; has size (N x C x H x W), 
-            where N is the batch size, C is the number of channels, and H and W are the height and width. 
+        Input data tensor from previous layer; has size (N x C x H x W),
+            where N is the batch size, C is the number of channels, and H and W are the height and width.
             Note that this is for the 2D image. Otherwise the size is (N x C x D1 x D2 ... x Dn)
-        
+
         W (differentiable) : T
-        The weight tensor that will be used in the convolutions; has size (C x M/group x kH x kW), 
-        where C is the number of channels, and kH and kW are the height and width of the kernel, 
-            and M is the number of feature maps. 
-        For more than 2 dimensions, the weight shape will be (C x M/group x k1 x k2 x ... x kn), 
-            where (k1 x k2 x ... x kn) is the dimension of the kernel. 
-        The number of channels in the output should be equal to 
+        The weight tensor that will be used in the convolutions; has size (C x M/group x kH x kW),
+        where C is the number of channels, and kH and kW are the height and width of the kernel,
+            and M is the number of feature maps.
+        For more than 2 dimensions, the weight shape will be (C x M/group x k1 x k2 x ... x kn),
+            where (k1 x k2 x ... x kn) is the dimension of the kernel.
+        The number of channels in the output should be equal to
             W.shape[1] * group (assuming zero based indices of the shape array)
-        
+
         B (optional, differentiable) : T
         Optional 1D bias to be added to the convolution, has size of M.
 
     Outputs
         Y (differentiable) : T
-        Output data tensor that contains the result of the convolution. 
-        The output dimensions are functions of the kernel size, stride size, pad lengths and group count. 
-        The number of channels in the output should be equal to 
+        Output data tensor that contains the result of the convolution.
+        The output dimensions are functions of the kernel size, stride size, pad lengths and group count.
+        The number of channels in the output should be equal to
             W.shape[1] * group (assuming zero based indices of the shape array)
-        
+
     Type Constraints
         T : tensor(float16), tensor(float), tensor(double)
         Constrain input and output types to float tensors.
@@ -249,7 +248,7 @@ def ConvTranspose_forward(op: Operation, values: List[torch.Tensor], ctx: TorchB
     ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=2, max_num_of_input=3)
     process_attribute(op.attributes, values[0].shape[2:], values[1].shape[2:], 'ConvTranspose')
-    
+
     groups    = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='group', default=1)
     padding   = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='pads', default=0)
     dilation  = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='dilations', default=1)
@@ -270,7 +269,7 @@ def ConvTranspose_forward(op: Operation, values: List[torch.Tensor], ctx: TorchB
             padding = 0
 
     output = F.conv_transpose2d(
-        input=x, weight=w, bias=b, groups=groups, padding=padding, 
+        input=x, weight=w, bias=b, groups=groups, padding=padding,
         dilation=dilation, stride=stride, output_padding=output_padding)
     return output
 
@@ -279,7 +278,7 @@ def MaxPool2d_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
     ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
     process_attribute(op.attributes, values[0].shape[2:])
-    
+
     [input_value] = values
     padding   = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='pads', default=0)
     dilation  = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='dilations', default=1)
@@ -295,12 +294,12 @@ def MaxPool2d_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
         else:
             input_value = F.pad(input_value, pad=[p_left, p_right, p_top, p_bottom])
             padding = 0
-    
+
     if op.type == 'GlobalMaxPool': kernel_size = input_value.size()[-2:]
     else: kernel_size = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='kernel_shape', compulsive=True)
-    
+
     output = F.max_pool2d(input_value, kernel_size=kernel_size,
-                          padding=padding, dilation=dilation, 
+                          padding=padding, dilation=dilation,
                           stride=stride, ceil_mode=ceil_mode)
     return output
 
@@ -319,8 +318,8 @@ def BatchNormalization_forward(op: Operation, values: List[torch.Tensor], ctx: T
 
 
 def Mul_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    """
-    Performs element-wise binary multiplication (with Numpy-style broadcasting support).
+    """Performs element-wise binary multiplication (with Numpy-style
+    broadcasting support).
 
     This operator supports multidirectional (i.e., Numpy-style) broadcasting; for more details please check the doc.
 
@@ -351,10 +350,10 @@ def Mul_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
 
 
 def Add_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    """
-    Performs element-wise binary addition (with Numpy-style broadcasting support).
+    """Performs element-wise binary addition (with Numpy-style broadcasting
+    support).
 
-    This operator supports multidirectional (i.e., Numpy-style) broadcasting; 
+    This operator supports multidirectional (i.e., Numpy-style) broadcasting;
         for more details please check the doc.
 
     (Opset 14 change): Extend supported types to include uint8, int8, uint16, and int16.
@@ -364,7 +363,7 @@ def Add_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
             First operand.
         B (differentiable) : T
             Second operand.
-    
+
     Outputs
         C (differentiable) : T
             Result, has same element type as two inputs
@@ -414,31 +413,30 @@ def Eltwise_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackend
 
 # TODO: shape might contain 0, needs better solution
 def Reshape_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    """
-    Reshape the input tensor similar to numpy.reshape. 
-    First input is the data tensor, second input is a shape tensor which specifies the output shape. 
-    It outputs the reshaped tensor. 
-    
-    At most one dimension of the new shape can be -1. 
-    In this case, the value is inferred from the size of the tensor and the remaining dimensions. 
-    A dimension could also be 0, in which case the actual dimension value is unchanged (i.e. taken from the input tensor). 
-    If 'allowzero' is set, and the new shape includes 0, 
+    """Reshape the input tensor similar to numpy.reshape. First input is the
+    data tensor, second input is a shape tensor which specifies the output
+    shape. It outputs the reshaped tensor.
+
+    At most one dimension of the new shape can be -1.
+    In this case, the value is inferred from the size of the tensor and the remaining dimensions.
+    A dimension could also be 0, in which case the actual dimension value is unchanged (i.e. taken from the input tensor).
+    If 'allowzero' is set, and the new shape includes 0,
         the dimension will be set explicitly to zero (i.e. not taken from input tensor)
 
     Attributes
         allowzero : int (default is 0) (Not implemented)
         (Optional) By default, when any value in the 'shape' input is equal to zero
-            the corresponding dimension value is copied from the input tensor dynamically. 
-        
+            the corresponding dimension value is copied from the input tensor dynamically.
+
         allowzero=1 indicates that if any value in the 'shape' input is set to zero,
             the zero value is honored, similar to NumPy.
     Inputs
         data (differentiable) : T
             An input tensor.
-    
+
         shape (non-differentiable) : tensor(int64)
             Specified shape for output.
-    
+
     Outputs
         reshaped (differentiable) : T
             Reshaped data.
@@ -462,12 +460,12 @@ def AveragePool_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBac
     ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
     process_attribute(op.attributes, values[0].shape[2:])
-    
+
     [input_value] = values
     padding   = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='pads', default=0)
     stride    = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='strides', default=None)
     ceil_mode = bool(GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='ceil_mode', default=False))
-    
+
     # onnx pads format[top, left, bottom, right] to torch pads format[left, right, top, bottom]
     if isinstance(padding, list) and len(padding) == 4:
         p_left, p_right, p_top, p_bottom = padding[1], padding[3], padding[0], padding[2]
@@ -480,7 +478,7 @@ def AveragePool_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBac
 
     if op.type == 'GlobalAveragePool': kernel_size = input_value.size()[-2:]
     else: kernel_size = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='kernel_shape', compulsive=True)
-    
+
     output = F.avg_pool2d(input_value, kernel_size=kernel_size,
                           padding=padding, stride=stride, ceil_mode=ceil_mode)
     return output
@@ -495,13 +493,13 @@ def ArgMax_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendC
 
 
 def Transpose_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    """
-    Transpose the input tensor similar to numpy.transpose. 
-    For example, when perm=(1, 0, 2), given an input tensor of shape (1, 2, 3), the output shape will be (2, 1, 3).
+    """Transpose the input tensor similar to numpy.transpose. For example, when
+    perm=(1, 0, 2), given an input tensor of shape (1, 2, 3), the output shape
+    will be (2, 1, 3).
 
     Attributes
         perm : list of ints
-            A list of integers. By default, reverse the dimensions, 
+            A list of integers. By default, reverse the dimensions,
             otherwise permute the axes according to the values given.
 
     Inputs
@@ -528,20 +526,20 @@ def Transpose_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
 
 
 def Concat_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    """
-    Concatenate a list of tensors into a single tensor. 
-    All input tensors must have the same shape, except for the dimension size of the axis to concatenate on.
+    """Concatenate a list of tensors into a single tensor. All input tensors
+    must have the same shape, except for the dimension size of the axis to
+    concatenate on.
 
     Attributes
         axis : int (required)
-            Which axis to concat on. 
-            A negative value means counting dimensions from the back. 
+            Which axis to concat on.
+            A negative value means counting dimensions from the back.
             Accepted range is [-r, r-1] where r = rank(inputs)..
-    
+
     Inputs (1 - ∞)
         inputs (variadic, differentiable) : T
             List of tensors for concatenation
-    
+
     Outputs
         concat_result (differentiable) : T
             Concatenated tensor
@@ -570,9 +568,8 @@ def Concat_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendC
 
 
 def Constant_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    """
-    A constant tensor. Exactly one of the two attributes, 
-        either value or sparse_value, must be specified.
+    """A constant tensor. Exactly one of the two attributes, either value or
+    sparse_value, must be specified.
 
     Version
     This version of the operator has been available since version 11 of the default ONNX operator set.
@@ -580,11 +577,11 @@ def Constant_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacken
     Attributes
         sparse_value : sparse_tensor
             The value for the elements of the output tensor in sparse format.
-        
+
         value : tensor
             The value for the elements of the output tensor.
     Inputs
-    
+
     Outputs
         output : T
             Output tensor containing the same value of the provided tensor.
@@ -601,10 +598,9 @@ def Constant_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacken
 
 
 def Tile_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    """
-    Constructs a tensor by tiling a given tensor. 
-    This is the same as function tile in Numpy, but no broadcast.
-    
+    """Constructs a tensor by tiling a given tensor. This is the same as
+    function tile in Numpy, but no broadcast.
+
     For example A = [[1, 2], [3, 4]], B = [1, 2], tile(A, B) = [[1, 2, 1, 2], [3, 4, 3, 4]]
 
     Version
@@ -613,14 +609,14 @@ def Tile_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
     Inputs
         input : T
             Input tensor of any shape.
-    
+
         repeats : T1
             1D int64 tensor of the same length as input's dimension number,
             includes numbers of repeated copies along input's dimensions.
-    
+
     Outputs
         output : T
-            Output tensor of the same dimension and type as tensor input. 
+            Output tensor of the same dimension and type as tensor input.
             output_dim[i] = input_dim[i] * repeats[i]
 
     Args:
@@ -651,20 +647,19 @@ def Tile_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
 
 
 def Squeeze_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    """
-    Remove single-dimensional entries from the shape of a tensor. 
-    Takes an input axes with a list of axes to squeeze. 
-    If axes is not provided, all the single dimensions will be removed from the shape. 
-    If an axis is selected with shape entry not equal to one, an error is raised.
+    """Remove single-dimensional entries from the shape of a tensor. Takes an
+    input axes with a list of axes to squeeze. If axes is not provided, all the
+    single dimensions will be removed from the shape. If an axis is selected
+    with shape entry not equal to one, an error is raised.
 
     Inputs (1 - 2)
         data (differentiable) : T
         Tensors with at least max(dims) dimensions.
-        
+
         axes (optional, non-differentiable) : tensor(int64)
-        List of integers indicating the dimensions to squeeze. 
+        List of integers indicating the dimensions to squeeze.
         Negative value means counting dimensions from the back. Accepted range is [-r, r-1] where r = rank(data).
-        
+
     Outputs
         squeezed (differentiable) : T
         Reshaped tensor with same data as input.
@@ -679,7 +674,7 @@ def Squeeze_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackend
     ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=2)
     [squeezing_tensor], axes = values, GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='axes', compulsive=True)
-    if isinstance(axes, list): 
+    if isinstance(axes, list):
         for squeezing_dim in sorted(axes, reverse=True):
             squeezing_tensor = torch.squeeze(squeezing_tensor, squeezing_dim)
     elif isinstance(axes, int):
@@ -690,35 +685,36 @@ def Squeeze_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackend
 
 
 def Unsqueeze_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    """
-    Insert single-dimensional entries to the shape of an input tensor (data). 
-    Takes one required argument axes - which contains a list of dimension indices and 
-        this operator will insert a dimension of value 1 into the corresponding 
+    """Insert single-dimensional entries to the shape of an input tensor
+    (data).
+
+    Takes one required argument axes - which contains a list of dimension indices and
+        this operator will insert a dimension of value 1 into the corresponding
         index of the output tensor (expanded).
 
-    For example: Given an input tensor (data) of shape [3, 4, 5], 
-        then Unsqueeze(data, axes=[0, 4]) outputs a tensor (expanded) 
+    For example: Given an input tensor (data) of shape [3, 4, 5],
+        then Unsqueeze(data, axes=[0, 4]) outputs a tensor (expanded)
         containing same data as data but with shape [1, 3, 4, 5, 1].
 
-    The attribute axes should not contain any duplicate entries. 
-    It is an error if it contains duplicates. 
-    
-    The rank of the output tensor (output_rank) is the rank of the input tensor (data) 
-        plus the number of values in axes. 
-    
-    Each value in axes should be within the (inclusive) range [-output_rank , output_rank - 1]. 
+    The attribute axes should not contain any duplicate entries.
+    It is an error if it contains duplicates.
+
+    The rank of the output tensor (output_rank) is the rank of the input tensor (data)
+        plus the number of values in axes.
+
+    Each value in axes should be within the (inclusive) range [-output_rank , output_rank - 1].
     The order of values in axes does not matter and can come in any order.
 
     Attributes
         axes : list of ints (required)
-            List of integers indicating the dimensions to be inserted. 
-            Negative value means counting dimensions from the back. 
+            List of integers indicating the dimensions to be inserted.
+            Negative value means counting dimensions from the back.
             Accepted range is [-r, r-1] where r = rank(expanded).
-    
+
     Inputs
         data : T
             Original tensor
-    
+
     Outputs
         expanded : T
             Reshaped tensor with same data as input.
@@ -734,7 +730,7 @@ def Unsqueeze_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
     ASSERT_NUM_OF_INPUT(op=op, values=values)
     [unsqueezing_tensor] = values
     axes = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='axes', compulsive=True)
-    if isinstance(axes, list): 
+    if isinstance(axes, list):
         for squeezing_dim in sorted(axes, reverse=True):
             unsqueezing_tensor = torch.unsqueeze(unsqueezing_tensor, squeezing_dim)
     elif isinstance(axes, int):
@@ -826,23 +822,22 @@ def Cast_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
 
 
 def ConstantOfShape_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    """
-    Generate a tensor with given value and shape.
+    """Generate a tensor with given value and shape.
 
     Attributes
     value : tensor
-    (Optional) The value of the output elements.Should be a one-element tensor. 
+    (Optional) The value of the output elements.Should be a one-element tensor.
         If not specified, it defaults to a tensor of value 0 and datatype float32
 
     Inputs
         input : T1
-            1D tensor. The shape of the expected output tensor. 
+            1D tensor. The shape of the expected output tensor.
             If empty tensor is given, the output would be a scalar. All values must be >= 0.
 
     Outputs
         output : T2
-        Output tensor of shape specified by 'input'.If attribute 'value' is specified, 
-            the value and datatype of the output tensor is taken from 'value'. If attribute 'value' is not specified, 
+        Output tensor of shape specified by 'input'.If attribute 'value' is specified,
+            the value and datatype of the output tensor is taken from 'value'. If attribute 'value' is not specified,
             the value in the output defaults to 0, and the datatype defaults to float32.
 
     Args:
@@ -893,46 +888,45 @@ def Clip_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
 
 
 def Slice_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    """
-    Produces a slice of the input tensor along multiple axes. 
-    Similar to numpy: https://docs.scipy.org/doc/numpy/reference/arrays.indexing.html 
-    Slices uses starts, ends, axes and steps inputs to specify the start 
-        and end dimension and step for each axis in the list of axes, 
-    
-    it uses this information to slice the input data tensor. 
-    If a negative value is passed for any of the start or end indices, 
+    """Produces a slice of the input tensor along multiple axes. Similar to
+    numpy: https://docs.scipy.org/doc/numpy/reference/arrays.indexing.html
+    Slices uses starts, ends, axes and steps inputs to specify the start and
+    end dimension and step for each axis in the list of axes,
+
+    it uses this information to slice the input data tensor.
+    If a negative value is passed for any of the start or end indices,
         it represents number of elements before the end of that dimension.
-    
-    If the value passed to start or end is larger than the n (the number of elements in this dimension), 
-        it represents n. For slicing to the end of a dimension with unknown size, 
-        it is recommended to pass in INT_MAX when sclicing forward and 'INT_MIN' when slicing backward. 
-    
-    If a negative value is passed for step, it represents slicing backward. 
-    However step value cannot be 0. If axes are omitted, they are set to [0, ..., ndim-1]. 
-    
-    If steps are omitted, they are set to [1, ..., 1] of length len(starts) 
-    
-    Example 1: data = [ [1, 2, 3, 4], [5, 6, 7, 8], ] axes = [0, 1] starts = [1, 0] ends = [2, 3] steps = [1, 2] result = [ [5, 7], ] 
+
+    If the value passed to start or end is larger than the n (the number of elements in this dimension),
+        it represents n. For slicing to the end of a dimension with unknown size,
+        it is recommended to pass in INT_MAX when sclicing forward and 'INT_MIN' when slicing backward.
+
+    If a negative value is passed for step, it represents slicing backward.
+    However step value cannot be 0. If axes are omitted, they are set to [0, ..., ndim-1].
+
+    If steps are omitted, they are set to [1, ..., 1] of length len(starts)
+
+    Example 1: data = [ [1, 2, 3, 4], [5, 6, 7, 8], ] axes = [0, 1] starts = [1, 0] ends = [2, 3] steps = [1, 2] result = [ [5, 7], ]
     Example 2: data = [ [1, 2, 3, 4], [5, 6, 7, 8], ] starts = [0, 1] ends = [-1, 1000] result = [ [2, 3, 4], ]
 
     Inputs (3 - 5)
         data : T
             Tensor of data to extract slices from.
-    
+
         starts : Tind
             1-D tensor of starting indices of corresponding axis in `axes`
-    
+
         ends : Tind
             1-D tensor of ending indices (exclusive) of corresponding axis in `axes`
-    
+
         axes (optional) : Tind
-            1-D tensor of axes that `starts` and `ends` apply to. 
+            1-D tensor of axes that `starts` and `ends` apply to.
             Negative value means counting dimensions from the back. Accepted range is [-r, r-1] where r = rank(data).
-    
+
         steps (optional) : Tind
-            1-D tensor of slice step of corresponding axis in `axes`. 
+            1-D tensor of slice step of corresponding axis in `axes`.
             Negative value means slicing backward. 'steps' cannot be 0. Defaults to 1.
-    
+
     Outputs
         output : T
             Sliced data tensor.
@@ -1072,51 +1066,51 @@ def Resize_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendC
 
 
 def _NMS_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    """
-    Filter out boxes that have high intersection-over-union (IOU) overlap with previously selected boxes. 
-    Bounding boxes with score less than score_threshold are removed. 
-    Bounding box format is indicated by attribute center_point_box. 
-    
-    Note that this algorithm is agnostic to where the origin is in the coordinate system and 
-    more generally is invariant to orthogonal transformations and translations of the coordinate system; 
-    
+    """Filter out boxes that have high intersection-over-union (IOU) overlap
+    with previously selected boxes. Bounding boxes with score less than
+    score_threshold are removed. Bounding box format is indicated by attribute
+    center_point_box.
+
+    Note that this algorithm is agnostic to where the origin is in the coordinate system and
+    more generally is invariant to orthogonal transformations and translations of the coordinate system;
+
     thus translating or reflections of the coordinate system result in the same boxes being selected by the algorithm.
-    The selected_indices output is a set of integers indexing into the input collection of 
-        bounding boxes representing the selected boxes. 
-    The bounding box coordinates corresponding to the selected indices 
+    The selected_indices output is a set of integers indexing into the input collection of
+        bounding boxes representing the selected boxes.
+    The bounding box coordinates corresponding to the selected indices
         can then be obtained using the Gather or GatherND operation.
 
     Attributes
         center_point_box : int (default is 0)
-        Integer indicate the format of the box data. 
-        The default is 0. 0 - the box data is supplied as [y1, x1, y2, x2] where (y1, x1) and (y2, x2) 
+        Integer indicate the format of the box data.
+        The default is 0. 0 - the box data is supplied as [y1, x1, y2, x2] where (y1, x1) and (y2, x2)
             are the coordinates of any diagonal pair of box corners and the coordinates can be provided as normalized
-            (i.e., lying in the interval [0, 1]) or absolute. 
-            Mostly used for TF models. 1 - the box data is supplied as 
+            (i.e., lying in the interval [0, 1]) or absolute.
+            Mostly used for TF models. 1 - the box data is supplied as
                 [x_center, y_center, width, height]. Mostly used for Pytorch models.
 
     Inputs (2 - 5)
         boxes : tensor(float)
-        An input tensor with shape [num_batches, spatial_dimension, 4]. 
+        An input tensor with shape [num_batches, spatial_dimension, 4].
         The single box data format is indicated by center_point_box.
-    
+
         scores : tensor(float)
         An input tensor with shape [num_batches, num_classes, spatial_dimension]
-        
+
         max_output_boxes_per_class (optional) : tensor(int64)
-        Integer representing the maximum number of boxes to be selected per batch per class. 
+        Integer representing the maximum number of boxes to be selected per batch per class.
         It is a scalar. Default to 0, which means no output.
-    
+
         iou_threshold (optional) : tensor(float)
-        Float representing the threshold for deciding whether boxes overlap too much with respect to IOU. 
+        Float representing the threshold for deciding whether boxes overlap too much with respect to IOU.
             It is scalar. Value range [0, 1]. Default to 0.
-    
+
         score_threshold (optional) : tensor(float)
         Float representing the threshold for deciding when to remove boxes based on score. It is a scalar.
 
     Outputs
         selected_indices : tensor(int64)
-        selected indices from the boxes tensor. [num_selected_indices, 3], 
+        selected indices from the boxes tensor. [num_selected_indices, 3],
             the selected index format is [batch_index, class_index, box_index].
 
     Args:
@@ -1149,14 +1143,14 @@ def _NMS_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
             # output.append(keep.to(device)) move back to gpu
 
             # In mmcv.ops.nms, boxes should given in the order of (x_min, y_min, x_max, y_max)
-            '''
-            # Strange speed, Revert back to original implementation.
+            """# Strange speed, Revert back to original implementation.
+
             # May lead to error if boxes are not in the order given above
 
             sorted_boxes = torch.tensor([[min(item[0], item[2]), min(item[1], item[3]), max(item[0], item[2]),
                                           max(item[1], item[3])] for item in sub_boxes], device=device)
             keep = mmcv.ops.nms(sorted_boxes, sub_scores[j].contiguous(), iou_threshold)[1]
-            '''
+            """
             keep = mmcv.ops.nms(sub_boxes, sub_scores[j].contiguous(), iou_threshold)[1]
             # keep = nms(sub_boxes, sub_scores[j], iou_threshold)[1]
             keep = keep[sub_scores[j][keep] > score_threshold]  # TODO: check GT or GE
@@ -1216,8 +1210,8 @@ def ReduceSum_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
 
 
 def Shape_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    """
-    Takes a tensor as input and outputs an 1D int64 tensor containing the shape of the input tensor.
+    """Takes a tensor as input and outputs an 1D int64 tensor containing the
+    shape of the input tensor.
 
     Version
         This version of the operator has been available since version 1 of the default ONNX operator set.
@@ -1225,7 +1219,7 @@ def Shape_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCo
     Inputs
         data : T
         An input tensor.
-    
+
     Outputs
         shape : T1
         Shape of the input tensor
@@ -1245,24 +1239,25 @@ def Shape_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCo
 
 
 def TopK_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    """
-    Retrieve the top-K largest or smallest elements along a specified axis. 
-    Given an input tensor of shape [a_1, a_2, ..., a_n, r] and integer argument k, 
-    return two outputs: -Value tensor of shape [a_1, a_2, ..., a_{axis-1}, k, a_{axis+1}, ... a_n]
-    which contains the values of the top k elements along the specified axis -
-    Index tensor of shape [a_1, a_2, ..., a_{axis-1}, k, a_{axis+1}, ... a_n] 
-    which contains the indices of the top k elements (original indices from the input tensor).
+    """Retrieve the top-K largest or smallest elements along a specified axis.
+    Given an input tensor of shape [a_1, a_2, ..., a_n, r] and integer argument
+    k, return two outputs: -Value tensor of shape [a_1, a_2, ..., a_{axis-1},
+    k, a_{axis+1}, ... a_n] which contains the values of the top k elements.
 
-    If "largest" is 1 (the default value) then the k largest elements are returned. 
-    If "sorted" is 1 (the default value) then the resulting k elements will be sorted. 
+    along the specified axis - Index tensor of shape [a_1, a_2, ...,
+    a_{axis-1}, k, a_{axis+1}, ... a_n] which contains the indices of the top k
+    elements (original indices from the input tensor).
+
+    If "largest" is 1 (the default value) then the k largest elements are returned.
+    If "sorted" is 1 (the default value) then the resulting k elements will be sorted.
     If "sorted" is 0, order of returned 'Values' and 'Indices' are undefined.
 
-    Given two equivalent values, this operator uses the indices along the axis as a tiebreaker. 
+    Given two equivalent values, this operator uses the indices along the axis as a tiebreaker.
     That is, the element with the lower index will appear first.
 
     Attributes
         axis : int (default is -1)
-            Dimension on which to do the sort. Negative value means counting dimensions from the back. 
+            Dimension on which to do the sort. Negative value means counting dimensions from the back.
             Accepted range is [-r, r-1] where r = rank(input).
 
         largest : int (default is 1)
@@ -1280,11 +1275,11 @@ def TopK_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
 
     Outputs
         Values (differentiable) : T
-            Tensor of shape [a_1, a_2, ..., a_{axis-1}, k, a_{axis+1}, ... a_n] 
+            Tensor of shape [a_1, a_2, ..., a_{axis-1}, k, a_{axis+1}, ... a_n]
             containing top K values from the input tensor
 
         Indices (non-differentiable) : I
-            Tensor of shape [a_1, a_2, ..., a_{axis-1}, k, a_{axis+1}, ... a_n] 
+            Tensor of shape [a_1, a_2, ..., a_{axis-1}, k, a_{axis+1}, ... a_n]
             containing the corresponding input tensor indices for the top K values.
 
     Args:
@@ -1308,15 +1303,16 @@ def TopK_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
 
 
 def Expand_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
-    """
-    Broadcast the input tensor following the given shape and the broadcast rule. 
-    The broadcast rule is similar to numpy.array(input) * numpy.ones(shape): 
-        Dimensions are right alignment; 
-        Two corresponding dimension must have the same value, or one of them is equal to 1. 
-    
-    Also, this operator is similar to numpy.broadcast_to(input, shape), 
-    but the major difference is numpy.broadcast_to() does not allow shape to be smaller than input.size(). 
-    It is possible that the output.shape is not equal to shape, 
+    """Broadcast the input tensor following the given shape and the broadcast
+    rule.
+
+    The broadcast rule is similar to numpy.array(input) * numpy.ones(shape):
+        Dimensions are right alignment;
+        Two corresponding dimension must have the same value, or one of them is equal to 1.
+
+    Also, this operator is similar to numpy.broadcast_to(input, shape),
+    but the major difference is numpy.broadcast_to() does not allow shape to be smaller than input.size().
+    It is possible that the output.shape is not equal to shape,
     when some dimensions in shape is equal to 1, or the shape.ndim < input.shape.ndim.
 
     Inputs
@@ -1382,42 +1378,42 @@ def ScatterElements_forward(op: Operation, values: List[torch.Tensor], ctx: Torc
 
 
 def ScatterND_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    """
-    OPSET 11:
-    ScatterND takes three inputs data tensor of rank r >= 1, indices tensor of rank q >= 1, 
-        and updates tensor of rank q + r - indices.shape[-1] - 1. 
-    
-    The output of the operation is produced by creating a copy of the input data, 
-    and then updating its value to values specified by updates at specific index positions specified by indices. 
-    Its output shape is the same as the shape of data. Note that indices should not have duplicate entries. 
+    """OPSET 11: ScatterND takes three inputs data tensor of rank r >= 1,
+    indices tensor of rank q >= 1,
+
+        and updates tensor of rank q + r - indices.shape[-1] - 1.
+
+    The output of the operation is produced by creating a copy of the input data,
+    and then updating its value to values specified by updates at specific index positions specified by indices.
+    Its output shape is the same as the shape of data. Note that indices should not have duplicate entries.
     That is, two or more updates for the same index-location is not supported.
 
-    indices is an integer tensor. Let k denote indices.shape[-1], the last dimension in the shape of indices. 
-    indices is treated as a (q-1)-dimensional tensor of k-tuples, where each k-tuple is a partial-index into data. 
-    Hence, k can be a value at most the rank of data. When k equals rank(data), 
-    each update entry specifies an update to a single element of the tensor. 
+    indices is an integer tensor. Let k denote indices.shape[-1], the last dimension in the shape of indices.
+    indices is treated as a (q-1)-dimensional tensor of k-tuples, where each k-tuple is a partial-index into data.
+    Hence, k can be a value at most the rank of data. When k equals rank(data),
+    each update entry specifies an update to a single element of the tensor.
     When k is less than rank(data) each update entry specifies an update to a slice of the tensor.
 
-    updates is treated as a (q-1)-dimensional tensor of replacement-slice-values. 
-    Thus, the first (q-1) dimensions of updates.shape must match the first (q-1) dimensions of indices.shape. 
-    The remaining dimensions of updates correspond to the dimensions of the replacement-slice-values. 
-    Each replacement-slice-value is a (r-k) dimensional tensor, corresponding to the trailing (r-k) dimensions of data. 
-    Thus, the shape of updates must equal indices.shape[0:q-1] ++ data.shape[k:r-1], 
+    updates is treated as a (q-1)-dimensional tensor of replacement-slice-values.
+    Thus, the first (q-1) dimensions of updates.shape must match the first (q-1) dimensions of indices.shape.
+    The remaining dimensions of updates correspond to the dimensions of the replacement-slice-values.
+    Each replacement-slice-value is a (r-k) dimensional tensor, corresponding to the trailing (r-k) dimensions of data.
+    Thus, the shape of updates must equal indices.shape[0:q-1] ++ data.shape[k:r-1],
     where ++ denotes the concatenation of shapes.
 
     Inputs
-        
+
         data : T
             Tensor of rank r >= 1.
-        
+
         indices : tensor(int64)
             Tensor of rank q >= 1.
-        
+
         updates : T
             Tensor of rank q + r - indices_shape[-1] - 1.
-    
+
     Outputs
-        
+
         output : T
             Tensor of rank r >= 1.
 
@@ -1454,7 +1450,7 @@ def Split_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCo
 def Gemm_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
     ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=2, max_num_of_input=3)
-    
+
     A, B = values[:2]
     if len(A.shape) != 2:
         # reshape A from [n, c, h, w] to [n, chw]
@@ -1477,18 +1473,18 @@ def MatMul_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendC
     return output
 
 def Softmax_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    """
-    The operator computes the normalized exponential values for the given input:
+    """The operator computes the normalized exponential values for the given
+    input:
 
     Softmax(input, axis) = Exp(input) / ReduceSum(Exp(input), axis=axis, keepdims=1)
 
-    The "axis" attribute indicates the dimension along which Softmax will be performed. 
+    The "axis" attribute indicates the dimension along which Softmax will be performed.
     The output tensor has the same shape and contains the Softmax values of the corresponding input.
 
     Attributes
         axis : int (default is -1)
-            Describes the dimension Softmax will be performed on. 
-            Negative value means counting dimensions from the back. 
+            Describes the dimension Softmax will be performed on.
+            Negative value means counting dimensions from the back.
             Accepted range is [-r, r-1] where r = rank(input).
 
     Inputs
@@ -1858,9 +1854,9 @@ def HardSwish_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
 
 
 def GRU_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    """
-    Computes an one-layer GRU. This operator is usually supported via some custom implementation such as CuDNN.
-    
+    """Computes an one-layer GRU. This operator is usually supported via some
+    custom implementation such as CuDNN.
+
     只支持 pytorch 导出来的 GRU 啊亲; 必须要 6 个输入 Variable
 
     Notations:
@@ -1920,7 +1916,7 @@ def GRU_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
         Softsign(x)            - x/(1 + |x|)
 
         Softplus(x)            - log(1 + e^x)
-    
+
     Equations (Default: f=Sigmoid, g=Tanh):
 
         - zt = f(Xt*(Wz^T) + Ht-1*(Rz^T) + Wbz + Rbz)
@@ -1932,9 +1928,9 @@ def GRU_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
         - ht = g(Xt*(Wh^T) + (rt (.) (Ht-1*(Rh^T) + Rbh)) + Wbh) # when linear_before_reset != 0
 
         - Ht = (1 - zt) (.) ht + zt (.) Ht-1
-    
-    This operator has optional inputs/outputs. See the doc for more details about the representation of optional arguments. 
-    An empty string may be used in the place of an actual argument's name to indicate a missing argument. 
+
+    This operator has optional inputs/outputs. See the doc for more details about the representation of optional arguments.
+    An empty string may be used in the place of an actual argument's name to indicate a missing argument.
     Trailing optional arguments (those not followed by an argument that is present) may also be simply omitted.
 
     Version
@@ -1944,101 +1940,100 @@ def GRU_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
 
     Attributes
         activation_alpha : list of floats
-            Optional scaling values used by some activation functions. 
-            The values are consumed in the order of activation functions, 
-            for example (f, g, h) in LSTM. 
-            
-            Default values are the same as of corresponding ONNX operators.For example with LeakyRelu, 
+            Optional scaling values used by some activation functions.
+            The values are consumed in the order of activation functions,
+            for example (f, g, h) in LSTM.
+
+            Default values are the same as of corresponding ONNX operators.For example with LeakyRelu,
             the default alpha is 0.01.
-        
+
         activation_beta : list of floats
-            Optional scaling values used by some activation functions. 
-            The values are consumed in the order of activation functions, 
-            for example (f, g, h) in LSTM. 
-            
+            Optional scaling values used by some activation functions.
+            The values are consumed in the order of activation functions,
+            for example (f, g, h) in LSTM.
+
             Default values are the same as of corresponding ONNX operators.
-        
+
         activations : list of strings
-            A list of 2 (or 4 if bidirectional) activation functions for update, reset, and hidden gates. 
-            The activation functions must be one of the activation functions specified above. 
+            A list of 2 (or 4 if bidirectional) activation functions for update, reset, and hidden gates.
+            The activation functions must be one of the activation functions specified above.
             Optional: See the equations for default if not specified.
-        
+
         clip : float
-            Cell clip threshold. 
-            Clipping bounds the elements of a tensor in the range of [-threshold, +threshold] 
+            Cell clip threshold.
+            Clipping bounds the elements of a tensor in the range of [-threshold, +threshold]
             and is applied to the input of activations. No clip if not specified.
-        
+
         direction : string (default is forward)
             Specify if the RNN is forward, reverse, or bidirectional.
             Must be one of forward (default), reverse, or bidirectional.
-        
+
         hidden_size : int
             Number of neurons in the hidden layer
-        
+
         layout : int (default is 0)
-            The shape format of inputs X, initial_h and outputs Y, Y_h. 
+            The shape format of inputs X, initial_h and outputs Y, Y_h.
 
-            If 0, the following shapes are expected: 
-                X.shape = [seq_length, batch_size, input_size], 
-                Y.shape = [seq_length, num_directions, batch_size, hidden_size], 
-                initial_h.shape = Y_h.shape = [num_directions, batch_size, hidden_size]. 
+            If 0, the following shapes are expected:
+                X.shape = [seq_length, batch_size, input_size],
+                Y.shape = [seq_length, num_directions, batch_size, hidden_size],
+                initial_h.shape = Y_h.shape = [num_directions, batch_size, hidden_size].
 
-            If 1, the following shapes are expected: 
-                X.shape = [batch_size, seq_length, input_size], 
-                Y.shape = [batch_size, seq_length, num_directions, hidden_size], 
+            If 1, the following shapes are expected:
+                X.shape = [batch_size, seq_length, input_size],
+                Y.shape = [batch_size, seq_length, num_directions, hidden_size],
                 initial_h.shape = Y_h.shape = [batch_size, num_directions, hidden_size].
-        
+
         linear_before_reset : int (default is 0)
-            When computing the output of the hidden gate, 
+            When computing the output of the hidden gate,
             apply the linear transformation before multiplying by the output of the reset gate.
-    
+
     Inputs (3 - 6)
         X (differentiable) : T
-            The input sequences packed (and potentially padded) into one 3-D tensor with the shape of 
+            The input sequences packed (and potentially padded) into one 3-D tensor with the shape of
             `[seq_length, batch_size, input_size]`.
-    
+
         W (differentiable) : T
-            The weight tensor for the gates. 
-            Concatenation of `W[zrh]` and `WB[zrh]` (if bidirectional) along dimension 0. 
+            The weight tensor for the gates.
+            Concatenation of `W[zrh]` and `WB[zrh]` (if bidirectional) along dimension 0.
             This tensor has shape `[num_directions, 3*hidden_size, input_size]`.
-    
+
         R (differentiable) : T
-            The recurrence weight tensor. 
-            Concatenation of `R[zrh]` and `RB[zrh]` (if bidirectional) along dimension 0. 
+            The recurrence weight tensor.
+            Concatenation of `R[zrh]` and `RB[zrh]` (if bidirectional) along dimension 0.
             This tensor has shape `[num_directions, 3*hidden_size, hidden_size]`.
-        
+
         B (optional, differentiable) : T
-            The bias tensor for the gates. 
-            Concatenation of `[Wb[zrh], Rb[zrh]]` and `[WBb[zrh], RBb[zrh]]` (if bidirectional) along dimension 0. 
+            The bias tensor for the gates.
+            Concatenation of `[Wb[zrh], Rb[zrh]]` and `[WBb[zrh], RBb[zrh]]` (if bidirectional) along dimension 0.
             This tensor has shape `[num_directions, 6*hidden_size]`. Optional: If not specified - assumed to be 0
-    
+
         sequence_lens (optional, non-differentiable) : T1
-            Optional tensor specifying lengths of the sequences in a batch. 
-            If not specified - assumed all sequences in the batch to have length `seq_length`. 
+            Optional tensor specifying lengths of the sequences in a batch.
+            If not specified - assumed all sequences in the batch to have length `seq_length`.
             It has shape `[batch_size]`.
-    
+
         initial_h (optional, non-differentiable) : T
-            Optional initial value of the hidden. 
-            If not specified - assumed to be 0. 
+            Optional initial value of the hidden.
+            If not specified - assumed to be 0.
             It has shape `[num_directions, batch_size, hidden_size]`.
-    
+
     Outputs (0 - 2)
         Y (optional, differentiable) : T
-            A tensor that concats all the intermediate output values of the hidden. 
+            A tensor that concats all the intermediate output values of the hidden.
             It has shape `[seq_length, num_directions, batch_size, hidden_size]`.
-    
+
         Y_h (optional, differentiable) : T
-            The last output value of the hidden. 
+            The last output value of the hidden.
             It has shape `[num_directions, batch_size, hidden_size]`.
-    
+
     Type Constraints
         T : tensor(float16), tensor(float), tensor(double)
-    
+
     Constrain input and output types to float tensors.
         T1 : tensor(int32)
-    
-    Constrain seq_lens to integer tensor.
 
+    Constrain seq_lens to integer tensor.
     """
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=6, max_num_of_input=6)
     direction = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='direction', default='forward')
@@ -2074,13 +2069,13 @@ def GRU_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
 
 def Neg_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
     """
-    Neg takes one input data (Tensor) and produces one output data (Tensor) 
+    Neg takes one input data (Tensor) and produces one output data (Tensor)
     where each element flipped sign, y = -x, is applied to the tensor elementwise.
 
     Inputs
         X (differentiable) : T
         Input tensor
-    
+
     Outputs
         Y (differentiable) : T
         Output tensor
@@ -2103,7 +2098,7 @@ def Sigmoid_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackend
     Inputs
         X (differentiable) : T
         Input tensor
-    
+
     Outputs
         Y (differentiable) : T
         Output tensor

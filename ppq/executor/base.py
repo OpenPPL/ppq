@@ -43,8 +43,7 @@ def register_operation_handler(hanlder: Callable, operation_type: str, platform:
 
 
 class RuntimeHook(metaclass=ABCMeta):
-    """
-        RuntimeHook is an abstract class designed for executor customizing
+    """RuntimeHook is an abstract class designed for executor customizing.
 
     Args:
         metaclass ([type], optional): [description]. Defaults to ABCMeta.
@@ -54,8 +53,7 @@ class RuntimeHook(metaclass=ABCMeta):
         self._op_meta = operation_meta
 
     def pre_forward_hook(self, inputs: list, **kwargs) -> list:
-        """
-            user-customized pre-processing procedure of input data
+        """user-customized pre-processing procedure of input data.
 
         Args:
             inputs (list): a list includes all input data.
@@ -64,10 +62,9 @@ class RuntimeHook(metaclass=ABCMeta):
             list: a list includes all input data(processed).
         """
         return inputs
-    
+
     def post_forward_hook(self, outputs: list, **kwargs) -> list:
-        """
-            user-customized post-processing procedure of output data
+        """user-customized post-processing procedure of output data.
 
         Args:
             inputs (list): a list includes all output data.
@@ -79,8 +76,8 @@ class RuntimeHook(metaclass=ABCMeta):
 
 
 class QuantOPRuntimeHook(RuntimeHook, metaclass=ABCMeta):
-    """
-        QuantOPRuntimeHook is an abstract class designed for executor customizing
+    """QuantOPRuntimeHook is an abstract class designed for executor
+    customizing.
 
     Args:
         metaclass ([type], optional): [description]. Defaults to ABCMeta.
@@ -108,8 +105,7 @@ class QuantOPRuntimeHook(RuntimeHook, metaclass=ABCMeta):
 
 
 class BaseGraphExecutor(Callable, metaclass=ABCMeta):
-    """
-        PPQ Base Graph Executor
+    """PPQ Base Graph Executor.
 
     Args:
         Callable ([type]): [description]
@@ -141,26 +137,26 @@ class BaseGraphExecutor(Callable, metaclass=ABCMeta):
             assert len(inputs_dictionary) == 1, \
                 'Graph needs more than one input, while only one tensor was given.'
             return {list(inputs_dictionary.keys())[0]: inputs}
-        
+
         elif isinstance(inputs, list):
             assert len(inputs_dictionary) == len(inputs), \
                 f'Inputs format misunderstood. Given inputs has '\
                 f'{len(inputs)} elements, while graph needs {len(inputs_dictionary)}'
             return {key: inputs[idx] for idx, key in enumerate(inputs_dictionary)}
-        
+
         elif isinstance(inputs, dict):
             assert len(inputs_dictionary) == len(inputs), \
                 f'Inputs format misunderstood. Given inputs has '\
                 f'{len(inputs)} elements, while graph needs {len(inputs_dictionary)}'
             return inputs
-        
+
         else:
             raise Exception('Oops, you can never reach here.')
 
     @ abstractmethod
     def forward(
-        self, 
-        inputs: Union[dict, list, torch.Tensor], 
+        self,
+        inputs: Union[dict, list, torch.Tensor],
         output_names:List[str] = None,
         hooks: Dict[str, RuntimeHook] = None,
     ) -> List[torch.Tensor]:
@@ -169,14 +165,14 @@ class BaseGraphExecutor(Callable, metaclass=ABCMeta):
     @ abstractmethod
     def tracing_operation_meta(
         self,
-        inputs: Union[dict, list, torch.Tensor], 
+        inputs: Union[dict, list, torch.Tensor],
         output_names:List[str] = None
     ) -> None:
         raise NotImplementedError('Please implement this function first.')
 
     def __call__(
-        self, 
-        inputs: Union[dict, torch.Tensor], 
+        self,
+        inputs: Union[dict, torch.Tensor],
         output_names:List[str] = None
     ) -> List[torch.Tensor]:
         return self.forward(inputs=inputs, output_names=output_names)

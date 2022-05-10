@@ -2,12 +2,11 @@ import torch
 
 
 def generate_indexer(
-    num_of_fetches: int, 
-    num_of_elements: int, 
+    num_of_fetches: int,
+    num_of_elements: int,
     seed: int = 0x20211230) -> torch.Tensor:
-    """
-    Sample with a given seed.
-    This function will generates a indexer based on your seed.
+    """Sample with a given seed. This function will generates a indexer based
+    on your seed.
 
     Args:
         num_of_fetches (int): [description]
@@ -25,7 +24,7 @@ def generate_indexer(
     return torch.tensor(indexer, dtype=torch.int32)
 
 def generate_torch_indexer(
-    num_of_fetches: int, 
+    num_of_fetches: int,
     num_of_elements: int) -> torch.Tensor:
     return torch.randint(low=0, high=num_of_elements, size=[num_of_fetches])
 
@@ -33,10 +32,9 @@ def generate_torch_indexer(
 def tensor_random_fetch(
     tensor: torch.Tensor, seed: int = None,
     num_of_fetches: int = 1024) -> torch.Tensor:
-    """
-    Fetch some elements from tensor randomly.
-        if a valid seed is given, elements will be sampled based on your seed,
-        otherwise a random seed will be generated.
+    """Fetch some elements from tensor randomly. if a valid seed is given,
+    elements will be sampled based on your seed, otherwise a random seed will
+    be generated.
 
     Args:
         tensor (torch.Tensor): [description]
@@ -53,15 +51,14 @@ def tensor_random_fetch(
 
 
 def channel_random_fetch(
-    tensor: torch.Tensor, 
+    tensor: torch.Tensor,
     fetchs_per_channel: int = 1024,
     seed: int = None,
     channel_axis: int = 0) -> torch.Tensor:
-    """
-    Fetch some elements from tensor randomly by each channel.
-        if a valid seed is given, elements will be sampled based on your seed,
-        otherwise a random seed will be generated.
-        
+    """Fetch some elements from tensor randomly by each channel. if a valid
+    seed is given, elements will be sampled based on your seed, otherwise a
+    random seed will be generated.
+
     result: [num_of_channel, fetchs_per_channel]
 
     Args:
@@ -84,17 +81,16 @@ def channel_random_fetch(
 
 
 def batch_random_fetch(
-    tensor: torch.Tensor, 
+    tensor: torch.Tensor,
     fetchs_per_batch: int = 1024,
     seed: int = None
     ) -> torch.Tensor:
-    """
-    Fetch some elements from each sample in a batched tensor.
-        if a valid seed is given, elements will be sampled based on your seed,
-        otherwise a random seed will be generated.
-        
+    """Fetch some elements from each sample in a batched tensor. if a valid
+    seed is given, elements will be sampled based on your seed, otherwise a
+    random seed will be generated.
+
     result: [num_of_batch, fetchs_per_batch]
-    
+
     Args:
         tensor (torch.Tensor): [description]
         fetchs_per_channel (int, optional): [description]. Defaults to 1024.

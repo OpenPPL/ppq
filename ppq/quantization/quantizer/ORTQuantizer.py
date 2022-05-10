@@ -70,7 +70,7 @@ class ORT_PerTensorQuantizer(BaseQuantizer):
             'Conv', 'GlobalAveragePool', 'AveragePool',
             'Relu', 'Add', 'Mul', 'Clip', 'Sigmoid',
             'MatMul', 'Gemm', 'Concat', 'LeakyRelu'}
-        ONNX_OOS_OPSET.update(PASSIVE_OPERATIONS) 
+        ONNX_OOS_OPSET.update(PASSIVE_OPERATIONS)
         return ONNX_OOS_OPSET
 
     @ property
@@ -181,7 +181,7 @@ class ORT_PerChannelQuantizer(BaseQuantizer):
             'Conv', 'GlobalAveragePool', 'AveragePool',
             'Relu', 'Add', 'Mul', 'Clip', 'Sigmoid',
             'MatMul', 'Gemm', 'Concat', 'LeakyRelu'}
-        ONNX_OOS_OPSET.update(PASSIVE_OPERATIONS) 
+        ONNX_OOS_OPSET.update(PASSIVE_OPERATIONS)
         return ONNX_OOS_OPSET
 
     @ property

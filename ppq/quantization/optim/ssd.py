@@ -30,9 +30,8 @@ EQUALIZATION_OPERATION_TYPE = {'Conv', 'Gemm', 'ConvTranspose'} # support all co
 
 
 class SSDEqualizationPass(QuantizationOptimizationPass):
-    """
-    PPQ Custimized Layerwise Equalization Pass
-    
+    """PPQ Custimized Layerwise Equalization Pass.
+
     This is another layerwise equalization pass which takes quantization error into consideration, for more
     details of equalization, please refer to LayerwiseEqualizationPass
 
@@ -42,7 +41,7 @@ class SSDEqualizationPass(QuantizationOptimizationPass):
     more time for loss estimation
     """
     def __init__(
-        self, 
+        self,
         optimize_level: int=1,
         channel_ratio: float = 0.5,
         loss_threshold: float = 0.8,
@@ -50,7 +49,7 @@ class SSDEqualizationPass(QuantizationOptimizationPass):
         quant_func: BaseQuantFunction = PPQLinearQuantFunction,
         iteration: int = 3
     ):
-        """SSD Equalization Pass With Loss Checking
+        """SSD Equalization Pass With Loss Checking.
 
         Args:
             optimize_level (int, optional): level of optimization. Only support level 1 for now.
@@ -100,7 +99,7 @@ class SSDEqualizationPass(QuantizationOptimizationPass):
         collate_fn: Callable,
         calib_steps: int
     ) -> Dict[Operation, torch.Tensor]:
-        """Collect activation ranges for Conv ops in the pair
+        """Collect activation ranges for Conv ops in the pair.
 
         Args:
             pair (List[Operation]): equalization pair
@@ -155,7 +154,7 @@ class SSDEqualizationPass(QuantizationOptimizationPass):
     def prepare_weight_for_equalization(self, pair: List[Operation]) -> Tuple[torch.Tensor]:
         first_computing_op_weight = pair[0].parameters[0].value
         last_computing_op_weight  = pair[-1].parameters[0].value
-        
+
         assert isinstance(first_computing_op_weight, torch.Tensor)
         assert isinstance(last_computing_op_weight, torch.Tensor)
 
@@ -189,7 +188,7 @@ class SSDEqualizationPass(QuantizationOptimizationPass):
             last_computing_op_weight = last_computing_op_weight.permute(0, 2, 1, 3, 4).contiguous()
             last_computing_op_weight = last_computing_op_weight.reshape(num_group * C_in_g, -1)
             last_weight_range = last_computing_op_weight.abs().max(dim=1)[0]
-    
+
         elif pair[-1].type == 'Gemm':
             C_out = first_weight_range.shape[0]
             if pair[-1].attributes.get('transB', 0):
@@ -205,29 +204,29 @@ class SSDEqualizationPass(QuantizationOptimizationPass):
                     last_weight_range = last_computing_op_weight.abs().max(dim=1)[0]
                 else:
                     last_weight_range = last_computing_op_weight.abs().max(dim=1)[0]
-    
+
         elif pair[-1].type == 'ConvTranspose':
             C_in = last_computing_op_weight.shape[0]
             last_weight_range = last_computing_op_weight.reshape(C_in, -1).abs().max(dim=1)[0]
 
         return first_weight_range, last_weight_range
-    
+
     def write_back(self, pair: List[Operation], scale: torch.Tensor) -> None:
         first_computing_op_weight = pair[0].parameters[0].value
         last_computing_op_weight  = pair[-1].parameters[0].value
-        
+
         assert isinstance(first_computing_op_weight, torch.Tensor)
         assert isinstance(last_computing_op_weight, torch.Tensor)
 
         if pair[0].type == 'Conv':
             pair[0].parameters[0].value = first_computing_op_weight * scale.reshape(-1, 1, 1, 1)
-        
+
         elif pair[0].type == 'Gemm':
             if pair[0].attributes.get('transB', 0):
                 pair[0].parameters[0].value = first_computing_op_weight * scale.reshape(-1, 1)
-            else: 
+            else:
                 pair[0].parameters[0].value = first_computing_op_weight * scale.reshape(1, -1)
-        
+
         elif pair[0].type == 'ConvTranspose':
             num_group = pair[0].attributes.get('group', 1)
             C_in, C_out_g, K1, K2 = first_computing_op_weight.shape
@@ -260,7 +259,7 @@ class SSDEqualizationPass(QuantizationOptimizationPass):
                     pair[-1].parameters[0].value = last_computing_op_weight.reshape(-1, last_computing_op_weight.shape[-1])
                 else:
                     pair[-1].parameters[0].value = last_computing_op_weight / scale.reshape(-1, 1)
-        
+
         elif pair[-1].type == 'ConvTranspose':
             pair[-1].parameters[0].value = last_computing_op_weight / scale.reshape(-1, 1, 1, 1)
 
@@ -275,7 +274,8 @@ class SSDEqualizationPass(QuantizationOptimizationPass):
         dfq_max_scale: float=10,
         eps: float=1e-8
     ):
-        """Equalization step with scale being calculated in the way specified by algo_type 
+        """Equalization step with scale being calculated in the way specified
+        by algo_type.
 
         Args:
             pair (List[Operation]): a list of operations representing a equalzation pair
@@ -306,7 +306,7 @@ class SSDEqualizationPass(QuantizationOptimizationPass):
             first_weight_act_range = torch.where(first_weight_act_range < 0.01, torch.tensor(0.01,\
                 device=first_weight_act_range.device, dtype=torch.float32), first_weight_act_range)
             act_scale = first_weight_act_range.max() / (first_weight_act_range + eps)
-            
+
             if algo_type == 1:
                 scale = torch.min(kernel_scale, act_scale)
             elif algo_type == 2:
@@ -320,7 +320,7 @@ class SSDEqualizationPass(QuantizationOptimizationPass):
                 kernel_scale = (kernel_scale / next_kernel_scale).sqrt()
                 scale = (act_scale * kernel_scale).sqrt()
                 scale = torch.clamp(scale, 1.0, ssd_max_scale)
-        
+
         self.write_back(pair, scale)
 
     def build_observer_pair(self, pair: List[Operation]) -> Dict[Operation, OperationObserver]:
@@ -391,9 +391,9 @@ class SSDEqualizationPass(QuantizationOptimizationPass):
             if isinstance(op, QuantableOperation):
                 op.restore_quantize_state(expire_device=None)
 
-    def run_pair(self, 
-                 pair: List[Operation], 
-                 inputs: List[torch.Tensor], 
+    def run_pair(self,
+                 pair: List[Operation],
+                 inputs: List[torch.Tensor],
                  hooks: Dict[Operation, CalibrationHook]={}) -> List[torch.Tensor]:
         for op in pair:
             inputs = inputs + [param.value for param in op.parameters]
@@ -418,7 +418,7 @@ class SSDEqualizationPass(QuantizationOptimizationPass):
                 if hook is not None:
                     hook.post_forward_hook(outputs, outputs_quant, output_configs)
                 inputs = outputs_quant
-            else: 
+            else:
                 inputs = outputs
         return inputs
 
@@ -444,7 +444,7 @@ class SSDEqualizationPass(QuantizationOptimizationPass):
             observer.render_quantization_config()
         pop_list = []
         for op, observer in observers.items():
-            if all([type(var_observer) not in {TorchHistObserver} 
+            if all([type(var_observer) not in {TorchHistObserver}
                 for var_observer in observer._hook._observer_table.values()]):
                     pop_list.append(op)
         for op in pop_list:
@@ -472,7 +472,7 @@ class SSDEqualizationPass(QuantizationOptimizationPass):
                 # mse calculation
                 loss.append(self.calculate_mse(fp_output, quant_output))
         return torch.stack(loss).mean().item()
-    
+
     # maintain original parameter for restoration in case of a larger loss after equalization
     def collect_original_parameter(self, pair: List[Operation]) -> Dict[Variable, torch.Tensor]:
         original_weights = {}
@@ -487,7 +487,7 @@ class SSDEqualizationPass(QuantizationOptimizationPass):
         for op in pair:
             if isinstance(op, QuantableOperation):
                 op.store_parameter_value()
-    
+
     # recover from maintained original parameters
     def recover_original_parameter(self,
                                 pair: List[Operation],
@@ -534,8 +534,8 @@ class SSDEqualizationPass(QuantizationOptimizationPass):
             self.layer_weight_norm(all_pairs)
 
         for i in range(self.iteration):
-            logger.debug(f"DFQ/SSD Equalization Iteration {i + 1}/{self.iteration}")
-            for _,pair in tqdm(enumerate(all_pairs), desc=f"SSD/DFQ Equalization Iteration {i+1}/{self.iteration}", total=len(all_pairs)):
+            logger.debug(f'DFQ/SSD Equalization Iteration {i + 1}/{self.iteration}')
+            for _,pair in tqdm(enumerate(all_pairs), desc=f'SSD/DFQ Equalization Iteration {i+1}/{self.iteration}', total=len(all_pairs)):
                 logger.debug(f"Now Processing Pair {_ + 1}/{len(all_pairs)}: {'--'.join([op.name for op in pair])}")
                 self.store_parameter(pair)
 

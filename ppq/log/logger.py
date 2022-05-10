@@ -3,17 +3,17 @@ import time
 from enum import Enum
 from typing import Union
 
-R_BEGIN = "\033[38;5;1m"
-G_BEGIN = "\033[38;5;2m"
-Y_BEGIN = "\033[38;5;3m"
+R_BEGIN = '\033[38;5;1m'
+G_BEGIN = '\033[38;5;2m'
+Y_BEGIN = '\033[38;5;3m'
 
-COLOR_END = " \033[m"
+COLOR_END = ' \033[m'
 
 initialized_loggers = {}
 
 
 def get_current_time():
-    return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) 
+    return time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
 
 
 class LEVEL(Enum):
@@ -29,7 +29,7 @@ class LEVEL(Enum):
     def convert(level: str):
         level = level.lower()
         if level == 'debug':
-            return LEVEL.DEBUG 
+            return LEVEL.DEBUG
         elif level == 'info':
             return LEVEL.INFO
         elif level == 'warning':
@@ -57,14 +57,13 @@ class Handler:
 
 
 class NaiveLogger(object):
-    """A very naive implementation of colored logger, but would be suffice
-    in single-process situation here where no race condition would happen.
-    """
+    """A very naive implementation of colored logger, but would be suffice in
+    single-process situation here where no race condition would happen."""
     __create_key = object()
 
     def __init__(self, create_key: object, name: str, level: LEVEL, file_name: str) -> None:
         assert (create_key == NaiveLogger.__create_key), \
-            "logger instance must be created using NaiveLogger.get_logger"
+            'logger instance must be created using NaiveLogger.get_logger'
         self._name     = name
         self._level    = level
         self._handlers = {'stdout' : Handler(level=level)}
@@ -84,10 +83,10 @@ class NaiveLogger(object):
     def get_logger(cls, name: str, level: Union[str, LEVEL]=LEVEL.INFO, file_name: str=None):
         if name in initialized_loggers:
             return initialized_loggers[name]
-        
+
         if isinstance(level, str):
             level = LEVEL.convert(level)
-        
+
         assert isinstance(level, LEVEL), 'level should be given by either str or LEVEL instances'
         logger = NaiveLogger(cls.__create_key, name, level, file_name)
         initialized_loggers[name] = logger
@@ -95,7 +94,7 @@ class NaiveLogger(object):
 
     def wrap_header(self, msg:str, type:str) -> str:
         cur_time = get_current_time()
-        return "{}:{}:{}: {}".format(type, self._name, cur_time, msg)
+        return '{}:{}:{}: {}'.format(type, self._name, cur_time, msg)
 
     def info(self, msg: str):
         msg = self.wrap_header(msg, 'INFO')
@@ -104,7 +103,7 @@ class NaiveLogger(object):
         for handler in self._handlers.values():
             if handler._file_name is not None:
                 handler.process(msg, LEVEL.INFO)
-            else: 
+            else:
                 handler.process(print_msg, LEVEL.INFO)
 
     def warning(self, msg:str):
@@ -114,7 +113,7 @@ class NaiveLogger(object):
         for handler in self._handlers.values():
             if handler._file_name is not None:
                 handler.process(msg, LEVEL.WARNING)
-            else: 
+            else:
                 handler.process(print_msg, LEVEL.WARNING)
 
     def error(self, msg:str):
@@ -126,7 +125,7 @@ class NaiveLogger(object):
                 handler.process(msg, LEVEL.ERROR)
             else:
                 handler.process(print_msg, LEVEL.ERROR)
-    
+
     def debug(self, msg: str):
         msg = self.wrap_header(msg, 'DEBUG')
         print_msg = G_BEGIN + msg + COLOR_END
@@ -134,7 +133,7 @@ class NaiveLogger(object):
         for handler in self._handlers.values():
             if handler._file_name is not None:
                 handler.process(msg, LEVEL.DEBUG)
-            else: 
+            else:
                 handler.process(print_msg, LEVEL.DEBUG)
 
     def register_handler(self, file_name: str, level: Union[str, LEVEL]=LEVEL.INFO):

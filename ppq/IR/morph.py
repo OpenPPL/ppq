@@ -145,12 +145,12 @@ class GraphFormatter(GraphCommandProcesser):
             self.__add_constant_input(slice, convert_any_to_torch_tensor(starts))
             self.__add_constant_input(slice, convert_any_to_torch_tensor(ends))
             self.__add_constant_input(slice, convert_any_to_torch_tensor(axes))
-            
+
     def format_pad(self) -> None:
         """
             对于不同的模型格式, pad 算子将有两种不同的输入格式：
             for different models, possibly Pad op has the following input formats
-                1. pads 参数由第二个输入变量给出 
+                1. pads 参数由第二个输入变量给出
                    pads parameter is given by the second input variable
                 2. pads 参数被放置于 operation.attribute 中
                    pads parameter is set in attribute
@@ -198,10 +198,10 @@ class GraphFormatter(GraphCommandProcesser):
             当 min, max 参数由 第二、第三个输入变量给出时，其中一个为空时直接返回 ValueError
             ValueError will be raised when any of min, max parameters is null
         """
-        
+
         interested_ops = []
         for _, operation in self.graph.operations.items():
-            if operation.type == 'Clip' and ('min' in operation.attributes or 'max' in operation.attributes): 
+            if operation.type == 'Clip' and ('min' in operation.attributes or 'max' in operation.attributes):
                 interested_ops.append(operation)
         for op in interested_ops:
             assert isinstance(op, Operation)
@@ -217,16 +217,13 @@ class GraphFormatter(GraphCommandProcesser):
             if 'max' in op.attributes: op.attributes.pop('max')
 
     def format_gather(self) -> None:
-        """
-            gather op 的参数 index 可能由 input variable 给出
-            但 index 参数不可以被量化，同时后端运算需要其作为Python 原生类型
-            因此将其转移到 gather op 的属性上。
-            index parameter of gather op can be given by input variable,
-            however, it can't be quantized, thus we transfer index parameter
-            to attribute of gather op
+        """gather op 的参数 index 可能由 input variable 给出 但 index
+        参数不可以被量化，同时后端运算需要其作为Python 原生类型 因此将其转移到 gather op 的属性上。 index parameter
+        of gather op can be given by input variable, however, it can't be
+        quantized, thus we transfer index parameter to attribute of gather op.
 
-            axis is set to 0 when it's not given
-            gather op 的参数 axis 可能不存在，此时强制植入 0 作为 axis 参数
+        axis is set to 0 when it's not given gather op 的参数 axis 可能不存在，此时强制植入 0
+        作为 axis 参数
         """
         interested_ops = []
         for _, operation in self.graph.operations.items():
@@ -247,9 +244,7 @@ class GraphFormatter(GraphCommandProcesser):
                 operation.attributes.pop('indices')
 
     def format_cast(self) -> None:
-        """
-            cast op 的参数 to 默认为 int，使用该函数将其封装为 ppq.core.DataType
-        """
+        """cast op 的参数 to 默认为 int，使用该函数将其封装为 ppq.core.DataType."""
         interested_ops = []
         for _, operation in self.graph.operations.items():
             assert isinstance(operation, Operation)
@@ -260,11 +255,9 @@ class GraphFormatter(GraphCommandProcesser):
             operation.attributes['to'] = DataType.convert_from_numpy(operation.attributes['to'])
 
     def format_int64_constant(self) -> None:
-        """
-            convert all int64 constants to int32, check if direct dtype cast is available
-            将所有 int64 的 Constant 转换为 int32
-            将检查所有 Constant value, 如果 value 范围在 int32 表示范围内则执行转换。
-        """
+        """convert all int64 constants to int32, check if direct dtype cast is
+        available 将所有 int64 的 Constant 转换为 int32 将检查所有 Constant value, 如果 value
+        范围在 int32 表示范围内则执行转换。"""
         for operation in self.graph.operations.values():
             if operation.type == 'Constant':
                 assert 'value' in operation.attributes
@@ -279,16 +272,15 @@ class GraphFormatter(GraphCommandProcesser):
                 if all(check): value = value.int()
 
     def format_constant_input(self) -> None:
-        """
-        部分部署平台不支持 Constant Op，在这种情况下我们使用这个 pass 把 Constant Op 的输入切换成 parameter variable 的形式
-        some backend platform doesn't support Constant Op, we use this pass to replace it by forcing its value to 
-        be a parameter variable
-        """
+        """部分部署平台不支持 Constant Op，在这种情况下我们使用这个 pass 把 Constant Op 的输入切换成
+        parameter variable 的形式 some backend platform doesn't support Constant
+        Op, we use this pass to replace it by forcing its value to be a
+        parameter variable."""
         constant_ops = []
         for operation in self.graph.operations.values():
             if operation.type == 'Constant':
                 assert len(operation.outputs) == 1, (
-                    f"Constant Operation {operation.name} has more than 1 output, is there a network parsing error?")
+                    f'Constant Operation {operation.name} has more than 1 output, is there a network parsing error?')
                 constant_ops.append(operation)
 
         for operation in constant_ops:
@@ -299,14 +291,13 @@ class GraphFormatter(GraphCommandProcesser):
             output_var.value = constant_value
             # force output variable to a parameter.
             output_var._is_parameter = True
-            
+
             operation.outputs.clear()
             output_var.source_op = None
             self.graph.delete_operation(op_name=operation.name)
 
     def truncate_on_var(self, var: Variable, mark_as_output: bool):
-        """
-        从一个指定位置将图截断
+        """从一个指定位置将图截断.
 
         Args:
             var (Variable): _description_
@@ -321,7 +312,7 @@ class GraphFormatter(GraphCommandProcesser):
             raise TypeError(f'Except variable instance here, however {type(var)} was given.')
         if var.name not in graph.variables:
             raise KeyError(f'Can not find vairiable {var.name} in current graph')
-        
+
         mark_to_delete, delete_queue, didx = set(), [], 0
         delete_queue.extend(var.dest_ops)
         while didx < len(delete_queue):
@@ -330,13 +321,13 @@ class GraphFormatter(GraphCommandProcesser):
                 mark_to_delete.add(first_op)
                 delete_queue.extend(graph.get_downstream_operations(first_op))
             didx += 1
-        
+
         for operation in mark_to_delete:
             graph.remove_operation(operation)
-        
-        if mark_as_output: 
+
+        if mark_as_output:
             graph.mark_variable_as_graph_output(var)
-        
+
         self.delete_isolated()
 
     def delete_isolated(self):
@@ -354,7 +345,7 @@ class GraphFormatter(GraphCommandProcesser):
                 for var in op.outputs:
                     self.graph.remove_variable(var)
                 self.graph.remove_operation(op)
-        
+
         var_blacklist = [None]
         while len(var_blacklist) > 0:
             var_blacklist = set()
@@ -363,11 +354,11 @@ class GraphFormatter(GraphCommandProcesser):
                 # 删除无根无输出的变量
                 if var.source_op is None and len(var.dest_ops) == 0:
                     var_blacklist.add(var)
-                
+
                 # 删除根节点不在图中的变量
                 if var.source_op is not None and var.source_op.name not in self.graph.operations:
                     var_blacklist.add(var)
-                
+
                 # 删除连接到未知节点的变量
                 for op in var.dest_ops:
                     if op.name not in self.graph.operations:
@@ -377,9 +368,9 @@ class GraphFormatter(GraphCommandProcesser):
                 if var.source_op is None and var.name not in self.graph.inputs:
                     if not var.is_parameter:
                         var_blacklist.add(var)
-                
+
                 # 没有输出的不能删...会影响算子输出顺序...
-    
+
             for var in var_blacklist:
                 self.graph.remove_variable(var)
 
@@ -396,11 +387,11 @@ class GraphFormatter(GraphCommandProcesser):
             for idx, dest_op in enumerate(var.dest_ops.copy()):
                 # create variables
                 sub_var = Variable(
-                    name=var.name + '_' + str(idx), 
+                    name=var.name + '_' + str(idx),
                     value=var.value, is_parameter=True,
                     dest_ops=[dest_op], source_op=None)
                 self.graph.append_variable(sub_var)
-                
+
                 # replace original variable with splited one.
                 dest_op.inputs[dest_op.inputs.index(var)] = sub_var
                 var.dest_ops.remove(dest_op)
@@ -413,7 +404,7 @@ class GraphFormatter(GraphCommandProcesser):
         for operation in self.graph.operations.values():
             if operation.type == 'Sub':
                 substractions.append(operation)
-        
+
         for operation in substractions:
             assert isinstance(operation, Operation)
             subtractor = operation.inputs[-1].source_op
@@ -422,23 +413,23 @@ class GraphFormatter(GraphCommandProcesser):
             # create a neg operation
             neg_op = Operation(name=subtractor.name + '_neg', op_type='Neg', attributes={})
             self.graph.append_operation(neg_op)
-            
+
             # create related variables
             neg_var = Variable(name=subtractor.name + '_neg_1', dest_ops=[operation], source_op=neg_op)
 
             # link var to op
             neg_op.inputs.append(substractor_var)
             neg_op.outputs.append(neg_var)
-            
+
             operation.inputs.remove(substractor_var)
             operation.inputs.append(neg_var)
 
             substractor_var.dest_ops.remove(operation)
             substractor_var.dest_ops.append(neg_op)
-            
+
             # add var to graph
             self.graph.append_variable(neg_var)
-            
+
             # replace sub to add
             operation._type = 'Add'
 
@@ -471,12 +462,10 @@ class GraphFormatter(GraphCommandProcesser):
 
 
 class GraphMerger(GraphCommandProcesser):
-    """
-    Graph Merger implements all graph fusion related functions.
-    """
+    """Graph Merger implements all graph fusion related functions."""
     def _acceptable_command_types(self) -> List[GraphCommandType]:
         return [
-            # add more extensions in the future 
+            # add more extensions in the future
             GraphCommandType.FUSE_BN
         ]
 
@@ -540,7 +529,7 @@ class GraphMerger(GraphCommandProcesser):
                 else:
                     w = w * scale.reshape([1, -1])
                 b = alpha * (b - mean) / np.sqrt(var + epsilon) + beta
-            
+
             elif computing_op.type == 'ConvTranspose':
 
                 scale = alpha / np.sqrt(var + epsilon)
@@ -585,20 +574,19 @@ class GraphMerger(GraphCommandProcesser):
 
 
 class GraphDecomposer(GraphCommandProcesser):
-    """
-    Since PPQ 0.6.4, GraphDecomposer is introduced to split some complex operations
-        For example, Gemm can be split with Matmul with Bias add
-        Gru can be split with Matmul, Sigmoid, Tanh
+    """Since PPQ 0.6.4, GraphDecomposer is introduced to split some complex
+    operations For example, Gemm can be split with Matmul with Bias add Gru can
+    be split with Matmul, Sigmoid, Tanh.
 
-    Operation decomposition is required for quantize complex operations, which can not be
-        correctly described by input & output tensor quant configurations.
-    By spliting operation into a series lower operations, we can have more quant configurations to
-        control its quantization logic
+    Operation decomposition is required for quantize complex operations, which
+    can not be     correctly described by input & output tensor quant
+    configurations. By spliting operation into a series lower operations, we
+    can have more quant configurations to     control its quantization logic
     """
-    
+
     def process(self, command: GraphCommand) -> Any:
         return super().process(command)
-    
+
     def _acceptable_command_types(self) -> List[GraphCommandType]:
         return super()._acceptable_command_types
 
@@ -610,12 +598,11 @@ class GraphDecomposer(GraphCommandProcesser):
 
 
 class GraphDeviceSwitcher(GraphCommandProcesser):
-    """
-    Graph Device Switcher insert necessary switcher operation for
-        graph split and device dispatching.
-    
+    """Graph Device Switcher insert necessary switcher operation for graph
+    split and device dispatching.
+
     See also ppq scheduler for more information.
-    
+
     All SOI operations are supposed to be executed on cpu.
         while other operations are supposed to be executed on cuda.
         Therefore switching operation will be inserted between SOI operations and fp32(quant) operations.
@@ -624,23 +611,23 @@ class GraphDeviceSwitcher(GraphCommandProcesser):
     However some operations receive SOI input(cpu tensor) naturally, such as reshape, slice, etc.
     PPQ uses a tracing function for judging whether it is necessary to insert a
         switcher between operations like that.
-        
+
     Before invoking this class, all operations must have been dispatched by a dispatcher.
 
     Args:
         GraphCommandProcesser ([type]): [description]
     """
     def insert_switcher(self):
-        """
-        Insert all necessary switchers into current graph.
-            Before invoking this function, all operations must have been dispatched by a dispatcher.
-        
+        """Insert all necessary switchers into current graph. Before invoking
+        this function, all operations must have been dispatched by a
+        dispatcher.
+
         THIS IS AN NOT-REENTRANT FUNCTION!
         """
         def can_pass_shape(from_op: Operation, to_op: Operation) -> bool:
             if to_op.platform == TargetPlatform.SHAPE_OR_INDEX: return True
             else: return not value_tracing_pattern(from_where=from_op, to_where=to_op)
-        
+
         soi_ops = []
         for operation in self.graph.operations.values():
             if operation.platform == TargetPlatform.SHAPE_OR_INDEX:
@@ -662,7 +649,7 @@ class GraphDeviceSwitcher(GraphCommandProcesser):
                         boundary_op = DeviceSwitchOP(name=operation.name + '_' + dest_op.name)
                         self._graph.insert_op_between_ops(inserting_op=boundary_op, up_op=operation, down_op=dest_op)
                         boundary_op.platform = TargetPlatform.FP32
-            
+
             for var in operation.inputs:
                 source_op = var.source_op
                 # TODO refine here.
@@ -673,9 +660,7 @@ class GraphDeviceSwitcher(GraphCommandProcesser):
                     boundary_op.platform = TargetPlatform.SHAPE_OR_INDEX
 
     def remove_switcher(self):
-        """
-        remove all switchers from current graph.
-        """
+        """remove all switchers from current graph."""
         removing_collection = []
         for operation in self.graph.operations.values():
             if operation.type == 'PPQDeviceSwitch':

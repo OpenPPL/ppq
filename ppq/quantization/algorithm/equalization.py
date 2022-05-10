@@ -35,7 +35,7 @@ class EqualizationPair:
                                a class encapsulating execution logic of equalization
 
                 在 self.all_upstream_layers 包含了 equalization 操作中的所有上游层(op)
-                self.all_upstream_layers contain all upstream ops 
+                self.all_upstream_layers contain all upstream ops
 
                 在 self.all_downstream_layers 包含了 equalization 操作中的所有下游层(op)
                 self.all_downstream_layers contain all downstream ops
@@ -45,13 +45,13 @@ class EqualizationPair:
             An EqualizationPair records all relevant ops participating in the equalization
             transformation, thus supporting equalization on local subgraphs
         Args:
-            all_upstream_layers (list): 
+            all_upstream_layers (list):
                 equalization 操作中的所有上游层(op)
 
-            all_downstream_layers (list): 
+            all_downstream_layers (list):
                 equalization 操作中的所有下游层(op)
 
-            method (EqualizationMethod, optional): 
+            method (EqualizationMethod, optional):
                 equalization 操作中，变换系数 s 的计算方式. Defaults to EqualizationMethod.ABSOLUTE_MAX.
 
         """
@@ -71,7 +71,7 @@ class EqualizationPair:
             assert upstream_layer.type in ('Conv', 'ConvTranspose', 'Gemm'), (
             'Only Conv or Linear layer is support in layerwise equalization now, '
             'but %s got' % upstream_layer.type)
-            
+
             if upstream_layer.type == 'ConvTranspose':
                 # weight shape is: [input channel, output channel / group, kernel, kernel]
                 weight, bias = self.get_convtranspose2d_params(upstream_layer, including_bias)
@@ -90,7 +90,7 @@ class EqualizationPair:
                 weight = torch.reshape(weight, (weight.shape[0], -1))
 
                 upstream_params.append(weight)
-                if including_bias and bias is not None: 
+                if including_bias and bias is not None:
                     upstream_params.append(torch.reshape(bias, (weight.shape[0], 1)))
 
             elif upstream_layer.type == 'Gemm':
@@ -98,7 +98,7 @@ class EqualizationPair:
                 weight, bias = self.get_linear_params(upstream_layer, including_bias)
 
                 upstream_params.append(weight)
-                if including_bias and bias is not None: 
+                if including_bias and bias is not None:
                     upstream_params.append(torch.reshape(bias, (weight.shape[0], 1)))
 
         # extract all params from downstream_layers
@@ -119,7 +119,7 @@ class EqualizationPair:
                 weight = torch.reshape(weight, (weight.shape[0] * weight.shape[1], -1))
 
                 downstream_params.append(weight)
-            
+
             elif downstream_layer.type == 'ConvTranspose':
                 # weight shape is: [input channel, output channel // num_of_groups, kernel, kernel]
                 weight, bias = self.get_convtranspose2d_params(downstream_layer, False)
@@ -130,7 +130,7 @@ class EqualizationPair:
                 weight = torch.reshape(weight, (weight.shape[0], -1))
 
                 downstream_params.append(weight)
-            
+
             elif downstream_layer.type == 'Gemm':
                 # weight shape is: [output channel, input channel]
                 weight, bias = self.get_linear_params(downstream_layer, False)
@@ -158,7 +158,7 @@ class EqualizationPair:
                 if bias is not None:
                     bias *= scale
                 self.set_convtranspose2d_params(upstream_layer, bias, weight)
-            
+
             elif upstream_layer.type == 'Conv':
                 weight, bias = self.get_conv2d_params(upstream_layer, True)
                 weight *= torch.reshape(scale, (-1, 1, 1, 1))
@@ -174,14 +174,14 @@ class EqualizationPair:
                 self.set_linear_params(upstream_layer, bias, weight)
 
         for downstream_layer in self.downstream_layers:
-            
+
             if downstream_layer.type == 'ConvTranspose':
                 weight, bias = self.get_convtranspose2d_params(downstream_layer, False)
                 # for group convolution, we have to select its weight by group
 
                 weight /= torch.reshape(scale, (-1, 1, 1, 1))
                 self.set_convtranspose2d_params(downstream_layer, bias, weight)
-            
+
             elif downstream_layer.type == 'Conv':
                 weight, bias = self.get_conv2d_params(downstream_layer, False)
                 # for group convolution, we have to select its weight by group
@@ -221,12 +221,12 @@ class EqualizationPair:
     def __str__(self) -> str:
         return (
             'Class EqualizationPair: '
-            '[all_upstream_layers: %s, all_downstream_layers: %s]' % 
+            '[all_upstream_layers: %s, all_downstream_layers: %s]' %
             (self.upstream_layers, self.downstream_layers))
 
 
     def get_conv2d_params(self, conv: Operation, including_bias: bool):
-        
+
         assert conv.type == 'Conv', (
             'Except input object with type Conv, but %s got' % conv.type)
 
@@ -238,7 +238,7 @@ class EqualizationPair:
 
 
     def get_convtranspose2d_params(self, conv: Operation, including_bias: bool):
-        
+
         assert conv.type == 'ConvTranspose', (
             'Except input object with type Conv, but %s got' % conv.type)
 
@@ -268,13 +268,13 @@ class EqualizationPair:
 
         assert conv.type == 'Conv', (
             'Except input object with type Conv, but %s got' % conv.type)
-        
+
         conv.parameters[0].value = weight
         if bias is not None and len(conv.parameters) > 1:
             conv.parameters[1].value = bias
 
     def set_convtranspose2d_params(self, conv: Operation, bias: torch.Tensor, weight: torch.Tensor):
-        
+
         assert conv.type == 'ConvTranspose', (
             'Except input object with type Conv, but %s got' % conv.type)
 
@@ -287,7 +287,7 @@ class EqualizationPair:
 
         assert linear.type == 'Gemm', (
             'Except input object with type Gemm, but %s got' % linear.type)
-        
+
         if not linear.attributes.get('transB', 0):
             weight = torch.transpose(weight, 1, 0)
         linear.parameters[0].value = weight
@@ -326,7 +326,7 @@ class EqualizationPair:
 
         elif method is EqualizationMethod.SQUARE_MEAN:
             return torch.mean(torch.square(params), axis=aggerate_axis)
-            
+
         else:
             raise NotImplementedError('Equalization method %s is not support.' % str(method))
 
@@ -347,7 +347,7 @@ def layerwise_equalization(
         one equalization step refers to use above formula to do equivalent transformation
 
         通过上述变换以及精心选取的 s，可以使得权重矩阵 A, b, C 的数值大小尽可能接近，从而使得量化更加精准
-        we could make numerical ranges of weight matrice of different layers become as similar as possible by 
+        we could make numerical ranges of weight matrice of different layers become as similar as possible by
         choosing approriate s, reducing quantization error, while preserving correct results
 
         注意目前只支持关于 CONV, GEMM 的权重拉平策略
@@ -357,7 +357,7 @@ def layerwise_equalization(
         "Markus Nagel et al., Data-Free Quantization through Weight Equalization and Bias Correction" arXiv:1906.04721, 2019.
 
     Args:
-        equalization_pairs (list): 所有需要被拉平的层的组合结构 all equalization pairs. 
+        equalization_pairs (list): 所有需要被拉平的层的组合结构 all equalization pairs.
         weight_threshold (float, optional): 参与权重均一化的最小权重 minimum weight for weight equalization defaults to 0.5.
         incluing_bias (bool, optional): 是否执行带bias的权重均一化 whether to include bias defaults to True.
         iteration (int, optional): 均一化执行次数 num of equalization iterations defaults to 10.
@@ -372,7 +372,7 @@ def layerwise_equalization(
     for iter_times in Progressbar(range(iteration), desc='Layerwise Equalization', total=iteration):
         for equalization_pair in equalization_pairs:
             assert isinstance(equalization_pair, EqualizationPair), (
-                "Input equalization pairs should be encapsuled with class EqualizationPair")
+                'Input equalization pairs should be encapsuled with class EqualizationPair')
 
             equalization_pair.layerwise_equalize(
                 weight_threshold=weight_threshold,

@@ -138,10 +138,10 @@ def load_caffe_graph(prototxt_path: str, caffemodel_path: str) -> BaseGraph:
     return format_graph(graph=ppq_ir)
 
 def dump_torch_to_onnx(
-    model: torch.nn.Module, 
-    onnx_export_file: str, 
-    input_shape: List[int], 
-    input_dtype: torch.dtype, 
+    model: torch.nn.Module,
+    onnx_export_file: str,
+    input_shape: List[int],
+    input_dtype: torch.dtype,
     inputs: List[Any] = None,
     device: str = 'cuda'):
     """
@@ -154,8 +154,8 @@ def dump_torch_to_onnx(
 
         input_shape (List[int]): 模型输入尺寸，用于执行 jit.trace，对于动态尺寸的模型，输入一个模型可接受的尺寸即可。
             如果模型存在多个输入，则需要使用 inputs 变量进行传参，此项设置为 None
-            a list of ints indicating size of input, for multiple inputs, please use keyword arg inputs for 
-            direct parameter passing and this should be set to None 
+            a list of ints indicating size of input, for multiple inputs, please use keyword arg inputs for
+            direct parameter passing and this should be set to None
 
         input_dtype (torch.dtype): 模型输入数据类型，如果模型存在多个输入，则需要使用 inputs 变量进行传参，此项设置为 None
                                    the torch datatype of input, for multiple inputs, please use keyword arg inputs
@@ -197,24 +197,21 @@ def quantize_onnx_model(
     verbose: int = 0,
     do_quantize: bool = True,
 ) -> BaseGraph:
-    """
-        量化一个 onnx 原生的模型
-            输入一个 onnx 模型的文件路径
-            返回一个量化后的 PPQ.IR.BaseGraph
-        quantize onnx model, input onnx model and return quantized ppq IR graph
+    """量化一个 onnx 原生的模型 输入一个 onnx 模型的文件路径 返回一个量化后的 PPQ.IR.BaseGraph quantize
+    onnx model, input onnx model and return quantized ppq IR graph.
 
     Args:
         onnx_import_file (str): 被量化的 onnx 模型文件路径 onnx model location
- 
+
         calib_dataloader (DataLoader): 校准数据集 calibration data loader
 
         calib_steps (int): 校准步数 calibration steps
 
         collate_fn (Callable): 校准数据的预处理函数 batch collate func for preprocessing
-        
+
         input_shape (List[int]): 模型输入尺寸，用于执行 jit.trace，对于动态尺寸的模型，输入一个模型可接受的尺寸即可。
             如果模型存在多个输入，则需要使用 inputs 变量进行传参，此项设置为 None
-                                a list of ints indicating size of input, for multiple inputs, please use 
+                                a list of ints indicating size of input, for multiple inputs, please use
                                 keyword arg inputs for direct parameter passing and this should be set to None
 
         input_dtype (torch.dtype): 模型输入数据类型，如果模型存在多个输入，则需要使用 inputs 变量进行传参，此项设置为 None
@@ -232,7 +229,7 @@ def quantize_onnx_model(
 
 
         platform (TargetPlatform, optional): 量化的目标平台 target backend platform, defaults to TargetPlatform.DSP_INT8.
-                                        
+
         device (str, optional): 量化过程的执行设备 execution device, defaults to 'cuda'.
 
         verbose (int, optional): 是否打印详细信息 whether to print details, defaults to 0.
@@ -242,7 +239,7 @@ def quantize_onnx_model(
         KeyError: 给定平台不被支持 the given platform is not supported yet
 
     Returns:
-        BaseGraph: 量化后的IR，包含了后端量化所需的全部信息 
+        BaseGraph: 量化后的IR，包含了后端量化所需的全部信息
                    The quantized IR, containing all information needed for backend execution
     """
     if not TargetPlatform.is_quantized_platform(platform=platform):
@@ -297,11 +294,8 @@ def quantize_torch_model(
     device: str = 'cuda',
     verbose: int = 0,
     ) -> BaseGraph:
-    """
-        量化一个 Pytorch 原生的模型
-            输入一个 torch.nn.Module
-            返回一个量化后的 PPQ.IR.BaseGraph
-        
+    """量化一个 Pytorch 原生的模型 输入一个 torch.nn.Module 返回一个量化后的 PPQ.IR.BaseGraph.
+
         quantize a pytorch model, input pytorch model and return quantized ppq IR graph
     Args:
         model (torch.nn.Module): 被量化的 torch 模型(torch.nn.Module) the pytorch model
@@ -311,10 +305,10 @@ def quantize_torch_model(
         calib_steps (int): 校准步数 calibration steps
 
         collate_fn (Callable): 校准数据的预处理函数 batch collate func for preprocessing
-        
+
         input_shape (List[int]): 模型输入尺寸，用于执行 jit.trace，对于动态尺寸的模型，输入一个模型可接受的尺寸即可。
             如果模型存在多个输入，则需要使用 inputs 变量进行传参，此项设置为 None
-                                a list of ints indicating size of input, for multiple inputs, please use 
+                                a list of ints indicating size of input, for multiple inputs, please use
                                 keyword arg inputs for direct parameter passing and this should be set to None
 
         input_dtype (torch.dtype): 模型输入数据类型，如果模型存在多个输入，则需要使用 inputs 变量进行传参，此项设置为 None
@@ -331,7 +325,7 @@ def quantize_torch_model(
         do_quantize (Bool, optional): 是否执行量化 whether to quantize the model, defaults to True, defaults to True.
 
         platform (TargetPlatform, optional): 量化的目标平台 target backend platform, defaults to TargetPlatform.DSP_INT8.
-                                        
+
         device (str, optional): 量化过程的执行设备 execution device, defaults to 'cuda'.
 
         verbose (int, optional): 是否打印详细信息 whether to print details, defaults to 0.
@@ -341,17 +335,17 @@ def quantize_torch_model(
         KeyError: 给定平台不被支持 the given platform is not supported yet
 
     Returns:
-        BaseGraph: 量化后的IR，包含了后端量化所需的全部信息 
+        BaseGraph: 量化后的IR，包含了后端量化所需的全部信息
                    The quantized IR, containing all information needed for backend execution
     """
     # dump pytorch model to onnx
-    dump_torch_to_onnx(model=model, onnx_export_file=onnx_export_file, 
-        input_shape=input_shape, input_dtype=input_dtype, 
+    dump_torch_to_onnx(model=model, onnx_export_file=onnx_export_file,
+        input_shape=input_shape, input_dtype=input_dtype,
         inputs=inputs, device=device)
 
-    return quantize_onnx_model(onnx_import_file=onnx_export_file, 
-        calib_dataloader=calib_dataloader, calib_steps=calib_steps, collate_fn=collate_fn, 
-        input_shape=input_shape, input_dtype=input_dtype, inputs=inputs, setting=setting, 
+    return quantize_onnx_model(onnx_import_file=onnx_export_file,
+        calib_dataloader=calib_dataloader, calib_steps=calib_steps, collate_fn=collate_fn,
+        input_shape=input_shape, input_dtype=input_dtype, inputs=inputs, setting=setting,
         platform=platform, device=device, verbose=verbose, do_quantize=do_quantize)
 
 @ empty_ppq_cache
@@ -390,7 +384,7 @@ def quantize_caffe_model(
 
         input_shape (List[int]): 模型输入尺寸，用于执行 jit.trace，对于动态尺寸的模型，输入一个模型可接受的尺寸即可。
             如果模型存在多个输入，则需要使用 inputs 变量进行传参，此项设置为 None
-                                a list of ints indicating size of input, for multiple inputs, please use 
+                                a list of ints indicating size of input, for multiple inputs, please use
                                 keyword arg inputs for direct parameter passing and this should be set to None
 
         input_dtype (torch.dtype): 模型输入数据类型，如果模型存在多个输入，则需要使用 inputs 变量进行传参，此项设置为 None
@@ -407,7 +401,7 @@ def quantize_caffe_model(
         do_quantize (Bool, optional): 是否执行量化 whether to quantize the model, defaults to True, defaults to True.
 
         platform (TargetPlatform, optional): 量化的目标平台 target backend platform, defaults to TargetPlatform.DSP_INT8.
-                                        
+
         device (str, optional): 量化过程的执行设备 execution device, defaults to 'cuda'.
 
         verbose (int, optional): 是否打印详细信息 whether to print details, defaults to 0.
@@ -417,7 +411,7 @@ def quantize_caffe_model(
         KeyError: 给定平台不被支持 the given platform is not supported yet
 
     Returns:
-        BaseGraph: 量化后的IR，包含了后端量化所需的全部信息 
+        BaseGraph: 量化后的IR，包含了后端量化所需的全部信息
                    The quantized IR, containing all information needed for backend execution
     """
     if not TargetPlatform.is_quantized_platform(platform=platform):
@@ -427,14 +421,14 @@ def quantize_caffe_model(
     if do_quantize:
         if calib_dataloader is None or calib_steps is None:
             raise TypeError('Quantization needs a valid calib_dataloader and calib_steps setting.')
-    
+
     if setting is None:
         setting = QuantizationSettingFactory.default_setting()
 
-    ppq_ir = load_graph(file_path=caffe_proto_file, 
-                        caffemodel_path=caffe_model_file, 
+    ppq_ir = load_graph(file_path=caffe_proto_file,
+                        caffemodel_path=caffe_model_file,
                         from_framework=NetworkFramework.CAFFE)
-    
+
     ppq_ir = format_graph(ppq_ir)
     ppq_ir = dispatch_graph(ppq_ir, platform, setting)
 
@@ -475,24 +469,21 @@ def quantize_native_model(
     verbose: int = 0,
     do_quantize: bool = True,
 ) -> BaseGraph:
-    """
-        量化一个已经在内存中的 ppq 模型
-            输入一个量化前的 PPQ.IR.BaseGraph
-            返回一个量化后的 PPQ.IR.BaseGraph
-        quantize ppq model, input ppq graph and return quantized ppq graph
+    """量化一个已经在内存中的 ppq 模型 输入一个量化前的 PPQ.IR.BaseGraph 返回一个量化后的 PPQ.IR.BaseGraph
+    quantize ppq model, input ppq graph and return quantized ppq graph.
 
     Args:
         native (BaseGraph): 被量化的 ppq graph
- 
+
         calib_dataloader (DataLoader): 校准数据集 calibration data loader
 
         calib_steps (int): 校准步数 calibration steps
 
         collate_fn (Callable): 校准数据的预处理函数 batch collate func for preprocessing
-        
+
         input_shape (List[int]): 模型输入尺寸，用于执行 jit.trace，对于动态尺寸的模型，输入一个模型可接受的尺寸即可。
             如果模型存在多个输入，则需要使用 inputs 变量进行传参，此项设置为 None
-                                a list of ints indicating size of input, for multiple inputs, please use 
+                                a list of ints indicating size of input, for multiple inputs, please use
                                 keyword arg inputs for direct parameter passing and this should be set to None
 
         input_dtype (torch.dtype): 模型输入数据类型，如果模型存在多个输入，则需要使用 inputs 变量进行传参，此项设置为 None
@@ -510,7 +501,7 @@ def quantize_native_model(
 
 
         platform (TargetPlatform, optional): 量化的目标平台 target backend platform, defaults to TargetPlatform.DSP_INT8.
-                                        
+
         device (str, optional): 量化过程的执行设备 execution device, defaults to 'cuda'.
 
         verbose (int, optional): 是否打印详细信息 whether to print details, defaults to 0.
@@ -520,7 +511,7 @@ def quantize_native_model(
         KeyError: 给定平台不被支持 the given platform is not supported yet
 
     Returns:
-        BaseGraph: 量化后的IR，包含了后端量化所需的全部信息 
+        BaseGraph: 量化后的IR，包含了后端量化所需的全部信息
                    The quantized IR, containing all information needed for backend execution
     """
     if not TargetPlatform.is_quantized_platform(platform=platform):
@@ -559,21 +550,20 @@ def quantize_native_model(
 
 
 def export_ppq_graph(
-    graph: BaseGraph, 
-    platform: TargetPlatform, 
-    graph_save_to: str, 
-    config_save_to: str = None, 
+    graph: BaseGraph,
+    platform: TargetPlatform,
+    graph_save_to: str,
+    config_save_to: str = None,
     **kwargs) -> None:
-    """
-    使用这个函数将 PPQ ir 保存到文件，同时导出 PPQ 的量化配置信息。
-        该函数可以将 PPQ ir 保存为不同格式的模型文件。
-    this func dumps ppq IR to file, and exports quantization setting information simultaneously
+    """使用这个函数将 PPQ ir 保存到文件，同时导出 PPQ 的量化配置信息。 该函数可以将 PPQ ir 保存为不同格式的模型文件。 this
+    func dumps ppq IR to file, and exports quantization setting information
+    simultaneously.
 
     详细的支持情况请参考: ppq.parser.__ini__.py
     for details please refer to ppq.parser.__ini__.py
 
     Args:
-        graph (BaseGraph): 被保存的 ir 
+        graph (BaseGraph): 被保存的 ir
                            the ppq IR graph
 
         platform (TargetPlatform): 期望部署的目标平台
@@ -610,26 +600,23 @@ def export_ppq_graph(
 
 
 def format_graph(graph: BaseGraph) -> BaseGraph:
-    """
+    """这个函数对计算图进行预处理工作，其主要内容是将计算图的格式进行统一 这个函数将会统一 cast, slice, parameter,
+    constant 算子的格式，并且执行有关 batchnorm 的合并工作.
 
-    这个函数对计算图进行预处理工作，其主要内容是将计算图的格式进行统一
-    这个函数将会统一 cast, slice, parameter, constant 算子的格式，并且执行有关 batchnorm 的合并工作
-    
     在 PPQ 中，我们不希望出现 Constant 算子，所有 Constant 输入将被当作 parameter variable 连接到下游算子上
     在 PPQ 中，我们不希望出现 Batchnorm 算子，所有 Batchnorm 将被合并
     在 PPQ 中，我们不希望出现权重共享的算子，所有被共享的权重将被复制分裂成多份
     在 PPQ 中，我们不希望出现孤立算子，所有孤立算子将被移除
-    
+
     This function takes pre-processing procedure with your graph.
     This function will convert operations like cast, slice, parameter, constant to the format that supported by ppq.
     This function will merge batchnorm when possible.
-    
+
     During quantization logic, we do not expect there is any constant operation in your network, so
         all of them will be converted as parameter input variable.
-    
+
     We do not expect there is any shared parameter in your network, all of them will be copied and spilted.
     We do not expect any isolated operation in your network, all of them will be removed.
-
     """
 
     # do graph level optimization
@@ -647,24 +634,20 @@ def format_graph(graph: BaseGraph) -> BaseGraph:
 
 
 def dispatch_graph(graph: BaseGraph, platform: TargetPlatform, setting: QuantizationSetting) -> BaseGraph:
-    """
-    
-    这个函数执行图切分与调度，你的计算图将被切分成一系列子图，并被调度到不同设备上。
-    调度的逻辑分为自动控制的部分以及手动覆盖的部分，你可以使用 QuantizationSetting 来向这个函数传递手动调度表
-    从而覆盖 PPQ 的调度逻辑。
-    
+    """这个函数执行图切分与调度，你的计算图将被切分成一系列子图，并被调度到不同设备上。 调度的逻辑分为自动控制的部分以及手动覆盖的部分，你可以使用
+    QuantizationSetting 来向这个函数传递手动调度表 从而覆盖 PPQ 的调度逻辑。
+
     注意：这个函数依据调度器和TargetPlatform 平台的不同而产生行为差异，生成不同的调度计划。
-    
+
     This function will cut your graph into a series of subgraph and send them to different device.
     PPQ provides an automatic dispatcher which, will generate different dispatching scheme on your TargetPlatform.
-    A dispatching table can be passed via QuantizationSetting to override 
+    A dispatching table can be passed via QuantizationSetting to override
         the default dispatching logic of ppq dispatcher manually.
-
     """
     assert platform in QUANTIZER_COLLECTION, (
         f'Platform misunderstood, except one of following platform {QUANTIZER_COLLECTION.keys()}')
     quantizer = QUANTIZER_COLLECTION[platform](graph) # 初始化一个 quantizer 没有很大代价...
-    
+
     if str(setting.dispatcher).lower() not in DISPATCHER_TABLE:
         raise ValueError(f'Can not found dispatcher type "{setting.dispatcher}", check your input again.')
     dispatcher = DISPATCHER_TABLE[str(setting.dispatcher).lower()]()
@@ -673,9 +656,9 @@ def dispatch_graph(graph: BaseGraph, platform: TargetPlatform, setting: Quantiza
     quant_types = quantizer.quant_operation_types
 
     dispatching_table = dispatcher.dispatch(
-        graph=graph, quant_types=quant_types, 
+        graph=graph, quant_types=quant_types,
         quant_platform=TargetPlatform.UNSPECIFIED, # MUST BE UNSPECIFIED, 这里的意思是交由 Quantizer 决定是否量化这个算子
-        fp32_platform=TargetPlatform.FP32,         
+        fp32_platform=TargetPlatform.FP32,
         SOI_platform=TargetPlatform.SHAPE_OR_INDEX)
 
     # override dispatching result with setting
@@ -687,17 +670,17 @@ def dispatch_graph(graph: BaseGraph, platform: TargetPlatform, setting: Quantiza
             'All platform setting given in dispatching table is expected given as int, '
             f'however {type(platform)} was given.')
         dispatching_table[opname] = TargetPlatform(platform)
-    
+
     for operation in graph.operations.values():
         assert operation.name in dispatching_table, (
             f'Internal Error, Can not find operation {operation.name} in dispatching table.')
         operation.platform = dispatching_table[operation.name]
-    
+
     # insert necessary device switchers.
     formatter = GraphDeviceSwitcher(graph)
     formatter(GraphCommand(GraphCommandType.INSERT_SWITCHER))
     return graph
-    
+
 
 class UnbelievableUserFriendlyQuantizationSetting:
     """
@@ -705,7 +688,7 @@ class UnbelievableUserFriendlyQuantizationSetting:
 
     这个文件包含了最基本的量化配置。
     """
-    
+
     def __init__(self, platform: TargetPlatform, finetune_steps: int = 5000, finetune_lr: float = 3e-4,
                  interested_outputs: List[str] = None, calibration: str = 'percentile', equalization: bool = True,
                  non_quantable_op: List[str] = None) -> None:
@@ -739,7 +722,7 @@ class UnbelievableUserFriendlyQuantizationSetting:
         # 将菜鸡版量化配置转换成高级版的
         daddy = QuantizationSettingFactory.default_setting()
         daddy.quantize_activation_setting.calib_algorithm = self.calibration
-        
+
         if self.platform in {TargetPlatform.PPL_CUDA_INT4, TargetPlatform.PPL_CUDA_INT8}:
             daddy.fusion_setting.fuse_conv_add   = True
         else: daddy.fusion_setting.fuse_conv_add = False
@@ -766,12 +749,12 @@ class UnbelievableUserFriendlyQuantizationSetting:
                     f'你尝试使用 non_quantable_op 来设定非量化算子，'
                     f'non_quantable_op 只应当包含算子的名字，而你传入的数据中包括了 {type(op_name)}')
                 daddy.dispatching_table.append(op_name, TargetPlatform.FP32)
-        
+
         return daddy
 
     def to_json(self, file_path: str) -> str:
         if os.path.exists(file_path):
-            if os.path.isdir(file_path): 
+            if os.path.isdir(file_path):
                 raise FileExistsError(f'文件 {file_path} 已经存在且是一个目录，无法将配置文件写入到该位置！')
             ppq_warning(f'文件 {file_path} 已经存在并将被覆盖')
 
@@ -790,12 +773,12 @@ class UnbelievableUserFriendlyQuantizationSetting:
             loaded = json.load(file)
         assert isinstance(loaded, dict), 'Json文件无法解析，格式不正确'
         assert 'platform' in loaded, 'Json文件缺少必要项目 "platform"'
-        
+
         platform = loaded['platform']
         if platform in TargetPlatform._member_names_:
             platform = TargetPlatform._member_map_[platform]
         else: raise KeyError('无法解析你的json配置文件，遇到了未知的platform属性。')
-        
+
         setting = UnbelievableUserFriendlyQuantizationSetting(platform)
         for key, value in loaded.items():
             if key == 'platform': continue
@@ -811,14 +794,12 @@ class UnbelievableUserFriendlyQuantizationSetting:
 def quantize(working_directory: str, setting: QuantizationSetting, model_type: NetworkFramework,
              executing_device: str, input_shape: List[int], target_platform: TargetPlatform,
              dataloader: DataLoader, calib_steps: int = 32) -> BaseGraph:
-    """
-    Helper function for quantize your model within working directory,
-        This function will do some check and redirect your requirement to: 
-            ppq.api.quantize_onnx_model
-            ppq.api.quantize_caffe_model
-    
+    """Helper function for quantize your model within working directory, This
+    function will do some check and redirect your requirement to:
+    ppq.api.quantize_onnx_model ppq.api.quantize_caffe_model.
+
     see them for more information.
-    
+
     Args:
         working_directory (str): A path that indicates working directory.
         setting (QuantizationSetting): Quantization setting
@@ -858,10 +839,9 @@ def quantize(working_directory: str, setting: QuantizationSetting, model_type: N
 
 
 def export(working_directory: str, quantized: BaseGraph, platform: TargetPlatform, **kwargs):
-    """
-    Helper function to export your graph to working directory,
-        You should notice this function just redirect your invoking to export_ppq_graph.
-        see export_ppq_graph for more information.
+    """Helper function to export your graph to working directory, You should
+    notice this function just redirect your invoking to export_ppq_graph. see
+    export_ppq_graph for more information.
 
     Args:
         working_directory (str): _description_
@@ -876,20 +856,19 @@ def export(working_directory: str, quantized: BaseGraph, platform: TargetPlatfor
     )
 
 
-def manop(graph: BaseGraph, list_of_passes: List[QuantizationOptimizationPass], 
+def manop(graph: BaseGraph, list_of_passes: List[QuantizationOptimizationPass],
           calib_dataloader: Iterable, executor: BaseGraphExecutor,
           collate_fn: Callable = None, **kwargs) -> BaseGraph:
-    """
-    manop 是一个很方便的函数，你可以调用这个函数来手动地执行一些量化优化工作
-    你可以在默认量化逻辑之前或之后调用这个函数来自定义量化处理流程，相比于直接实现
-    Quantizer来修改量化逻辑的方式, 使用 manop 会更加灵活。
-    
+    """manop 是一个很方便的函数，你可以调用这个函数来手动地执行一些量化优化工作
+    你可以在默认量化逻辑之前或之后调用这个函数来自定义量化处理流程，相比于直接实现 Quantizer来修改量化逻辑的方式, 使用 manop
+    会更加灵活。
+
     MANOP (manually optimize) function is introduced since PPQ 0.6.4.
-    This function allows you to manually invoke 
+    This function allows you to manually invoke
         QuantizationOptimizationPass before or after default quantization logic.
-    
-    We do not use function name like apply, optim, do ... 
-    Because they are so widely-used in other python libraries, 
+
+    We do not use function name like apply, optim, do ...
+    Because they are so widely-used in other python libraries,
         and can easily conflict with each other.
 
     Args:
@@ -923,8 +902,8 @@ def manop(graph: BaseGraph, list_of_passes: List[QuantizationOptimizationPass],
 
 
 __all__ = ['load_graph', 'load_onnx_graph', 'load_caffe_graph',
-           'dispatch_graph', 'dump_torch_to_onnx', 'quantize_onnx_model', 
-           'quantize_torch_model', 'quantize_caffe_model', 
-           'export_ppq_graph', 'format_graph', 'quantize', 'export', 
-           'UnbelievableUserFriendlyQuantizationSetting', 'manop', 
+           'dispatch_graph', 'dump_torch_to_onnx', 'quantize_onnx_model',
+           'quantize_torch_model', 'quantize_caffe_model',
+           'export_ppq_graph', 'format_graph', 'quantize', 'export',
+           'UnbelievableUserFriendlyQuantizationSetting', 'manop',
            'quantize_native_model']

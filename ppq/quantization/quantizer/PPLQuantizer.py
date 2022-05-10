@@ -30,7 +30,7 @@ class PPLCUDAQuantizer(BaseQuantizer):
             quant_max=self._quant_max, quant_min=self._quant_min,
             observer_algorithm='percentile'
         )
-        
+
         if operation.type in {'Conv', 'ConvTranspose', 'Gemm'}:
             # set all parameters within Conv, ConvTranspose, Gemm to per-channel quant-config.
             assert operation.num_of_input > 0, 'Seems you got a Conv layer with no parameters.'
@@ -101,7 +101,7 @@ class PPLCUDAQuantizer(BaseQuantizer):
     def quant_operation_types(self) -> set:
         return {
             'Conv', 'Relu', 'PRelu', 'Clip', 'Gemm',
-            'Resize', 'MaxPool', 'AveragePool', 
+            'Resize', 'MaxPool', 'AveragePool',
             'GlobalMaxPool', 'GlobalAveragePool',
             'Mul', 'Add', 'LeakyRelu', 'Split', 'Concat',
             'Transpose', 'Slice', 'Reshape', 'Flatten',

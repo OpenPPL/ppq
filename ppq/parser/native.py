@@ -8,7 +8,7 @@ from ppq.IR.base.graph import GraphBuilder
 class NativeExporter(GraphExporter):
     def __init__(self) -> None:
         super().__init__()
-    def export(self, file_path: str, graph: BaseGraph, 
+    def export(self, file_path: str, graph: BaseGraph,
                config_path: str = None, dump_value: bool = True):
         def dump_elements_to_file(file, elements: list):
             for element in elements: dump(element, file)
@@ -58,4 +58,3 @@ class NativeImporter(GraphBuilder):
         except Exception as e:
             raise Exception('File format parsing error. Graph Definition has been damaged.')
         return graph
-        

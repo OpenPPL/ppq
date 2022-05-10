@@ -13,12 +13,12 @@ for i in range(TEST_TIMES):
     t = torch.rand(size=[128, 3, 224, 224]).to(EXECUTING_DEVICE)
     s = torch.rand(size=[1]).to(EXECUTING_DEVICE)
     o = torch.randint(low=0, high=255, size=[1]).float().to(EXECUTING_DEVICE)
-    
+
     # torch quantize
     qt = ppq_tensor_round(t / s, policy=ROUNDING_POLICY) + o
     qt = qt.clip(Q_MIN, Q_MAX)
     qt = (qt - o) * s
-    
+
     # t = t.int()
     cuda_qt = CUDA.LinearQuantize_T(
         t, s, o, Q_MIN, Q_MAX, ROUNDING_POLICY.value)
@@ -31,14 +31,14 @@ for i in range(TEST_TIMES):
     s = torch.rand(size=[3]).to(EXECUTING_DEVICE)
     o = torch.randint(low=0, high=255, size=[3]).float().to(EXECUTING_DEVICE)
     c = 1
-    
+
     # torch quantize
     shape = [1 if axis != c else -1 for axis in range(t.ndim)]
     s, o = s.view(shape), o.view(shape)
     qt = ppq_tensor_round(t / s, policy=ROUNDING_POLICY) + o
     qt = qt.clip(Q_MIN, Q_MAX)
     qt = (qt - o) * s
-    
+
     # t = t.int()
     cuda_qt = CUDA.LinearQuantize_C(
         t, s, o, c, Q_MIN, Q_MAX, ROUNDING_POLICY.value)
@@ -48,7 +48,7 @@ for i in range(TEST_TIMES):
 for i in range(TEST_TIMES):
     t = torch.rand(size=[128, 3, 224, 224]).to(EXECUTING_DEVICE)
     s = 0.01
-    
+
     # torch hist
     hist = torch.histc(torch.abs(t), bins=50, min=0, max=0.5)
 
@@ -129,9 +129,9 @@ for i in range(100):
     t = torch.rand(size=[3,3,224,224]).to(EXECUTING_DEVICE)
     s = torch.Tensor([1]).float().to(EXECUTING_DEVICE)
     o = torch.zeros(size=[1]).to(EXECUTING_DEVICE).float()
-    
+
     t.requires_grad = True
-    
+
     qt = CUDA.LinearQuantize_T(t, s, o, Q_MIN, Q_MAX)
     rl_torch = torch.sum(torch.abs(qt - t)) / sqrt(qt.numel())
     rl_torch.backward()
@@ -146,9 +146,9 @@ for i in range(100):
     t = torch.rand(size=[3,3,224,224]).to(EXECUTING_DEVICE)
     s = torch.Tensor([1, 2, 3]).float().to(EXECUTING_DEVICE)
     o = torch.zeros(size=[3]).to(EXECUTING_DEVICE).float()
-    
+
     t.requires_grad = True
-    
+
     qt = CUDA.LinearQuantize_C(t, s, o, 1, Q_MIN, Q_MAX)
     rl_torch = torch.sum(torch.abs(qt - t)) / sqrt(qt.numel())
     rl_torch.backward()

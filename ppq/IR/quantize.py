@@ -14,7 +14,7 @@ from .processer import GraphCommandProcesser
 
 class QuantableOperation(Operation):
     def __init__(
-        self, 
+        self,
         convert_from: Operation,
         quantize_config: OperationQuantizationConfig,
         platform: TargetPlatform
@@ -42,7 +42,7 @@ class QuantableOperation(Operation):
 
     @ config.setter
     def set_config(self, config):
-        """ we will update variable's during this function
+        """we will update variable's during this function.
 
         Args:
             config ([type]): [description]
@@ -74,7 +74,7 @@ class QuantableOperation(Operation):
         return self
 
     def store_parameter_value(self):
-        for var, _ in zip(self.inputs + self.outputs, 
+        for var, _ in zip(self.inputs + self.outputs,
             self.config.input_quantization_config + self.config.output_quantization_config):
             if var.is_parameter:
                 assert isinstance(var, QuantableVariable), 'Unexpected error.'
@@ -86,7 +86,7 @@ class QuantableOperation(Operation):
 
     def dequantize(self, parameter_only: bool = False, expire_device: str = 'cpu'):
         if self._dequantized: return self
-        for var, quant_config in zip(self.inputs + self.outputs, 
+        for var, quant_config in zip(self.inputs + self.outputs,
             self.config.input_quantization_config + self.config.output_quantization_config):
             if parameter_only and not var.is_parameter: continue
             quant_config.detail['Stored State'] = quant_config.state
@@ -105,7 +105,7 @@ class QuantableOperation(Operation):
 
     def restore_quantize_state(self, expire_device: str = 'cpu'):
         if not self._dequantized: return self
-        for var, quant_config in zip(self.inputs + self.outputs, 
+        for var, quant_config in zip(self.inputs + self.outputs,
             self.config.input_quantization_config + self.config.output_quantization_config):
             if 'Stored State' in quant_config.detail:
                 quant_config.state = quant_config.detail['Stored State']
@@ -124,9 +124,8 @@ class QuantableOperation(Operation):
 
     @ property
     def config_with_variable(self) -> List[Tuple[TensorQuantizationConfig, Variable]]:
-        """
-        Just a helper function,
-            This function will list all related config and variable with current operation.
+        """Just a helper function, This function will list all related config
+        and variable with current operation.
 
         Returns:
             List[Tuple[TensorQuantizationConfig, Variable]]: [description]
@@ -154,7 +153,7 @@ class QuantableVariable(Variable):
     @ property
     def stored_value(self) -> Any:
         return self._fp32_value
-    
+
     @ stored_value.setter
     def stored_value(self, value: Any):
         self._fp32_value = value
@@ -193,16 +192,14 @@ class QuantableVariable(Variable):
 
 
 class DeviceSwitchOP(Operation):
-    """
-    DeviceSwitch is a PPQ internal operation.
-        This operation is inserted at platfrom's boundary
-        for transfering data between devices.
+    """DeviceSwitch is a PPQ internal operation. This operation is inserted at
+    platfrom's boundary for transfering data between devices.
 
     Args:
         Operation ([type]): [description]
     """
     def __init__(self, name: str,
-                 inputs: List[Variable] = None, 
+                 inputs: List[Variable] = None,
                  outputs: List[Variable] = None) -> None:
         super().__init__(
             attributes={},
@@ -222,9 +219,9 @@ class QuantableGraph(GraphCommandProcesser):
         return [
             GraphCommandType.QUANTIZE_OPERATION,
         ]
-    
+
     def quantize_operation(
-        self, 
+        self,
         operation_name: str,
         target_platform: TargetPlatform,
         quantization_config: OperationQuantizationConfig
@@ -256,7 +253,7 @@ class QuantableGraph(GraphCommandProcesser):
             if isinstance(var, QuantableVariable): continue
             self._next_command_processer(
                 ReplaceVariableCommand(
-                    var_name=var.name, 
+                    var_name=var.name,
                     replace_to=QuantableVariable(convert_from=var)
                 )
             )
@@ -273,17 +270,13 @@ class QuantableGraph(GraphCommandProcesser):
         else: return operation.dequantize()
 
     def dequantize_graph(self):
-        """
-            一个方便懒人的函数
-        """
+        """一个方便懒人的函数."""
         for operation in self.graph.operations.values():
             if isinstance(operation, QuantableOperation):
                 operation.dequantize()
-    
+
     def restore_quantize_state(self):
-        """
-            一个方便懒人的函数
-        """
+        """一个方便懒人的函数."""
         for operation in self.graph.operations.values():
             if isinstance(operation, QuantableOperation):
                 operation.restore_quantize_state()

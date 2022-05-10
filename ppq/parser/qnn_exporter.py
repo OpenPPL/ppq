@@ -27,15 +27,15 @@ class QNNDSPExporter(OnnxExporter):
                 if config.num_of_bits > 8: continue
 
                 if config.state in {
-                    QuantizationStates.SOI, 
-                    QuantizationStates.DEACTIVATED, 
-                    QuantizationStates.DEQUANTIZED, 
+                    QuantizationStates.SOI,
+                    QuantizationStates.DEACTIVATED,
+                    QuantizationStates.DEQUANTIZED,
                     QuantizationStates.FP32
                 }: continue
-                # Simply override recorder is acceptable here, 
+                # Simply override recorder is acceptable here,
                 # we do not support mix presicion quantization for CUDA backend now.
                 # All configurations for this variable should keep identical towards each other.
-                
+
                 if config.state == QuantizationStates.SLAVE and var.name in activation_info: continue
 
                 assert not isinstance(config, ChannelwiseTensorQuantizationConfig), 'QNNExporter only support'\
@@ -49,12 +49,12 @@ class QNNDSPExporter(OnnxExporter):
                         }]
                 if var.is_parameter:
                     param_info[var.name] = info
-                else: 
+                else:
                     activation_info[var.name] = info
 
         exports = {
-            "activation_encodings": activation_info,
-            "param_encodings": param_info
+            'activation_encodings': activation_info,
+            'param_encodings': param_info
         }
 
         with open(file=config_path, mode='w') as file:

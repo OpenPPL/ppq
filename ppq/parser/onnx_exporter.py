@@ -94,7 +94,7 @@ class OnnxExporter(GraphExporter):
                     }
                     for config, var in operation.config_with_variable
                 }
-                
+
                 for config, _ in operation.config_with_variable:
                     if config.dominated_by == config:
                         render_buffer['values'][config.__hash__()] = {
@@ -104,7 +104,7 @@ class OnnxExporter(GraphExporter):
 
                 render_buffer['configs'][operation.name] = op_dict
                 render_buffer['dispatchings'][operation.name] = operation.platform.name
-        
+
         with open(file=config_path, mode='w') as file:
             json.dump(render_buffer, file, indent=4)
 
@@ -114,7 +114,7 @@ class OnnxExporter(GraphExporter):
             assert isinstance(exporter, OperationExporter), (
                 f'Expected an OpExporter here, however {type(exporter)} was given.')
             operation = exporter.export(operation=operation, graph=None)
-        
+
         attributes = operation.attributes
         for key in attributes:
             value = attributes[key]
@@ -182,7 +182,7 @@ class OnnxExporter(GraphExporter):
         # if a valid config path is given, export quantization config to there.
         if config_path is not None:
             self.export_quantization_config(config_path, graph)
-        
+
         # Ready to export onnx graph defination.
         _inputs, _outputs, _initilizers, _nodes = [], [], [], []
         for operation in graph.topological_sort():

@@ -49,7 +49,7 @@ class BaseQuantizer(metaclass = ABCMeta):
         # prequant pipeline will change your network structure and float value.
         prequant_pipeline = self.build_prequant_pipeline(
             setting, executor=executor)
-        prequant_pipeline.optimize(                
+        prequant_pipeline.optimize(
             graph=self._processer_chain,
             dataloader=calib_dataloader,
             executor=executor,
@@ -76,7 +76,7 @@ class BaseQuantizer(metaclass = ABCMeta):
             **kwargs
         )
 
-        if self._verbose: 
+        if self._verbose:
             print(self.report(), end='')
             print('Network Quantization Finished.')
         # check if all quantization configs have been processed
@@ -111,7 +111,7 @@ class BaseQuantizer(metaclass = ABCMeta):
             else: operation_platforms[op_name] = self.default_platform
 
             # maunnl override.
-            if op_name in operation_platforms: 
+            if op_name in operation_platforms:
                 operation.platform = operation_platforms[op_name]
 
         # build operation_quantization_configs
@@ -155,8 +155,8 @@ class BaseQuantizer(metaclass = ABCMeta):
                 quantization_config = operation_quantization_configs[op_name]
                 self._processer_chain(
                     QuantizeOperationCommand(
-                        op_name=operation.name, 
-                        target_platform=target_platform, 
+                        op_name=operation.name,
+                        target_platform=target_platform,
                         config=quantization_config
                     )
                 )
@@ -166,7 +166,7 @@ class BaseQuantizer(metaclass = ABCMeta):
 
     @ staticmethod
     def create_default_quant_config(
-        operation_meta: OperationMeta, num_of_bits: int, 
+        operation_meta: OperationMeta, num_of_bits: int,
         quant_min: int, quant_max: int, observer_algorithm: str,
         policy: QuantizationPolicy, rounding: RoundingPolicy,
     ) -> OperationQuantizationConfig:
@@ -189,7 +189,7 @@ class BaseQuantizer(metaclass = ABCMeta):
     @ abstractproperty
     @ property
     def quant_operation_types(self) -> set:
-        raise NotImplementedError('Quantizier does not have a quantable op set yet.') 
+        raise NotImplementedError('Quantizier does not have a quantable op set yet.')
 
     @ abstractproperty
     @ property
@@ -217,7 +217,7 @@ class BaseQuantizer(metaclass = ABCMeta):
         quant_ops = [op for op in self._graph.operations.values() if isinstance(op, QuantableOperation)]
         quant_vars = [var for var in self._graph.variables.values() if isinstance(var, QuantableVariable)]
         quant_cfgs = []
-        
+
         config_states_cnt = {state: 0 for state in QuantizationStates}
         for op in quant_ops:
             for cfg, _ in op.config_with_variable:
@@ -238,12 +238,12 @@ class BaseQuantizer(metaclass = ABCMeta):
         return debug_str
 
     def build_quant_pipeline(
-        self, setting: QuantizationSetting, 
+        self, setting: QuantizationSetting,
         executor: BaseGraphExecutor) -> QuantizationOptimizationPipeline:
         assert isinstance(setting, QuantizationSetting), (
             f'PPQ needs a OptimSetting instance to initialize optimization pipeline,'
             f' however {type(setting)} was given.')
-        
+
         list_of_passes = []
 
         if setting.ssd_equalization:
@@ -255,7 +255,7 @@ class BaseQuantizer(metaclass = ABCMeta):
                 layer_norm           = equalization_setting.layer_norm,
                 iteration            = equalization_setting.iteration
             ))
-        
+
         if setting.channel_split:
             channel_split_setting = setting.channel_split_setting
             list_of_passes.append(ChannelSplitPass(
@@ -286,7 +286,7 @@ class BaseQuantizer(metaclass = ABCMeta):
 
             if fusion_setting.fuse_conv_add:
                 list_of_passes.append(PPLCudaAddConvReluMerge())
-            
+
             if fusion_setting.remove_useless_quantization:
                 list_of_passes.append(QuantizeReducePass())
 
@@ -303,10 +303,10 @@ class BaseQuantizer(metaclass = ABCMeta):
             else:
                 list_of_passes.append(RuntimeCalibrationPass(
                     method=act_setting.calib_algorithm))
-            
+
             if act_setting.inplace_act_quantization:
                 list_of_passes.append(InplaceQuantizationSettingPass())
-        
+
         if setting.fusion:
             if fusion_setting.align_quantization:
                 list_of_passes.append(QuantAlignmentPass(
@@ -319,7 +319,7 @@ class BaseQuantizer(metaclass = ABCMeta):
             param_setting = setting.quantize_parameter_setting
             if param_setting.quantize_passive_parameter:
                 list_of_passes.append(PassiveParameterQuantizePass())
-        
+
         if setting.lsq_optimization:
             lsq_setting = setting.lsq_optimization_setting
             list_of_passes.append(LearningStepSizeOptimization(
@@ -330,7 +330,7 @@ class BaseQuantizer(metaclass = ABCMeta):
                 collecting_device      = lsq_setting.collecting_device
             )
         )
-        
+
         if setting.blockwise_reconstruction:
             brecq_setting = setting.blockwise_reconstruction_setting
             list_of_passes.append(BlockwiseReconstructionPass(
@@ -368,21 +368,21 @@ class BaseQuantizer(metaclass = ABCMeta):
         if setting.quantize_parameter:
             if param_setting.baking_parameter:
                 list_of_passes.append(ParameterBakingPass())
-            
+
         if setting.extension:
             list_of_passes.append(ExtensionPass(
                 setting.extension_setting.my_first_parameter))
-    
-        
+
+
         return QuantizationOptimizationPipeline(passes=list_of_passes)
 
     def build_prequant_pipeline(
-        self, setting: QuantizationSetting, 
+        self, setting: QuantizationSetting,
         executor: BaseGraphExecutor) -> QuantizationOptimizationPipeline:
         assert isinstance(setting, QuantizationSetting), (
             f'PPQ needs a OptimSetting instance to initialize optimization pipeline,'
             f' however {type(setting)} was given.')
-        
+
         list_of_passes = []
 
         if setting.equalization:
@@ -396,7 +396,7 @@ class BaseQuantizer(metaclass = ABCMeta):
                 bias_mutiplier       = equalization_setting.bias_multiplier,
                 activation_mutiplier = equalization_setting.act_multiplier
             ))
-        
+
         if setting.matrix_factorization:
             list_of_passes.append(MatrixFactorizationPass(
                 interested_layers=setting.matrix_factorization_setting.interested_layers,

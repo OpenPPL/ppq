@@ -1,9 +1,6 @@
-"""
-    PPQ Core Decorator & MetaClass definations
-    PPQ 核心装饰器、元类型定义
+"""PPQ Core Decorator & MetaClass definations PPQ 核心装饰器、元类型定义.
 
-    You are not allowed to modify this
-    请勿修改此文件
+You are not allowed to modify this 请勿修改此文件
 """
 
 import gc
@@ -14,10 +11,9 @@ from .config import PPQ_DEBUG
 
 
 class SingletonMeta(type):
-    """
-    The Singleton class can be implemented in different ways in Python. Some
-        possible methods include: base class, decorator, metaclass. We will use the
-        metaclass because it is best suited for this purpose.
+    """The Singleton class can be implemented in different ways in Python. Some
+    possible methods include: base class, decorator, metaclass. We will use the
+    metaclass because it is best suited for this purpose.
 
     see also: https://refactoring.guru/design-patterns/singleton/python/example
     """
@@ -25,10 +21,8 @@ class SingletonMeta(type):
     _instances = {}
 
     def __call__(cls, *args, **kwargs):
-        """
-        Possible changes to the value of the `__init__` argument do not affect
-        the returned instance.
-        """
+        """Possible changes to the value of the `__init__` argument do not
+        affect the returned instance."""
         if cls not in cls._instances:
             instance = super().__call__(*args, **kwargs)
             cls._instances[cls] = instance
@@ -36,8 +30,7 @@ class SingletonMeta(type):
 
 
 def ppq_legacy(func: str, version: str, adapt_to: str = None):
-    """
-    Mark an function as legacy function.
+    """Mark an function as legacy function.
 
     Args:
         func (str): _description_
@@ -48,10 +41,10 @@ def ppq_legacy(func: str, version: str, adapt_to: str = None):
 
 
 def empty_ppq_cache(func: Callable):
-    """
-        Using empty_ppq_cache decorator to clear ppq memory cache,
-            both gpu memory and cpu memory will be clear via this function.
-        Function which get decorated by this will clear all ppq system cache BEFORE its running.
+    """Using empty_ppq_cache decorator to clear ppq memory cache, both gpu
+    memory and cpu memory will be clear via this function.
+
+    Function which get decorated by this will clear all ppq system cache BEFORE its running.
     Args:
         func (Callable): decorated function
     """
@@ -63,8 +56,8 @@ def empty_ppq_cache(func: Callable):
 
 
 def ppq_quant_param_computing_function(func: Callable):
-    """
-        mark a function to be a scale-computing function.
+    """mark a function to be a scale-computing function.
+
     Args:
         func (Callable): decorated function
     """
@@ -74,8 +67,8 @@ def ppq_quant_param_computing_function(func: Callable):
 
 
 def ppq_debug_function(func: Callable):
-    """
-        mark a function to be a debug function.
+    """mark a function to be a debug function.
+
     Args:
         func (Callable): decorated function
     """
@@ -93,9 +86,9 @@ def ppq_debug_function(func: Callable):
 
 
 def ppq_file_io(func: Callable):
-    """
-        mark a function to be a ppq file io function.
-            function must have return a file handle.
+    """mark a function to be a ppq file io function.
+
+    function must have return a file handle.
     Args:
         func (Callable): decorated function
     """

@@ -63,14 +63,14 @@ class CalibrationHook(QuantOPRuntimeHook):
         for _, observer in self._observer_table.items():
             observer.render_quantization_config()
             observer.report()
-    
+
     def __str__(self) -> str:
-        return ''.join([observer.__str__() + '\n' for _, observer in self._observer_table.items()]) 
+        return ''.join([observer.__str__() + '\n' for _, observer in self._observer_table.items()])
 
 
 class OperationObserver(metaclass=ABCMeta):
     def __init__(
-        self, 
+        self,
         operation: QuantableOperation,
         monitor_parameter: bool = True,
         monitor_outputs  : bool = True,
@@ -83,15 +83,15 @@ class OperationObserver(metaclass=ABCMeta):
 
         self._operation = operation
         self._hook = self.build_hook(
-            monitor_parameter = monitor_parameter, 
-            monitor_outputs   = monitor_outputs, 
+            monitor_parameter = monitor_parameter,
+            monitor_outputs   = monitor_outputs,
             monitor_inputs    = monitor_inputs
         )
 
     def render_quantization_config(self):
         self.hook.render_quantization_config()
 
-    def build_hook(self, monitor_parameter: bool, 
+    def build_hook(self, monitor_parameter: bool,
         monitor_outputs: bool, monitor_inputs: bool) -> CalibrationHook:
         assert isinstance(self._operation, QuantableOperation)
         observer_table = {}

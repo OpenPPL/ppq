@@ -11,11 +11,11 @@ from .base import QuantizationOptimizationPass
 
 
 class ParameterBakingPass(QuantizationOptimizationPass):
-    """
-    ParameterBakingPass is a useful tool for quantization simulation acceleration.
-        By default quantizer will bake network parameters once all quantization procedures are finished.
-    For a typical Convolution layer or Gemm layer, which has a non-empty bias tensor,
-    ParameterBakingPass will speed up the layer execution by 30%-50%.
+    """ParameterBakingPass is a useful tool for quantization simulation
+    acceleration. By default quantizer will bake network parameters once all
+    quantization procedures are finished. For a typical Convolution layer or
+    Gemm layer, which has a non-empty bias tensor, ParameterBakingPass will
+    speed up the layer execution by 30%-50%.
 
     ParameterBakingPass will rewrite layer parameters with their quantized version,
         the quantization procedure will strictly follow layer quantization configuration.
@@ -58,10 +58,10 @@ class ConstantBakingPass(QuantizationOptimizationPass):
         self._quantize_function = quantize_function
 
     @ empty_ppq_cache
-    def optimize(self, processer: GraphCommandProcesser, dataloader: Iterable, 
+    def optimize(self, processer: GraphCommandProcesser, dataloader: Iterable,
         executor: BaseGraphExecutor, **kwargs) -> None:
         raise NotImplementedError('This pass has been removed from current PPQ version.')
-    
+
         graph = processer.graph
         for _, operation in graph.operations.items():
             assert isinstance(operation, Operation)

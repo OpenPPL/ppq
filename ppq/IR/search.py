@@ -27,7 +27,7 @@ class Path(Iterable):
     def __init__(self, operation: Operation = None) -> None:
         self._container = deque()
         if operation is not None: self._container.append(operation)
-    
+
     def append(self, op: Operation):
         self._container.append(op)
         return self
@@ -38,13 +38,13 @@ class Path(Iterable):
 
     def __iter__(self) -> Iterator[Operation]:
         return self._container.__iter__()
-    
+
     def __getitem__(self, index: int) -> Operation:
         return self._container[index]
-    
+
     def __str__(self) -> str:
         return ''.join([str(_) for _ in self._container.__str__()])
-    
+
     def tolist(self) -> List[Operation]:
         return list(self._container)
 
@@ -57,7 +57,7 @@ class Path(Iterable):
 class OperationSet(set):
     def __init__(self) -> None:
         super().__init__()
-    
+
     def add(self, element: Operation):
         if not isinstance(element, Operation):
             raise TypeError('Operation Set can only contains operation instance.')
@@ -66,7 +66,7 @@ class OperationSet(set):
 
     def __iter__(self) -> Iterator[Operation]:
         return super().__iter__()
-    
+
     def filter(self, condition: PointPattern):
         removing = []
         for item in self:
@@ -102,11 +102,11 @@ class TraversalCommand(GraphCommand):
                 ep_expr = lamdba x: x.type == 'Conv'
                 limitation = None
                 direction = 'down'
-            this Command searches paths which starts with any 
+            this Command searches paths which starts with any
             Conv op, visits any number of Relu ops, and finally
             ends with any Conv op
         Args:
-            sp_expr (Union[PointPattern, Callable]): 
+            sp_expr (Union[PointPattern, Callable]):
                 start point expression, 用于匹配检索起点的表达式
             rp_expr (Union[RelayPattern, Callable]):
                 relay point expression, 用于匹配检索中继点的表达式
@@ -128,13 +128,11 @@ class TraversalCommand(GraphCommand):
             super().__init__(GraphCommandType.TRAVERSAL_OPSET_MATCHING)
         else:
             raise ValueError('PPQ only support "opset" matching and "path" matching for now.')
-            
+
 
     @ staticmethod
     def complie(query: str):
-        """
-        compile 函数把一个查询字符串编译成一个 TraversalCommand。
-        我们还没有具体实现这个函数，但我们已经定义好了语法：
+        """compile 函数把一个查询字符串编译成一个 TraversalCommand。 我们还没有具体实现这个函数，但我们已经定义好了语法：
 
         查询字符串应该是下面的格式：
         SELECT  ["START"|"END"|"PATH"]
@@ -182,14 +180,12 @@ class TreeNode:
 
 class PatternTree(Iterable):
     def __init__(self, patterns: List[Callable], edges: List[List[int]]) -> None:
-        """
-        Pattern Tree 是一个用来表示图模式的结构体
-        这将在图中检索任意一个抽象树形结构
-        
+        """Pattern Tree 是一个用来表示图模式的结构体 这将在图中检索任意一个抽象树形结构.
+
         你将使用 Pattern Tree 定义你的树结构
         使用 patterns 确定每一个节点需要满足的条件
         使用 edges 将节点们彼此相连从而构成树形结构
-        
+
         patterns[0] 将被设定为树的根节点
 
         Args:
@@ -246,41 +242,41 @@ class HungarianSolver:
         pt = PatternTree(
                 patterns = [lambda x: x.is_computing_op, lambda x: x.is_computing_op, 'Conv', 'Mul']
                 edges = [[0, 1], [1, 2], [2, 3], [0, 3]])
-        
+
             pt create an abstract tree pattern of:
                                             --- lambda x: x.is_computing_op  --
             lambda x: x.is_computing_op --- +                                 + --- 'Mul'
                                             --- 'Conv'                       --
 
-        There is an pattern overlap between x.is_computing_op and 'Conv', 
+        There is an pattern overlap between x.is_computing_op and 'Conv',
             so pattern x.is_computing_op might have more than 1 matchings.
-        
+
         in this case, we use hungarian algorithm to find an optimal matching(maximum).
             if there is more than 1 optimal matching, this solver will return ARBITRARY ONE.
 
         Args:
             num_of_ops (int):
 
-            num_of_patterns (int): 
+            num_of_patterns (int):
 
             matches (List[List[int]]): matches is a collection of op - pattern matchings,
-                if matches = [[0, 0], [1, 1], [2, 2]], 
+                if matches = [[0, 0], [1, 1], [2, 2]],
                     it means op0 is matched with pattern 0
                     it means op1 is matched with pattern 1
                     it means op2 is matched with pattern 2
-            
+
             Hungarian Algorithm will find an optimial matching between ops and patterns.
         """
         self.neighbor_table  = {node_idx: set() for node_idx in range(num_of_patterns)}
         self.num_of_ops      = num_of_ops
         self.num_of_patterns = num_of_patterns
         self.matched         = [-1 for _ in range(num_of_ops)]
-        for sp, ep in matches: 
+        for sp, ep in matches:
             self.neighbor_table[sp].add(ep)
-    
+
     def solve(self) -> bool:
         # 有一个匹配失败就立即返回，无需继续计算
-        visited = [False for _ in range(self.num_of_ops)] 
+        visited = [False for _ in range(self.num_of_ops)]
         for i in range(self.num_of_ops):
             if not self._solve(i, visited): return False
         return True
@@ -299,39 +295,39 @@ class TypeExpr(Callable):
     def __init__(self, type: str) -> None:
         self.type = type
         super().__init__()
-    
+
     def __call__(self, op: Operation) -> bool:
         return op.type == self.type
 
 
 class TreePatternMatcher:
     def __init__(self, pattern_tree: PatternTree) -> None:
-        """
-        TreePatternMatcher offers you a really powerful pattern matching tool that helps
-        you finding specific structure from your graph. Define your network structure with
-        pattern tree --- an internal data structure of PPQ, then extract corresponding graph 
-            structures from ppq graph via TreePatternMatcher.
-        
+        """TreePatternMatcher offers you a really powerful pattern matching
+        tool that helps you finding specific structure from your graph. Define
+        your network structure with pattern tree --- an internal data structure
+        of PPQ, then extract corresponding graph structures from ppq graph via
+        TreePatternMatcher.
+
         This feature will benifits you a lot when dealing with graph fusion and graph editing.
         PPQ use Depth First Search and Hungarian Algorithm to match pattern from your graph,
             be aware that for complex pattern it might cost a lot of time in matching.
-        
-        Time complexity: O(nkd^3), 
+
+        Time complexity: O(nkd^3),
             where n is the num of operation in your graph,
             k is the num of pattern in your pattern tree,
             d is the maximum drgree in your graph.
-        
+
         Notice in most cases it won't reach this complexity,
         it always have a complexity like O(nk)
-        
+
         ATTENTION: Do not use poorly designed pattern which might cause multiple matching results.
                    For this case, ppq will randomly pick one matched result and return.
-         
+
         Example:
             pt = PatternTree(
                 patterns = [lambda x: x.is_computing_op, 'Softplus', 'Tanh', 'Mul']
                 edges = [[0, 1], [1, 2], [2, 3], [0, 3]])
-        
+
             pt create an abstract tree pattern of:
                                             --- 'Softplus'   ---   'Tanh' --
             lambda x: x.is_computing_op --- +                              + --- 'Mul'
@@ -343,7 +339,7 @@ class TreePatternMatcher:
         self.pattern_tree   = pattern_tree
         self._interal_store = []
         self.results        = []
-        
+
     def match(self, graph: BaseGraph, exclusive: bool) -> List[List[Operation]]:
         root, candidates = self.pattern_tree.root, []
 
@@ -358,11 +354,11 @@ class TreePatternMatcher:
             if self._match(graph=graph, op=op, node_idx=0, exclusive=exclusive):
                 self.results.append(self._interal_store)
         return self.results
-        
+
     def _match(self, graph: BaseGraph, op: Operation, node_idx: int, exclusive: bool) -> bool:
         pnode, following_ops = self.pattern_tree[node_idx], graph.get_downstream_operations(op)
         num_of_ops, num_of_patterns = len(following_ops), len(self.pattern_tree.following_patterns(node_idx))
-        
+
         # 递归终止于 pattern 结尾
         if len(pnode.edges) == 0:
             if self._interal_store[node_idx] is not None:
@@ -373,14 +369,14 @@ class TreePatternMatcher:
 
         matches = []
         for op_idx, downstream_op in enumerate(following_ops):
-            for pattern_idx, pattern in enumerate(self.pattern_tree.following_patterns(node_idx)): 
+            for pattern_idx, pattern in enumerate(self.pattern_tree.following_patterns(node_idx)):
                 if pattern(downstream_op):
                     matches.append((pattern_idx, op_idx))
 
         # exclusive 模式，不允许节点有额外输出边
-        if exclusive and num_of_ops != num_of_patterns: 
+        if exclusive and num_of_ops != num_of_patterns:
             return False
-        
+
         # pattern 可以匹配到多个不同的节点，最坏情况下，找出所有可行的匹配方案时间复杂度为 n!
         # 其中 n 为 op 的下游节点个数，对于这种情况，我们不可能枚举所有匹配方案并完成算法 (P-completed)。
         # 如果 pattern 匹配到了多个节点，我们使用匈牙利算法找出任意一个最优匹配，并警告用户这样做的不完备性与随机性。
@@ -390,10 +386,10 @@ class TreePatternMatcher:
         #   edges = [[0, 1], [0, 2], [0, 3], ...]
         # 树形匹配将有 3! 种可行方案，我们将随机选取其中一种，进一步枚举可能产生不可预期的结果
         matching_solver = HungarianSolver(
-            num_of_ops = num_of_ops, 
+            num_of_ops = num_of_ops,
             num_of_patterns = num_of_patterns,
             matches = matches)
-        
+
         # 二部图匹配失败，直接返回 False
         if not matching_solver.solve():
             return False
@@ -405,15 +401,14 @@ class TreePatternMatcher:
                 if self._interal_store[node_idx] != op:
                     return False # 这种情况出现于复杂模式，直接返回失败即可
             self._interal_store[node_idx] = op
-            flag = self._match(graph=graph, op=following_ops[op_idx], 
+            flag = self._match(graph=graph, op=following_ops[op_idx],
                                node_idx=pnode.edges[pattern_idx], exclusive=exclusive)
             if not flag: return False
         return True
 
 
 class SearchableGraph(GraphCommandProcesser):
-    """
-        PPQ Graph Searching Engine.
+    """PPQ Graph Searching Engine.
 
     Args:
         GraphCommandProcesser ([type]): [description]
@@ -438,7 +433,7 @@ class SearchableGraph(GraphCommandProcesser):
                     direction=command._direction)
         else:
             raise TypeError(
-                'To execute a traversal-based pattern matching, a TraversalCommand is required here.\n' 
+                'To execute a traversal-based pattern matching, a TraversalCommand is required here.\n'
                 'Initialize your own TraversalCommand instance for invoking '
                 'this function rather than using plain GraphCommand Please.')
 
@@ -475,7 +470,7 @@ class SearchableGraph(GraphCommandProcesser):
                 if not rp_expr(start_point, op): continue
 
                 # searching following operations.
-                for path in self._path_matching(start_point=op, rp_expr=rp_expr, 
+                for path in self._path_matching(start_point=op, rp_expr=rp_expr,
                     ep_expr=ep_expr, direction=direction):
                     ret_collection.append(path.copy().append_left(start_point))
 
@@ -489,10 +484,10 @@ class SearchableGraph(GraphCommandProcesser):
         ep_expr: PointPattern,
         direction: str = 'up'
     ) -> OperationSet:
-        
+
         # memoization based searching.
         if start_point in self._cache: return self._cache[start_point]
-        
+
         # begin searching.
         ret_collection = OperationSet()
 
@@ -511,7 +506,7 @@ class SearchableGraph(GraphCommandProcesser):
 
                 # searching following operations.
                 further_result = self._opset_matching(
-                    start_point=op, rp_expr=rp_expr, 
+                    start_point=op, rp_expr=rp_expr,
                     ep_expr=ep_expr, direction=direction)
 
                 if len(further_result) > 0:
@@ -522,16 +517,14 @@ class SearchableGraph(GraphCommandProcesser):
 
     def path_matching(
         self,
-        sp_expr: Callable, 
+        sp_expr: Callable,
         rp_expr: Callable,
         ep_expr: Callable,
         direction: str
         ) -> List[Path]:
-        """
-        path_matching is used for path searching on the
-        graph, and complete paths will be returned. Note
-        that it's posssible for results to overflow when
-        there are numerous matchings
+        """path_matching is used for path searching on the graph, and complete
+        paths will be returned. Note that it's posssible for results to
+        overflow when there are numerous matchings.
 
         path_matching 用于图检索，匹配完整路径
             一个最简单的例子：
@@ -542,10 +535,10 @@ class SearchableGraph(GraphCommandProcesser):
                 direction = 'down'
             该指令检索出从任意 Conv 出发，到任意 Conv 的所有可行路径
             其中路径上含有任意多个 Relu 节点，并且只能包含 Relu
-            
+
             你需要注意到 rp_expr 是一个二元表达式，其中 x 代表起点，y 代表终点
         Args:
-            sp_expr (Union[Pattern, Callable]): 
+            sp_expr (Union[Pattern, Callable]):
                 start point expression, 用于匹配检索起点的表达式
             rp_expr (Union[Pattern, Callable]):
                 relay point expression, 用于匹配检索中继点的表达式
@@ -570,7 +563,7 @@ class SearchableGraph(GraphCommandProcesser):
 
             # match patterns, add patterns towards result collection.
             matchings = self._path_matching(
-                start_point=operation, rp_expr=rp_expr, 
+                start_point=operation, rp_expr=rp_expr,
                 ep_expr=ep_expr, direction=direction)
             _ret_collection.extend(matchings)
 
@@ -579,18 +572,17 @@ class SearchableGraph(GraphCommandProcesser):
 
         # use limitation to filter out invalid path.
         return _ret_collection
-    
+
     def opset_matching(
         self,
-        sp_expr: Callable, 
+        sp_expr: Callable,
         rp_expr: Callable,
         ep_expr: Callable,
         direction: str = 'up'
         ) -> OperationSet:
-        """
-        opset_matching is used for operator set searching,
-        it returns relevant op set instead of specific paths,
-        should be used when results of path_matching overflow
+        """opset_matching is used for operator set searching, it returns
+        relevant op set instead of specific paths, should be used when results
+        of path_matching overflow.
 
         opset_matching 用于图检索，匹配算子集合（无序）
             一个最简单的例子：
@@ -601,13 +593,13 @@ class SearchableGraph(GraphCommandProcesser):
                 direction = 'down'
             该指令检索出从任意 Conv 出发，经过任意多个Relu，到任意 Conv 的所有相关算子
             注意返回结果是无序的，相比于 path matching，opset matching 的性能更高。
-            
+
             你需要注意到 rp_expr 是一个二元表达式，其中 x 代表起点，y 代表终点
-            
+
             在极端情况下，path matching 的结果是无法返回的（由于其结果数可能过多）
-            此时应当使用 opset matching 
+            此时应当使用 opset matching
         Args:
-            sp_expr (Union[Pattern, Callable]): 
+            sp_expr (Union[Pattern, Callable]):
                 start point expression, 用于匹配检索起点的表达式
             rp_expr (Union[Pattern, Callable]):
                 relay point expression, 用于匹配检索中继点的表达式
@@ -628,7 +620,7 @@ class SearchableGraph(GraphCommandProcesser):
         for operation in candidates:
             # match patterns, add patterns towards result collection.
             partial_matchings = self._opset_matching(
-                start_point=operation, rp_expr=rp_expr, 
+                start_point=operation, rp_expr=rp_expr,
                 ep_expr=ep_expr, direction=direction)
 
             if len(partial_matchings) > 0:
@@ -672,13 +664,13 @@ class SearchableGraph(GraphCommandProcesser):
             concat_matchings[concat.name].append(op.name)
         return dict(concat_matchings)
 
-    def pattern_matching(self, patterns: List[Callable], 
+    def pattern_matching(self, patterns: List[Callable],
                          edges: List[List[int]], exclusive: bool = True) -> List[List[Operation]]:
         # compile string to type expr.
         for pidx in range (len(patterns)):
             pfunc = patterns[pidx]
             if isinstance(pfunc, str):
                 patterns[pidx] = TypeExpr(pfunc)
-        
+
         pm = TreePatternMatcher(PatternTree(patterns=patterns, edges=edges))
         return pm.match(self.graph, exclusive=exclusive)

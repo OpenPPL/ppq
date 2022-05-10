@@ -57,18 +57,18 @@ __global__ void _QuantizeTensor_LT(
 }
 
 __host__ Tensor QuantizeTensor_LT(
-    const Tensor &value, const Tensor &scale, const Tensor &offset, 
-    const int clip_min, const int clip_max, const Rounding rounding,  
+    const Tensor &value, const Tensor &scale, const Tensor &offset,
+    const int clip_min, const int clip_max, const Rounding rounding,
     const float dropout){
-    /** 
+    /**
      * PPQ Tensor Quantization Function implementation.
-     * This function quantizes a float tensor(tensor wise), 
-     * giving an quantized tensor as output 
-     * 
+     * This function quantizes a float tensor(tensor wise),
+     * giving an quantized tensor as output
+     *
      * Say we have a float value f, and int value i
      * This Transformation satisfies: f = (clip(i / s + o) - o) * s
      * Where s is scale factor, and o is offset
-     * 
+     *
      * This function is tensor wise quantization function
      * All tensor share a same scale and offset
      */
@@ -114,18 +114,18 @@ __global__ void _QuantizeTensor_LC(
 }
 
 __host__ Tensor QuantizeTensor_LC(
-    const Tensor &value, const Tensor &scale, const Tensor &offset, 
+    const Tensor &value, const Tensor &scale, const Tensor &offset,
     const int clip_min, const int clip_max, const int channel_axis,
     const Rounding rounding, const float dropout){
-    /** 
+    /**
      * PPQ Tensor Quantization Function implementation.
-     * This function quantizes a float tensor(channel wise), 
-     * giving an quantized tensor as output 
-     * 
+     * This function quantizes a float tensor(channel wise),
+     * giving an quantized tensor as output
+     *
      * Say we have a float value f, and int value i
      * This Transformation satisfies: f = (clip(i / s + o) - o) * s
      * Where s is scale factor, and o is offset
-     * 
+     *
      * This function is channel wise quantization function
      * Each channel has its own scale and offset.
      */
@@ -170,7 +170,7 @@ void _QuantizeTensor_LT_B(
 
     KERNEL_LOOP(iter, num_of_elements){
         float v = value[iter];
-        
+
         /* Calculate grad for scales, offsets, alpha */
         float partial_gard_s = ((quantized[iter] - v) / s) * grad_y[iter] * grad_factor;
         float partial_gard_o = 0.0f;
@@ -187,7 +187,7 @@ void _QuantizeTensor_LT_B(
             partial_gard_v = 0;
         }
         grad_v[iter] = partial_gard_v;
-        
+
         /* Reduce Gradient */
         float reduced_grad_o = BlockReduceSum<float>(partial_gard_o); __syncthreads();
         float reduced_grad_s = BlockReduceSum<float>(partial_gard_s); __syncthreads();
@@ -200,11 +200,11 @@ void _QuantizeTensor_LT_B(
 }
 
 __host__ std::vector<Tensor> QuantizeTensor_LT_B(
-    const Tensor &value, const Tensor &quantized, 
-    const Tensor &scales, const Tensor &offsets, const Tensor &grad_y, 
+    const Tensor &value, const Tensor &quantized,
+    const Tensor &scales, const Tensor &offsets, const Tensor &grad_y,
     const float grad_factor, const int clip_min, const int clip_max
 ){
-    /** 
+    /**
      * Gradient Bakcwrad for quantization
      * Solve grad_s, grad_o, grad_v at once.
      */
@@ -252,19 +252,19 @@ void _QuantizeTensor_LC_B(
     float * grad_s,
     float * grad_o
 ){
-    int64_t iter; 
-    int64_t iter_offset = (blockIdx.x * element_per_channel * num_of_channel) + 
+    int64_t iter;
+    int64_t iter_offset = (blockIdx.x * element_per_channel * num_of_channel) +
                           (blockIdx.y * element_per_channel);
     float partial_gard_o = 0; float partial_gard_s = 0;
     int c = blockIdx.y; float s = scales[c]; int o = std::nearbyint(offsets[c]);
 
-    for(iter = (blockIdx.x * blockDim.x) + threadIdx.x; 
+    for(iter = (blockIdx.x * blockDim.x) + threadIdx.x;
         // if processing element is not belongs to correct channel, skip its computation
-        iter < element_per_channel; 
+        iter < element_per_channel;
         iter += blockDim.x * gridDim.x)
     {
         float g = grad_y[iter + iter_offset];
-        
+
         /* Calculate grad for scales, offsets, alpha */
         partial_gard_s = (quantized[iter + iter_offset] - value[iter + iter_offset]) * (g / s);
         float partial_gard_v = g;
@@ -295,12 +295,12 @@ void _QuantizeTensor_LC_B(
 }
 
 __host__ std::vector<Tensor> QuantizeTensor_LC_B(
-    const Tensor &value, const Tensor &quantized, 
+    const Tensor &value, const Tensor &quantized,
     const Tensor &scales, const Tensor &offsets, const Tensor &grad_y,
-    const float grad_factor, const int clip_min, const int clip_max, 
+    const float grad_factor, const int clip_min, const int clip_max,
     const int channel_axis
 ){
-    /** 
+    /**
      * Gradient Bakcwrad for quantization
      * Solve grad_s, grad_o, grad_v at once.
      */

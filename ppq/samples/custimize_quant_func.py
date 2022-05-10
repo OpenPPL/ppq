@@ -10,10 +10,10 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 class MyQuantDelegator(TorchQuantizeDelegate):
-    """
-    Use This class to realize your quantization logic.
-        Inherit class TorchQuantizeDelegate, implement interface __call__, then regsiter
-        your delegator with executor.register_quantize_delegate
+    """Use This class to realize your quantization logic.
+
+    Inherit class TorchQuantizeDelegate, implement interface __call__, then
+    regsiter your delegator with executor.register_quantize_delegate
     """
     def __call__(self, tensor: torch.Tensor, config: TensorQuantizationConfig) -> torch.Tensor:
         if config.policy.has_property(QuantizationProperty.ASYMMETRICAL):
@@ -44,13 +44,13 @@ quant_setting.dispatcher   = 'conservative' # dispatch this network in conserver
 # Load training data for creating a calibration dataloader.
 calibration_dataset = load_calibration_dataset()
 calibration_dataloader = DataLoader(
-    dataset=calibration_dataset, 
+    dataset=calibration_dataset,
     batch_size=BATCHSIZE, shuffle=True)
 
 # quantize your model.
 quantized = quantize_torch_model(
     model=model, calib_dataloader=calibration_dataloader,
-    calib_steps=32, input_shape=[BATCHSIZE] + INPUT_SHAPE, 
+    calib_steps=32, input_shape=[BATCHSIZE] + INPUT_SHAPE,
     setting=quant_setting, collate_fn=collate_fn, platform=PLATFORM,
     onnx_export_file='Output/onnx.model', device=DEVICE, verbose=0)
 

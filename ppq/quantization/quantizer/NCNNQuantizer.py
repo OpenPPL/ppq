@@ -55,7 +55,7 @@ class NCNNQuantizer(BaseQuantizer):
                         offsets = None, scales  = None, channel_axis = 0
                     )
                 base_quant_config.input_quantization_config[1].observer_algorithm = 'Minmax'
-                
+
                 group        = operation.attributes.get('group', 1)
                 dilations    = operation.attributes.get('dilations', [1, 1])
                 strides      = operation.attributes.get('strides', [1, 1])
@@ -86,7 +86,7 @@ class NCNNQuantizer(BaseQuantizer):
             if operation.num_of_input > 2:
                 bias_config = base_quant_config.input_quantization_config[-1]
                 bias_config.state = QuantizationStates.FP32
-            
+
             if operation.type in PASSIVE_OPERATIONS:
                 base_quant_config.is_active_quant_op = False
         return base_quant_config

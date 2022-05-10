@@ -16,9 +16,9 @@ from .op import TorchBackendContext
 
 
 def build_meta(value: Any) -> TensorMeta:
-    if isinstance(value, torch.Tensor): 
+    if isinstance(value, torch.Tensor):
         return TensorMeta.parsing_from_torch_tensor(value)
-    if isinstance(value, numpy.ndarray): 
+    if isinstance(value, numpy.ndarray):
         return TensorMeta.parsing_from_numpy_ndarray(value)
     raise TypeError(f'Can not tracing meta for given value(type: {type(value)}), check your graph again.')
 
@@ -45,15 +45,14 @@ class TorchMetaDataTracingHook(RuntimeHook):
 
 
 class TorchQuantizeDelegate(Callable):
-    """
-    Since PPQ 0.6.2, Interface TorchQuantizeDelegate is introduced to customize quantization logic:
-        To be specific, you are suppose to inherit this class, and define your own computation logic
-        within function __call__.
-        
+    """Since PPQ 0.6.2, Interface TorchQuantizeDelegate is introduced to
+    customize quantization logic: To be specific, you are suppose to inherit
+    this class, and define your own computation logic within function __call__.
+
         Pass your Delegate to TorchExecutor by TorchExecutor.register_quantize_delegate(c, d)
-            Where c is the target quantization config, d is your delegator class. 
+            Where c is the target quantization config, d is your delegator class.
             Once you invoke this function, PPQ execution system will hand the quantization
-            computation of config c over to your delegate. PPQ execution system will no 
+            computation of config c over to your delegate. PPQ execution system will no
             longer quantize variable related with config c anymore.
 
     Notice that a delegate replaces quantization computation only, it still under the control of PPQ quantization
@@ -61,10 +60,10 @@ class TorchQuantizeDelegate(Callable):
     required to quantize related tensor and so your delegate class will take no effects on config c.
 
         Remove delegate function by TorchExecutor.remove_quantize_delegate(c)
-    
+
     If you have some customized parameter of your delegator logic, set them as class attributes.
     Like: self.param1 = ..., self.param2 = ...
-    
+
     Do not edit config structure directly.
 
     Args:
@@ -73,7 +72,7 @@ class TorchQuantizeDelegate(Callable):
     def __init__(self) -> None:
         super().__init__()
 
-    def __call__(self, tensor: torch.Tensor, 
+    def __call__(self, tensor: torch.Tensor,
                  config: TensorQuantizationConfig) -> torch.Tensor:
         raise NotImplementedError('Implement this function first.')
 
@@ -91,8 +90,8 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
 
                 which means you can directly access to tensor.grad after using output.backward()
         Args:
-            graph (BaseGraph): 
-                executing graph object, 
+            graph (BaseGraph):
+                executing graph object,
                 TorchExecutor will automatically send all graph parameters towards executing device.
 
             rounding_policy (RoundingPolicy)
@@ -107,8 +106,8 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
             fp16_mode (bool, optional): [whether the simulator is running in fp16 mode(unimplemented).]. Defaults to True.
 
             device (str, optional): [
-                executing device, as same as torch.device, 
-                you can not select gpu to executing yet, 
+                executing device, as same as torch.device,
+                you can not select gpu to executing yet,
                 graph will always be send to the very first visible cuda device.
             ]. Defaults to 'cuda'.
         """
@@ -125,17 +124,17 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
         self.deploy()
 
     def register_quantize_delegate(
-        self, config: TensorQuantizationConfig, 
+        self, config: TensorQuantizationConfig,
         delegator: TorchQuantizeDelegate):
-        """
-        Since PPQ 0.6.2, Interface TorchQuantizeDelegate is introduced to customize quantization logic:
-            To be specific, you are suppose to inherit this class, and define your own computation logic
-            within function __call__.
-            
+        """Since PPQ 0.6.2, Interface TorchQuantizeDelegate is introduced to
+        customize quantization logic: To be specific, you are suppose to
+        inherit this class, and define your own computation logic within
+        function __call__.
+
             Pass your Delegate to TorchExecutor by TorchExecutor.register_quantize_delegate(c, d)
-                Where c is the target quantization config, d is your delegator class. 
+                Where c is the target quantization config, d is your delegator class.
                 Once you invoke this function, PPQ execution system will hand the quantization
-                computation of config c over to your delegate. PPQ execution system will no 
+                computation of config c over to your delegate. PPQ execution system will no
                 longer quantize variable related with config c anymore.
 
         Notice that a delegate replaces quantization computation only, it still under the control of PPQ quantization
@@ -155,15 +154,15 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
 
     def remove_quantize_delegate(
         self, config: TensorQuantizationConfig):
-        """
-        Since PPQ 0.6.2, Interface TorchQuantizeDelegate is introduced to customize quantization logic:
-            To be specific, you are suppose to inherit this class, and define your own computation logic
-            within function __call__.
-            
+        """Since PPQ 0.6.2, Interface TorchQuantizeDelegate is introduced to
+        customize quantization logic: To be specific, you are suppose to
+        inherit this class, and define your own computation logic within
+        function __call__.
+
             Pass your Delegate to TorchExecutor by TorchExecutor.register_quantize_delegate(c, d)
-                Where c is the target quantization config, d is your delegator class. 
+                Where c is the target quantization config, d is your delegator class.
                 Once you invoke this function, PPQ execution system will hand the quantization
-                computation of config c over to your delegate. PPQ execution system will no 
+                computation of config c over to your delegate. PPQ execution system will no
                 longer quantize variable related with config c anymore.
 
         Notice that a delegate replaces quantization computation only, it still under the control of PPQ quantization
@@ -176,11 +175,11 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
             raise TypeError(
                 f'Except a TensorQuantizationConfig instance, however {type(config)} was passed.')
         if config in self._delegates:
-            self._delegates.pop(config)   
+            self._delegates.pop(config)
 
     def deploy(self):
-        """
-            Deploy graph parameters towards target device.
+        """Deploy graph parameters towards target device.
+
         Raises:
             ValueError: [when target device is unacceptable]
         """
@@ -195,13 +194,12 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
 
     @ torch.no_grad()
     def forward(
-        self, 
-        inputs: Union[dict, list, torch.Tensor], 
+        self,
+        inputs: Union[dict, list, torch.Tensor],
         output_names:List[str] = None,
         hooks: Dict[str, RuntimeHook] = None
     ) -> List[torch.Tensor]:
-        """
-        Forward function of this executor.
+        """Forward function of this executor.
 
         Notice this forward function will never store and compute gradients.
 
@@ -213,19 +211,19 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
 
                 Defaults to None.
 
-            hooks (Dict[str, RuntimeHook], optional): 
+            hooks (Dict[str, RuntimeHook], optional):
                 A hook table for customizing operation behaviour and collate data during executing.
                 All hooks should inherit from class RuntimeHook, with all necessary methods implemented.
                     See also: ppq.executor.base.RuntimeHook
 
                 Executor calls hook.pre_forward_hook(operation, input_data) before dispatching operation,
-                by using this feature, you can dynamically dispatch operation during executing, 
+                by using this feature, you can dynamically dispatch operation during executing,
                 or processing input data as you want.(remember to return processed input data)
 
                 Executor calls hook.post_forward_hook(operation, output_data) after the execution,
                 you are supposed to  gather all necessary data from execution via this feature.
 
-                For Quantable Opeartion, a much more powerful class: 
+                For Quantable Opeartion, a much more powerful class:
                     ppq.executor.base.QuantOpRuntimeHook is provided.
                 see also: ppq.executor.base.QuantOpRuntimeHook
 
@@ -235,20 +233,19 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
             List[torch.Tensor]: [executing result, list of tensor objects.]
         """
         return self.__forward(
-            inputs=inputs, 
+            inputs=inputs,
             output_names=output_names,
             executing_order=self._executing_order,
             hooks=hooks
         )
 
     def forward_with_gradient(
-        self, 
-        inputs: Union[dict, list, torch.Tensor], 
+        self,
+        inputs: Union[dict, list, torch.Tensor],
         output_names:List[str] = None,
         hooks: Dict[str, RuntimeHook] = None,
     ) -> List[torch.Tensor]:
-        """
-            forward function of this executor.
+        """forward function of this executor.
 
             Notice this one will store and compute gradient.
 
@@ -259,19 +256,19 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
 
                 Defaults to None.
 
-            hooks (Dict[str, RuntimeHook], optional): 
+            hooks (Dict[str, RuntimeHook], optional):
                 A hook table for customizing operation behaviour and collate data during executing.
                 All hooks should inherit from class RuntimeHook, with all necessary methods implemented.
                     See also: ppq.executor.base.RuntimeHook
 
                 Executor calls hook.pre_forward_hook(operation, input_data) before dispatching operation,
-                by using this feature, you can dynamically dispatch operation during executing, 
+                by using this feature, you can dynamically dispatch operation during executing,
                 or processing input data as you want.(remember to return processed input data)
 
                 Executor calls hook.post_forward_hook(operation, output_data) after the execution,
                 you are supposed to  gather all necessary data from execution via this feature.
 
-                For Quantable Opeartion, a much more powerful class: 
+                For Quantable Opeartion, a much more powerful class:
                     ppq.executor.base.QuantOpRuntimeHook is provided.
                 see also: ppq.executor.base.QuantOpRuntimeHook
 
@@ -281,27 +278,27 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
             List[torch.Tensor]: [executing result, list of tensor objects.]
         """
         return self.__forward(
-            inputs=inputs, 
+            inputs=inputs,
             output_names=output_names,
             executing_order=self._executing_order,
             hooks=hooks
         )
 
     def __forward(
-        self, 
+        self,
         inputs: Union[dict, list, torch.Tensor],
         executing_order: List[Operation],
         output_names:List[str] = None,
         hooks: Dict[str, RuntimeHook] = None,
     ) -> List[torch.Tensor]:
-    
+
         # processing with different input format
         if isinstance(inputs, dict):
             # directly feed value into variables
             for name, value in inputs.items():
                 if name not in self._graph.variables:
                     raise KeyError(f'Can not find variable {name} in your graph.')
-                else: 
+                else:
                     var = self._graph.variables[name]
                     var.value = value
         else:
@@ -326,8 +323,8 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
 
         visited_op, result_collector = [], [None for _ in output_names]
         # output name can be the same as input name, collect them directly.
-        for name in output_names: 
-            if name in inputs: 
+        for name in output_names:
+            if name in inputs:
                 result_collector[output_names.index(name)] = inputs[name]
 
         for operation in executing_order[: last_idx]:
@@ -344,12 +341,12 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
                 operation_forward_func = platform_dispatching_table[operation.type]
                 operation_runtime_hook = hooks[operation.name] if (hooks is not None) and (operation.name in hooks) else None
                 inputs = [var.value for var in operation.inputs]
-                
+
                 # if operation is an QuantableOperation, we have to quant its inputs and outputs at first.
                 if isinstance(operation, QuantableOperation):
                     input_configs = [_ for _ in operation.config.input_quantization_config]
                     inputs = [self.quantize_function(input, config) for input, config in zip(inputs, input_configs)]
-                
+
                 # PATCH 20220208
                 for idx, var in enumerate(operation.inputs):
                     if var.name in output_names:
@@ -359,7 +356,7 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
                 if operation_runtime_hook is not None:
                     if isinstance(operation_runtime_hook, QuantOPRuntimeHook):
                         inputs = operation_runtime_hook.pre_forward_hook(
-                            inputs=[var.value for var in operation.inputs], 
+                            inputs=[var.value for var in operation.inputs],
                             quant_inputs=inputs, quant_configs=input_configs)
                     elif isinstance(operation_runtime_hook, RuntimeHook):
                         inputs = operation_runtime_hook.pre_forward_hook(inputs=inputs)
@@ -379,7 +376,7 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
                 if operation_runtime_hook is not None:
                     if isinstance(operation_runtime_hook, QuantOPRuntimeHook):
                         outputs = operation_runtime_hook.post_forward_hook(
-                            outputs=fp_outputs, quant_outputs=outputs, 
+                            outputs=fp_outputs, quant_outputs=outputs,
                             quant_configs=output_configs)
                     elif isinstance(operation_runtime_hook, RuntimeHook):
                         outputs = operation_runtime_hook.post_forward_hook(outputs=outputs)
@@ -414,12 +411,12 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
     @ empty_ppq_cache
     def tracing_operation_meta(
         self,
-        inputs: Union[dict, list, torch.Tensor], 
+        inputs: Union[dict, list, torch.Tensor],
         output_names: List[str] = None,
     ) -> None:
-        """
-        Tracing meta data for each operation, if there are some already created meta data with your operation,
-            They will be override without warrning.
+        """Tracing meta data for each operation, if there are some already
+        created meta data with your operation, They will be override without
+        warrning.
 
         Args:
             inputs (Union[dict, list, torch.Tensor]): [description]
@@ -430,7 +427,7 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
             hooks[op_name] = TorchMetaDataTracingHook(operation=operation)
 
         self.__forward(
-            inputs=inputs, 
+            inputs=inputs,
             output_names=output_names,
             executing_order=self._executing_order,
             hooks=hooks)
@@ -457,28 +454,27 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
         else: return self._default_quant_fn(input, config)
 
     def dummy_forward(self, hooks: Dict[str, RuntimeHook] = None) -> None:
-        """
-        This function allows you to execute entire graph without feeding any data.
-        This feature is required for operation parameter quantization.
-            See also: ppq.quantization.optim.ParameterQuantizePass
-        
+        """This function allows you to execute entire graph without feeding any
+        data. This feature is required for operation parameter quantization.
+        See also: ppq.quantization.optim.ParameterQuantizePass.
+
         This function fakes some input tensors via operation metadata.
             ATTENTION: operation must have metadata before invoking this function.
 
         Args:
-            hooks (Dict[str, RuntimeHook], optional): 
+            hooks (Dict[str, RuntimeHook], optional):
                 A hook table for customizing operation behaviour and collate data during executing.
                 All hooks should inherit from class RuntimeHook, with all necessary methods implemented.
                     See also: ppq.executor.base.RuntimeHook
 
                 Executor calls hook.pre_forward_hook(operation, input_data) before dispatching operation,
-                by using this feature, you can dynamically dispatch operation during executing, 
+                by using this feature, you can dynamically dispatch operation during executing,
                 or processing input data as you want.(remember to return processed input data)
 
                 Executor calls hook.post_forward_hook(operation, output_data) after the execution,
                 you are supposed to  gather all necessary data from execution via this feature.
 
-                For Quantable Opeartion, a much more powerful class: 
+                For Quantable Opeartion, a much more powerful class:
                     ppq.executor.base.QuantOpRuntimeHook is provided.
                 see also: ppq.executor.base.QuantOpRuntimeHook
 
@@ -498,23 +494,23 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
         self.forward(inputs=feed_dict, hooks=hooks)
 
     def partial_graph_forward(
-        self, operations: List[Operation], 
-        feed_dict: Dict[str, torch.Tensor], 
+        self, operations: List[Operation],
+        feed_dict: Dict[str, torch.Tensor],
         output_names:List[str]) -> List[torch.Tensor]:
-        """
-        This forward function allows you to execute a series operations in your graph.
-            (only operations list in your params will be executed with this function)
-        Which serves as a great feature for quantization aware training.
+        """This forward function allows you to execute a series operations in
+        your graph. (only operations list in your params will be executed with
+        this function) Which serves as a great feature for quantization aware
+        training.
 
         Args:
-            operations (List[Operation]): 
-                operations that you want to execute, 
+            operations (List[Operation]):
+                operations that you want to execute,
                 notice that executing will strictly follow your operation order.
-            
-            feed_dict (Dict[str, torch.Tensor]): 
+
+            feed_dict (Dict[str, torch.Tensor]):
                 an dictionary contains {variable name: value}, as an input to this execution.
-            
-            output_names (List[str]): 
+
+            output_names (List[str]):
                 output variable names.
 
         Returns:
@@ -522,7 +518,7 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
         """
 
         return self.__forward(
-            inputs=feed_dict, 
+            inputs=feed_dict,
             output_names=output_names,
             executing_order=operations
         )

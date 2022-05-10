@@ -1,9 +1,6 @@
-"""
-    PPQ Core Foreign Function Interface
-    PPQ 核心编程语言接口
+"""PPQ Core Foreign Function Interface PPQ 核心编程语言接口.
 
-    You are not allowed to modify this
-    请勿修改此文件
+You are not allowed to modify this 请勿修改此文件
 """
 
 import os
@@ -34,20 +31,20 @@ except Exception as e:
 
 # helper class for calling cuda methods.
 class CUDA:
-    """
-    CUDA is a helper class for invoking highly-effcient custimized cuda kernel.
-        PPQ developer team has implemented a series of quantization related cuda kernel,
-        They are 5-100x faster than torch kernels, with less gpu memory cost.
+    """CUDA is a helper class for invoking highly-effcient custimized cuda
+    kernel. PPQ developer team has implemented a series of quantization related
+    cuda kernel, They are 5-100x faster than torch kernels, with less gpu
+    memory cost.
 
     You can easily extend your cuda kernel via this class:
         Firstly, implement your kernel within ppq/csrc/cuda, write your own .cu file and .h file.
         Secondly, add your functions to ppq/csrc/cuda/export.cc, add them to export table.
-        Finally, add a interface with this python class(ppq.core.ffi.CUDA), 
+        Finally, add a interface with this python class(ppq.core.ffi.CUDA),
         following the signature as same as others.
 
     PPQ CUDA Extention 命名规则:
         我们使用函数名+后缀名的形式命名 CUDA Extension 函数:
-        
+
         后缀名 _T 表示 Tensorwise 函数
         后缀名 _C 表示 Channelwise 函数
         后缀名 _B 表示 导函数
@@ -84,7 +81,7 @@ class CUDA:
         if not tensor.is_contiguous(): tensor = tensor.contiguous()
         return __CUDA_EXTENTION__.QuantizeTensor_LC(
             tensor, scales, offsets, minimum, maximum, channel_axis, rounding, dropout)
-        
+
     @ staticmethod
     def LinearQuantize_T_B(
         tensor: torch.Tensor,
@@ -98,7 +95,7 @@ class CUDA:
     ) -> torch.Tensor:
         if not tensor.is_contiguous(): tensor = tensor.contiguous()
         return __CUDA_EXTENTION__.QuantizeTensor_LT_B(
-            tensor, quantized, scales, offsets, 
+            tensor, quantized, scales, offsets,
             dy, grad_factor, minimum, maximum
         )
 
@@ -116,7 +113,7 @@ class CUDA:
     ) -> torch.Tensor:
         if not tensor.is_contiguous(): tensor = tensor.contiguous()
         return __CUDA_EXTENTION__.QuantizeTensor_LC_B(
-            tensor, quantized, scales, offsets, 
+            tensor, quantized, scales, offsets,
             dy, grad_factor, minimum, maximum, channel_axis
         )
 
@@ -171,7 +168,7 @@ class CUDA:
         if not reference.is_contiguous(): tensor = reference.contiguous()
         return __CUDA_EXTENTION__.TensorClip_C(
             tensor, reference, limit, channel_axis)
-        
+
     @ staticmethod
     def RoundingLoss_LT(
         tensor: torch.Tensor,
@@ -198,7 +195,7 @@ class CUDA:
         if not tensor.is_contiguous(): tensor = tensor.contiguous()
         return __CUDA_EXTENTION__.RoundingLoss_LT_B(
             tensor, dy, scales, offsets, minimum, maximum, rounding)
-        
+
     @ staticmethod
     def RoundingLoss_LC(
         tensor: torch.Tensor,
@@ -230,7 +227,5 @@ class CUDA:
 
     @ staticmethod
     def Sync():
-        """
-        Synchronize device.
-        """
+        """Synchronize device."""
         synchronize()

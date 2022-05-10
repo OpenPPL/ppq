@@ -32,7 +32,7 @@ def compute_loss(
     executor: TorchExecutor,
     loss_fn: Callable=torch_mean_square_error
 ) -> Dict[str, float]:
-    """loss computing for fp32 and quantized graph outputs, used 
+    """loss computing for fp32 and quantized graph outputs, used
     in multiple training-based algorithms below
     Args:
         output_names (List[str]): output variable names
@@ -52,7 +52,7 @@ def compute_loss(
         fp_outputs = executor.forward(data, output_names)
         restore_quantization_state(graph)
         quant_outputs = executor.forward(data, output_names)
-        
+
         for name, fp_output, quant_output in zip(output_names, fp_outputs, quant_outputs):
             batch_loss = loss_fn(quant_output, fp_output)
             losses[name] += batch_loss.detach().item()
@@ -78,9 +78,9 @@ def find_all_blocks(graph: BaseGraph,
                 executing_order: List[Operation],
                 block_limit: int=None
     ) -> List[TrainableBlock]:
-    """block construction function of training-based algorithms, if `block_limit`
-    is not specified, block grandularity will be controlled by the default value
-    OPTIM_ADVOPT_GRAPH_MAXSIZE specified in ppq.core.common
+    """block construction function of training-based algorithms, if
+    `block_limit` is not specified, block grandularity will be controlled by
+    the default value OPTIM_ADVOPT_GRAPH_MAXSIZE specified in ppq.core.common.
 
     Args:
         graph (BaseGraph): ppq ir graph
@@ -116,7 +116,7 @@ def collect_block_input_output(
     collate_fn: Callable,
     collecting_device: str
 ) -> List[Tuple[List[torch.Tensor], torch.Tensor]]:
-    """Collect training quant input and fp32 output values for block
+    """Collect training quant input and fp32 output values for block.
 
     Args:
         block (TrainableBlock): the trainable block
@@ -143,10 +143,9 @@ def collect_block_input_output(
     return block_input
 
 class TrainingBasedPass(QuantizationOptimizationPass):
-    """
-    Training Based Pass is a basic class that provides necessary function for
-        all training optimizition passes. Optimization will be more stable and
-        accurate with functions provided by this pass. (Might be a little slower).
+    """Training Based Pass is a basic class that provides necessary function
+    for all training optimizition passes. Optimization will be more stable and
+    accurate with functions provided by this pass. (Might be a little slower).
 
     This pass will collect result of interested outputs after optimization and
         check if the optimized result has a lower SNR. If so, the optimization will be
@@ -161,7 +160,7 @@ class TrainingBasedPass(QuantizationOptimizationPass):
     Args:
         QuantizationOptimizationPass ([type]): [description]
     """
-    def __init__(self, name: str = 'Default Quanzation Optim', 
+    def __init__(self, name: str = 'Default Quanzation Optim',
                  interested_outputs: List[str] = None, verbose: bool = True) -> None:
         self._loss_fn = torch_snr_error
         self._interested_outputs = interested_outputs
@@ -172,11 +171,11 @@ class TrainingBasedPass(QuantizationOptimizationPass):
 
     @ empty_ppq_cache
     def initialize_checkpoints(
-        self, graph: BaseGraph, executor: BaseGraphExecutor, 
+        self, graph: BaseGraph, executor: BaseGraphExecutor,
         dataloader: Iterable, collate_fn: Callable):
         """
         Establish a series of network checkpoints with your network.
-            Checkpoint is a data structure that helps us compare quant results and fp32 results. 
+            Checkpoint is a data structure that helps us compare quant results and fp32 results.
         Args:
             graph (BaseGraph): [description]
             executor (BaseGraphExecutor): [description]
@@ -195,13 +194,13 @@ class TrainingBasedPass(QuantizationOptimizationPass):
 
         if self._interested_outputs is None or len(self._interested_outputs) == 0:
             self._interested_outputs = [name for name in graph.outputs]
-        
+
         for name in self._interested_outputs:
             self._checkpoints[name] = FinetuneCheckPoint(variable=name)
 
         # dequantize graph, collect references
         for op in graph.operations.values():
-            if isinstance(op, QuantableOperation): 
+            if isinstance(op, QuantableOperation):
                 op.dequantize()
 
         for data in tqdm(dataloader, desc='Collecting Referecens'):
@@ -214,9 +213,9 @@ class TrainingBasedPass(QuantizationOptimizationPass):
 
         # restore quantization state:
         for op in graph.operations.values():
-            if isinstance(op, QuantableOperation): 
+            if isinstance(op, QuantableOperation):
                 op.restore_quantize_state()
-        
+
         # update state
         verbose, self._verbose = self._verbose, False
         self.check(executor=executor, dataloader=dataloader, collate_fn=collate_fn)
@@ -224,9 +223,8 @@ class TrainingBasedPass(QuantizationOptimizationPass):
 
     def check(self, executor: BaseGraphExecutor,
         dataloader: Iterable, collate_fn: Callable):
-        """
-        Check quantization error with a given dataloader with current checkpoints.
-            Return whether quantization error is lower than before.
+        """Check quantization error with a given dataloader with current
+        checkpoints. Return whether quantization error is lower than before.
 
         Args:
             executor (BaseGraphExecutor): [description]
@@ -236,7 +234,7 @@ class TrainingBasedPass(QuantizationOptimizationPass):
         Returns:
             [type]: [description]
         """
-        
+
         # step - 1, collecting data
         for data in dataloader:
             if collate_fn is not None: data = collate_fn(data)
@@ -276,16 +274,15 @@ class TrainingBasedPass(QuantizationOptimizationPass):
                                   'Please inherit this class and give an implmenetation to override this function.')
 
     def dequantize_immediately(self, operation: Operation):
-        """
-        Dequantize an operation inplace, use this function carefully.
-            if parameter value has been changed during your optimization procedure,
-            then it is not safe to dequantize an operation via this function,
-            use operation.dequantize to load stored fp32 value instead.
-        
+        """Dequantize an operation inplace, use this function carefully. if
+        parameter value has been changed during your optimization procedure,
+        then it is not safe to dequantize an operation via this function, use
+        operation.dequantize to load stored fp32 value instead.
+
         This function will change quantization state to dequantize an operation,
             Only quantization state will be changed by this function so that it is
             extremely fast.
-        
+
         If your parameter value has already been baked, an exception will be thrown.
         Args:
             operation (Operation): [description]
@@ -300,11 +297,10 @@ class TrainingBasedPass(QuantizationOptimizationPass):
                     cfg.state = QuantizationStates.DEQUANTIZED
 
     def quantize_immediately(self, operation: Operation):
-        """
-        Restore quantization state of an operation, use this function carefully.
-            if parameter value has been changed during your optimization procedure,
-            then it is not safe to restore state via this function,
-            use operation.restore_quantize_state to load stored quant value instead.
+        """Restore quantization state of an operation, use this function
+        carefully. if parameter value has been changed during your optimization
+        procedure, then it is not safe to restore state via this function, use
+        operation.restore_quantize_state to load stored quant value instead.
 
         This function will change quantization state to quantize an operation,
             Only quantization state will be changed by this function so that it is
@@ -322,11 +318,10 @@ class TrainingBasedPass(QuantizationOptimizationPass):
                     self._quant_state_recorder.pop(cfg)
 
     def dequantize_graph_immediately(self, graph: BaseGraph):
-        """
-        Dequantize entire graph inplace, use this function carefully.
-            if parameter value has been changed during your optimization procedure,
-            then it is not safe to dequantize graph via this function, as this function 
-            only changes quantization state to dequantize entire graph.
+        """Dequantize entire graph inplace, use this function carefully. if
+        parameter value has been changed during your optimization procedure,
+        then it is not safe to dequantize graph via this function, as this
+        function only changes quantization state to dequantize entire graph.
 
         If your parameter value has already been baked, an exception will be thrown.
         Args:
@@ -336,10 +331,9 @@ class TrainingBasedPass(QuantizationOptimizationPass):
             self.dequantize_immediately(operation)
 
     def quantize_graph_immediately(self, graph: BaseGraph):
-        """
-        Restore quantization state of entire graph, use this function carefully.
-            if parameter value has been changed during your optimization procedure,
-            then it is not safe to restore state via this function.
+        """Restore quantization state of entire graph, use this function
+        carefully. if parameter value has been changed during your optimization
+        procedure, then it is not safe to restore state via this function.
 
         If your parameter value has already been baked, an exception will be thrown.
         Args:
@@ -347,27 +341,27 @@ class TrainingBasedPass(QuantizationOptimizationPass):
         """
         for operation in graph.operations.values():
             self.quantize_immediately(operation)
-         
+
 
 class BiasCorrectionPass(TrainingBasedPass):
-    def __init__(self, auto_check: bool=False, interested_output: List[str] = None, 
+    def __init__(self, auto_check: bool=False, interested_output: List[str] = None,
                  verbose: bool = True, max_steps:int = 8) -> None:
-        """
-        Quantization can introduce a biased error in the activations.
-            Bias correction serves as a useful prosedure to eliminate those introduced bias error.
+        """Quantization can introduce a biased error in the activations. Bias
+        correction serves as a useful prosedure to eliminate those introduced
+        bias error.
 
         let: Y = WX + b
              Quant(Y) = Qunat(W) Quant(X) + b
-             
+
              bias_error = reduce_mean(Y - Quant(Y))
-             
+
         Correct bias by: b = b + bias_error
-        
+
         Args:
             quantize_function (BaseQuantFunction): [description]
             auto_check (bool, optional): [description]. Defaults to False.
         """
-        super().__init__(name='PPQ Bias Correction Pass', 
+        super().__init__(name='PPQ Bias Correction Pass',
                          interested_outputs=interested_output, verbose=verbose)
         self._auto_check = auto_check
         self._max_steps = max_steps
@@ -382,25 +376,25 @@ class BiasCorrectionPass(TrainingBasedPass):
         **kwargs
     ) -> None:
         def collect_bias(output: torch.Tensor, collector: list, op_type: str):
-            if op_type in {'Conv', 'ConvTranspose'}: 
+            if op_type in {'Conv', 'ConvTranspose'}:
                 collector.append(torch.mean(output, dim=(0, 2, 3)).unsqueeze(0))
-            elif op_type in {'Gemm'}: 
+            elif op_type in {'Gemm'}:
                 collector.append(torch.mean(output, dim=(0, )).unsqueeze(0))
             else: raise TypeError(f'Unsupported Operation type: {op_type}')
 
         assert isinstance(executor, TorchExecutor), (
             'PPQ Training-based optimization algorithm needs a TorchExecutor.')
-    
+
         if self._auto_check:
-            self.initialize_checkpoints(graph=processer.graph, executor=executor, 
-                                        dataloader=dataloader, collate_fn=collate_fn)    
-    
-        for idx, operation in tqdm(enumerate(executor._executing_order), 
-                                   desc='Bias Correction Procedure ...', 
+            self.initialize_checkpoints(graph=processer.graph, executor=executor,
+                                        dataloader=dataloader, collate_fn=collate_fn)
+
+        for idx, operation in tqdm(enumerate(executor._executing_order),
+                                   desc='Bias Correction Procedure ...',
                                    total=len(executor._executing_order)):
             assert isinstance(operation, Operation)
             if not has_bias(operation): continue
-            
+
             bias, output_var = operation.inputs[-1].value, operation.outputs[0]
             qt_collector, fp_collector = [], []
 
@@ -410,7 +404,7 @@ class BiasCorrectionPass(TrainingBasedPass):
                 collect_bias(output, qt_collector, op_type=operation.type)
                 if idx >= self._max_steps: break
             self.dequantize_immediately(operation)
-            
+
             for idx, data in enumerate(dataloader):
                 if collate_fn is not None: data = collate_fn(data)
                 [output] = executor.forward(inputs=data, output_names=[output_var.name])
@@ -527,9 +521,9 @@ class AdaRoundPass(QuantizationOptimizationPass):
                     cur_iter += 1
 
                 if ep_idx % 100 == 0:
-                    print("Epoch: {:<4} L2 Loss: {:>10.3f} Beta: {:>3.3f}".format(ep_idx, loss, reg.beta))
+                    print('Epoch: {:<4} L2 Loss: {:>10.3f} Beta: {:>3.3f}'.format(ep_idx, loss, reg.beta))
             h_v = AdaroundRegTerm().rectified_sigmoid(continuous_v)
-            print("Loss: {:>5.3f} Ceil: {:>5} Floor: {:>5} Total: {:>5} Ratio: {:>.3f}".format(
+            print('Loss: {:>5.3f} Ceil: {:>5} Floor: {:>5} Total: {:>5} Ratio: {:>.3f}'.format(
                 loss,
                 h_v[h_v + 1e-4 >= 1.0].numel(), h_v[h_v <= 1e-4].numel(), torch.numel(h_v),
                 (h_v[h_v + 1e-4 >= 1.0].numel() + h_v[h_v <= 1e-4].numel()) / torch.numel(h_v)))
@@ -557,17 +551,22 @@ class AdaRoundPass(QuantizationOptimizationPass):
 
 
 class BlockwiseReconstructionPass(TrainingBasedPass):
-    """Blockwise Reconstruction Pass, blockwisely perform adaround, if you specify interested_layers in the setting, 
-    then only block which containes any of operations specified in interested_layers will be optimized, otherwise all
-    searched blocks will be optimized.
-       A standard procedure is, first turn all training-based optimization passes off in your quantization setting and
-    run a plain quantization, then use error analysis tool(provided by ppq) to analysis snr error or cosine similarities
-    of every layer, choose names of those with significant snr or poor similarities as your interested_layers, then turn
-    on this pass and do optimization. In case you have no idea which layers should be selected as interested_layers, simply
-    leave it as blank and all blocks will be tuned.
-       Note that you could control the maximum number of operations in a block by setting OPTIM_ADVOPT_GRAPH_MAXSIZE in
-    ppq.core.common, and by default every block will be trained for 300 epochs, which takes certain long time. The optimization
-    goal of every block is
+    """Blockwise Reconstruction Pass, blockwisely perform adaround, if you
+    specify interested_layers in the setting, then only block which containes
+    any of operations specified in interested_layers will be optimized,
+    otherwise all searched blocks will be optimized. A standard procedure is,
+    first turn all training-based optimization passes off in your quantization
+    setting and run a plain quantization, then use error analysis tool(provided
+    by ppq) to analysis snr error or cosine similarities of every layer, choose
+    names of those with significant snr or poor similarities as your
+    interested_layers, then turn on this pass and do optimization. In case you
+    have no idea which layers should be selected as interested_layers, simply
+    leave it as blank and all blocks will be tuned. Note that you could control
+    the maximum number of operations in a block by setting
+    OPTIM_ADVOPT_GRAPH_MAXSIZE in ppq.core.common, and by default every block
+    will be trained for 300 epochs, which takes certain long time. The
+    optimization goal of every block is.
+
                 Loss = LpNormLoss(y, y^) + lamda * rounding_loss(v)
     where y is the output of the current block running in fp32 mode, and y^ is the output of the current block running
     in quant mode, lamda is a hyperparameter adjusting scales of rounding loss, and v is the element-wise rounding
@@ -620,7 +619,7 @@ class BlockwiseReconstructionPass(TrainingBasedPass):
                             delegator = BlockwiseReconstructionDelegator(var, cfg, reg, scale_multiplier, device)
                             delegator.masters = masters
                             params[cfg] = delegator
-                    
+
                     # for those vars who controls their own scales and offsets
                     elif cfg.state == QuantizationStates.ACTIVATED:
                         delegator = BlockwiseReconstructionDelegator(var, cfg, reg, scale_multiplier, device)
@@ -708,7 +707,7 @@ class BlockwiseReconstructionPass(TrainingBasedPass):
             reg = AdaroundRegTerm(max_iter=len(dataloader) * self.epochs)
             all_params = self.initiate_block_params(block, reg, executor._device)
             scale_params, continue_vs = [], []
-            
+
             # collect rounding parameters for rounding loss computing,
             # and all gradient-needed parameters for optimization
             for (cfg, delegator) in all_params.items():
@@ -773,15 +772,15 @@ class BlockwiseReconstructionPass(TrainingBasedPass):
                 early_stop_flag = 1
                 for _,continue_v in enumerate(continue_vs):
                     h_v = continue_v.detach()
-                    logger.debug("Rounding var {} Ceil: {:>5} Floor: {:>5} Total: {:>5} Ratio: {:>.3f}".format(
+                    logger.debug('Rounding var {} Ceil: {:>5} Floor: {:>5} Total: {:>5} Ratio: {:>.3f}'.format(
                         _ + 1, h_v[h_v + 1e-4 >= 1.0].numel(), h_v[h_v <= 1e-4].numel(), torch.numel(h_v),
                         (h_v[h_v + 1e-4 >= 1.0].numel() + h_v[h_v <= 1e-4].numel()) / torch.numel(h_v))
                     )
                     early_stop_flag &= ((h_v[h_v + 1e-4 >= 1.0].numel() + h_v[h_v <= 1e-4].numel()) / torch.numel(h_v) > 0.9999)
-                
+
                 if early_stop_flag:
                     break
-            
+
             if  early_stop_flag:
                 logger.info('Already converged, stop training...')
 
@@ -794,7 +793,7 @@ class BlockwiseReconstructionPass(TrainingBasedPass):
 
             for (cfg, delegator) in all_params.items():
                 executor.remove_quantize_delegate(cfg)
-            
+
             # process passive parameter of Pad or Clip for coherence
             for op in block.rps:
                 if isinstance(op, QuantableOperation) and op.type == 'Clip':
@@ -811,15 +810,17 @@ class BlockwiseReconstructionPass(TrainingBasedPass):
 
 
 class LearningStepSizeOptimization(TrainingBasedPass):
-    """Learned Step Size optimization, a training-based optimization pass which tunes weight, weight scale, weight offset
-    (for aym quantization only) and activation scale, activation offset(for asym quantization only) of computing layers. 
-    
+    """Learned Step Size optimization, a training-based optimization pass which
+    tunes weight, weight scale, weight offset (for aym quantization only) and
+    activation scale, activation offset(for asym quantization only) of
+    computing layers.
+
         This pass will firstly partition the graph into multiple trainable blocks, and you can control partition grandularity
     by setting the global parameter OPTIM_ADVOPT_GRAPH_MAXSIZE in ppq.core.common, usually a block contains several computing
     operations(Conv, Gemm or ConvTranspose).
-            
+
         OPTIM_ADVOPT_GRAPH_MAXSIZE = 1                     OPTIM_ADVOPT_GRAPH_MAXSIZE = 3
-             
+
               __|________                                        __|_________
                Conv    |                                          Conv     |
                 |     block-1                                      |       |
@@ -829,10 +830,10 @@ class LearningStepSizeOptimization(TrainingBasedPass):
                 |     block-2                                      |       |
               _Relu____|_                                        _Relu_____|_
                 |                                                  |
-        
+
         If `interested_layers` parameter is specified, then only blocks which contains operations specified in `interested_layers`
     will be tuned, otherwise all partitioned blocks will be tuned by default.
-        
+
         For more information about step learning algorithm, please refer to
             Esser, Steven K., et al. "Learned step size quantization." arXiv preprint arXiv:1902.08153 (2019).
     """
@@ -850,7 +851,7 @@ class LearningStepSizeOptimization(TrainingBasedPass):
         self.lr = lr
         self.scale_multiplier = scale_multiplier
         self.collecting_device = collecting_device
-    
+
     def initiate_param(self,
                     block: TrainableBlock,
                     device: Union[str, torch.device]
@@ -897,7 +898,7 @@ class LearningStepSizeOptimization(TrainingBasedPass):
             if isinstance(op, QuantableOperation) and op.is_computing_op:
                 for var in op.inputs[1:]:
                     var.value.requires_grad = True
-    
+
     def disable_grad(self, block: TrainableBlock) -> None:
         for op in block.rps:
             if isinstance(op, QuantableOperation) and op.is_computing_op:
@@ -934,7 +935,7 @@ class LearningStepSizeOptimization(TrainingBasedPass):
             for (cfg, delegator) in params.items():
                 executor.register_quantize_delegate(cfg, delegator)
                 block_params.extend(delegator.collect_params())
-   
+
             optimizer = torch.optim.Adam([param for param in block_params if param.requires_grad], lr=self.lr)
             scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, [int(self.epochs / 2), int(self.epochs * 2 / 3)])
 
@@ -967,13 +968,13 @@ class LearningStepSizeOptimization(TrainingBasedPass):
                 if lsq_block_loss < original_block_loss:
                     delegator.finalize()
                 executor.remove_quantize_delegate(cfg)
-            
+
             self.disable_grad(blk)
             if original_block_loss < lsq_block_loss:
                 logger.warning('Loss not improved, abandon trained values...')
                 self.recover(blk)
 
-    def optimize(self, processer: GraphCommandProcesser, 
+    def optimize(self, processer: GraphCommandProcesser,
                  dataloader: Iterable, executor: BaseGraphExecutor,
                  collate_fn: Callable,
                  **kwargs) -> None:
@@ -991,27 +992,26 @@ class LearningStepSizeOptimization(TrainingBasedPass):
 
 
 class AdvancedQuantOptimization(TrainingBasedPass):
-    """
-    PPQ Advanced Quantization Optimization
+    """PPQ Advanced Quantization Optimization.
 
     This optimization pass minimize the quantization errors of each subgraph separately
         by optimizing its parameters over the calibration set.
 
     Where:
         qout = quant( quant(W + W_offset) * quant(X) + quant(bias + bias_offset) )
-    
+
         fout = W * B + bias
-    
+
         error = Mean((qout - fout)^2)
-    
+
     This training procedure trys to solve best W_offest and bias_offset to minimize error
         Based on your setting and network size, the training procedure will takes 5~120 minutes.
-    
+
     This function will treat your network as series of subgraphs, you should notice that
-        ONLY THE OUTPUT VALUE OF A SUBGRAPH IS OPTIMIZED IN THIS PASS, 
+        ONLY THE OUTPUT VALUE OF A SUBGRAPH IS OPTIMIZED IN THIS PASS,
         ACTIVATIONS THAT INSIDE YOUR SUBGRAPH MIGHT BE GREATLY CHANGED!
         DO NOT ATTEMPT TO COMPARE THOSE INTERNAL VALUE WITH ITS FP32 VERSION.
-    
+
     We use graph search engine to build subgraph from your network with pattern below,
         see function build_block_from_start for detail information
 
@@ -1019,14 +1019,14 @@ class AdvancedQuantOptimization(TrainingBasedPass):
         TrainingBasedPass ([type]): [description]
     """
     def __init__(self, collecting_device: str, limit: float = 3.0, steps: int = 5000,
-                 lr: float = 3e-4, interested_outputs: List[str] = None, 
+                 lr: float = 3e-4, interested_outputs: List[str] = None,
                  interested_layers: List[str] = None,
                  verbose: bool = True, check: bool = True) -> None:
 
         super().__init__(
-            name='PPQ Advanced Optimization Procedure', 
+            name='PPQ Advanced Optimization Procedure',
             interested_outputs=interested_outputs, verbose=verbose)
-        
+
         if not USING_CUDA_KERNEL:
             raise PermissionError(
                 'Advanced Quant Optimization requires compliation of ppq cuda kernels. '
@@ -1039,17 +1039,17 @@ class AdvancedQuantOptimization(TrainingBasedPass):
         self.limit             = limit
         self.interested_layers = interested_layers
         self.target_step       = steps
-        
+
         self._bidx = 0
         self._num_of_blocks = 0
-        
+
         if isinstance(self.interested_layers, list) and len(self.interested_layers) == 0:
             self.interested_layers = None
 
     def collect_training_data(
         self, output_name: str,
         dataloader: Iterable,
-        executor: BaseGraphExecutor, 
+        executor: BaseGraphExecutor,
         collate_fn: Callable) -> List[List[torch.Tensor]]:
 
         output_collector = []
@@ -1062,7 +1062,7 @@ class AdvancedQuantOptimization(TrainingBasedPass):
     @ empty_ppq_cache
     def finetune(
         self, quant_inputs: List[torch.Tensor], fp32_outputs: List[torch.Tensor],
-        executor: TorchExecutor, block: TrainableBlock, 
+        executor: TorchExecutor, block: TrainableBlock,
         dataloader: Iterable, collate_fn:Callable) -> None:
 
         # initialize training environment.
@@ -1081,8 +1081,8 @@ class AdvancedQuantOptimization(TrainingBasedPass):
                 for cfg, var in operation.config_with_variable:
                     if not var.is_parameter: continue
                     trainable_params.append((var, cfg))
-    
-        delegators = [RQTDelegator(config=cfg, limit=self.limit, binding=var) for var, cfg in trainable_params]     
+
+        delegators = [RQTDelegator(config=cfg, limit=self.limit, binding=var) for var, cfg in trainable_params]
         optimizer = torch.optim.Adam(params=[d.binding.value for d in delegators], lr=self.lr)
         shcduler  = torch.optim.lr_scheduler.LambdaLR(optimizer=optimizer, lr_lambda=lambda t: 1 / (1 << (t // 5000)))
         # register all quantization delegators
@@ -1093,7 +1093,7 @@ class AdvancedQuantOptimization(TrainingBasedPass):
                 qt_input, fp_output = dataset.pop()
                 qt_input, fp_output = qt_input.to(device), fp_output.to(device)
                 qt_output = executor.partial_graph_forward(
-                    operations=block.rps, feed_dict={input_var.name: qt_input}, 
+                    operations=block.rps, feed_dict={input_var.name: qt_input},
                     output_names=[output_var.name])[0]
 
                 # compute loss
@@ -1139,7 +1139,7 @@ class AdvancedQuantOptimization(TrainingBasedPass):
         if self._interested_outputs is None:
             self._interested_outputs = [name for name in processer.graph.outputs]
 
-        if self.collecting_device == 'executor': 
+        if self.collecting_device == 'executor':
             self.collecting_device = executor._device
 
         graph         = processer.graph
@@ -1160,13 +1160,13 @@ class AdvancedQuantOptimization(TrainingBasedPass):
                 if self.interested_layers is None: interested_ops.append(target_op)
                 elif self.interested_layers is not None and target_op.name in self.interested_layers:
                     interested_ops.append(target_op)
-        
+
         # build all blocks, drop overlapped layers.
         blocks, visited = [], set()
         for op in interested_ops:
             if op in visited: continue
             block = block_builder.build(op, limit=OPTIM_ADVOPT_GRAPH_MAXDEPTH)
-            
+
             # PATCH 20220317 drop block that has no computing op.
             if all([rp.is_computing_op == False for rp in block.rps]): continue
             if block.sp.is_computing_op == False: continue
@@ -1179,7 +1179,7 @@ class AdvancedQuantOptimization(TrainingBasedPass):
         # set up checkpoints
         if self.check_flag:
             self.initialize_checkpoints(
-                graph=graph, executor=executor, 
+                graph=graph, executor=executor,
                 dataloader=dataloader, collate_fn=collate_fn)
 
         for bidx, block in enumerate(blocks):
@@ -1189,25 +1189,25 @@ class AdvancedQuantOptimization(TrainingBasedPass):
             end_op       = block.ep
             block_input  = block.sp.inputs[0]
             block_output = end_op.outputs[0]
-            
+
             # dequantize prefix operations and block operations
             for op in graph.operations.values():
-                if isinstance(op, QuantableOperation): 
+                if isinstance(op, QuantableOperation):
                     op.dequantize()
                     # can not use dequantize_immediately cause weight has been changed.
                     # self.dequantize_immediately(op)
 
             fp32_outputs = self.collect_training_data(
-                output_name=block_output.name, dataloader=dataloader, 
+                output_name=block_output.name, dataloader=dataloader,
                 executor=executor, collate_fn=collate_fn)
 
             # quantize prefix operations and block operations
             for op in graph.operations.values():
-                if isinstance(op, QuantableOperation): 
+                if isinstance(op, QuantableOperation):
                     op.restore_quantize_state()
 
             quant_inputs = self.collect_training_data(
-                output_name= block_input.name, dataloader=dataloader, 
+                output_name= block_input.name, dataloader=dataloader,
                 executor=executor, collate_fn=collate_fn)
 
             # start training, solve the best parameters
@@ -1236,27 +1236,26 @@ class AdvancedQuantOptimization(TrainingBasedPass):
 
 
 class LearningToCalibPass(TrainingBasedPass):
-    """
-        This is an Experimental Pass, do not invoke.
-        
-        PPQ Leraning Based Calibration Pass
-        For int8 quantization, you need to calibrate or estimate the value range, 
-            i.e, (min, max) of all floating-point tensors in the model. 
-        
-        Choose value range carefully is really importance procedure during quantization.
-            Usually we use methods like MSE, Percentile, KL to solve a good value range
-            from prospective view, while this pass offers you another possibility.
-        
-        This pass will make all your quantization range as trainable, and learn to quantize
-            your network with sampling methods.
+    """This is an Experimental Pass, do not invoke.
 
-        ATTENTION: YOU SHALL USE THIS FUNCTION AFTER ACTIVATIONS HAVE BEEN CORRECTLY CALIBRATED
-            SINCE THIS FUNCTION NEEDS A SCALE AND OFFSET AS INITIALIZED VALUE.
+    PPQ Leraning Based Calibration Pass
+    For int8 quantization, you need to calibrate or estimate the value range,
+        i.e, (min, max) of all floating-point tensors in the model.
 
-        ATTENTION: ONLY CONFIGURATION WITH STATE "ACTIVED" WILL BE TUNED VIA THIS FUNCTION.
+    Choose value range carefully is really importance procedure during quantization.
+        Usually we use methods like MSE, Percentile, KL to solve a good value range
+        from prospective view, while this pass offers you another possibility.
+
+    This pass will make all your quantization range as trainable, and learn to quantize
+        your network with sampling methods.
+
+    ATTENTION: YOU SHALL USE THIS FUNCTION AFTER ACTIVATIONS HAVE BEEN CORRECTLY CALIBRATED
+        SINCE THIS FUNCTION NEEDS A SCALE AND OFFSET AS INITIALIZED VALUE.
+
+    ATTENTION: ONLY CONFIGURATION WITH STATE "ACTIVED" WILL BE TUNED VIA THIS FUNCTION.
     """
-    
-    def __init__(self, method: str = 'e-greedy', 
+
+    def __init__(self, method: str = 'e-greedy',
                  calib_act: bool = True, calib_weight: bool = True) -> None:
         self.method            = method
         self.calib_act         = calib_act
@@ -1264,7 +1263,7 @@ class LearningToCalibPass(TrainingBasedPass):
         self.target_step       = 7500
         self.e                 = 0.1
         self.collecting_device = 'cuda'
-        self.arms              = [1, 0.9, 1.1, 0.7, 1.3] 
+        self.arms              = [1, 0.9, 1.1, 0.7, 1.3]
         # for power-of-2 policy, use bandit like [0.5, 1, 2]
         super().__init__('RL Based Calibration Pass')
 
@@ -1285,10 +1284,10 @@ class LearningToCalibPass(TrainingBasedPass):
         loss_ema    = EMARecorder(beta=0.98)
         output_var  = block.ep.outputs[0]
         input_var   = block.sp.inputs[0]
-        
+
         for delegator in delegators:
             executor.register_quantize_delegate(config=delegator.config, delegator=delegator)
-        
+
         cur_iter = 0
         with tqdm(total=self.target_step) as t:
             while cur_iter < self.target_step:
@@ -1296,7 +1295,7 @@ class LearningToCalibPass(TrainingBasedPass):
                 qt_input, fp_output = qt_input.to(device), fp_output.to(device)
 
                 qt_output = executor.partial_graph_forward(
-                    operations=block.rps, feed_dict={input_var.name: qt_input}, 
+                    operations=block.rps, feed_dict={input_var.name: qt_input},
                     output_names=[output_var.name])[0]
 
                 loss = torch_snr_error(y_pred=qt_output, y_real=fp_output).item()
@@ -1312,7 +1311,7 @@ class LearningToCalibPass(TrainingBasedPass):
         for delegator in delegators:
             executor.remove_quantize_delegate(config=delegator.config)
             delegator.finalize()
-        
+
         if not self.check(executor=executor, dataloader=dataloader, collate_fn=collate_fn):
             for delegator in delegators:
                 delegator.withdraw()
@@ -1320,7 +1319,7 @@ class LearningToCalibPass(TrainingBasedPass):
     def collect_training_data(
         self, output_name: str,
         dataloader: Iterable,
-        executor: BaseGraphExecutor, 
+        executor: BaseGraphExecutor,
         collate_fn: Callable) -> List[List[torch.Tensor]]:
 
         output_collector = []
@@ -1330,10 +1329,10 @@ class LearningToCalibPass(TrainingBasedPass):
             output_collector.append(output.to(self.collecting_device))
         return output_collector
 
-    def optimize(self, processer: GraphCommandProcesser, 
-                 dataloader: Iterable, executor: TorchExecutor, 
+    def optimize(self, processer: GraphCommandProcesser,
+                 dataloader: Iterable, executor: TorchExecutor,
                  collate_fn: Callable, **kwargs) -> None:
-        
+
         graph         = processer.graph
         block_builder = BlockBuilder(graph=graph, topo_order=executor._executing_order)
 
@@ -1350,7 +1349,7 @@ class LearningToCalibPass(TrainingBasedPass):
         for op in graph.operations.values():
             if op in visited: continue
             block = block_builder.build(op, limit=OPTIM_ADVOPT_GRAPH_MAXDEPTH)
-            
+
             # PATCH 20220317 drop block that has no computing op.
             if all([rp.is_computing_op == False for rp in block.rps]): continue
             if block.sp.is_computing_op == False: continue
@@ -1359,7 +1358,7 @@ class LearningToCalibPass(TrainingBasedPass):
             blocks.append(block)
 
         self.initialize_checkpoints(
-            graph=graph, executor=executor, 
+            graph=graph, executor=executor,
             dataloader=dataloader, collate_fn=collate_fn)
 
         graph         = processer.graph
@@ -1375,22 +1374,22 @@ class LearningToCalibPass(TrainingBasedPass):
 
             # dequantize prefix operations and block operations
             for op in graph.operations.values():
-                if isinstance(op, QuantableOperation): 
+                if isinstance(op, QuantableOperation):
                     op.dequantize()
                     # can not use dequantize_immediately cause weight has been changed.
                     # self.dequantize_immediately(op)
 
             fp32_outputs = self.collect_training_data(
-                output_name=block_output.name, dataloader=dataloader, 
+                output_name=block_output.name, dataloader=dataloader,
                 executor=executor, collate_fn=collate_fn)
 
             # quantize prefix operations and block operations
             for op in graph.operations.values():
-                if isinstance(op, QuantableOperation): 
+                if isinstance(op, QuantableOperation):
                     op.restore_quantize_state()
 
             quant_inputs = self.collect_training_data(
-                output_name= block_input.name, dataloader=dataloader, 
+                output_name= block_input.name, dataloader=dataloader,
                 executor=executor, collate_fn=collate_fn)
 
             # start training, solve the best parameters

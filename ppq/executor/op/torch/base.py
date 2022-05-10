@@ -9,14 +9,13 @@ class TorchBackendContext:
         self.executing_device = executing_device
 
 def ASSERT_ALL_TENSORS_AT_CPU(op: Operation, values: List[torch.Tensor], force_convert: bool = False):
-    """
-    Dynamic Shape Platfrom Operations Process with shape related tensors, 
-        which must not be quantized and must be computed with cpu.
+    """Dynamic Shape Platfrom Operations Process with shape related tensors,
+    which must not be quantized and must be computed with cpu.
 
     This function will check all inputs tensors' device, and move all cuda tensor to cpu(if force_convert is true).
     ATTENTION: do not set force_convert as True if not necessary. PPQ will automatically move
         operations to proper platform, there should not be any input tensor deployed at cuda
-        when invoking a dynamic shape operation. 
+        when invoking a dynamic shape operation.
 
     IF THERE IS ANY CUDA INPUT TENSOR FOR DYNAMIC SHAPE OPERATION, THERE PROBABLY ARE SOME SYSTEM FAILURES.
     YOU ARE SUPPOSED TO REPORT THOSE SYSTEM FAILURES TO US.
@@ -45,7 +44,7 @@ def ASSERT_ALL_TENSORS_AT_CPU(op: Operation, values: List[torch.Tensor], force_c
                             'Convert it to cpu tensor now.')
                 values[idx] = tensor.cpu()
 
-def ASSERT_NUM_OF_INPUT(op: Operation, values: List[torch.Tensor], 
+def ASSERT_NUM_OF_INPUT(op: Operation, values: List[torch.Tensor],
                         min_num_of_input: int = -1, max_num_of_input: int = 99):
     if min_num_of_input == max_num_of_input:
         if len(values) != min_num_of_input:
@@ -59,11 +58,10 @@ def ASSERT_NUM_OF_INPUT(op: Operation, values: List[torch.Tensor],
                          f'expects {min_num_of_input} inputs at least, however {len(values)} was given')
 
 def GET_ATTRIBUTE_FROM_OPERATION(op: Operation, attribute: str, compulsive: bool = False, default: Any = None):
-    """
-    Try to get an attribute from operation.
-    If an attribute is compulsive, then operation must give a value of it, otherwise an error will be thrown.
-    If an attribute is not compulsive, a default value will be given if operation.attributes do not holds a
-        value of requesting attribute.
+    """Try to get an attribute from operation. If an attribute is compulsive,
+    then operation must give a value of it, otherwise an error will be thrown.
+    If an attribute is not compulsive, a default value will be given if
+    operation.attributes do not holds a value of requesting attribute.
 
     Args:
         op (Operation): Opeartion instance.
@@ -82,8 +80,7 @@ def GET_ATTRIBUTE_FROM_OPERATION(op: Operation, attribute: str, compulsive: bool
             return default
 
 def ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op: Operation, values: List[torch.Tensor], device: str = None):
-    """
-    PPQ Default Backend Suppose all inputs are torch.Tensor at same device.
+    """PPQ Default Backend Suppose all inputs are torch.Tensor at same device.
 
     This function will check all inputs tensors' device.
 

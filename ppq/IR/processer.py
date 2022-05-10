@@ -8,8 +8,7 @@ from .base.graph import BaseGraph
 
 class GraphCommandProcesser(Callable, metaclass=ABCMeta):
     def __init__(self, graph_or_processor: Union[BaseGraph, Callable]) -> None:
-        """
-            GraphCommandProcesser 是用于处理图上相关操作的抽象基类
+        """GraphCommandProcesser 是用于处理图上相关操作的抽象基类.
 
             我们使用指令-责任链模式处理 PPQ 计算图的相关操作，具体来说：
 
@@ -37,7 +36,7 @@ class GraphCommandProcesser(Callable, metaclass=ABCMeta):
             GraphCommandProcesser is an absract class for manipulating the graph
 
             We use Command-Responsibility Chain to process operations on the computational graph:
-            
+
                 all graph-related operations are encapsulated by GraphCommand objects, which contain
                 the operation type and necessary parameters
 
@@ -48,7 +47,7 @@ class GraphCommandProcesser(Callable, metaclass=ABCMeta):
                 finally be executed when meeting the corresponding processer. An exception will be thrown
                 if no processer in the current chain is able to deal with the given command
 
-                When you implement a new GraphCommandProcesser, you should implement its inner method 
+                When you implement a new GraphCommandProcesser, you should implement its inner method
                 _acceptable_command_types, it returns all available GraphCommand types for execution
                 and you should implement corresponding execution details in _process
 
@@ -56,7 +55,7 @@ class GraphCommandProcesser(Callable, metaclass=ABCMeta):
                 multiple processers which could deal with same Command type in the chain, the first processer
                 receiving the command will execute
 
-                GraphCommandProcesser follows its predefined logic to parse GraphCommand, execute on the graph 
+                GraphCommandProcesser follows its predefined logic to parse GraphCommand, execute on the graph
                 correspondingly and return the final result
 
         Args:
@@ -74,9 +73,8 @@ class GraphCommandProcesser(Callable, metaclass=ABCMeta):
     @property
     @abstractproperty
     def _acceptable_command_types(self) -> List[GraphCommandType]:
-        """
-
-            Subclass of GraphCommandProcesser must give an implementation of this function
+        """Subclass of GraphCommandProcesser must give an implementation of
+        this function.
 
             Return all acceptable GraphCommandTypes in a list as result.
             something like:
@@ -93,12 +91,10 @@ class GraphCommandProcesser(Callable, metaclass=ABCMeta):
             'Oh, seems you forgot to implement GraphCommandProcesser._acceptable_command_types function')
 
     def __call__(self, command: GraphCommand) -> Any:
-        """
-
-            Invoking interface of GraphCommandProcesser responsibility chain.
-            All processers within the chain shall be invoked by this function one be one,
-            unitl there is a processer claim to accept input command object,
-            the entire processing of responsibility chain ends then.
+        """Invoking interface of GraphCommandProcesser responsibility chain.
+        All processers within the chain shall be invoked by this function one
+        be one, unitl there is a processer claim to accept input command
+        object, the entire processing of responsibility chain ends then.
 
             invoke a GraphCommandProcesser chain like that:
 
@@ -144,9 +140,8 @@ class GraphCommandProcesser(Callable, metaclass=ABCMeta):
             )
 
     def acceptable_command_types(self) -> List[GraphCommandType]:
-        """
-            Return all acceptable command types of current chain.
-            Notice there might be duplicated types.
+        """Return all acceptable command types of current chain. Notice there
+        might be duplicated types.
 
         Returns:
             List[GraphCommandType]: all acceptable command types
@@ -161,9 +156,8 @@ class GraphCommandProcesser(Callable, metaclass=ABCMeta):
 
     @ abstractmethod
     def process(self, command: GraphCommand) -> Any:
-        """
-
-            Subclass of GraphCommandProcesser must give an implementation of this function
+        """Subclass of GraphCommandProcesser must give an implementation of
+        this function.
 
             Process recieved GraphCommand instance and give result(if there is any)
 

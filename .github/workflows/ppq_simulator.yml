@@ -30,4 +30,4 @@ jobs:
 
       - name: Test
         run: |
-          cd ../../ && ./test_ppq.sh ${{ github.run_id }} 
+          cd ../../ && ./test_ppq.sh ${{ github.run_id }}

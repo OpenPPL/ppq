@@ -5,7 +5,7 @@ class TensorCollector:
 
     def dump_to_disk(self, value: object) -> int:
         pass
-    
+
     def load_from_disk(self, fidx: int):
         pass
 
@@ -32,7 +32,7 @@ class TensorCollector:
             self.container.append(value.detach().cpu())
         if self.device == 'disk':
             self.container.append(self.dump_to_disk(value))
-    
+
     def pop(self, idx = None) -> torch.Tensor:
         if self.shuffle:
             pass

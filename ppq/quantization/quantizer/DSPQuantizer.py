@@ -98,7 +98,7 @@ class PPL_DSP_TI_Quantizer(PPL_DSP_Quantizer):
         self._num_of_bits = 8
         self._quant_min   = -int(pow(2, self._num_of_bits - 1))
         self._quant_max   = int(pow(2, self._num_of_bits - 1)) - 1
-    
+
     def build_quant_pipeline(
         self, setting: QuantizationSetting, executor: BaseGraphExecutor) -> QuantizationOptimizationPipeline:
         pipeline = super().build_quant_pipeline(setting, executor)

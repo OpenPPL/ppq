@@ -1,8 +1,8 @@
 # Advanced Usage
-This tutorial illustrates how you could jump out of the high-level API box and actually control your own 
+This tutorial illustrates how you could jump out of the high-level API box and actually control your own
 quantization workflow by customizing your own scripts. Note that [ProgramEntrance](./ProgramEntrance.md)
 hides many details behind several high-level API calls in order to make the whole process easier for new
-users, however, in some degree this tutorial shows how you can build your own workflow, thus providing 
+users, however, in some degree this tutorial shows how you can build your own workflow, thus providing
 more flexiablity.
 
 ## Prepare Your DataLoader
@@ -73,7 +73,7 @@ if you want to customize your own setting, you can start from
 ```python
 setting = QuantizationSettingFactory.default_setting()
 ```
-say if you want to apply ssd equalization algorithm instead of default equalization method, all you need is 
+say if you want to apply ssd equalization algorithm instead of default equalization method, all you need is
 to turn on the corresponding pass in your setting
 ```python
 setting = QuantizationSettingFactory.default_setting()
@@ -90,28 +90,28 @@ applications
 
 ## Schedule Your Graph
 Before IR graph can be processed by *Quantizer*, PPQ needs to dispatch operations in the IR graph to different
-platforms, for example, shape-related operations will be dispatched to *TargetPlatform.SHAPE_OR_INDEX*, and 
+platforms, for example, shape-related operations will be dispatched to *TargetPlatform.SHAPE_OR_INDEX*, and
 non-quantable operations will be dispatched to *TargetPlatform.FP32*
 ```python
 from ppq.api.interface import dispatch_graph
 
 ppq_graph_ir = dispatch_graph(ppq_graph_ir)
 ```
-then we can begin our quantization process using all prepared information 
+then we can begin our quantization process using all prepared information
 
 ## Initialize An Executor
-All operations are exectuted by *Executor* instances in PPQ, and as you can see from 
+All operations are exectuted by *Executor* instances in PPQ, and as you can see from
 [default.py](../../ppq/executor/torch/default.py), the inner operation executing logic
 is implemented using pytorch
 ```python
 from ppq.executor import TorchExecutor
 
 executor = TorchExecutor(ppq_graph_ir, device='cuda') # for cuda
-executor = TorchExecutor(ppq_graph_ir, device='cpu')  # for cpu 
+executor = TorchExecutor(ppq_graph_ir, device='cpu')  # for cpu
 ```
 
 ## Quantization
-PPQ will designate a quantizer for your target platform which would follow the following 
+PPQ will designate a quantizer for your target platform which would follow the following
 conventions to actually run the quantization
 1. Prepare dispatched graph IR for calibration
 2. Refine quantization behaviors for certain operations
@@ -160,7 +160,7 @@ outputs = executor.forward(data) # execution in fp32 mode
 See [ProgramEntrance](./ProgramEntrance.md) for more information.
 
 
-## Export 
+## Export
 Usually the chozen target platform determines the exact exporting format of the quantized IR graph, but sometimes
 you might want to export in a different format
 ```python
