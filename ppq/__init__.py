@@ -36,7 +36,7 @@ from ppq.quantization.qfunction.linear import PPQLinearQuantFunction
 from ppq.quantization.quantizer import (BaseQuantizer, NXP_Quantizer,
                                         PPL_DSP_Quantizer, PPLCUDAQuantizer,
                                         TensorRTQuantizer)
-from ppq.scheduler import (AggresiveDispatcher, ConservativeDispatcher,
+from ppq.scheduler import (AggressiveDispatcher, ConservativeDispatcher,
                            GraphDispatcher, PPLNNDispatcher)
 from ppq.utils.round import (ppq_numerical_round, ppq_round_to_power_of_2,
                              ppq_tensor_round)

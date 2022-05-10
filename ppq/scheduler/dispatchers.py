@@ -8,14 +8,14 @@ from .base import (GraphDispatcher, SOI_generators, SOI_receivers,
                    reverse_tracing_pattern, value_tracing_pattern)
 
 
-class AggresiveDispatcher(GraphDispatcher):
+class AggressiveDispatcher(GraphDispatcher):
     """
     Graph Dispatcher cuts a graph into parts, each part of graph will dispatch to a specific platform
         for further execution and quantization.
     
     For the most part, all operations within graph can be partitioned into quantable operations, 
         Shape-Or-Index related operations and remaining operations, all sub classes of GraphDispatcher will
-        give an implementation of function "dispath" to send all operations to their proper platform.
+        give an implementation of function "dispatch" to send all operations to their proper platform.
 
     ATTENTION: platform attribute will greatly affect quantizer's quantization logic, and the execution result.
         If operation is sent to a quantable platform, then its inputs and outputs will be quantized if necessary.
@@ -67,8 +67,8 @@ class AggresiveDispatcher(GraphDispatcher):
             Dict[str, TargetPlatform]: [description]
         """
 
-        recivers, generators = SOI_receivers(graph), SOI_generators(graph)
-        search_engine, SOI_operations, FP32_operations = SearchableGraph(graph), set(recivers), set()
+        receivers, generators = SOI_receivers(graph), SOI_generators(graph)
+        search_engine, SOI_operations, FP32_operations = SearchableGraph(graph), set(receivers), set()
 
         quant_operations = search_engine.opset_matching(
             sp_expr = lambda x: x.is_computing_op,
@@ -82,7 +82,7 @@ class AggresiveDispatcher(GraphDispatcher):
         shape_forward_matching = search_engine.opset_matching(
             sp_expr = lambda x: x in generators and x.type not in {'Constant'},
             rp_expr = value_tracing_pattern,
-            ep_expr = lambda x: x in recivers or x in quant_operations or x.is_boundary, 
+            ep_expr = lambda x: x in receivers or x in quant_operations or x.is_boundary, 
             direction = 'down')
 
         # update matchings, ready for further searching.
@@ -134,7 +134,7 @@ class ConservativeDispatcher(GraphDispatcher):
     
     For the most part, all operations within graph can be partitioned into quantable operations, 
         Shape-Or-Index related operations and remaining operations, all sub classes of GraphDispatcher will
-        give an implementation of function "dispath" to send all operations to their proper platform.
+        give an implementation of function "dispatch" to send all operations to their proper platform.
         
     Conservative Dispatcher cuts graph in a conservative way, which means it takes as much as possible operations
         into fp32 platform.
@@ -187,8 +187,8 @@ class ConservativeDispatcher(GraphDispatcher):
         Returns:
             Dict[str, TargetPlatform]: [description]
         """
-        recivers, generators = SOI_receivers(graph), SOI_generators(graph)
-        search_engine, SOI_operations = SearchableGraph(graph), set(recivers)
+        receivers, generators = SOI_receivers(graph), SOI_generators(graph)
+        search_engine, SOI_operations = SearchableGraph(graph), set(receivers)
 
         quant_operations = search_engine.opset_matching(
             sp_expr = lambda x: x.is_computing_op,
@@ -207,7 +207,7 @@ class ConservativeDispatcher(GraphDispatcher):
         shape_forward_matching = search_engine.opset_matching(
             sp_expr = lambda x: x in generators and x.type not in {'Constant'},
             rp_expr = value_tracing_pattern,
-            ep_expr = lambda x: (x in recivers or 
+            ep_expr = lambda x: (x in receivers or 
                                  x in quant_operations or 
                                  x.is_boundary or 
                                  x.is_computing_op), 
@@ -273,7 +273,7 @@ class PPLNNDispatcher(GraphDispatcher):
     
     For the most part, all operations within graph can be partitioned into quantable operations, 
         Shape-Or-Index related operations and remaining operations, all sub classes of GraphDispatcher will
-        give an implementation of function "dispath" to send all operations to their proper platform.
+        give an implementation of function "dispatch" to send all operations to their proper platform.
         
     Conv only Dispatcher cuts graph in a conservative way, which means it takes as much as possible operations
         into fp32 platform.
@@ -326,8 +326,8 @@ class PPLNNDispatcher(GraphDispatcher):
         Returns:
             Dict[str, TargetPlatform]: [description]
         """
-        recivers, generators = SOI_receivers(graph), SOI_generators(graph)
-        search_engine, SOI_operations = SearchableGraph(graph), set(recivers)
+        receivers, generators = SOI_receivers(graph), SOI_generators(graph)
+        search_engine, SOI_operations = SearchableGraph(graph), set(receivers)
 
         quant_operations = search_engine.opset_matching(
             sp_expr = lambda x: x.type == 'Conv',
@@ -345,7 +345,7 @@ class PPLNNDispatcher(GraphDispatcher):
         shape_forward_matching = search_engine.opset_matching(
             sp_expr = lambda x: x in generators and x.type not in {'Constant'},
             rp_expr = value_tracing_pattern,
-            ep_expr = lambda x: (x in recivers or 
+            ep_expr = lambda x: (x in receivers or 
                                  x in quant_operations or 
                                  x.is_boundary or 
                                  x.is_computing_op), 
