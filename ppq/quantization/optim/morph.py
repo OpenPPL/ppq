@@ -25,9 +25,8 @@ logger = NaiveLogger.get_logger('PPQ')
 
 
 class NXPResizeModeChangePass(QuantizationOptimizationPass):
-    """
-    This optimization pass overwrite resize mode to 'nearest' for all resize operations.
-    """
+    """This optimization pass overwrite resize mode to 'nearest' for all resize
+    operations."""
     def __init__(self) -> None:
         super().__init__(name='NXP Resize Operation Transformation')
 
@@ -62,9 +61,8 @@ class NCNNFormatGemmPass(QuantizationOptimizationPass):
 
 
 class MatrixFactorizationPass(QuantizationOptimizationPass):
-    """
-    Use Matrix Farctorization to minimize quantization error.
-        This pass will split a computing layer with 2 sub layers.
+    """Use Matrix Farctorization to minimize quantization error. This pass will
+    split a computing layer with 2 sub layers.
 
         before split:  WX + b = Y
         after split:   B(AX) + b = Y
@@ -219,10 +217,13 @@ class MatrixFactorizationPass(QuantizationOptimizationPass):
 
 
 class WeightSplitPass(QuantizationOptimizationPass):
-    """WeightSplitPass is similar to Outlier ChannelSplitPass below, both designed for per-tensor quantization,
-    the difference is that ChannelSplitPass needs to find a counterpart computing operation right next to the
-    desired computing layers so that no new operators will be added to graph. However, WeightSplitPass can operate
-    under any kind of situation, and the cost will be computing overhead for bringing in new quantization operators.
+    """WeightSplitPass is similar to Outlier ChannelSplitPass below, both
+    designed for per-tensor quantization, the difference is that
+    ChannelSplitPass needs to find a counterpart computing operation right next
+    to the desired computing layers so that no new operators will be added to
+    graph. However, WeightSplitPass can operate under any kind of situation,
+    and the cost will be computing overhead for bringing in new quantization
+    operators.
 
        Conv    ==>   Conv_child_1  Conv_child_2
                             \       /
@@ -237,7 +238,7 @@ class WeightSplitPass(QuantizationOptimizationPass):
                 interested_layers: List[str]=[],
                 loss_reduce_thre: float=0.80
                 ) -> None:
-        """Weight Split Pass
+        """Weight Split Pass.
 
         Args:
             interested_layers (List[str], optional): layers which need split. Defaults to [].
@@ -569,27 +570,25 @@ class WeightSplitPass(QuantizationOptimizationPass):
 
 
 class ChannelSplitPass(QuantizationOptimizationPass):
-    """
-    ChannelSplitPass is designed for per-tenser quantization only, this implementation
-    is based on the original paper:
+    """ChannelSplitPass is designed for per-tenser quantization only, this
+    implementation is based on the original paper:
 
-    "zhao, Ritchie et al., Improving Neural Network Quantization without Retraining using Outlier Channel Splitting"
+      "zhao, Ritchie et al., Improving Neural Network Quantization without Retraining using Outlier Channel Splitting"
 
-    Basically this pass shrinks ranges of outlier channels by first half-down the channel value
-        then duplicate the whole channel, making it more friendly for per-tensor quantization
-        while preserving the fp output same
+      Basically this pass shrinks ranges of outlier channels by first half-down the channel value
+          then duplicate the whole channel, making it more friendly for per-tensor quantization
+          while preserving the fp output same
 
-    In this implementation, to avoid bringing in supplemental ops, for each user-given op, we find its counterpart op,
-    split input/output channel of the user-given op and duplicate output/input channel of its counterpart
+      In this implementation, to avoid bringing in supplemental ops, for each user-given op, we find its counterpart op,
+      split input/output channel of the user-given op and duplicate output/input channel of its counterpart
 
-            split Conv1                                          split Conv2
+              split Conv1                                          split Conv2
 
-    Conv1  --  Relu  --  Conv2                               Conv1  --  Relu  --  Conv2
-  (C2,C1,H1,W1)      (C3,C2,H2,W2)                        (C2,C1,H1,W1)      (C3,C2,H2,W2)
-        || split          || duplicate                          || duplicate       || split
-        \/ duplicate      \/                                    \/                 \/ duplicate
-  (C2+C,C1,H1,W1)    (C3,C2+C,H2,W2)                      (C2+C,C1,H1,W1)    (C3,C2+C,H2,W2)
-
+      Conv1  --  Relu  --  Conv2                               Conv1  --  Relu  --  Conv2
+    (C2,C1,H1,W1)      (C3,C2,H2,W2)                        (C2,C1,H1,W1)      (C3,C2,H2,W2)
+          || split          || duplicate                          || duplicate       || split
+          \/ duplicate      \/                                    \/                 \/ duplicate
+    (C2+C,C1,H1,W1)    (C3,C2+C,H2,W2)                      (C2+C,C1,H1,W1)    (C3,C2+C,H2,W2)
     """
     def __init__(self,
                 interested_layers: List[str],
@@ -598,10 +597,11 @@ class ChannelSplitPass(QuantizationOptimizationPass):
                 split_ratio: float=0.5,
                 grid_aware: bool=True
     ) -> None:
-        """ChannelSplitPass, try this when other algorithms fail to improve your per-tensor quantization
-        accuracy, interested_layers and corresponding search_directions should decided by user, user should
-        make sure every split operation in interested_layers has a counterpart along the corresponding
-        search direction
+        """ChannelSplitPass, try this when other algorithms fail to improve
+        your per-tensor quantization accuracy, interested_layers and
+        corresponding search_directions should decided by user, user should
+        make sure every split operation in interested_layers has a counterpart
+        along the corresponding search direction.
 
         Args:
             interested_layers (List[str]): a list of strings representing ops you want to apply channel split.
@@ -844,13 +844,11 @@ class ChannelSplitPass(QuantizationOptimizationPass):
 
 
 class MetaxGemmSplitPass(QuantizationOptimizationPass):
-    """
-    Metax 不支持 Gemm 的量化，这个 pass 将 Gemm 拆分成
+    """Metax 不支持 Gemm 的量化，这个 pass 将 Gemm 拆分成.
 
-        --- Matmul -----|
-                        + --- Add ---
-            bias   -----|
-
+    --- Matmul -----|
+                    + --- Add ---
+        bias   -----|
     """
     def __init__(self, name: str = 'Metax Gemm Split Pass') -> None:
         super().__init__(name)
@@ -894,11 +892,10 @@ class MetaxGemmSplitPass(QuantizationOptimizationPass):
 
 
 class GRUSplitPass(QuantizationOptimizationPass):
-    """
-        执行 GRU 算子分解，这个 Pass 将 GRU 算子分解为单步执行的形式
+    """执行 GRU 算子分解，这个 Pass 将 GRU 算子分解为单步执行的形式.
 
-        请注意，对于 ONNX GRU 算子而言, 它有两个输出, 一个是完整的hidden vector, 另一个是单步的 last state
-        这个 pass 是针对单步执行而设计的，它将直接删除 hidden vector 之后的所有输出
+    请注意，对于 ONNX GRU 算子而言, 它有两个输出, 一个是完整的hidden vector, 另一个是单步的 last state 这个
+    pass 是针对单步执行而设计的，它将直接删除 hidden vector 之后的所有输出
     """
     def __init__(self, name: str = 'Metax Gemm Split Pass') -> None:
         super().__init__(name)
@@ -1049,4 +1046,3 @@ class GRUSplitPass(QuantizationOptimizationPass):
             op.outputs.clear()
             graph.remove_operation(op)
             self.delete_hidden_vec(graph, hidden_vec)
-

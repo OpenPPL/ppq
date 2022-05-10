@@ -30,8 +30,7 @@ EQUALIZATION_OPERATION_TYPE = {'Conv', 'Gemm', 'ConvTranspose'} # support all co
 
 
 class SSDEqualizationPass(QuantizationOptimizationPass):
-    """
-    PPQ Custimized Layerwise Equalization Pass
+    """PPQ Custimized Layerwise Equalization Pass.
 
     This is another layerwise equalization pass which takes quantization error into consideration, for more
     details of equalization, please refer to LayerwiseEqualizationPass
@@ -50,7 +49,7 @@ class SSDEqualizationPass(QuantizationOptimizationPass):
         quant_func: BaseQuantFunction = PPQLinearQuantFunction,
         iteration: int = 3
     ):
-        """SSD Equalization Pass With Loss Checking
+        """SSD Equalization Pass With Loss Checking.
 
         Args:
             optimize_level (int, optional): level of optimization. Only support level 1 for now.
@@ -100,7 +99,7 @@ class SSDEqualizationPass(QuantizationOptimizationPass):
         collate_fn: Callable,
         calib_steps: int
     ) -> Dict[Operation, torch.Tensor]:
-        """Collect activation ranges for Conv ops in the pair
+        """Collect activation ranges for Conv ops in the pair.
 
         Args:
             pair (List[Operation]): equalization pair
@@ -275,7 +274,8 @@ class SSDEqualizationPass(QuantizationOptimizationPass):
         dfq_max_scale: float=10,
         eps: float=1e-8
     ):
-        """Equalization step with scale being calculated in the way specified by algo_type
+        """Equalization step with scale being calculated in the way specified
+        by algo_type.
 
         Args:
             pair (List[Operation]): a list of operations representing a equalzation pair
@@ -534,8 +534,8 @@ class SSDEqualizationPass(QuantizationOptimizationPass):
             self.layer_weight_norm(all_pairs)
 
         for i in range(self.iteration):
-            logger.debug(f"DFQ/SSD Equalization Iteration {i + 1}/{self.iteration}")
-            for _,pair in tqdm(enumerate(all_pairs), desc=f"SSD/DFQ Equalization Iteration {i+1}/{self.iteration}", total=len(all_pairs)):
+            logger.debug(f'DFQ/SSD Equalization Iteration {i + 1}/{self.iteration}')
+            for _,pair in tqdm(enumerate(all_pairs), desc=f'SSD/DFQ Equalization Iteration {i+1}/{self.iteration}', total=len(all_pairs)):
                 logger.debug(f"Now Processing Pair {_ + 1}/{len(all_pairs)}: {'--'.join([op.name for op in pair])}")
                 self.store_parameter(pair)
 

@@ -10,10 +10,10 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 class MyQuantDelegator(TorchQuantizeDelegate):
-    """
-    Use This class to realize your quantization logic.
-        Inherit class TorchQuantizeDelegate, implement interface __call__, then register
-        your delegator with executor.register_quantize_delegate
+    """Use This class to realize your quantization logic.
+
+    Inherit class TorchQuantizeDelegate, implement interface __call__, then
+    register your delegator with executor.register_quantize_delegate
     """
     def __call__(self, tensor: torch.Tensor, config: TensorQuantizationConfig) -> torch.Tensor:
         if config.policy.has_property(QuantizationProperty.ASYMMETRICAL):

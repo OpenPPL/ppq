@@ -4,7 +4,7 @@ import torch
 class TestBlock1(torch.nn.Module):
     def __init__(self):
         super().__init__()
-    
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return x + x
 
@@ -13,7 +13,7 @@ class TestBlock2(torch.nn.Module):
     def __init__(self):
         super().__init__()
         self.conv = torch.nn.Conv2d(in_channels=3, out_channels=16, kernel_size=3)
-    
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.conv(x)
 
@@ -23,7 +23,7 @@ class TestBlock3(torch.nn.Module):
         super().__init__()
         self.conv1 = torch.nn.Conv2d(in_channels=3, out_channels=16, kernel_size=3)
         self.relu1 = torch.nn.ReLU()
-    
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.relu1(self.conv1(x))
 
@@ -33,7 +33,7 @@ class TestBlock4(torch.nn.Module):
         super().__init__()
         self.conv1 = torch.nn.Conv2d(in_channels=3, out_channels=16, kernel_size=3)
         self.relu1 = torch.nn.ReLU()
-        
+
         self.conv2 = torch.nn.Conv2d(in_channels=3, out_channels=16, kernel_size=3)
         self.relu2 = torch.nn.ReLU()
 
@@ -46,7 +46,7 @@ class TestBlock5(torch.nn.Module):
         super().__init__()
         self.conv1 = torch.nn.Conv2d(in_channels=3, out_channels=16, kernel_size=3)
         self.relu1 = torch.nn.ReLU6()
-        
+
         self.conv2 = torch.nn.Conv2d(in_channels=3, out_channels=16, kernel_size=3)
         self.relu2 = torch.nn.Sigmoid()
 
@@ -60,10 +60,10 @@ class TestBlock6(torch.nn.Module):
         self.conv0 = torch.nn.Conv2d(in_channels=3, out_channels=16, kernel_size=1)
         self.conv1 = torch.nn.Conv2d(in_channels=16, out_channels=16, kernel_size=3)
         self.relu1 = torch.nn.ReLU()
-        
+
         self.conv2 = torch.nn.Conv2d(in_channels=16, out_channels=16, kernel_size=3)
         self.relu2 = torch.nn.ReLU()
-        
+
         self.conv3 = torch.nn.Conv2d(in_channels=16, out_channels=16, kernel_size=3)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -80,11 +80,11 @@ class TestBlock7(torch.nn.Module):
         self.conv1 = torch.nn.Conv2d(in_channels=16, out_channels=16, kernel_size=3)
         self.bn1   = torch.nn.BatchNorm2d(num_features=16)
         self.relu1 = torch.nn.ReLU()
-        
+
         self.conv2 = torch.nn.Conv2d(in_channels=16, out_channels=16, kernel_size=3)
         self.bn2   = torch.nn.BatchNorm2d(num_features=16)
         self.relu2 = torch.nn.ReLU()
-        
+
         self.conv3 = torch.nn.Conv2d(in_channels=16, out_channels=16, kernel_size=3)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -120,7 +120,7 @@ class TestBlock10(torch.nn.Module):
     def __init__(self):
         super().__init__()
         self.gemm = torch.nn.Linear(in_features=1000, out_features=1000)
-        
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.gemm(x)
         return x
@@ -132,7 +132,7 @@ class TestBlock11(torch.nn.Module):
         self.gemm1 = torch.nn.Linear(in_features=1000, out_features=1000)
         self.gemm2 = torch.nn.Linear(in_features=1000, out_features=1000)
         self.gemm3 = torch.nn.Linear(in_features=1000, out_features=1000)
-    
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.gemm1(x)
         x = self.gemm2(x)
@@ -163,11 +163,11 @@ class TestBlock13(torch.nn.Module):
         self.gemm1 = torch.nn.Linear(in_features=1000, out_features=1000)
         self.bn1   = torch.nn.BatchNorm1d(num_features=1000)
         self.relu1 = torch.nn.ReLU()
-        
+
         self.gemm2 = torch.nn.Linear(in_features=1000, out_features=1000)
         self.bn2   = torch.nn.BatchNorm1d(num_features=1000)
         self.relu2 = torch.nn.ReLU()
-        
+
         self.gemm3 = torch.nn.Linear(in_features=1000, out_features=1000)
         self.bn3   = torch.nn.BatchNorm1d(num_features=1000)
         self.relu3 = torch.nn.ReLU()
@@ -185,11 +185,11 @@ class TestBlock14(torch.nn.Module):
         self.gemm1 = torch.nn.Linear(in_features=1000, out_features=1000)
         self.bn1   = torch.nn.BatchNorm1d(num_features=1000)
         self.relu1 = torch.nn.ReLU()
-        
+
         self.gemm2 = torch.nn.Linear(in_features=1000, out_features=1000)
         self.bn2   = torch.nn.BatchNorm1d(num_features=1000)
         self.relu2 = torch.nn.ReLU()
-        
+
         self.gemm3 = torch.nn.Linear(in_features=1000, out_features=1000)
         self.bn3   = torch.nn.BatchNorm1d(num_features=1000)
         self.relu3 = torch.nn.ReLU()

@@ -71,7 +71,7 @@ class HessianDispatcher:
         for op in all_computing_ops:
             params.append(op.parameters[0].value)
             if not allow_grad_none:
-                assert(op.parameters[0].value.grad is not None, f"grad of {op.name} weight is None")
+                assert(op.parameters[0].value.grad is not None, f'grad of {op.name} weight is None')
 
             grads.append(0. if op.parameters[0].value.grad is None else op.parameters[0].value.grad + 0.)
         return params, grads
@@ -279,8 +279,8 @@ class PPLNNMixPrecisionDispatcher:
         INT4_COMPUTING_OPS: List[str],
         **kwargs
     ) -> Dict[str, TargetPlatform]:
-        """dispatch certain ops to INT4 platforms, note that INT4_COMPUTING_OPS should be determined by
-        users in advance
+        """dispatch certain ops to INT4 platforms, note that INT4_COMPUTING_OPS
+        should be determined by users in advance.
 
         Args:
             graph (BaseGraph): ppq graph ir.

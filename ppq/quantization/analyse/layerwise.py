@@ -24,9 +24,8 @@ def layerwise_error_analyse(
     verbose: bool = True,
     ) -> Dict[str, tuple]:
 
-    """
-    Measure the quantization error of each operation
-    A dictionary contains output differences for all operation will be returned as a result.
+    """Measure the quantization error of each operation A dictionary contains
+    output differences for all operation will be returned as a result.
 
         Result is like: {'operation name 1': 0.933, 'operation name 2': 0.926}
 

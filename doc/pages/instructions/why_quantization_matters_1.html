@@ -222,7 +222,7 @@
               <pre><code>这指的是在网络完成一次前向计算过程中真正用于计算的时间，除此以外在一次典型的前向传播当中还需要考虑数据读写与内存拷贝所耗费的时间。</code></pre>
 
               <p>在上述定义的基础上，我们将深入网络的执行过程，深入探寻网络量化的完整流程。以GPU为例，我将向你粗略展示在一次网络前向传播中，究竟包含了那些必要环节：</p>
-              
+
               <div class="text-center">
                 <figure class="figure img-thumbnail bg-lighter">
                     <img src="../../assets/pic/NetworkExecuting.png" class="figure-img img-fluid" alt="Image">
@@ -231,7 +231,7 @@
               </div>
 
               <p>正如上图中所展示的那样，对于神经网络的执行而言我们总是要在计算之外耗费一些时间，事实上对于小型网络而言耗费在执行之外的时间是不可忽视的。同时我们也要注意到GPU这样强大的硬件提供了<strong> 设备间流水线 </strong>这样的技术，这一技术在连续大批量计算过程中能够有效掩蔽读写数据的延迟，然而在要求实时性的场景中（Batchsize=1），我们仍然难以克服读写数据所带来的严重损耗。</p>
-            
+
               <p>我在这里向你澄清两个事实：
                 <ul>
                     <li>硬件的吞吐量与硬件的延时往往需要采用不同的方法进行优化。</li>
@@ -245,13 +245,13 @@
               <p>为了解答这个问题，我们需要更进一步地探索硬件计算的真实面目，不妨先看看下面这个简单的求和程序：</p>
               <pre class="line-numbers code-dark"><code class="language-markup">int main(){
     int a[1000], sum;
-    for(int i = 0; i &lt 1000; i++) 
+    for(int i = 0; i &lt 1000; i++)
         sum += a[i];
 }</code></pre>
               <p>哦，我知道数组 a 似乎没有正确的初始化，但这不是我们此时需要担心的事。只需要注意到这是一个整数数组的求和程序，那么就可以对它进行简单修改，从而得到一个浮点数组的求和程序：</p>
               <pre class="line-numbers code-dark"><code class="language-markup">int main(){
     float a[1000], sum;
-    for(int i = 0; i &lt 1000; i++) 
+    for(int i = 0; i &lt 1000; i++)
         sum += a[i];
 }</code></pre>
               <p>现在，你一定正在思考这样的一个问题：以上两个求和程序谁更快？为什么？我将在下一章中为你解答这个问题，现在我希望你能够仔细思考一下这个问题的答案。</p>

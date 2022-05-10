@@ -37,8 +37,8 @@ __all__ = [
 logger = NaiveLogger.get_logger('PPQ')
 
 def Conv_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    """
-    The convolution operator consumes an input tensor and a filter, and computes the output.
+    """The convolution operator consumes an input tensor and a filter, and
+    computes the output.
 
     Attributes
         auto_pad : string (default is NOTSET)
@@ -149,9 +149,8 @@ def Conv_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
 
 
 def ConvTranspose_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    """
-
-    The convolution transpose operator consumes an input tensor and a filter, and computes the output.
+    """The convolution transpose operator consumes an input tensor and a
+    filter, and computes the output.
 
     If the pads parameter is provided the shape of the output is calculated via the following equation:
 
@@ -319,8 +318,8 @@ def BatchNormalization_forward(op: Operation, values: List[torch.Tensor], ctx: T
 
 
 def Mul_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    """
-    Performs element-wise binary multiplication (with Numpy-style broadcasting support).
+    """Performs element-wise binary multiplication (with Numpy-style
+    broadcasting support).
 
     This operator supports multidirectional (i.e., Numpy-style) broadcasting; for more details please check the doc.
 
@@ -351,8 +350,8 @@ def Mul_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
 
 
 def Add_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    """
-    Performs element-wise binary addition (with Numpy-style broadcasting support).
+    """Performs element-wise binary addition (with Numpy-style broadcasting
+    support).
 
     This operator supports multidirectional (i.e., Numpy-style) broadcasting;
         for more details please check the doc.
@@ -414,10 +413,9 @@ def Eltwise_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackend
 
 # TODO: shape might contain 0, needs better solution
 def Reshape_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    """
-    Reshape the input tensor similar to numpy.reshape.
-    First input is the data tensor, second input is a shape tensor which specifies the output shape.
-    It outputs the reshaped tensor.
+    """Reshape the input tensor similar to numpy.reshape. First input is the
+    data tensor, second input is a shape tensor which specifies the output
+    shape. It outputs the reshaped tensor.
 
     At most one dimension of the new shape can be -1.
     In this case, the value is inferred from the size of the tensor and the remaining dimensions.
@@ -495,9 +493,9 @@ def ArgMax_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendC
 
 
 def Transpose_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    """
-    Transpose the input tensor similar to numpy.transpose.
-    For example, when perm=(1, 0, 2), given an input tensor of shape (1, 2, 3), the output shape will be (2, 1, 3).
+    """Transpose the input tensor similar to numpy.transpose. For example, when
+    perm=(1, 0, 2), given an input tensor of shape (1, 2, 3), the output shape
+    will be (2, 1, 3).
 
     Attributes
         perm : list of ints
@@ -528,9 +526,9 @@ def Transpose_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
 
 
 def Concat_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    """
-    Concatenate a list of tensors into a single tensor.
-    All input tensors must have the same shape, except for the dimension size of the axis to concatenate on.
+    """Concatenate a list of tensors into a single tensor. All input tensors
+    must have the same shape, except for the dimension size of the axis to
+    concatenate on.
 
     Attributes
         axis : int (required)
@@ -570,9 +568,8 @@ def Concat_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendC
 
 
 def Constant_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    """
-    A constant tensor. Exactly one of the two attributes,
-        either value or sparse_value, must be specified.
+    """A constant tensor. Exactly one of the two attributes, either value or
+    sparse_value, must be specified.
 
     Version
     This version of the operator has been available since version 11 of the default ONNX operator set.
@@ -601,9 +598,8 @@ def Constant_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacken
 
 
 def Tile_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    """
-    Constructs a tensor by tiling a given tensor.
-    This is the same as function tile in Numpy, but no broadcast.
+    """Constructs a tensor by tiling a given tensor. This is the same as
+    function tile in Numpy, but no broadcast.
 
     For example A = [[1, 2], [3, 4]], B = [1, 2], tile(A, B) = [[1, 2, 1, 2], [3, 4, 3, 4]]
 
@@ -651,11 +647,10 @@ def Tile_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
 
 
 def Squeeze_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    """
-    Remove single-dimensional entries from the shape of a tensor.
-    Takes an input axes with a list of axes to squeeze.
-    If axes is not provided, all the single dimensions will be removed from the shape.
-    If an axis is selected with shape entry not equal to one, an error is raised.
+    """Remove single-dimensional entries from the shape of a tensor. Takes an
+    input axes with a list of axes to squeeze. If axes is not provided, all the
+    single dimensions will be removed from the shape. If an axis is selected
+    with shape entry not equal to one, an error is raised.
 
     Inputs (1 - 2)
         data (differentiable) : T
@@ -690,8 +685,9 @@ def Squeeze_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackend
 
 
 def Unsqueeze_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    """
-    Insert single-dimensional entries to the shape of an input tensor (data).
+    """Insert single-dimensional entries to the shape of an input tensor
+    (data).
+
     Takes one required argument axes - which contains a list of dimension indices and
         this operator will insert a dimension of value 1 into the corresponding
         index of the output tensor (expanded).
@@ -826,8 +822,7 @@ def Cast_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
 
 
 def ConstantOfShape_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    """
-    Generate a tensor with given value and shape.
+    """Generate a tensor with given value and shape.
 
     Attributes
     value : tensor
@@ -893,11 +888,10 @@ def Clip_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
 
 
 def Slice_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    """
-    Produces a slice of the input tensor along multiple axes.
-    Similar to numpy: https://docs.scipy.org/doc/numpy/reference/arrays.indexing.html
-    Slices uses starts, ends, axes and steps inputs to specify the start
-        and end dimension and step for each axis in the list of axes,
+    """Produces a slice of the input tensor along multiple axes. Similar to
+    numpy: https://docs.scipy.org/doc/numpy/reference/arrays.indexing.html
+    Slices uses starts, ends, axes and steps inputs to specify the start and
+    end dimension and step for each axis in the list of axes,
 
     it uses this information to slice the input data tensor.
     If a negative value is passed for any of the start or end indices,
@@ -1072,10 +1066,10 @@ def Resize_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendC
 
 
 def _NMS_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    """
-    Filter out boxes that have high intersection-over-union (IOU) overlap with previously selected boxes.
-    Bounding boxes with score less than score_threshold are removed.
-    Bounding box format is indicated by attribute center_point_box.
+    """Filter out boxes that have high intersection-over-union (IOU) overlap
+    with previously selected boxes. Bounding boxes with score less than
+    score_threshold are removed. Bounding box format is indicated by attribute
+    center_point_box.
 
     Note that this algorithm is agnostic to where the origin is in the coordinate system and
     more generally is invariant to orthogonal transformations and translations of the coordinate system;
@@ -1149,14 +1143,14 @@ def _NMS_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
             # output.append(keep.to(device)) move back to gpu
 
             # In mmcv.ops.nms, boxes should given in the order of (x_min, y_min, x_max, y_max)
-            '''
-            # Strange speed, Revert back to original implementation.
+            """# Strange speed, Revert back to original implementation.
+
             # May lead to error if boxes are not in the order given above
 
             sorted_boxes = torch.tensor([[min(item[0], item[2]), min(item[1], item[3]), max(item[0], item[2]),
                                           max(item[1], item[3])] for item in sub_boxes], device=device)
             keep = mmcv.ops.nms(sorted_boxes, sub_scores[j].contiguous(), iou_threshold)[1]
-            '''
+            """
             keep = mmcv.ops.nms(sub_boxes, sub_scores[j].contiguous(), iou_threshold)[1]
             # keep = nms(sub_boxes, sub_scores[j], iou_threshold)[1]
             keep = keep[sub_scores[j][keep] > score_threshold]  # TODO: check GT or GE
@@ -1216,8 +1210,8 @@ def ReduceSum_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
 
 
 def Shape_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    """
-    Takes a tensor as input and outputs an 1D int64 tensor containing the shape of the input tensor.
+    """Takes a tensor as input and outputs an 1D int64 tensor containing the
+    shape of the input tensor.
 
     Version
         This version of the operator has been available since version 1 of the default ONNX operator set.
@@ -1245,13 +1239,14 @@ def Shape_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCo
 
 
 def TopK_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    """
-    Retrieve the top-K largest or smallest elements along a specified axis.
-    Given an input tensor of shape [a_1, a_2, ..., a_n, r] and integer argument k,
-    return two outputs: -Value tensor of shape [a_1, a_2, ..., a_{axis-1}, k, a_{axis+1}, ... a_n]
-    which contains the values of the top k elements along the specified axis -
-    Index tensor of shape [a_1, a_2, ..., a_{axis-1}, k, a_{axis+1}, ... a_n]
-    which contains the indices of the top k elements (original indices from the input tensor).
+    """Retrieve the top-K largest or smallest elements along a specified axis.
+    Given an input tensor of shape [a_1, a_2, ..., a_n, r] and integer argument
+    k, return two outputs: -Value tensor of shape [a_1, a_2, ..., a_{axis-1},
+    k, a_{axis+1}, ... a_n] which contains the values of the top k elements.
+
+    along the specified axis - Index tensor of shape [a_1, a_2, ...,
+    a_{axis-1}, k, a_{axis+1}, ... a_n] which contains the indices of the top k
+    elements (original indices from the input tensor).
 
     If "largest" is 1 (the default value) then the k largest elements are returned.
     If "sorted" is 1 (the default value) then the resulting k elements will be sorted.
@@ -1308,8 +1303,9 @@ def TopK_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
 
 
 def Expand_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
-    """
-    Broadcast the input tensor following the given shape and the broadcast rule.
+    """Broadcast the input tensor following the given shape and the broadcast
+    rule.
+
     The broadcast rule is similar to numpy.array(input) * numpy.ones(shape):
         Dimensions are right alignment;
         Two corresponding dimension must have the same value, or one of them is equal to 1.
@@ -1382,9 +1378,9 @@ def ScatterElements_forward(op: Operation, values: List[torch.Tensor], ctx: Torc
 
 
 def ScatterND_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    """
-    OPSET 11:
-    ScatterND takes three inputs data tensor of rank r >= 1, indices tensor of rank q >= 1,
+    """OPSET 11: ScatterND takes three inputs data tensor of rank r >= 1,
+    indices tensor of rank q >= 1,
+
         and updates tensor of rank q + r - indices.shape[-1] - 1.
 
     The output of the operation is produced by creating a copy of the input data,
@@ -1477,8 +1473,8 @@ def MatMul_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendC
     return output
 
 def Softmax_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    """
-    The operator computes the normalized exponential values for the given input:
+    """The operator computes the normalized exponential values for the given
+    input:
 
     Softmax(input, axis) = Exp(input) / ReduceSum(Exp(input), axis=axis, keepdims=1)
 
@@ -1858,8 +1854,8 @@ def HardSwish_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
 
 
 def GRU_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    """
-    Computes an one-layer GRU. This operator is usually supported via some custom implementation such as CuDNN.
+    """Computes an one-layer GRU. This operator is usually supported via some
+    custom implementation such as CuDNN.
 
     只支持 pytorch 导出来的 GRU 啊亲; 必须要 6 个输入 Variable
 
@@ -2038,7 +2034,6 @@ def GRU_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
         T1 : tensor(int32)
 
     Constrain seq_lens to integer tensor.
-
     """
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=6, max_num_of_input=6)
     direction = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='direction', default='forward')

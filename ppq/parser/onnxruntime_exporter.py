@@ -19,12 +19,17 @@ from .onnx_exporter import OnnxExporter
 
 
 class ONNXRUNTIMExporter(OnnxExporter):
-    """ONNXRUNTIME int8 QDQ format exporter, no further actions should be applied to the graph because we will modify the graph
-    in-place, and the modified graph can't be executed. We remove Clip and Relu ops(fuse into computing op) here when asym quantization
-    for activation is applied, and following the official implementation, when an variable has multiple outputs, we assume the same
-    quantization scales and offset. For parameters, we pre-quantize the value and only insert DequantizeLinear op, both per-layer/per-channel
-    and asym/sym quantizations are supported for export, the exported onnx model is tested to align with PPQ monitor when CUDAExecutionProvider
-    is applied in onnxruntime-gpu >= 1.8.1, i.e., to run the model correctly if you have gpu and onnxruntime-gpu version installed
+    """ONNXRUNTIME int8 QDQ format exporter, no further actions should be
+    applied to the graph because we will modify the graph in-place, and the
+    modified graph can't be executed. We remove Clip and Relu ops(fuse into
+    computing op) here when asym quantization for activation is applied, and
+    following the official implementation, when an variable has multiple
+    outputs, we assume the same quantization scales and offset. For parameters,
+    we pre-quantize the value and only insert DequantizeLinear op, both per-
+    layer/per-channel and asym/sym quantizations are supported for export, the
+    exported onnx model is tested to align with PPQ monitor when
+    CUDAExecutionProvider is applied in onnxruntime-gpu >= 1.8.1, i.e., to run
+    the model correctly if you have gpu and onnxruntime-gpu version installed.
 
     X     W      b             X        quant(W)   quant(b)
     \     |     /               \         |          /
@@ -128,10 +133,9 @@ class ONNXRUNTIMExporter(OnnxExporter):
         return created
 
     def remove_activation_ops(self, graph: BaseGraph) -> BaseGraph:
-        """
-        For Asymmetric Quantization Policy, Activations like Relu & Clip can be
-            removed from your network safely. Their function can be replaced by
-            quant & dequant operations.
+        """For Asymmetric Quantization Policy, Activations like Relu & Clip can
+        be removed from your network safely. Their function can be replaced by
+        quant & dequant operations.
 
         So to say those activation is unnecessary for Asymmetric quantized network.
 
@@ -172,9 +176,9 @@ class ONNXRUNTIMExporter(OnnxExporter):
         return graph
 
     def remove_duplicated_quant_op(self, graph: BaseGraph) -> BaseGraph:
-        """
-        Some time there will be more than 1 quant operation inserted with a single variable.
-        This function will remove duplicated quant operation from variable if it is possible.
+        """Some time there will be more than 1 quant operation inserted with a
+        single variable. This function will remove duplicated quant operation
+        from variable if it is possible.
 
         If inserted quant operations do not share a same zeropoint and scale,
         Then there is no way to remove any one of them.
@@ -214,13 +218,12 @@ class ONNXRUNTIMExporter(OnnxExporter):
 
     @ property
     def required_opsets(self) -> Dict[str, int]:
-        extra_domain_versions = [("ai.onnx", 13)]
+        extra_domain_versions = [('ai.onnx', 13)]
         return dict(extra_domain_versions)
 
     def convert_operation_from_opset11_to_opset13(self, graph:BaseGraph) -> None:
-        """
-        Convert your network from opset 11 standard towards opset 13
-        With Onnx definition, per-channel quant operation requires opset 13.
+        """Convert your network from opset 11 standard towards opset 13 With
+        Onnx definition, per-channel quant operation requires opset 13.
 
         Args:
             graph (BaseGraph): Processing graph.
@@ -242,9 +245,9 @@ class ONNXRUNTIMExporter(OnnxExporter):
     def convert_operation(self, graph: BaseGraph, op: QuantableOperation,
                           process_activation: bool, process_parameter: bool,
                           quant_param_to_int: bool):
-        """
-        Convert an operation to onnx quant & dequant format by inserting necessary quant & dequant op around it.
-        There are 2 ways to represent quantized ONNX models:
+        """Convert an operation to onnx quant & dequant format by inserting
+        necessary quant & dequant op around it. There are 2 ways to represent
+        quantized ONNX models:
 
         Operator Oriented. All the quantized operators have their own ONNX definitions,
             like QLinearConv, MatMulInteger and etc.
@@ -308,8 +311,7 @@ class ONNXRUNTIMExporter(OnnxExporter):
         process_parameter: bool = True,
         remove_activation_fn: bool = True,
         quant_parameter_to_int: bool = True) -> BaseGraph:
-        """
-        Prepare your graph for exporting.
+        """Prepare your graph for exporting.
 
         There are many works to do with your graph:
 

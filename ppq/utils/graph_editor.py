@@ -4,10 +4,10 @@ from ppq.IR import GraphFormatter
 
 
 def truncate_graph(graph: BaseGraph, outputs: List[str]):
-    """
-    truncate your graph, so that all operations behind outputs(function parameter) will be eliminated.
-        A list of output variable is given as parameter of this function.
-        PPQ will goes forward from all those variables, mark all downstream operations for removing.
+    """truncate your graph, so that all operations behind outputs(function
+    parameter) will be eliminated. A list of output variable is given as
+    parameter of this function. PPQ will goes forward from all those variables,
+    mark all downstream operations for removing.
 
     A truncated graph object will return as result.
 

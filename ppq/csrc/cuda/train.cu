@@ -51,7 +51,7 @@ __global__ void _TensorClip_C(
 __host__ Tensor TensorClip_C(
     const Tensor &value, const Tensor &reference, const Tensor &limit,
     const int channel_axis){
-    /** 
+    /**
     Clip a tensor inplace with given limit
     All scalar of value will be cliped with range [reference - limit, reference + limit]
 
@@ -68,7 +68,7 @@ __host__ Tensor TensorClip_C(
     }
 
     Tensor out = at::empty_like(value);
-    _TensorClip_C<<<NUM_OF_BLOCK(NUM_OF_ELEMENT(value)), 
+    _TensorClip_C<<<NUM_OF_BLOCK(NUM_OF_ELEMENT(value)),
         CUDA_NUM_THREADS, 0, at::cuda::getCurrentCUDAStream()>>>(
         NUM_OF_ELEMENT(value), element_per_channel, num_of_channel,
         PTR<float>(value), PTR<float>(reference), PTR<float>(limit),
@@ -103,7 +103,7 @@ __host__ Tensor TensorClip_T(
     CheckTensor(limit, at::kFloat, "Limit(Expect to be FP32)");
 
     Tensor out = at::empty_like(value);
-    _TensorClip_T<<<NUM_OF_BLOCK(NUM_OF_ELEMENT(value)), 
+    _TensorClip_T<<<NUM_OF_BLOCK(NUM_OF_ELEMENT(value)),
         CUDA_NUM_THREADS, 0, at::cuda::getCurrentCUDAStream()>>>(
         NUM_OF_ELEMENT(value),
         PTR<float>(value), PTR<float>(reference), PTR<float>(limit),
@@ -129,7 +129,7 @@ __global__ void _RoundingLoss_LT(
         auto _ = QuantizeScalar<float, float, int>(
             v, s, o, clip_min, clip_max, rounding);
         auto out = DequantizeScalar<int, float, int>(_, s, o);
-        
+
         float diff = abs(out - v);
         // if value has been clipped, set diff = 0
         if (v > s * (clip_max - o)) diff = 0;
@@ -141,8 +141,8 @@ __global__ void _RoundingLoss_LT(
 }
 
 __host__ Tensor RoundingLoss_LT(
-    const Tensor &value, const Tensor &scale, const Tensor &offset, 
-    const int clip_min, const int clip_max, 
+    const Tensor &value, const Tensor &scale, const Tensor &offset,
+    const int clip_min, const int clip_max,
     Rounding rounding
 ){
     /*
@@ -150,7 +150,7 @@ __host__ Tensor RoundingLoss_LT(
 
         R = sum(norm2(T - quant(T))) / sqrt(elements_of(T))
 
-        If one value inside R is clipped by quant function, 
+        If one value inside R is clipped by quant function,
             then it contributes nothing to R.
     */
     CheckTensor(value, at::kFloat, "Value(Expect to be FP32)");
@@ -158,7 +158,7 @@ __host__ Tensor RoundingLoss_LT(
     CheckTensor(offset, at::kFloat, "Offset(Expect to be FP32)");
 
     Tensor loss = at::zeros({1}, value.options());
-    _RoundingLoss_LT<<<NUM_OF_BLOCK(NUM_OF_ELEMENT(value)), 
+    _RoundingLoss_LT<<<NUM_OF_BLOCK(NUM_OF_ELEMENT(value)),
         CUDA_NUM_THREADS, 0, at::cuda::getCurrentCUDAStream()>>>(
         NUM_OF_ELEMENT(value),
         PTR<float>(value), PTR<float>(scale), PTR<float>(offset),
@@ -194,9 +194,9 @@ __global__ void _RoundingLoss_LT_B(
 }
 
 __host__ Tensor RoundingLoss_LT_B(
-    const Tensor &value, const Tensor &dy, 
-    const Tensor &scale, const Tensor &offset, 
-    const int clip_min, const int clip_max, 
+    const Tensor &value, const Tensor &dy,
+    const Tensor &scale, const Tensor &offset,
+    const int clip_min, const int clip_max,
     Rounding rounding
 ){
     /*
@@ -207,10 +207,10 @@ __host__ Tensor RoundingLoss_LT_B(
     CheckTensor(offset, at::kFloat, "Offset(Expect to be FP32)");
 
     Tensor grad_v = at::zeros_like(value);
-    _RoundingLoss_LT_B<<<NUM_OF_BLOCK(NUM_OF_ELEMENT(value)), 
+    _RoundingLoss_LT_B<<<NUM_OF_BLOCK(NUM_OF_ELEMENT(value)),
         CUDA_NUM_THREADS, 0, at::cuda::getCurrentCUDAStream()>>>(
         NUM_OF_ELEMENT(value),
-        PTR<float>(value), PTR<float>(dy), 
+        PTR<float>(value), PTR<float>(dy),
         PTR<float>(scale), PTR<float>(offset),
         clip_min, clip_max, rounding, PTR<float>(grad_v)
     );
@@ -235,7 +235,7 @@ __global__ void _RoundingLoss_LC(
         auto _ = QuantizeScalar<float, float, int>(
             value[iter], scale[c], std::nearbyint(offset[c]), clip_min, clip_max, rounding);
         auto out = DequantizeScalar<int, float, int>(_, scale[c], std::nearbyint(offset[c]));
-        
+
         float diff = abs(out - v);
         // if value has been clipped, set diff = 0
         if (v > scale[c] * (clip_max - offset[c])) diff = 0;
@@ -247,8 +247,8 @@ __global__ void _RoundingLoss_LC(
 }
 
 __host__ Tensor RoundingLoss_LC(
-    const Tensor &value, const Tensor &scale, const Tensor &offset, 
-    const int clip_min, const int clip_max, 
+    const Tensor &value, const Tensor &scale, const Tensor &offset,
+    const int clip_min, const int clip_max,
     const int channel_axis, Rounding rounding
 ){
     /*
@@ -256,7 +256,7 @@ __host__ Tensor RoundingLoss_LC(
 
         R = sum(norm2(T - quant(T))) / sqrtf(elements_of(T))
 
-        If one value inside R is clipped by quant function, 
+        If one value inside R is clipped by quant function,
             then it contributes nothing to R.
     */
     CheckTensor(value, at::kFloat, "Value(Expect to be FP32)");
@@ -270,7 +270,7 @@ __host__ Tensor RoundingLoss_LC(
     }
 
     Tensor loss = at::zeros({1}, value.options());
-    _RoundingLoss_LC<<<NUM_OF_BLOCK(NUM_OF_ELEMENT(value)), 
+    _RoundingLoss_LC<<<NUM_OF_BLOCK(NUM_OF_ELEMENT(value)),
         CUDA_NUM_THREADS, 0, at::cuda::getCurrentCUDAStream()>>>(
         NUM_OF_ELEMENT(value), element_per_channel, num_of_channel,
         PTR<float>(value), PTR<float>(scale), PTR<float>(offset),
@@ -308,9 +308,9 @@ __global__ void _RoundingLoss_LC_B(
 }
 
 __host__ Tensor RoundingLoss_LC_B(
-    const Tensor &value, const Tensor &dy, 
-    const Tensor &scale, const Tensor &offset, 
-    const int clip_min, const int clip_max, 
+    const Tensor &value, const Tensor &dy,
+    const Tensor &scale, const Tensor &offset,
+    const int clip_min, const int clip_max,
     const int channel_axis, Rounding rounding
 ){
     /*
@@ -327,10 +327,10 @@ __host__ Tensor RoundingLoss_LC_B(
     }
 
     Tensor grad_v = at::zeros_like(value);
-    _RoundingLoss_LC_B<<<NUM_OF_BLOCK(NUM_OF_ELEMENT(value)), 
+    _RoundingLoss_LC_B<<<NUM_OF_BLOCK(NUM_OF_ELEMENT(value)),
         CUDA_NUM_THREADS, 0, at::cuda::getCurrentCUDAStream()>>>(
         NUM_OF_ELEMENT(value), element_per_channel, num_of_channel,
-        PTR<float>(value), PTR<float>(dy), 
+        PTR<float>(value), PTR<float>(dy),
         PTR<float>(scale), PTR<float>(offset),
         clip_min, clip_max, rounding, PTR<float>(grad_v)
     );

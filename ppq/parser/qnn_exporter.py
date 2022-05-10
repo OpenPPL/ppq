@@ -53,8 +53,8 @@ class QNNDSPExporter(OnnxExporter):
                     activation_info[var.name] = info
 
         exports = {
-            "activation_encodings": activation_info,
-            "param_encodings": param_info
+            'activation_encodings': activation_info,
+            'param_encodings': param_info
         }
 
         with open(file=config_path, mode='w') as file:

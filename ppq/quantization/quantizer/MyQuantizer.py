@@ -15,9 +15,8 @@ from .base import BaseQuantizer
 
 
 class ExtQuantizer(BaseQuantizer):
-    """
-    ExtQuantizer 是一个空的量化器模板，你可以在这里面实现你自定义的平台量化逻辑
-        你需要实现该类所有成员函数与方法，并且使用 TargetPlatform.EXTENSION 调用这个量化器
+    """ExtQuantizer 是一个空的量化器模板，你可以在这里面实现你自定义的平台量化逻辑 你需要实现该类所有成员函数与方法，并且使用
+    TargetPlatform.EXTENSION 调用这个量化器.
 
         --> quantize_torch_model(..., platform=EXTENSION)
 
@@ -43,8 +42,7 @@ class ExtQuantizer(BaseQuantizer):
         super().__init__(graph=graph) # do not forget to initialize super class.
 
     def init_quantize_config(self, operation: Operation) -> OperationQuantizationConfig:
-        """
-        使用这个函数来初始化算子的量化配置，该函数会被父类作为接口调用。
+        """使用这个函数来初始化算子的量化配置，该函数会被父类作为接口调用。
 
         我们提供了一个方便的函数 create_default_quant_config 来帮助你实现相关逻辑
             调用这个函数将直接产生一个默认的量化配置，你可以在此基础上进行修改。
@@ -108,32 +106,25 @@ class ExtQuantizer(BaseQuantizer):
 
     @ property
     def target_platform(self) -> TargetPlatform:
-        """
-        target_platform 属性是提供给子图切分使用的，
-            所有量化区的算子将被调度到这个设备上。
+        """target_platform 属性是提供给子图切分使用的， 所有量化区的算子将被调度到这个设备上。
 
-        Property target_platform is acquired by graph dispather.
-            It states where your quantized operation depoly.
-
+        Property target_platform is acquired by graph dispather.     It states
+        where your quantized operation depoly.
         """
         return TargetPlatform.EXTENSION
 
     @ property
     def default_platform(self) -> TargetPlatform:
-        """
-        default_platform 属性是提供给子图切分使用的，
-            所有冲突区的算子将被调度到这个设备上。
+        """default_platform 属性是提供给子图切分使用的， 所有冲突区的算子将被调度到这个设备上。
 
-        Property default_platform is acquired by graph dispather.
-            It states where non-quantable operation depoly.
-
+        Property default_platform is acquired by graph dispather.     It states
+        where non-quantable operation depoly.
         """
         return TargetPlatform.FP32
 
     @ property
     def quant_operation_types(self) -> set:
-        """
-        quant_operation_types 指明了所有可以被量化的算子类型。
+        """quant_operation_types 指明了所有可以被量化的算子类型。
 
         聪明的你可能想问了，如果我不是按类型进行量化，而是想特定去量化某几个算子怎么办。
             我建议你通过手写一个调度表来实现这样的功能，只需要把其他算子调度到FP32上就行了。
@@ -147,7 +138,6 @@ class ExtQuantizer(BaseQuantizer):
             so to say quantizer is only in charge of quantable subgraph,
             those operation within non-quantable subgraph will never be
             quantized even their type is listed here.
-
         """
         return {
             'Conv', 'ConvTranspose', 'Gemm', 'Relu', 'PRelu',
@@ -159,9 +149,7 @@ class ExtQuantizer(BaseQuantizer):
 
     @ property
     def quantize_policy(self) -> QuantizationPolicy:
-        """
-        quantize_policy 指明了默认量化策略
-            被函数 create_default_quant_config 所使用
+        """quantize_policy 指明了默认量化策略 被函数 create_default_quant_config 所使用.
 
         quantize_policy is used by create_default_quant_config(),
             to generate a default quantization configuration.
@@ -177,9 +165,7 @@ class ExtQuantizer(BaseQuantizer):
 
     @ property
     def rounding_policy(self) -> RoundingPolicy:
-        """
-        rounding_policy 指明了默认取整策略
-            被函数 create_default_quant_config 所使用
+        """rounding_policy 指明了默认取整策略 被函数 create_default_quant_config 所使用.
 
         rounding_policy is used by create_default_quant_config(),
             to generate a default quantization configuration.

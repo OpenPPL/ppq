@@ -10,7 +10,7 @@ def readme():
 
 
 setup(author='ppq',
-      author_email="dcp-ppq@sensetime.com",
+      author_email='dcp-ppq@sensetime.com',
       description='PPQ is an offline quantization tools',
       long_description=readme(),
       long_description_content_type='text/markdown',

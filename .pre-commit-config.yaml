@@ -12,7 +12,6 @@ repos:
         args: ["--remove"]
       - id: mixed-line-ending
         args: ["--fix=lf"]
-      - exclude: ^doc&
   - repo: https://github.com/markdownlint/markdownlint
     rev: v0.11.0
     hooks:

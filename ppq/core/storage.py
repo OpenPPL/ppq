@@ -1,9 +1,6 @@
-"""
-    PPQ Core File System
-    PPQ 核心文件系统(IO)
+"""PPQ Core File System PPQ 核心文件系统(IO)
 
-    You are not allowed to modify this
-    请勿修改此文件
+You are not allowed to modify this 请勿修改此文件
 """
 import os
 from typing import Any
@@ -29,9 +26,8 @@ def open_txt_file_from_writing(file: str, mode: str, encoding: str='utf-8'):
 
 
 class Serializable():
-    """
-        An interface which means a class instance is binary serializable, nothing funny.
-    """
+    """An interface which means a class instance is binary serializable,
+    nothing funny."""
     def __init__(self) -> None:
         self._export_value = DUMP_VALUE
 
@@ -39,7 +35,7 @@ class Serializable():
         if not isinstance(state, dict):
             raise TypeError(f'PPQ Data Load Failure. Can not load data from {type(state)}, '
                 'Your data might get damaged.')
-        
+
         if '__version__' not in state or state['__version__'] != PPQ_VERSION:
             ppq_warning(
                 'You are loading an object created by PPQ with different version,'
@@ -47,7 +43,7 @@ class Serializable():
 
         for key, value in state.items():
             self.__dict__[key] = value
-            if isinstance(value, ValueState): 
+            if isinstance(value, ValueState):
                 self.__dict__[key] = value.unpack()
         return self
 
@@ -55,7 +51,7 @@ class Serializable():
         attribute_dicts = self.__dict__
         attribute_dicts['__version__'] = PPQ_VERSION
         serialized = dict()
-        
+
         for name, value in attribute_dicts.items():
             if isinstance(value, np.ndarray) or isinstance(value, torch.Tensor):
                 if self._export_value is False: value = None

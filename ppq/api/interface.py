@@ -197,11 +197,8 @@ def quantize_onnx_model(
     verbose: int = 0,
     do_quantize: bool = True,
 ) -> BaseGraph:
-    """
-        量化一个 onnx 原生的模型
-            输入一个 onnx 模型的文件路径
-            返回一个量化后的 PPQ.IR.BaseGraph
-        quantize onnx model, input onnx model and return quantized ppq IR graph
+    """量化一个 onnx 原生的模型 输入一个 onnx 模型的文件路径 返回一个量化后的 PPQ.IR.BaseGraph quantize
+    onnx model, input onnx model and return quantized ppq IR graph.
 
     Args:
         onnx_import_file (str): 被量化的 onnx 模型文件路径 onnx model location
@@ -297,10 +294,7 @@ def quantize_torch_model(
     device: str = 'cuda',
     verbose: int = 0,
     ) -> BaseGraph:
-    """
-        量化一个 Pytorch 原生的模型
-            输入一个 torch.nn.Module
-            返回一个量化后的 PPQ.IR.BaseGraph
+    """量化一个 Pytorch 原生的模型 输入一个 torch.nn.Module 返回一个量化后的 PPQ.IR.BaseGraph.
 
         quantize a pytorch model, input pytorch model and return quantized ppq IR graph
     Args:
@@ -475,11 +469,8 @@ def quantize_native_model(
     verbose: int = 0,
     do_quantize: bool = True,
 ) -> BaseGraph:
-    """
-        量化一个已经在内存中的 ppq 模型
-            输入一个量化前的 PPQ.IR.BaseGraph
-            返回一个量化后的 PPQ.IR.BaseGraph
-        quantize ppq model, input ppq graph and return quantized ppq graph
+    """量化一个已经在内存中的 ppq 模型 输入一个量化前的 PPQ.IR.BaseGraph 返回一个量化后的 PPQ.IR.BaseGraph
+    quantize ppq model, input ppq graph and return quantized ppq graph.
 
     Args:
         native (BaseGraph): 被量化的 ppq graph
@@ -564,10 +555,9 @@ def export_ppq_graph(
     graph_save_to: str,
     config_save_to: str = None,
     **kwargs) -> None:
-    """
-    使用这个函数将 PPQ ir 保存到文件，同时导出 PPQ 的量化配置信息。
-        该函数可以将 PPQ ir 保存为不同格式的模型文件。
-    this func dumps ppq IR to file, and exports quantization setting information simultaneously
+    """使用这个函数将 PPQ ir 保存到文件，同时导出 PPQ 的量化配置信息。 该函数可以将 PPQ ir 保存为不同格式的模型文件。 this
+    func dumps ppq IR to file, and exports quantization setting information
+    simultaneously.
 
     详细的支持情况请参考: ppq.parser.__ini__.py
     for details please refer to ppq.parser.__ini__.py
@@ -610,10 +600,8 @@ def export_ppq_graph(
 
 
 def format_graph(graph: BaseGraph) -> BaseGraph:
-    """
-
-    这个函数对计算图进行预处理工作，其主要内容是将计算图的格式进行统一
-    这个函数将会统一 cast, slice, parameter, constant 算子的格式，并且执行有关 batchnorm 的合并工作
+    """这个函数对计算图进行预处理工作，其主要内容是将计算图的格式进行统一 这个函数将会统一 cast, slice, parameter,
+    constant 算子的格式，并且执行有关 batchnorm 的合并工作.
 
     在 PPQ 中，我们不希望出现 Constant 算子，所有 Constant 输入将被当作 parameter variable 连接到下游算子上
     在 PPQ 中，我们不希望出现 Batchnorm 算子，所有 Batchnorm 将被合并
@@ -629,7 +617,6 @@ def format_graph(graph: BaseGraph) -> BaseGraph:
 
     We do not expect there is any shared parameter in your network, all of them will be copied and spilted.
     We do not expect any isolated operation in your network, all of them will be removed.
-
     """
 
     # do graph level optimization
@@ -647,11 +634,8 @@ def format_graph(graph: BaseGraph) -> BaseGraph:
 
 
 def dispatch_graph(graph: BaseGraph, platform: TargetPlatform, setting: QuantizationSetting) -> BaseGraph:
-    """
-
-    这个函数执行图切分与调度，你的计算图将被切分成一系列子图，并被调度到不同设备上。
-    调度的逻辑分为自动控制的部分以及手动覆盖的部分，你可以使用 QuantizationSetting 来向这个函数传递手动调度表
-    从而覆盖 PPQ 的调度逻辑。
+    """这个函数执行图切分与调度，你的计算图将被切分成一系列子图，并被调度到不同设备上。 调度的逻辑分为自动控制的部分以及手动覆盖的部分，你可以使用
+    QuantizationSetting 来向这个函数传递手动调度表 从而覆盖 PPQ 的调度逻辑。
 
     注意：这个函数依据调度器和TargetPlatform 平台的不同而产生行为差异，生成不同的调度计划。
 
@@ -659,7 +643,6 @@ def dispatch_graph(graph: BaseGraph, platform: TargetPlatform, setting: Quantiza
     PPQ provides an automatic dispatcher which, will generate different dispatching scheme on your TargetPlatform.
     A dispatching table can be passed via QuantizationSetting to override
         the default dispatching logic of ppq dispatcher manually.
-
     """
     assert platform in QUANTIZER_COLLECTION, (
         f'Platform misunderstood, except one of following platform {QUANTIZER_COLLECTION.keys()}')
@@ -811,11 +794,9 @@ class UnbelievableUserFriendlyQuantizationSetting:
 def quantize(working_directory: str, setting: QuantizationSetting, model_type: NetworkFramework,
              executing_device: str, input_shape: List[int], target_platform: TargetPlatform,
              dataloader: DataLoader, calib_steps: int = 32) -> BaseGraph:
-    """
-    Helper function for quantize your model within working directory,
-        This function will do some check and redirect your requirement to:
-            ppq.api.quantize_onnx_model
-            ppq.api.quantize_caffe_model
+    """Helper function for quantize your model within working directory, This
+    function will do some check and redirect your requirement to:
+    ppq.api.quantize_onnx_model ppq.api.quantize_caffe_model.
 
     see them for more information.
 
@@ -858,10 +839,9 @@ def quantize(working_directory: str, setting: QuantizationSetting, model_type: N
 
 
 def export(working_directory: str, quantized: BaseGraph, platform: TargetPlatform, **kwargs):
-    """
-    Helper function to export your graph to working directory,
-        You should notice this function just redirect your invoking to export_ppq_graph.
-        see export_ppq_graph for more information.
+    """Helper function to export your graph to working directory, You should
+    notice this function just redirect your invoking to export_ppq_graph. see
+    export_ppq_graph for more information.
 
     Args:
         working_directory (str): _description_
@@ -879,10 +859,9 @@ def export(working_directory: str, quantized: BaseGraph, platform: TargetPlatfor
 def manop(graph: BaseGraph, list_of_passes: List[QuantizationOptimizationPass],
           calib_dataloader: Iterable, executor: BaseGraphExecutor,
           collate_fn: Callable = None, **kwargs) -> BaseGraph:
-    """
-    manop 是一个很方便的函数，你可以调用这个函数来手动地执行一些量化优化工作
-    你可以在默认量化逻辑之前或之后调用这个函数来自定义量化处理流程，相比于直接实现
-    Quantizer来修改量化逻辑的方式, 使用 manop 会更加灵活。
+    """manop 是一个很方便的函数，你可以调用这个函数来手动地执行一些量化优化工作
+    你可以在默认量化逻辑之前或之后调用这个函数来自定义量化处理流程，相比于直接实现 Quantizer来修改量化逻辑的方式, 使用 manop
+    会更加灵活。
 
     MANOP (manually optimize) function is introduced since PPQ 0.6.4.
     This function allows you to manually invoke

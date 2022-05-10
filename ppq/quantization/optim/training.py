@@ -78,9 +78,9 @@ def find_all_blocks(graph: BaseGraph,
                 executing_order: List[Operation],
                 block_limit: int=None
     ) -> List[TrainableBlock]:
-    """block construction function of training-based algorithms, if `block_limit`
-    is not specified, block grandularity will be controlled by the default value
-    OPTIM_ADVOPT_GRAPH_MAXSIZE specified in ppq.core.common
+    """block construction function of training-based algorithms, if
+    `block_limit` is not specified, block grandularity will be controlled by
+    the default value OPTIM_ADVOPT_GRAPH_MAXSIZE specified in ppq.core.common.
 
     Args:
         graph (BaseGraph): ppq ir graph
@@ -116,7 +116,7 @@ def collect_block_input_output(
     collate_fn: Callable,
     collecting_device: str
 ) -> List[Tuple[List[torch.Tensor], torch.Tensor]]:
-    """Collect training quant input and fp32 output values for block
+    """Collect training quant input and fp32 output values for block.
 
     Args:
         block (TrainableBlock): the trainable block
@@ -143,10 +143,9 @@ def collect_block_input_output(
     return block_input
 
 class TrainingBasedPass(QuantizationOptimizationPass):
-    """
-    Training Based Pass is a basic class that provides necessary function for
-        all training optimizition passes. Optimization will be more stable and
-        accurate with functions provided by this pass. (Might be a little slower).
+    """Training Based Pass is a basic class that provides necessary function
+    for all training optimizition passes. Optimization will be more stable and
+    accurate with functions provided by this pass. (Might be a little slower).
 
     This pass will collect result of interested outputs after optimization and
         check if the optimized result has a lower SNR. If so, the optimization will be
@@ -224,9 +223,8 @@ class TrainingBasedPass(QuantizationOptimizationPass):
 
     def check(self, executor: BaseGraphExecutor,
         dataloader: Iterable, collate_fn: Callable):
-        """
-        Check quantization error with a given dataloader with current checkpoints.
-            Return whether quantization error is lower than before.
+        """Check quantization error with a given dataloader with current
+        checkpoints. Return whether quantization error is lower than before.
 
         Args:
             executor (BaseGraphExecutor): [description]
@@ -276,11 +274,10 @@ class TrainingBasedPass(QuantizationOptimizationPass):
                                   'Please inherit this class and give an implementation to override this function.')
 
     def dequantize_immediately(self, operation: Operation):
-        """
-        Dequantize an operation inplace, use this function carefully.
-            if parameter value has been changed during your optimization procedure,
-            then it is not safe to dequantize an operation via this function,
-            use operation.dequantize to load stored fp32 value instead.
+        """Dequantize an operation inplace, use this function carefully. if
+        parameter value has been changed during your optimization procedure,
+        then it is not safe to dequantize an operation via this function, use
+        operation.dequantize to load stored fp32 value instead.
 
         This function will change quantization state to dequantize an operation,
             Only quantization state will be changed by this function so that it is
@@ -300,11 +297,10 @@ class TrainingBasedPass(QuantizationOptimizationPass):
                     cfg.state = QuantizationStates.DEQUANTIZED
 
     def quantize_immediately(self, operation: Operation):
-        """
-        Restore quantization state of an operation, use this function carefully.
-            if parameter value has been changed during your optimization procedure,
-            then it is not safe to restore state via this function,
-            use operation.restore_quantize_state to load stored quant value instead.
+        """Restore quantization state of an operation, use this function
+        carefully. if parameter value has been changed during your optimization
+        procedure, then it is not safe to restore state via this function, use
+        operation.restore_quantize_state to load stored quant value instead.
 
         This function will change quantization state to quantize an operation,
             Only quantization state will be changed by this function so that it is
@@ -322,11 +318,10 @@ class TrainingBasedPass(QuantizationOptimizationPass):
                     self._quant_state_recorder.pop(cfg)
 
     def dequantize_graph_immediately(self, graph: BaseGraph):
-        """
-        Dequantize entire graph inplace, use this function carefully.
-            if parameter value has been changed during your optimization procedure,
-            then it is not safe to dequantize graph via this function, as this function
-            only changes quantization state to dequantize entire graph.
+        """Dequantize entire graph inplace, use this function carefully. if
+        parameter value has been changed during your optimization procedure,
+        then it is not safe to dequantize graph via this function, as this
+        function only changes quantization state to dequantize entire graph.
 
         If your parameter value has already been baked, an exception will be thrown.
         Args:
@@ -336,10 +331,9 @@ class TrainingBasedPass(QuantizationOptimizationPass):
             self.dequantize_immediately(operation)
 
     def quantize_graph_immediately(self, graph: BaseGraph):
-        """
-        Restore quantization state of entire graph, use this function carefully.
-            if parameter value has been changed during your optimization procedure,
-            then it is not safe to restore state via this function.
+        """Restore quantization state of entire graph, use this function
+        carefully. if parameter value has been changed during your optimization
+        procedure, then it is not safe to restore state via this function.
 
         If your parameter value has already been baked, an exception will be thrown.
         Args:
@@ -352,9 +346,9 @@ class TrainingBasedPass(QuantizationOptimizationPass):
 class BiasCorrectionPass(TrainingBasedPass):
     def __init__(self, auto_check: bool=False, interested_output: List[str] = None,
                  verbose: bool = True, max_steps:int = 8) -> None:
-        """
-        Quantization can introduce a biased error in the activations.
-            Bias correction serves as a useful prosedure to eliminate those introduced bias error.
+        """Quantization can introduce a biased error in the activations. Bias
+        correction serves as a useful prosedure to eliminate those introduced
+        bias error.
 
         let: Y = WX + b
              Quant(Y) = Qunat(W) Quant(X) + b
@@ -527,9 +521,9 @@ class AdaRoundPass(QuantizationOptimizationPass):
                     cur_iter += 1
 
                 if ep_idx % 100 == 0:
-                    print("Epoch: {:<4} L2 Loss: {:>10.3f} Beta: {:>3.3f}".format(ep_idx, loss, reg.beta))
+                    print('Epoch: {:<4} L2 Loss: {:>10.3f} Beta: {:>3.3f}'.format(ep_idx, loss, reg.beta))
             h_v = AdaroundRegTerm().rectified_sigmoid(continuous_v)
-            print("Loss: {:>5.3f} Ceil: {:>5} Floor: {:>5} Total: {:>5} Ratio: {:>.3f}".format(
+            print('Loss: {:>5.3f} Ceil: {:>5} Floor: {:>5} Total: {:>5} Ratio: {:>.3f}'.format(
                 loss,
                 h_v[h_v + 1e-4 >= 1.0].numel(), h_v[h_v <= 1e-4].numel(), torch.numel(h_v),
                 (h_v[h_v + 1e-4 >= 1.0].numel() + h_v[h_v <= 1e-4].numel()) / torch.numel(h_v)))
@@ -557,17 +551,22 @@ class AdaRoundPass(QuantizationOptimizationPass):
 
 
 class BlockwiseReconstructionPass(TrainingBasedPass):
-    """Blockwise Reconstruction Pass, blockwisely perform adaround, if you specify interested_layers in the setting,
-    then only block which contains any of operations specified in interested_layers will be optimized, otherwise all
-    searched blocks will be optimized.
-       A standard procedure is, first turn all training-based optimization passes off in your quantization setting and
-    run a plain quantization, then use error analysis tool(provided by ppq) to analysis snr error or cosine similarities
-    of every layer, choose names of those with significant snr or poor similarities as your interested_layers, then turn
-    on this pass and do optimization. In case you have no idea which layers should be selected as interested_layers, simply
-    leave it as blank and all blocks will be tuned.
-       Note that you could control the maximum number of operations in a block by setting OPTIM_ADVOPT_GRAPH_MAXSIZE in
-    ppq.core.common, and by default every block will be trained for 300 epochs, which takes certain long time. The optimization
-    goal of every block is
+    """Blockwise Reconstruction Pass, blockwisely perform adaround, if you
+    specify interested_layers in the setting, then only block which contains
+    any of operations specified in interested_layers will be optimized,
+    otherwise all searched blocks will be optimized. A standard procedure is,
+    first turn all training-based optimization passes off in your quantization
+    setting and run a plain quantization, then use error analysis tool(provided
+    by ppq) to analysis snr error or cosine similarities of every layer, choose
+    names of those with significant snr or poor similarities as your
+    interested_layers, then turn on this pass and do optimization. In case you
+    have no idea which layers should be selected as interested_layers, simply
+    leave it as blank and all blocks will be tuned. Note that you could control
+    the maximum number of operations in a block by setting
+    OPTIM_ADVOPT_GRAPH_MAXSIZE in ppq.core.common, and by default every block
+    will be trained for 300 epochs, which takes certain long time. The
+    optimization goal of every block is.
+
                 Loss = LpNormLoss(y, y^) + lamda * rounding_loss(v)
     where y is the output of the current block running in fp32 mode, and y^ is the output of the current block running
     in quant mode, lamda is a hyperparameter adjusting scales of rounding loss, and v is the element-wise rounding
@@ -773,7 +772,7 @@ class BlockwiseReconstructionPass(TrainingBasedPass):
                 early_stop_flag = 1
                 for _,continue_v in enumerate(continue_vs):
                     h_v = continue_v.detach()
-                    logger.debug("Rounding var {} Ceil: {:>5} Floor: {:>5} Total: {:>5} Ratio: {:>.3f}".format(
+                    logger.debug('Rounding var {} Ceil: {:>5} Floor: {:>5} Total: {:>5} Ratio: {:>.3f}'.format(
                         _ + 1, h_v[h_v + 1e-4 >= 1.0].numel(), h_v[h_v <= 1e-4].numel(), torch.numel(h_v),
                         (h_v[h_v + 1e-4 >= 1.0].numel() + h_v[h_v <= 1e-4].numel()) / torch.numel(h_v))
                     )
@@ -811,8 +810,10 @@ class BlockwiseReconstructionPass(TrainingBasedPass):
 
 
 class LearningStepSizeOptimization(TrainingBasedPass):
-    """Learned Step Size optimization, a training-based optimization pass which tunes weight, weight scale, weight offset
-    (for aym quantization only) and activation scale, activation offset(for asym quantization only) of computing layers.
+    """Learned Step Size optimization, a training-based optimization pass which
+    tunes weight, weight scale, weight offset (for aym quantization only) and
+    activation scale, activation offset(for asym quantization only) of
+    computing layers.
 
         This pass will firstly partition the graph into multiple trainable blocks, and you can control partition grandularity
     by setting the global parameter OPTIM_ADVOPT_GRAPH_MAXSIZE in ppq.core.common, usually a block contains several computing
@@ -991,8 +992,7 @@ class LearningStepSizeOptimization(TrainingBasedPass):
 
 
 class AdvancedQuantOptimization(TrainingBasedPass):
-    """
-    PPQ Advanced Quantization Optimization
+    """PPQ Advanced Quantization Optimization.
 
     This optimization pass minimize the quantization errors of each subgraph separately
         by optimizing its parameters over the calibration set.
@@ -1236,24 +1236,23 @@ class AdvancedQuantOptimization(TrainingBasedPass):
 
 
 class LearningToCalibPass(TrainingBasedPass):
-    """
-        This is an Experimental Pass, do not invoke.
+    """This is an Experimental Pass, do not invoke.
 
-        PPQ Leraning Based Calibration Pass
-        For int8 quantization, you need to calibrate or estimate the value range,
-            i.e, (min, max) of all floating-point tensors in the model.
+    PPQ Leraning Based Calibration Pass
+    For int8 quantization, you need to calibrate or estimate the value range,
+        i.e, (min, max) of all floating-point tensors in the model.
 
-        Choose value range carefully is really importance procedure during quantization.
-            Usually we use methods like MSE, Percentile, KL to solve a good value range
-            from prospective view, while this pass offers you another possibility.
+    Choose value range carefully is really importance procedure during quantization.
+        Usually we use methods like MSE, Percentile, KL to solve a good value range
+        from prospective view, while this pass offers you another possibility.
 
-        This pass will make all your quantization range as trainable, and learn to quantize
-            your network with sampling methods.
+    This pass will make all your quantization range as trainable, and learn to quantize
+        your network with sampling methods.
 
-        ATTENTION: YOU SHALL USE THIS FUNCTION AFTER ACTIVATIONS HAVE BEEN CORRECTLY CALIBRATED
-            SINCE THIS FUNCTION NEEDS A SCALE AND OFFSET AS INITIALIZED VALUE.
+    ATTENTION: YOU SHALL USE THIS FUNCTION AFTER ACTIVATIONS HAVE BEEN CORRECTLY CALIBRATED
+        SINCE THIS FUNCTION NEEDS A SCALE AND OFFSET AS INITIALIZED VALUE.
 
-        ATTENTION: ONLY CONFIGURATION WITH STATE "ACTIVATED" WILL BE TUNED VIA THIS FUNCTION.
+    ATTENTION: ONLY CONFIGURATION WITH STATE "ACTIVATED" WILL BE TUNED VIA THIS FUNCTION.
     """
 
     def __init__(self, method: str = 'e-greedy',

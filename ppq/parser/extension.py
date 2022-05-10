@@ -2,22 +2,20 @@ from ppq.IR import BaseGraph, GraphExporter
 
 
 class ExtensionExporter(GraphExporter):
-    """
-    ExtensionExporter is an empty exporter for you to implement custimized logic.
-        rewrite function export in order to dump ppq graph to disk.
-    
+    """ExtensionExporter is an empty exporter for you to implement custimized
+    logic. rewrite function export in order to dump ppq graph to disk.
+
     use export_ppq_graph(..., platform=TargetPlatform.EXTENSION) to invoke this class.
 
     Args:
         GraphExporter ([type]): [description]
     """
-    
+
     def __init__(self) -> None:
         super().__init__()
 
     def export(self, file_path: str, graph: BaseGraph, config_path: str = None):
-        """
-        Write cusimized logic for dumping ppq graph.
+        """Write cusimized logic for dumping ppq graph.
 
         Args:
             file_path (str): [description]

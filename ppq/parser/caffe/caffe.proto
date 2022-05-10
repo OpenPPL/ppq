@@ -306,7 +306,7 @@ message LayerParameter {
   repeated NetStateRule exclude = 9;
 
   // set data type of top blobs;(fp32 fp16 uchar int8 ...)
-  optional string top_data_type = 11 [default='None']; 
+  optional string top_data_type = 11 [default='None'];
 
   enum PrecisionType {
     DEFAULT = 0;
@@ -524,7 +524,7 @@ message LayerParameter {
   // hexagon dsp uint16 quantize bits, used only when PrecisionType = UINT16, range [1, 16]
   // default = 0 means this layer's quantize bits is not specified, will use global quantize bits.
   optional uint32 quantize_bits = 6001 [default = 0];
-  
+
 }
 
 message Convolution3dParameter {

@@ -158,10 +158,10 @@
               <p>与一般的量化模拟器不同，PPQ 并不会在网络结构中插入量化节点，而是通过一种类似于 hook 的形式直接将量化操作添加到算子的执行逻辑中，这两种方法各有优劣，但我希望让你注意到以下的问题：</p>
               <ul>
                 <li>对于上图中的 Var 1 来说，Conv 1 和 Conv 2 可以分别对其进行量化，Conv 1 执行对输出的量化，而 Conv 2 执行对输入的量化。这一特性对于混合精度量化而言是必须的，例如在 Conv 1 使用 8 bit 精度量化而 Conv 2 使用 4 bit 精度量化，则 Var 1 必须量化两次。</li>
-                <li>PPQ 会通过一些手段来消除冗余的量化操作，对于上图中的 Conv 1 和 Conv 2，如果量化位宽一致，PPQ 总是会屏蔽下游算子的输入量化。</li> 
-                <li>Tensor Quantization Config 是被算子维护的，每一个算子都维护了一系列对应的 Tensor Quantization Config。在 PPQ 中你可以通过 Var 1.config的形式访问到 Tensor Quantization Config，但请返回值只是其上下游算子的一个镜像。</li> 
+                <li>PPQ 会通过一些手段来消除冗余的量化操作，对于上图中的 Conv 1 和 Conv 2，如果量化位宽一致，PPQ 总是会屏蔽下游算子的输入量化。</li>
+                <li>Tensor Quantization Config 是被算子维护的，每一个算子都维护了一系列对应的 Tensor Quantization Config。在 PPQ 中你可以通过 Var 1.config的形式访问到 Tensor Quantization Config，但请返回值只是其上下游算子的一个镜像。</li>
               </ul>
-              
+
               <hr>
               <h2 id="headings">RoundingPolicy</h2>
 
@@ -177,7 +177,7 @@
                 <li><strong>ROUND_UP: </strong>直接向上取整</li>
                </ul>
                <p>可以访问wiki来获取详细的取整计算方法：<a href="https://en.wikipedia.org/wiki/Rounding">https://en.wikipedia.org/wiki/Rounding</a></p>
-               
+
                <hr>
                <h2 id="headings">QuantizationPolicy</h2>
                <p>QuantizationPolicy 在 PPQ 中用来描述量化策略，它是一些 QuantizationProperty 枚举的组合位图。在 PPQ 中我们支持的 QuantizationProperty 包括：</p>
@@ -192,7 +192,7 @@
                </ul>
                <p>你可以通过组合 QuantizationProperty 的方式来确定一种特定的 QuantizationPolicy，例如: policy = QuantizationProperty.ASYMMETRICAL + QuantizationProperty.LINEAR + QuantizationProperty.PER_CHANNEL 确定了一种非对称线性逐通道量化策略。</p>
                <p>并不是所有组合都是合理的，例如 PER_TENSOR 与 PER_CHANNEL 不能同时出现在你的 QuantizationPolicy 里，PPQ 已经做好了类似的限制，如果你错误地组装了 QuantizationPolicy，PPQ 会向你抛出错误。</p>
-               
+
                <hr>
                <h2 id="headings">QuantizationStates</h2>
                <p>PPQ 中最为复杂的属性之一，同样地是一个枚举类型，用来表示 Tensor Quantization Config 的当前的状态，例如量化是否生效。PPQ 使用整整 11 种状态描述量化，枚举值包括：</p>
@@ -217,7 +217,7 @@
                 </figure>
               </div>
               <p>上图为你更进一步地解释了 QuantizationState 的迁移情况，你也可以通过观察 PPQ 导出的量化 config 文件来进一步地进行分析。 总而言之，PPQ 使用复杂的状态信息来保证量化的正确性，避免与Shape或Index相关的计算被错误地量化，同时保证与后端的计算具有一致性，即在后端进行图融合的情况下，PPQ 能够保证量化计算一致。</p>
-              
+
               <hr>
               <h2 id="headings">图融合与联合定点</h2>
               <p>图融合是神经网络推理引擎常用的优化技巧，常见的融合操作包括 Conv-Relu 融合，Conv-Add 融合，Conv-Conv 融合等。若非必要，PPQ 不会试图直接在原图上进行真实的图融合操作，而是使用一些特殊手段对定点信息进行修正，从而使得修正后的定点信息能与硬件融图之后的计算过程保持一致，例如典型的 Conv-Relu 融图中，由于 Conv-Relu 融合后，Conv 算子的输出由 Relu 代替了，因此 PPQ 必须屏蔽掉 Conv 算子的输出量化，才能够保证与硬件执行结果一致。否则 PPQ 将在 Conv 的输出与 Relu 的输出上分别执行两次量化。</p>
@@ -234,7 +234,7 @@
         </div>
       </div>
     </main><!-- /.main-content -->
-    
+
     <!-- Footer -->
     <footer class="footer">
       <div class="container">

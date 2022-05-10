@@ -32,14 +32,14 @@ quant_setting.dispatcher   = 'conservative' # dispatch this network in conserver
 # Load training data for creating a calibration dataloader.
 calibration_dataset = load_calibration_dataset()
 calibration_dataloader = DataLoader(
-    dataset=calibration_dataset, 
+    dataset=calibration_dataset,
     batch_size=BATCHSIZE, shuffle=True)
 
 # quantize your model.
 quantized = quantize_caffe_model(
     caffe_model_file=MODEL_PATH, caffe_proto_file=PROTO_PATH,
     calib_dataloader=calibration_dataloader,
-    calib_steps=32, input_shape=[BATCHSIZE] + INPUT_SHAPE, 
+    calib_steps=32, input_shape=[BATCHSIZE] + INPUT_SHAPE,
     setting=quant_setting, collate_fn=collate_fn, platform=PLATFORM,
     device=DEVICE, verbose=0)
 
@@ -47,6 +47,6 @@ quantized = quantize_caffe_model(
 assert isinstance(quantized, BaseGraph)
 
 # export quantized graph.
-export_ppq_graph(graph=quantized, platform=TargetPlatform.CAFFE, 
-                 graph_save_to='Output/quantized(caffe)', 
+export_ppq_graph(graph=quantized, platform=TargetPlatform.CAFFE,
+                 graph_save_to='Output/quantized(caffe)',
                  config_save_to='Output/quantized(caffe).json')

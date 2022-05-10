@@ -3,7 +3,7 @@
 # include <thrust/execution_policy.h>
 
 
-__global__ 
+__global__
 static void _Quantile_T(
     const float *source,
     float *dest,
@@ -20,7 +20,7 @@ static void _Quantile_T(
 }
 
 
-__global__ 
+__global__
 static void _cuda_order_preserving_observe(
     const float *source,
     float *dest,
@@ -42,18 +42,18 @@ static void _cuda_order_preserving_observe(
 __host__ Tensor Quantile_T(const Tensor &source, const float q){
     CheckTensor(source, at::kFloat, "Value(Expect to be FP32)");
     const int64_t num_of_elements = NUM_OF_ELEMENT(source);
-    
+
     Tensor dest = at::empty({2}, source.options());
     Tensor value = source.clone();
 
     thrust::sort(
-        thrust::device, 
+        thrust::device,
         PTR<float>(value),
         PTR<float>(value) + num_of_elements);
 
     _Quantile_T<<<1, 1>>>(
-        PTR<float>(value), 
-        PTR<float>(dest), 
+        PTR<float>(value),
+        PTR<float>(dest),
         num_of_elements, q);
     return dest;
 }
@@ -61,7 +61,7 @@ __host__ Tensor Quantile_T(const Tensor &source, const float q){
 
 Tensor cuda_order_preserving_observe(Tensor &source){
     const int num_of_elements = source.numel();
-    
+
     Tensor dest = at::empty({4}, source.options());
     Tensor source_cpy = source.clone();
 
@@ -94,11 +94,11 @@ __host__ void Histogram_T(
     const float hist_scale,
     const bool clip_outliers,
     Tensor &hist){
-    /** 
+    /**
      * PPQ Tensorwise Histogram Implementation
      * This function computes histogram of given value.
      * Result will sum up to hist tensor.
-     * 
+     *
      * Say we have a float value f, and a float value hist_scale
      * We will select hist_bin = floor(f / hist_scale)
      */
@@ -137,11 +137,11 @@ __host__ void Histogram_C(
     const float hist_scale,
     const bool clip_outliers,
     Tensor &hist){
-    /** 
+    /**
      * PPQ Channelwise Histogram Implementation
      * This function computes histogram of given value along with given channel.
      * Result will sum up to hist tensor.
-     * 
+     *
      * Say we have a float value f, and a float value hist_scale
      * We will select hist_bin = floor(f / hist_scale)
      */

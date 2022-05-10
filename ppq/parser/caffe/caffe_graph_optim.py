@@ -8,10 +8,8 @@ from . import ppl_caffe_pb2
 logger = NaiveLogger.get_logger('PPQ')
 
 def de_inplace(net_def: ppl_caffe_pb2.NetParameter) -> ppl_caffe_pb2.NetParameter:
-    """
-    Remove inplace layer in netdef
-    If the names of bottom and top are same, it means the computation of this layer is in place
-    """
+    """Remove inplace layer in netdef If the names of bottom and top are same,
+    it means the computation of this layer is in place."""
 
     def new_name(_name):
         if current_write_times[_name] == total_write_times[_name]:
@@ -99,11 +97,8 @@ def merge_batchnorm_scale(caffe_net: ppl_caffe_pb2.NetParameter) -> ppl_caffe_pb
     return new_net
 
 def optimize_for_export(caffe_net: ppl_caffe_pb2.NetParameter) -> ppl_caffe_pb2.NetParameter:
-    """
-    Simplify some caffe ops
-    Pattern 1: combine multi-slices to one
-    Pattern 2: combine multi-eltwise back to one
-    """
+    """Simplify some caffe ops Pattern 1: combine multi-slices to one Pattern
+    2: combine multi-eltwise back to one."""
     slice_combine(caffe_net)
     eltwise_combine(caffe_net)
     return caffe_net

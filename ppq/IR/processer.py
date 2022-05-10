@@ -8,8 +8,7 @@ from .base.graph import BaseGraph
 
 class GraphCommandProcessor(Callable, metaclass=ABCMeta):
     def __init__(self, graph_or_processor: Union[BaseGraph, Callable]) -> None:
-        """
-            GraphCommandProcessor 是用于处理图上相关操作的抽象基类
+        """GraphCommandProcessor 是用于处理图上相关操作的抽象基类.
 
             我们使用指令-责任链模式处理 PPQ 计算图的相关操作，具体来说：
 
@@ -74,9 +73,8 @@ class GraphCommandProcessor(Callable, metaclass=ABCMeta):
     @property
     @abstractproperty
     def _acceptable_command_types(self) -> List[GraphCommandType]:
-        """
-
-            Subclass of GraphCommandProcessor must give an implementation of this function
+        """Subclass of GraphCommandProcessor must give an implementation of
+        this function.
 
             Return all acceptable GraphCommandTypes in a list as result.
             something like:
@@ -93,12 +91,10 @@ class GraphCommandProcessor(Callable, metaclass=ABCMeta):
             'Oh, seems you forgot to implement GraphCommandProcessor._acceptable_command_types function')
 
     def __call__(self, command: GraphCommand) -> Any:
-        """
-
-            Invoking interface of GraphCommandProcessor responsibility chain.
-            All processors within the chain shall be invoked by this function one be one,
-            unitl there is a processor claim to accept input command object,
-            the entire processing of responsibility chain ends then.
+        """Invoking interface of GraphCommandProcessor responsibility chain.
+        All processors within the chain shall be invoked by this function one
+        be one, unitl there is a processor claim to accept input command
+        object, the entire processing of responsibility chain ends then.
 
             invoke a GraphCommandProcessor chain like that:
 
@@ -144,9 +140,8 @@ class GraphCommandProcessor(Callable, metaclass=ABCMeta):
             )
 
     def acceptable_command_types(self) -> List[GraphCommandType]:
-        """
-            Return all acceptable command types of current chain.
-            Notice there might be duplicated types.
+        """Return all acceptable command types of current chain. Notice there
+        might be duplicated types.
 
         Returns:
             List[GraphCommandType]: all acceptable command types
@@ -161,9 +156,8 @@ class GraphCommandProcessor(Callable, metaclass=ABCMeta):
 
     @ abstractmethod
     def process(self, command: GraphCommand) -> Any:
-        """
-
-            Subclass of GraphCommandProcessor must give an implementation of this function
+        """Subclass of GraphCommandProcessor must give an implementation of
+        this function.
 
             Process received GraphCommand instance and give result(if there is any)
 
