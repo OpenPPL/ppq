@@ -12,25 +12,25 @@ class AggresiveDispatcher(GraphDispatcher):
     """
     Graph Dispatcher cuts a graph into parts, each part of graph will dispatch to a specific platform
         for further execution and quantization.
-    
-    For the most part, all operations within graph can be partitioned into quantable operations, 
+
+    For the most part, all operations within graph can be partitioned into quantable operations,
         Shape-Or-Index related operations and remaining operations, all sub classes of GraphDispatcher will
-        give an implementation of function "dispath" to send all operations to their proper platform.
+        give an implementation of function "dispatch" to send all operations to their proper platform.
 
     ATTENTION: platform attribute will greatly affect quantizer's quantization logic, and the execution result.
         If operation is sent to a quantable platform, then its inputs and outputs will be quantized if necessary.
         if operation is classified as shape-or-index related operation, then its execution will be taken with cpu.
         if operation is sent to a fp32 platform, then its inputs and outputs shall never be quantized.
-        
+
     ATTENTION: this dispatcher will insert necessary DeviceSwitch operations
         between shape-or-index operations and others.
     """
     @staticmethod
     def dispatch(
         graph: BaseGraph, quant_types: Set[str],
-        quant_platform: TargetPlatform, 
-        fp32_platform: TargetPlatform, 
-        SOI_platform: TargetPlatform, 
+        quant_platform: TargetPlatform,
+        fp32_platform: TargetPlatform,
+        SOI_platform: TargetPlatform,
         **kwargs
         ) -> Dict[str, TargetPlatform]:
         """
@@ -40,27 +40,27 @@ class AggresiveDispatcher(GraphDispatcher):
         There are 3 default platform during dispatching:
             quant_platform - all quantable parts of graph will be dispatched to this platform
             SOI_platform   - Aka. Shape or Index related operations will be dispatched to this platform.
-            fp32_platform  - there are some operations receiving results from both quant_platform and SOI_platform, 
+            fp32_platform  - there are some operations receiving results from both quant_platform and SOI_platform,
                 they will be dispatched to fp32_platform.
-        
-        ATTENTION: Quantization follows this dispatching, 
+
+        ATTENTION: Quantization follows this dispatching,
             and only the operations within quantable platform will be quantized in the future.
-        
-        ATTENTION: this dispatcher will insert necessary DeviceSwitch operations between 
+
+        ATTENTION: this dispatcher will insert necessary DeviceSwitch operations between
             shape-or-index operations and others.
 
         Args:
             graph (BaseGraph): graph object which going to be dispatched by this dispatcher.
-            
+
             quant_types(Set[str]): all quantable types for given platforms.
-            
-            quant_platform (TargetPlatform): 
+
+            quant_platform (TargetPlatform):
                 platform object where quantable parts will goes to.
 
-            fp32_platform (TargetPlatform): 
+            fp32_platform (TargetPlatform):
                 platform object where SOI parts will goes to.
 
-            SOI_platform (TargetPlatform): 
+            SOI_platform (TargetPlatform):
                 platform object where remaining parts will goes to.
 
         Returns:
@@ -82,7 +82,7 @@ class AggresiveDispatcher(GraphDispatcher):
         shape_forward_matching = search_engine.opset_matching(
             sp_expr = lambda x: x in generators and x.type not in {'Constant'},
             rp_expr = value_tracing_pattern,
-            ep_expr = lambda x: x in recivers or x in quant_operations or x.is_boundary, 
+            ep_expr = lambda x: x in recivers or x in quant_operations or x.is_boundary,
             direction = 'down')
 
         # update matchings, ready for further searching.
@@ -95,9 +95,9 @@ class AggresiveDispatcher(GraphDispatcher):
             shape_backward_matching = search_engine.opset_matching(
                 sp_expr = lambda x: x in SOI_operations and x.type != 'Shape' and not x in quant_operations,
                 rp_expr = reverse_tracing_pattern,
-                ep_expr = lambda x: x in generators or x in quant_operations or x.is_boundary, 
+                ep_expr = lambda x: x in generators or x in quant_operations or x.is_boundary,
                 direction = 'up')
-            
+
             if all([(op in SOI_operations) for op in shape_backward_matching]): break
             # update matchings
             SOI_operations.update(shape_backward_matching)
@@ -131,11 +131,11 @@ class ConservativeDispatcher(GraphDispatcher):
     """
     Graph Dispatcher cuts a graph into parts, each part of graph will dispatch to a specific platform
         for further execution and quantization.
-    
-    For the most part, all operations within graph can be partitioned into quantable operations, 
+
+    For the most part, all operations within graph can be partitioned into quantable operations,
         Shape-Or-Index related operations and remaining operations, all sub classes of GraphDispatcher will
-        give an implementation of function "dispath" to send all operations to their proper platform.
-        
+        give an implementation of function "dispatch" to send all operations to their proper platform.
+
     Conservative Dispatcher cuts graph in a conservative way, which means it takes as much as possible operations
         into fp32 platform.
 
@@ -143,15 +143,15 @@ class ConservativeDispatcher(GraphDispatcher):
         If operation is sent to a quantable platform, then its inputs and outputs will be quantized if necessary.
         if operation is classified as shape-or-index related operation, then its execution will be taken with cpu.
         if operation is sent to a fp32 platform, then its inputs and outputs shall never be quantized.
-        
+
     ATTENTION: this dispatcher will insert necessary DeviceSwitch operations
         between shape-or-index operations and others.
     """
     @staticmethod
     def dispatch(
         graph: BaseGraph, quant_types: Set[str],
-        quant_platform: TargetPlatform, 
-        fp32_platform: TargetPlatform, 
+        quant_platform: TargetPlatform,
+        fp32_platform: TargetPlatform,
         SOI_platform: TargetPlatform, **kwargs
         ) -> Dict[str, TargetPlatform]:
         """
@@ -161,27 +161,27 @@ class ConservativeDispatcher(GraphDispatcher):
         There are 3 default platform during dispatching:
             quant_platform - all quantable parts of graph will be dispatched to this platform
             SOI_platform   - Aka. Shape or Index related operations will be dispatched to this platform.
-            fp32_platform  - there are some operations receiving results from both quant_platform and SOI_platform, 
+            fp32_platform  - there are some operations receiving results from both quant_platform and SOI_platform,
                 they will be dispatched to fp32_platform.
-        
-        ATTENTION: Quantization follows this dispatching, 
+
+        ATTENTION: Quantization follows this dispatching,
             and only the operations within quantable platform will be quantized in the future.
-        
-        ATTENTION: this dispatcher will insert necessary DeviceSwitch operations between 
+
+        ATTENTION: this dispatcher will insert necessary DeviceSwitch operations between
             shape-or-index operations and others.
 
         Args:
             graph (BaseGraph): graph object which going to be dispatched by this dispatcher.
-            
+
             quant_types(Set[str]): all quantable types for given platforms.
-            
-            quant_platform (TargetPlatform): 
+
+            quant_platform (TargetPlatform):
                 platform object where quantable parts will goes to.
 
-            fp32_platform (TargetPlatform): 
+            fp32_platform (TargetPlatform):
                 platform object where SOI parts will goes to.
 
-            SOI_platform (TargetPlatform): 
+            SOI_platform (TargetPlatform):
                 platform object where remaining parts will goes to.
 
         Returns:
@@ -207,10 +207,10 @@ class ConservativeDispatcher(GraphDispatcher):
         shape_forward_matching = search_engine.opset_matching(
             sp_expr = lambda x: x in generators and x.type not in {'Constant'},
             rp_expr = value_tracing_pattern,
-            ep_expr = lambda x: (x in recivers or 
-                                 x in quant_operations or 
-                                 x.is_boundary or 
-                                 x.is_computing_op), 
+            ep_expr = lambda x: (x in recivers or
+                                 x in quant_operations or
+                                 x.is_boundary or
+                                 x.is_computing_op),
             direction = 'down')
 
         # remove computing operations and quant operations from matching
@@ -225,17 +225,17 @@ class ConservativeDispatcher(GraphDispatcher):
             shape_backward_matching = search_engine.opset_matching(
                 sp_expr = lambda x: x in SOI_operations and x.type != 'Shape',
                 rp_expr = reverse_tracing_pattern,
-                ep_expr = lambda x: (x in SOI_operations or 
-                                     x in quant_operations or 
-                                     x.is_boundary or 
-                                     x.is_computing_op), 
+                ep_expr = lambda x: (x in SOI_operations or
+                                     x in quant_operations or
+                                     x.is_boundary or
+                                     x.is_computing_op),
                 direction = 'up')
-            
+
             # remove computing operations and quant operations from matching
             shape_backward_matching.filter(lambda x: x.is_computing_op or x in quant_operations)
-            
+
             if all([(op in SOI_operations) for op in shape_backward_matching]): break
-            
+
             # update matchings
             SOI_operations.update(shape_backward_matching)
 
@@ -270,11 +270,11 @@ class PPLNNDispatcher(GraphDispatcher):
     """
     Graph Dispatcher cuts a graph into parts, each part of graph will dispatch to a specific platform
         for further execution and quantization.
-    
-    For the most part, all operations within graph can be partitioned into quantable operations, 
+
+    For the most part, all operations within graph can be partitioned into quantable operations,
         Shape-Or-Index related operations and remaining operations, all sub classes of GraphDispatcher will
-        give an implementation of function "dispath" to send all operations to their proper platform.
-        
+        give an implementation of function "dispatch" to send all operations to their proper platform.
+
     Conv only Dispatcher cuts graph in a conservative way, which means it takes as much as possible operations
         into fp32 platform.
 
@@ -282,15 +282,15 @@ class PPLNNDispatcher(GraphDispatcher):
         If operation is sent to a quantable platform, then its inputs and outputs will be quantized if necessary.
         if operation is classified as shape-or-index related operation, then its execution will be taken with cpu.
         if operation is sent to a fp32 platform, then its inputs and outputs shall never be quantized.
-        
+
     ATTENTION: this dispatcher will insert necessary DeviceSwitch operations
         between shape-or-index operations and others.
     """
     @staticmethod
     def dispatch(
         graph: BaseGraph, quant_types: Set[str],
-        quant_platform: TargetPlatform, 
-        fp32_platform: TargetPlatform, 
+        quant_platform: TargetPlatform,
+        fp32_platform: TargetPlatform,
         SOI_platform: TargetPlatform, **kwargs
         ) -> Dict[str, TargetPlatform]:
         """
@@ -300,27 +300,27 @@ class PPLNNDispatcher(GraphDispatcher):
         There are 3 default platform during dispatching:
             quant_platform - all quantable parts of graph will be dispatched to this platform
             SOI_platform   - Aka. Shape or Index related operations will be dispatched to this platform.
-            fp32_platform  - there are some operations receiving results from both quant_platform and SOI_platform, 
+            fp32_platform  - there are some operations receiving results from both quant_platform and SOI_platform,
                 they will be dispatched to fp32_platform.
-        
-        ATTENTION: Quantization follows this dispatching, 
+
+        ATTENTION: Quantization follows this dispatching,
             and only the operations within quantable platform will be quantized in the future.
-        
-        ATTENTION: this dispatcher will insert necessary DeviceSwitch operations between 
+
+        ATTENTION: this dispatcher will insert necessary DeviceSwitch operations between
             shape-or-index operations and others.
 
         Args:
             graph (BaseGraph): graph object which going to be dispatched by this dispatcher.
-            
+
             quant_types(Set[str]): all quantable types for given platforms.
-            
+
             quant_platform (TargetPlatform): =
                 platform object where quantable parts will goes to.
 
-            fp32_platform (TargetPlatform): 
+            fp32_platform (TargetPlatform):
                 platform object where SOI parts will goes to.
 
-            SOI_platform (TargetPlatform): 
+            SOI_platform (TargetPlatform):
                 platform object where remaining parts will goes to.
 
         Returns:
@@ -345,10 +345,10 @@ class PPLNNDispatcher(GraphDispatcher):
         shape_forward_matching = search_engine.opset_matching(
             sp_expr = lambda x: x in generators and x.type not in {'Constant'},
             rp_expr = value_tracing_pattern,
-            ep_expr = lambda x: (x in recivers or 
-                                 x in quant_operations or 
-                                 x.is_boundary or 
-                                 x.is_computing_op), 
+            ep_expr = lambda x: (x in recivers or
+                                 x in quant_operations or
+                                 x.is_boundary or
+                                 x.is_computing_op),
             direction = 'down')
 
         # remove computing operations and quant operations from matching
@@ -363,17 +363,17 @@ class PPLNNDispatcher(GraphDispatcher):
             shape_backward_matching = search_engine.opset_matching(
                 sp_expr = lambda x: x in SOI_operations and x.type != 'Shape',
                 rp_expr = reverse_tracing_pattern,
-                ep_expr = lambda x: (x in SOI_operations or 
-                                     x in quant_operations or 
-                                     x.is_boundary or 
-                                     x.is_computing_op), 
+                ep_expr = lambda x: (x in SOI_operations or
+                                     x in quant_operations or
+                                     x.is_boundary or
+                                     x.is_computing_op),
                 direction = 'up')
-            
+
             # remove computing operations and quant operations from matching
             shape_backward_matching.filter(lambda x: x.is_computing_op or x in quant_operations)
-            
+
             if all([(op in SOI_operations) for op in shape_backward_matching]): break
-            
+
             # update matchings
             SOI_operations.update(shape_backward_matching)
 

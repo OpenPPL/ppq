@@ -6,13 +6,13 @@ from ppq.core import (ChannelwiseTensorQuantizationConfig,
                       OperationQuantizationConfig, QuantizationPolicy,
                       QuantizationProperty, QuantizationStates, RoundingPolicy,
                       TargetPlatform)
-from ppq.IR import BaseGraph, GraphCommandProcesser
+from ppq.IR import BaseGraph, GraphCommandProcessor
 from .base import BaseQuantizer
 
 
 class TensorRTQuantizer(BaseQuantizer):
     def __init__(
-        self, graph: Union[BaseGraph, GraphCommandProcesser]
+        self, graph: Union[BaseGraph, GraphCommandProcessor]
     ) -> Union[torch.Tensor, list, dict]:
 
         self._num_of_bits = 8
@@ -30,7 +30,7 @@ class TensorRTQuantizer(BaseQuantizer):
             observer_algorithm='percentile'
         )
         base_quant_config.output_quantization_config[0].state = QuantizationStates.FP32
-        
+
         if operation.type in {'Conv', 'ConvTranspose', 'Gemm'}:
             # set all parameters within Conv, ConvTranspose, Gemm to per-channel quant-config.
             assert operation.num_of_input > 0, 'Seems you got a Conv layer with no parameters.'
@@ -82,7 +82,7 @@ class TensorRTQuantizer(BaseQuantizer):
     @ property
     def quant_operation_types(self) -> set:
         return {
-            'Conv', 'Gemm', 'ConvTranspose', 
+            'Conv', 'Gemm', 'ConvTranspose',
             'AveragePool', 'GlobalAveragePool'
         }
 

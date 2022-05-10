@@ -7,7 +7,7 @@ from ppq.core import (PASSIVE_OPERATIONS, OperationQuantizationConfig,
                       QuantizationStates, RoundingPolicy, TargetPlatform,
                       ChannelwiseTensorQuantizationConfig)
 from ppq.executor.base import BaseGraphExecutor
-from ppq.IR import BaseGraph, GraphCommandProcesser
+from ppq.IR import BaseGraph, GraphCommandProcessor
 from ppq.IR.base.graph import Operation
 from ppq.quantization.optim import QuantizationOptimizationPipeline, PPLDSPTIReCalibrationPass
 from .base import BaseQuantizer
@@ -16,7 +16,7 @@ from .base import BaseQuantizer
 class PPL_DSP_Quantizer(BaseQuantizer):
     def __init__(
         self,
-        graph: Union[BaseGraph, GraphCommandProcesser]
+        graph: Union[BaseGraph, GraphCommandProcessor]
     ) -> Union[torch.Tensor, list, dict]:
 
         self._num_of_bits = 8
@@ -93,12 +93,12 @@ class PPL_DSP_Quantizer(BaseQuantizer):
 
 
 class PPL_DSP_TI_Quantizer(PPL_DSP_Quantizer):
-    def __init__(self, graph: Union[BaseGraph, GraphCommandProcesser]) -> Union[torch.Tensor, list, dict]:
+    def __init__(self, graph: Union[BaseGraph, GraphCommandProcessor]) -> Union[torch.Tensor, list, dict]:
         super().__init__(graph)
         self._num_of_bits = 8
         self._quant_min   = -int(pow(2, self._num_of_bits - 1))
         self._quant_max   = int(pow(2, self._num_of_bits - 1)) - 1
-    
+
     def build_quant_pipeline(
         self, setting: QuantizationSetting, executor: BaseGraphExecutor) -> QuantizationOptimizationPipeline:
         pipeline = super().build_quant_pipeline(setting, executor)

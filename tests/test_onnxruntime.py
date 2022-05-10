@@ -32,19 +32,19 @@ for case in TORCH_TEST_CASES:
             platform=TargetPlatform.ONNXRUNTIME,
             graph_save_to='onnxruntime',
             config_save_to='export.json')
-        
+
         # graph has only 1 input and output.
         for name in quantized.outputs: output_name = name
         for name in quantized.inputs: input_name = name
         session = onnxruntime.InferenceSession('onnxruntime.onnx', providers=onnxruntime.get_available_providers())
         onnxruntime_outputs = [session.run([output_name], {input_name: convert_any_to_numpy(sample)}) for sample in dataset]
         onnxruntime_outputs = [convert_any_to_torch_tensor(sample) for sample in onnxruntime_outputs]
-        
+
         error = []
         for ref, real in zip(sample_output, onnxruntime_outputs):
             error.append(torch_snr_error(ref, real))
         error = sum(error) / len(error) * 100
-        
+
         print(f'Simulating Error: {error: .4f}%')
         assert error < 1
     except NotImplementedError as e:
@@ -68,10 +68,10 @@ for case in TORCH_TEST_CASES:
         '''
         quantized.outputs.clear()
         quantized.mark_variable_as_graph_output(quantized.variables['onnx::Conv_26'])
-        processer = GraphFormatter(quantized)
-        processer.truncate_on_var(quantized.variables['onnx::Conv_26'], mark_as_output=True)
+        processor = GraphFormatter(quantized)
+        processor.truncate_on_var(quantized.variables['onnx::Conv_26'], mark_as_output=True)
         '''
-        
+
         executor = TorchExecutor(quantized)
         sample_output = [(executor(sample)[0].cpu().unsqueeze(0)) for sample in dataset]
 
@@ -80,19 +80,19 @@ for case in TORCH_TEST_CASES:
             platform=TargetPlatform.ORT_OOS_INT8,
             graph_save_to='onnx',
             config_save_to='export.json')
-        
+
         # graph has only 1 input and output.
         for name in quantized.outputs: output_name = name
         for name in quantized.inputs: input_name = name
         session = onnxruntime.InferenceSession('onnx.onnx', providers=onnxruntime.get_available_providers())
         onnxruntime_outputs = [session.run([output_name], {input_name: convert_any_to_numpy(sample)}) for sample in dataset]
         onnxruntime_outputs = [convert_any_to_torch_tensor(sample) for sample in onnxruntime_outputs]
-        
+
         error = []
         for ref, real in zip(sample_output, onnxruntime_outputs):
             error.append(torch_snr_error(ref, real))
         error = sum(error) / len(error) * 100
-        
+
         print(f'Simulating Error: {error: .4f}%')
         # assert error < 1
 

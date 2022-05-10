@@ -5,7 +5,7 @@ from ppq.core import (ChannelwiseTensorQuantizationConfig, QuantizationStates,
                       QuantizationPolicy, QuantizationProperty,
                       TensorQuantizationConfig, empty_ppq_cache)
 from ppq.executor import BaseGraphExecutor, RuntimeHook
-from ppq.IR import GraphCommandProcesser, QuantableOperation
+from ppq.IR import GraphCommandProcessor, QuantableOperation
 from ppq.quantization.observer import (CalibrationHook, OperationObserver,
                                        TensorObserverFactroy, TorchMinMaxObserver,
                                        TorchHistObserver, TorchMSEObserver)
@@ -18,24 +18,24 @@ from .base import QuantizationOptimizationPass
 class RuntimeCalibrationPass(QuantizationOptimizationPass):
     """
         PPQ Runtime Calibration Pass
-        For int8 quantization, you need to calibrate or estimate the value range, 
-            i.e, (min, max) of all floating-point tensors in the model. 
-        
-        Unlike constant tensors such as weights and biases, 
-            variable tensors such as model input, activations (outputs of intermediate layers) 
-            and model output cannot be calibrated unless we run a few inference cycles. 
-        
-        As a result, the converter requires a representative dataset to calibrate them. 
+        For int8 quantization, you need to calibrate or estimate the value range,
+            i.e, (min, max) of all floating-point tensors in the model.
+
+        Unlike constant tensors such as weights and biases,
+            variable tensors such as model input, activations (outputs of intermediate layers)
+            and model output cannot be calibrated unless we run a few inference cycles.
+
+        As a result, the converter requires a representative dataset to calibrate them.
         This dataset is supposed to be a small subset (about 100~500 samples) of the training or validation data.
-        
+
         ATTENTION: DO NOT GIVE A LARGER DATASET THAN EXPECTED, PPQ WILL RAISE AN ERROR ABOUT IT.
     """
     def __init__(self, method: str = None, override: bool = False) -> None:
         """
         Args:
-            method (str, optional): calibration method, if is not None, will override quantizer's setting. 
+            method (str, optional): calibration method, if is not None, will override quantizer's setting.
                 Defaults to None.
-            
+
             override (bool, optional): whether to override existing quantization configurations.
         """
 
@@ -46,7 +46,7 @@ class RuntimeCalibrationPass(QuantizationOptimizationPass):
         self._calib_steps = None
         self._override = override
 
-    def calibrate(self, desc: str, dataloader: Iterable, executor: BaseGraphExecutor, 
+    def calibrate(self, desc: str, dataloader: Iterable, executor: BaseGraphExecutor,
         hooks:Dict[str, RuntimeHook], output_names: List[str] = None):
 
         calib_step = 0
@@ -64,7 +64,7 @@ class RuntimeCalibrationPass(QuantizationOptimizationPass):
     @ empty_ppq_cache
     def optimize(
         self,
-        processer: GraphCommandProcesser,
+        processor: GraphCommandProcessor,
         dataloader: Iterable,
         executor: BaseGraphExecutor,
         calib_steps: int,
@@ -75,7 +75,7 @@ class RuntimeCalibrationPass(QuantizationOptimizationPass):
         self._calib_steps = calib_steps
         assert calib_steps >= 8, 'Insufficient Calibration Detected, to better quantize your network, '\
             'more calibration steps is demonded, we strongly recommend you to prepare more calibration data '\
-            'and more calibration steps is perferred here. (at least 8)'
+            'and more calibration steps is preferred here. (at least 8)'
 
         assert calib_steps <= 512, 'Calibration steps is too large, ppq is capable for quantizing your network within 32-128 '\
             'calibration steps. More calibraiton steps will greatly delay ppq\'s calibration procedure. '\
@@ -85,19 +85,19 @@ class RuntimeCalibrationPass(QuantizationOptimizationPass):
         # Override existing quantization configurations
         # -------------------------------------------------
         if self._override:
-            for operation in processer.graph.operations.values():
+            for operation in processor.graph.operations.values():
                 if not isinstance(operation, QuantableOperation): continue
-               
+
                 for config, var in operation.config_with_variable:
-                    if (not var.is_parameter and 
-                        config.state == QuantizationStates.ACTIVATED and 
+                    if (not var.is_parameter and
+                        config.state == QuantizationStates.ACTIVATED and
                         config.dominated_by == config):
                         config.state = QuantizationStates.INITIAL
 
         # build observer and hook for each quantable operation
         hooks = {}
-        for op_name, operation in processer.graph.operations.items():
-            
+        for op_name, operation in processor.graph.operations.items():
+
             if not isinstance(operation, QuantableOperation): continue
 
             # override algorithm setting if necessary
@@ -106,14 +106,14 @@ class RuntimeCalibrationPass(QuantizationOptimizationPass):
                     config.observer_algorithm = self._method
 
             observer = OperationObserver(
-                operation=executor._graph.operations[op_name], 
+                operation=executor._graph.operations[op_name],
                 monitor_parameter=False)
             self._observers[op_name] = observer
             hooks[op_name]           = observer.hook
 
         # ready for calibration
         # hook forward function, let observers take effects.
-        self.calibrate(desc='Calibration Progress(Phase 1)', dataloader=dataloader, 
+        self.calibrate(desc='Calibration Progress(Phase 1)', dataloader=dataloader,
             executor=executor, hooks=hooks, output_names=None)
 
         # render calibration result.
@@ -125,17 +125,17 @@ class RuntimeCalibrationPass(QuantizationOptimizationPass):
         # -------------------------------------------------
         # There are some two-phase observer in ppq,
         # which means they have to be calibrated for a second time.
-        #   see also: TorchHistObserver 
+        #   see also: TorchHistObserver
         # -------------------------------------------------
 
         # remove one-phase observer from hook dict.
         pop_list = []
         for op_name, observer in self._observers.items():
             assert isinstance(observer, OperationObserver)
-            if all([type(var_observer) not in {TorchHistObserver, TorchMSEObserver} 
+            if all([type(var_observer) not in {TorchHistObserver, TorchMSEObserver}
                 for var_observer in observer._hook._observer_table.values()]):
                     pop_list.append(op_name)
-        
+
         for op_name in pop_list:
             self._observers.pop(op_name)
             hooks.pop(op_name)
@@ -143,7 +143,7 @@ class RuntimeCalibrationPass(QuantizationOptimizationPass):
         if len(hooks) > 0:
             # ready for calibration(Phase 2)
             # hook forward function, let observers take effects.
-            self.calibrate(desc='Calibration Progress(Phase 2)', dataloader=dataloader, 
+            self.calibrate(desc='Calibration Progress(Phase 2)', dataloader=dataloader,
                 executor=executor, hooks=hooks, output_names=None)
 
             # render calibration result for a second time.
@@ -156,16 +156,16 @@ class RuntimeCalibrationPass(QuantizationOptimizationPass):
 class RuntimePerlayerCalibrationPass(RuntimeCalibrationPass):
     """
         PPQ Runtime Calibration Pass(Per layer calibration)
-        For int8 quantization, you need to calibrate or estimate the value range, 
-            i.e, (min, max) of all floating-point tensors in the model. 
-        
-        Unlike constant tensors such as weights and biases, 
-            variable tensors such as model input, activations (outputs of intermediate layers) 
-            and model output cannot be calibrated unless we run a few inference cycles. 
-        
-        As a result, the converter requires a representative dataset to calibrate them. 
+        For int8 quantization, you need to calibrate or estimate the value range,
+            i.e, (min, max) of all floating-point tensors in the model.
+
+        Unlike constant tensors such as weights and biases,
+            variable tensors such as model input, activations (outputs of intermediate layers)
+            and model output cannot be calibrated unless we run a few inference cycles.
+
+        As a result, the converter requires a representative dataset to calibrate them.
         This dataset is supposed to be a small subset (around ~100-500 samples) of the training or validation data.
-        
+
         ATTENTION: DO NOT GIVE A LARGER DATASET THAN EXPECTED, PPQ WILL RAISE AN ERROR ABOUT IT.
     """
     def __init__(self, method: str) -> None:
@@ -173,44 +173,44 @@ class RuntimePerlayerCalibrationPass(RuntimeCalibrationPass):
         self._method = method
         self.name = 'PPQ Runtime Calibration Pass(Per Layer)'
 
-    def optimize(self, processer: GraphCommandProcesser, dataloader: Iterable, 
+    def optimize(self, processor: GraphCommandProcessor, dataloader: Iterable,
         executor: BaseGraphExecutor, calib_steps: int, collate_fn: Callable, **kwargs) -> None:
         self._collate_fn = collate_fn
         self._calib_steps = calib_steps
         assert calib_steps >= 8, 'Insufficient Calibration Detected, to better quantize your network, '\
             'more calibration steps is demonded, we strongly recommend you to prepare more calibration data '\
-            'and more calibration steps is perferred here. (at least 8)'
+            'and more calibration steps is preferred here. (at least 8)'
 
         assert calib_steps <= 512, 'Calibration steps is too large, ppq is capable for quantizing your network within 32-128 '\
             'calibration steps. More calibraiton steps will greatly delay ppq\'s calibration procedure. '\
             'Reset your calib_steps parameter please.'
 
-        for operation in tqdm(processer.graph.topological_sort(), 
+        for operation in tqdm(processor.graph.topological_sort(),
                               desc='Runtime Calibration(Per Layer)'):
-            
+
             if not isinstance(operation, QuantableOperation): continue
-            
+
             # override algorithm setting if necessary
             for config, var in operation.config_with_variable:
                 if not var.is_parameter and self._method is not None:
                     config.observer_algorithm = self._method
 
             observer = OperationObserver(
-                operation=operation, 
+                operation=operation,
                 monitor_parameter=False)
-            
-            self.calibrate(desc=f'Runtime Calibration for {operation.name}', 
-                dataloader=dataloader, executor=executor, 
-                hooks={operation.name: observer.hook}, 
+
+            self.calibrate(desc=f'Runtime Calibration for {operation.name}',
+                dataloader=dataloader, executor=executor,
+                hooks={operation.name: observer.hook},
                 output_names=[var.name for var in operation.outputs])
-            
-            if any([type(var_observer) in {TorchHistObserver} 
+
+            if any([type(var_observer) in {TorchHistObserver}
                 for var_observer in observer._hook._observer_table.values()]):
-                self.calibrate(desc=f'Runtime Calibration for {operation.name} (Phrase 2)', 
-                    dataloader=dataloader, executor=executor, 
-                    hooks={operation.name: observer.hook}, 
+                self.calibrate(desc=f'Runtime Calibration for {operation.name} (Phrase 2)',
+                    dataloader=dataloader, executor=executor,
+                    hooks={operation.name: observer.hook},
                     output_names=[var.name for var in operation.outputs])
-            
+
             observer.render_quantization_config()
             observer.report()
 
@@ -229,30 +229,30 @@ class PPLDSPTIReCalibrationPass(RuntimeCalibrationPass):
         super().__init__(method, override)
         self.name = 'PPQ ReCalibration For Computing Op Pass'
 
-    def optimize(self, processer: GraphCommandProcesser, dataloader: Iterable, 
+    def optimize(self, processor: GraphCommandProcessor, dataloader: Iterable,
         executor: BaseGraphExecutor, calib_steps: int, collate_fn: Callable, **kwargs) -> None:
         self._collate_fn = collate_fn
         self._calib_steps = calib_steps
         assert calib_steps >= 8, 'Insufficient Calibration Detected, to better quantize your network, '\
             'more calibration steps is demonded, we strongly recommend you to prepare more calibration data '\
-            'and more calibration steps is perferred here. (at least 8)'
+            'and more calibration steps is preferred here. (at least 8)'
 
         assert calib_steps <= 512, 'Calibration steps is too large, ppq is capable for quantizing your network within 32-128 '\
             'calibration steps. More calibraiton steps will greatly delay ppq\'s calibration procedure. '\
             'Reset your calib_steps parameter please.'
 
         hooks = {}
-        for operation in tqdm(processer.graph.topological_sort(), 
+        for operation in tqdm(processor.graph.topological_sort(),
                               desc='Collecting Observer For Computing Ops'):
-            
+
             if not isinstance(operation, QuantableOperation) or not operation.is_computing_op: continue
             output_cfg = operation.config.output_quantization_config[0]
             master_cfg, master_operation, master_var = output_cfg, operation, operation.outputs[0]
-            
+
             observe_table = {}
             # to check if all input data is greater than 0
             # we only need a basic observer here
-            if operation.inputs[0].name in processer.graph.inputs:
+            if operation.inputs[0].name in processor.graph.inputs:
                 input_cfg = operation.config.input_quantization_config[0]
                 sym_input_cfg = TensorQuantizationConfig(
                     policy=QuantizationPolicy(
@@ -271,8 +271,8 @@ class PPLDSPTIReCalibrationPass(RuntimeCalibrationPass):
                 )
                 observe_table.update({input_cfg : TensorObserverFactroy.build_observer(operation.inputs[0], sym_input_cfg)})
 
-            # only consider overlapped by relu/clip activation here 
-            downstream_ops = processer.graph.get_downstream_operations(operation)
+            # only consider overlapped by relu/clip activation here
+            downstream_ops = processor.graph.get_downstream_operations(operation)
             if len(downstream_ops) == 1 and downstream_ops[0].type in {'Relu', 'Clip'}\
                 and isinstance(downstream_ops[0], QuantableOperation):
                 if len(observe_table) > 0:
@@ -281,7 +281,7 @@ class PPLDSPTIReCalibrationPass(RuntimeCalibrationPass):
                 master_cfg = downstream_ops[0].config.output_quantization_config[0]
                 master_operation = downstream_ops[0]
                 master_var = downstream_ops[0].outputs[0]
-            
+
             master_cfg_per_channel = ChannelwiseTensorQuantizationConfig(
                 policy=QuantizationPolicy(
                     QuantizationProperty.SYMMETRICAL +
@@ -306,7 +306,7 @@ class PPLDSPTIReCalibrationPass(RuntimeCalibrationPass):
 
         self.calibrate(desc='ReCalibration For Computing Ops', dataloader=dataloader,\
             executor=executor, hooks=hooks)
-        
+
         for hook in hooks.values():
             assert isinstance(hook, CalibrationHook)
             # hook.render_quantization_config()

@@ -7,7 +7,7 @@ from ppq.core import (ChannelwiseTensorQuantizationConfig, PASSIVE_OPERATIONS,
                       QuantizationProperty, QuantizationStates, RoundingPolicy,
                       TargetPlatform)
 from ppq.executor.base import BaseGraphExecutor
-from ppq.IR import BaseGraph, GraphCommandProcesser, Operation
+from ppq.IR import BaseGraph, GraphCommandProcessor, Operation
 from ppq.quantization.optim import QuantizationOptimizationPipeline, NCNNFormatGemmPass
 
 from .base import BaseQuantizer
@@ -15,7 +15,7 @@ from .base import BaseQuantizer
 
 class NCNNQuantizer(BaseQuantizer):
     def __init__(
-        self, graph: Union[BaseGraph, GraphCommandProcesser]
+        self, graph: Union[BaseGraph, GraphCommandProcessor]
     ) -> Union[torch.Tensor, list, dict]:
 
         self._num_of_bits = 8
@@ -55,7 +55,7 @@ class NCNNQuantizer(BaseQuantizer):
                         offsets = None, scales  = None, channel_axis = 0
                     )
                 base_quant_config.input_quantization_config[1].observer_algorithm = 'Minmax'
-                
+
                 group        = operation.attributes.get('group', 1)
                 dilations    = operation.attributes.get('dilations', [1, 1])
                 strides      = operation.attributes.get('strides', [1, 1])
@@ -86,7 +86,7 @@ class NCNNQuantizer(BaseQuantizer):
             if operation.num_of_input > 2:
                 bias_config = base_quant_config.input_quantization_config[-1]
                 bias_config.state = QuantizationStates.FP32
-            
+
             if operation.type in PASSIVE_OPERATIONS:
                 base_quant_config.is_active_quant_op = False
         return base_quant_config

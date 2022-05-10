@@ -709,7 +709,7 @@ class Scale(CaffeOpBuilder):
 @register_class
 class TanH(CaffeOpBuilder):
     # TODO
-    # paramter 'engine' is  not added yet
+    # parameter 'engine' is  not added yet
     pass
 
 
