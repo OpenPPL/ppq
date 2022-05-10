@@ -3,15 +3,23 @@ repos:
     rev: v4.1.0
     hooks:
       - id: trailing-whitespace
+        files: ^ppq/
       - id: check-yaml
+        files: ^ppq/
       - id: end-of-file-fixer
+        files: ^ppq/
       - id: requirements-txt-fixer
+        files: ^ppq/
       - id: double-quote-string-fixer
+        files: ^ppq/
       - id: check-merge-conflict
+        files: ^ppq/
       - id: fix-encoding-pragma
         args: ["--remove"]
+        files: ^ppq/
       - id: mixed-line-ending
         args: ["--fix=lf"]
+        files: ^ppq/
   - repo: https://github.com/markdownlint/markdownlint
     rev: v0.11.0
     hooks:
