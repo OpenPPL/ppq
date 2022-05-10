@@ -140,6 +140,7 @@ manop(graph=graph, list_of_passes=custimized_prequant_passes,
 
 print('网络正量化中，根据你的量化配置，这将需要一段时间:')
 quantized = quantize_native_model(
+    setting=QS,                     # setting 对象用来控制标准量化逻辑
     model=graph,
     calib_dataloader=dataloader,
     calib_steps=32,
