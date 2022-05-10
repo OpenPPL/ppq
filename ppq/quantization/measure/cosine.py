@@ -12,7 +12,7 @@ def torch_cosine_similarity(y_pred: torch.Tensor, y_real: torch.Tensor, reductio
     if y_pred.ndim == 1:
         y_pred = y_pred.unsqueeze(0)
         y_real = y_real.unsqueeze(0)
-    
+
     y_pred = y_pred.flatten(start_dim=1).float()
     y_real = y_real.flatten(start_dim=1).float()
 

@@ -372,7 +372,7 @@ def layerwise_equalization(
     for iter_times in Progressbar(range(iteration), desc='Layerwise Equalization', total=iteration):
         for equalization_pair in equalization_pairs:
             assert isinstance(equalization_pair, EqualizationPair), (
-                "Input equalization pairs should be encapsuled with class EqualizationPair")
+                'Input equalization pairs should be encapsuled with class EqualizationPair')
 
             equalization_pair.layerwise_equalize(
                 weight_threshold=weight_threshold,

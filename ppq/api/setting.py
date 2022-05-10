@@ -238,9 +238,8 @@ class QuantizationFusionSetting():
 
 
 class TemplateSetting():
-    """
-    TemplateSetting 只是为了向你展示如何创建一个新的 Setting 并传递给相对应的 pass
-        传递的过程在 ppq.quantization.quantizer.base.py 里面
+    """TemplateSetting 只是为了向你展示如何创建一个新的 Setting 并传递给相对应的 pass 传递的过程在
+    ppq.quantization.quantizer.base.py 里面.
 
     TemplateSetting just shows you how to create a setting class.
         parameter passing is inside ppq.quantization.quantizer.base.py
@@ -328,10 +327,10 @@ class WeightSplitSetting():
 
 class DispatchingTable():
     def __init__(self) -> None:
-        self.intro_0 = "Dispatching Table is a str -> TargetPlatform dictionary."
-        self.intro_1 = "Any thing listed in this table will override the policy of PPQ dispatcher."
-        self.intro_2 = "Example above shows you how to edit a valid dispatching table."
-        self.attention = "All operation names that can not be found with your graph will be ignored."
+        self.intro_0 = 'Dispatching Table is a str -> TargetPlatform dictionary.'
+        self.intro_1 = 'Any thing listed in this table will override the policy of PPQ dispatcher.'
+        self.intro_2 = 'Example above shows you how to edit a valid dispatching table.'
+        self.attention = 'All operation names that can not be found with your graph will be ignored.'
 
         self.dispatchings = {
             'YOUR OEPRATION NAME' : 'TARGET PLATFORM(INT)',

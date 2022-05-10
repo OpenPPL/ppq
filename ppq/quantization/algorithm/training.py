@@ -23,9 +23,8 @@ if USING_CUDA_KERNEL:
 
 if not USING_CUDA_KERNEL:
     class Clip_T(Function):
-        """
-        Tensorwise Clip function requires an input tensor t,
-            a reference tensor r, and a limit tensor.
+        """Tensorwise Clip function requires an input tensor t, a reference
+        tensor r, and a limit tensor.
 
         This function will clip t within range [r - limit, r + limit]
         Limit tensor is applied per tensor, so to say each value of tensor t
@@ -42,9 +41,8 @@ if not USING_CUDA_KERNEL:
             return dy, None, None
 
     class Clip_C(Function):
-        """
-        Channelwise Clip function requires an input tensor t,
-            a reference tensor r, and a limit tensor.
+        """Channelwise Clip function requires an input tensor t, a reference
+        tensor r, and a limit tensor.
 
         This function will clip t within range [r - limit, r + limit]
         Limit tensor is applied per channel, so to say each channel of tensor t
@@ -61,10 +59,9 @@ if not USING_CUDA_KERNEL:
             return dy, None, None, None
 
     class RoundingLoss_T(Function):
-        """
-        Compute Tensorwise Rounding loss(L1)
-            This function implements Tensorwise Rounding loss with torch.
-            This function implements backwards with torch.
+        """Compute Tensorwise Rounding loss(L1) This function implements
+        Tensorwise Rounding loss with torch. This function implements backwards
+        with torch.
 
         Say rounding loss = RL, we will have
 
@@ -84,10 +81,9 @@ if not USING_CUDA_KERNEL:
             return torch.sum(torch.abs(qt - tensor)) / sqrt(qt.numel())
 
     class RoundingLoss_C(Function):
-        """
-        Compute Channelwise Rounding loss(L1)
-            This function implements Channelwise Rounding loss with torch.
-            This function implements backwards with torch.
+        """Compute Channelwise Rounding loss(L1) This function implements
+        Channelwise Rounding loss with torch. This function implements
+        backwards with torch.
 
         Say rounding loss = RL, we will have
 
@@ -112,9 +108,8 @@ if not USING_CUDA_KERNEL:
 
 else: # if USING_CUDA_KERNEL:
     class Clip_T(Function):
-        """
-        Tensorwise Clip function requires an input tensor t,
-            a reference tensor r, and a limit tensor.
+        """Tensorwise Clip function requires an input tensor t, a reference
+        tensor r, and a limit tensor.
 
         This function will clip t within range [r - limit, r + limit]
         Limit tensor is applied per tensor, so to say each value of tensor t
@@ -130,9 +125,8 @@ else: # if USING_CUDA_KERNEL:
             return dy, None, None
 
     class Clip_C(Function):
-        """
-        Channelwise Clip function requires an input tensor t,
-            a reference tensor r, and a limit tensor.
+        """Channelwise Clip function requires an input tensor t, a reference
+        tensor r, and a limit tensor.
 
         This function will clip t within range [r - limit, r + limit]
         Limit tensor is applied per channel, so to say each channel of tensor t
@@ -149,10 +143,9 @@ else: # if USING_CUDA_KERNEL:
             return dy, None, None, None
 
     class RoundingLoss_T(Function):
-        """
-        Compute Tensorwise Rounding loss(L1)
-            This function implements Tensorwise Rounding loss with cuda.
-            This function implements backwards with cuda.
+        """Compute Tensorwise Rounding loss(L1) This function implements
+        Tensorwise Rounding loss with cuda. This function implements backwards
+        with cuda.
 
         Say rounding loss = RL, we will have
 
@@ -185,10 +178,9 @@ else: # if USING_CUDA_KERNEL:
                 rounding=rounding), None, None, None, None, None
 
     class RoundingLoss_C(Function):
-        """
-        Compute Channelwise Rounding loss(L1)
-            This function implements Channelwise Rounding loss with cuda.
-            This function implements backwards with cuda.
+        """Compute Channelwise Rounding loss(L1) This function implements
+        Channelwise Rounding loss with cuda. This function implements backwards
+        with cuda.
 
         Say rounding loss = RL, we will have
 
@@ -252,9 +244,8 @@ def PPQRoundingLoss(tensor: torch.Tensor,
 
 
 class FinetuneCheckPoint:
-    """
-    Finetune Check Point stores training loss for variables.
-        It bounds to a specific variable, collects and stores its fp32 value as a reference.
+    """Finetune Check Point stores training loss for variables. It bounds to a
+    specific variable, collects and stores its fp32 value as a reference.
 
     ATTENTION: collecting fp32 value might cause GPU memory overflow, so we use a seed to
         sample only a part of fp32 value instead(randomly pick about 2000 values from given tensor).
@@ -288,24 +279,23 @@ class FinetuneCheckPoint:
 
 
 class RQTDelegator(TorchQuantizeDelegate):
-    """
-        Restricted Quantization(RQT) Functions are a set of custimized
-        quantization functions which provide value restriction on your parameter.
+    """Restricted Quantization(RQT) Functions are a set of custimized
+    quantization functions which provide value restriction on your parameter.
 
-        Value restriction is an essential functionaility for training your network from
-            its fp32 version. All parameters go through this function is restricted with
-            [reference - limit, reference + limit], where reference is the fp32 value of
-            your parameter.
+    Value restriction is an essential functionaility for training your network from
+        its fp32 version. All parameters go through this function is restricted with
+        [reference - limit, reference + limit], where reference is the fp32 value of
+        your parameter.
 
-        RQT Functions guarantee that parameter never goes to far away from origin.
+    RQT Functions guarantee that parameter never goes to far away from origin.
 
-        With those features, we could directly finetune a quantized network
-            from 32-bit to lower bit width, avoiding the risk of over-fitting.
+    With those features, we could directly finetune a quantized network
+        from 32-bit to lower bit width, avoiding the risk of over-fitting.
 
-        USE THIS FUNCTION TO REPLACE PPQ EXECUTOR'S QUANTIZATION LOGIC WITH
-            executor.register_quant_delegator(config, RQTDelegator())
+    USE THIS FUNCTION TO REPLACE PPQ EXECUTOR'S QUANTIZATION LOGIC WITH
+        executor.register_quant_delegator(config, RQTDelegator())
 
-        ATTENTION: RQT FUNCTIONS ARE AVAILABLE WITH USING_CUDA_KERNEL = True
+    ATTENTION: RQT FUNCTIONS ARE AVAILABLE WITH USING_CUDA_KERNEL = True
     """
     def __init__(
         self, binding: Variable, config: TensorQuantizationConfig, limit: float) -> None:
@@ -349,17 +339,17 @@ class RQTDelegator(TorchQuantizeDelegate):
 
 
 class LSQDelegator(TorchQuantizeDelegate):
-    """
-        Lsq Delegator is an cuda implementation of learned step size quantization.
-        We apply Qdrop together with lsq to lower the variance of gradient estimations.
+    """Lsq Delegator is an cuda implementation of learned step size
+    quantization. We apply Qdrop together with lsq to lower the variance of
+    gradient estimations.
 
-        With those features, we could directly finetune a quantized network
-            from 32-bit to lower bit width, avoiding the risk of over-fitting.
+    With those features, we could directly finetune a quantized network
+        from 32-bit to lower bit width, avoiding the risk of over-fitting.
 
-        USE THIS FUNCTION TO REPLACE PPQ EXECUTOR'S QUANTIZATION LOGIC WITH
-            executor.register_quant_delegator(config, LSQDelegator())
+    USE THIS FUNCTION TO REPLACE PPQ EXECUTOR'S QUANTIZATION LOGIC WITH
+        executor.register_quant_delegator(config, LSQDelegator())
 
-        ATTENTION: THIS FUNCTION IS AVAILABLE ONLY WITH USING_CUDA_KERNEL = True
+    ATTENTION: THIS FUNCTION IS AVAILABLE ONLY WITH USING_CUDA_KERNEL = True
     """
     def __init__(self, binding: Variable,
                  config: TensorQuantizationConfig, dropout: float) -> None:
@@ -403,19 +393,17 @@ class LSQDelegator(TorchQuantizeDelegate):
 
 
 class BanditDelegator(TorchQuantizeDelegate):
-    """
-        带有多臂赌博机的量化代理，从 ppq 0.6.2 版本后，我们引入
-            多臂赌博机算法训练 scale 与 offset。在未来我们可能还会引入其他
-            类似的算法，例如UCB，马尔可夫蒙特卡洛估计等。
+    """带有多臂赌博机的量化代理，从 ppq 0.6.2 版本后，我们引入 多臂赌博机算法训练 scale 与 offset。在未来我们可能还会引入其他
+    类似的算法，例如UCB，马尔可夫蒙特卡洛估计等。
 
-        引入这些算法的原因是我们注意到 scale 与 offset 的导数非常不靠谱
-        为此我们引入简单的强化学习，直接估计P(r | scale=s, context)
-        即再给定上下文 context 的情况下，选取当前 scale 为 s，获利的概率
+    引入这些算法的原因是我们注意到 scale 与 offset 的导数非常不靠谱
+    为此我们引入简单的强化学习，直接估计P(r | scale=s, context)
+    即再给定上下文 context 的情况下，选取当前 scale 为 s，获利的概率
 
-        Quantization with multi-arm bandit.
+    Quantization with multi-arm bandit.
 
-        Multi-arm bandits are introduced since PPQ 0.6.2 for training
-            quantization scale and offset.
+    Multi-arm bandits are introduced since PPQ 0.6.2 for training
+        quantization scale and offset.
     """
     def __init__(self,  arms: List[float], config: TensorQuantizationConfig) -> None:
         if len(arms) < 2: raise ValueError('Can not initialize bandit with less than 2 arms.')
@@ -451,9 +439,8 @@ class BanditDelegator(TorchQuantizeDelegate):
 
 
 class RandomMemDataset:
-    """
-        A very little helper class for randomly pick data samples from your dataset.
-    """
+    """A very little helper class for randomly pick data samples from your
+    dataset."""
     def __init__(self, data: Iterable) -> None:
         self._data = data
         self._num_of_batchs = len(data)
@@ -472,9 +459,7 @@ class TrainableSubgraph(BaseGraph):
 
 
 class TimeDecay:
-    """
-        A helper class computing time decay.
-    """
+    """A helper class computing time decay."""
     def __init__(self, t_max: int, decay: float=0.2, beta_start: float=20, beta_end:float=2):
         self.t_max = t_max
         self.start_decay = decay * t_max
@@ -487,9 +472,9 @@ class TimeDecay:
 
 
 class AdaroundRegTerm(torch.nn.Module):
-    """
-        Adaround Reg Term is a part of Adaround optimization algorithm.
-            This term represents the difference between a fp32 value and its quantized counter-part.
+    """Adaround Reg Term is a part of Adaround optimization algorithm.
+
+    This term represents the difference between a fp32 value and its quantized counter-part.
         We use a same implementation as proposed in Adaround paper.
     Args:
         torch ([type]): [description]
@@ -524,12 +509,11 @@ def Lp_norm(pred: torch.tensor, tgt: torch.tensor, p: float = 2.0):
 
 
 class PriorityQueue:
-    """
-        一个很低端的优先队列实现
+    """一个很低端的优先队列实现.
 
-        因为python自带的那个实现少一个我需要的接口
+    因为python自带的那个实现少一个我需要的接口
 
-        所以我就自己写了这个，它很慢，但是够用。
+    所以我就自己写了这个，它很慢，但是够用。
     """
     def __init__(self, ) -> None:
         self._data = []
@@ -557,10 +541,10 @@ class PriorityQueue:
 
 
 class TrainableBlock:
-    """
-    TrainableBlock refers to a limited subgraph extracted from integrated computational graph.
-        TrainableBlock have exact one input node and one output node, while
-        its depth(the distance from input node to output node) is limited.
+    """TrainableBlock refers to a limited subgraph extracted from integrated
+    computational graph. TrainableBlock have exact one input node and one
+    output node, while its depth(the distance from input node to output node)
+    is limited.
 
     Formal definition of TrainableBlock can be found with following code of BlockBuilder
 
@@ -595,9 +579,8 @@ class BlockBuilder:
         return TrainableBlock(sp=sp, ep=ep, rps=[op for _, op in rps])
 
     def build(self, op: Operation, limit: int) -> TrainableBlock:
-        """
-        子图分割算法, 这个算法将从指定节点出发, 构造一个满足定义的子图结构
-        Solving best block from given operation.
+        """子图分割算法, 这个算法将从指定节点出发, 构造一个满足定义的子图结构 Solving best block from given
+        operation.
 
         Block definition:(子图定义)
             A Block is a triple contains S, E, M,
@@ -672,10 +655,7 @@ class BlockBuilder:
         return self.create_block(sp=sp, ep=ep)
 
     def initialize_depth(self) -> None:
-        """
-            为图中所有节点确定深度，基于拓扑排序与动态规划，O(kn)时间复杂度
-            k为图节点最大度数，n为图节点个数
-        """
+        """为图中所有节点确定深度，基于拓扑排序与动态规划，O(kn)时间复杂度 k为图节点最大度数，n为图节点个数."""
         for operation in self.op_orders:
             # graph input operation, set depth as 0
             if len(self.graph.get_upstream_operations(operation)) == 0:
@@ -856,9 +836,7 @@ class BlockwiseReconstructionDelegator(StraightThroughEstimateDelegator):
 
 
 class EMARecorder():
-    """
-    Exponential Moving Average(EMA) with bias correction.
-    """
+    """Exponential Moving Average(EMA) with bias correction."""
     def __init__(self, beta: float = 0.98):
         self.beta  = beta
         self.t     = 0

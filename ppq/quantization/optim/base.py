@@ -7,8 +7,8 @@ from ppq.IR import BaseGraph, DefaultGraphProcessor, GraphCommandProcessor
 
 
 class QuantizationOptimizationPass(metaclass = ABCMeta):
-    """
-    QuantizationOptimizationPass is a basic building block of PPQ quantization logic.
+    """QuantizationOptimizationPass is a basic building block of PPQ
+    quantization logic.
 
     PPQ is designed as a Multi pass Compiler of quantization network.
         where pass here refers to a traversal through the entire network.
@@ -45,8 +45,8 @@ class QuantizationOptimizationPass(metaclass = ABCMeta):
 
 
 class QuantizationOptimizationPipeline(Container, Iterable):
-    """
-    QuantizationOptimizationPipeline is a sorted set PPQ Optimization passes.
+    """QuantizationOptimizationPipeline is a sorted set PPQ Optimization
+    passes.
 
     PPQ is designed as a Multi pass Compiler of quantization network.
         where pass here refers to a traversal through the entire network.

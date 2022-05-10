@@ -1,19 +1,18 @@
-"""
-    这是一个 PPQ 量化的入口脚本，将你的模型和数据按要求进行打包:
+"""这是一个 PPQ 量化的入口脚本，将你的模型和数据按要求进行打包:
 
-    This file will show you how to quantize your network with PPQ
-        You should prepare your model and calibration dataset as follow:
+This file will show you how to quantize your network with PPQ
+    You should prepare your model and calibration dataset as follow:
 
-        ~/working/model.onnx                          <--  your model
-        ~/working/data/*.npy or ~/working/data/*.bin  <--  your dataset
+    ~/working/model.onnx                          <--  your model
+    ~/working/data/*.npy or ~/working/data/*.bin  <--  your dataset
 
-    if you are using caffe model:
-        ~/working/model.caffemdoel  <--  your model
-        ~/working/model.prototext   <--  your model
+if you are using caffe model:
+    ~/working/model.caffemdoel  <--  your model
+    ~/working/model.prototext   <--  your model
 
-    ### MAKE SURE YOUR INPUT LAYOUT IS [N, C, H, W] or [C, H, W] ###
+### MAKE SURE YOUR INPUT LAYOUT IS [N, C, H, W] or [C, H, W] ###
 
-    quantized model will be generated at: ~/working/quantized.onnx
+quantized model will be generated at: ~/working/quantized.onnx
 """
 from ppq import *
 from ppq.IR.processor import GraphCommandProcessor

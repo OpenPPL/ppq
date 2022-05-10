@@ -9,10 +9,12 @@ from .base import BaseQuantizer
 
 
 class ACADEMICQuantizer(BaseQuantizer):
-    """ACADEMICQuantizer applies a loose quantization scheme where only input variables of
-    computing ops are quantized(symmetrical per-tensor for weight and asymmetrical per-tensor
-    for activation). This setting doesn't align with any kind of backend for now and it's designed
-    only for purpose of paper reproducing and algorithm verification.
+    """ACADEMICQuantizer applies a loose quantization scheme where only input
+    variables of computing ops are quantized(symmetrical per-tensor for weight
+    and asymmetrical per-tensor for activation).
+
+    This setting doesn't align with any kind of backend for now and it's
+    designed only for purpose of paper reproducing and algorithm verification.
     """
     def __init__(self, graph: BaseGraph, verbose: bool = True) -> None:
         self._num_of_bits = 8

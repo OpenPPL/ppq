@@ -1,7 +1,7 @@
 # include "test.h"
 
 __device__ inline int _round2int(
-    const float value, 
+    const float value,
     const int rounding
 ){
     switch(rounding){

@@ -132,9 +132,7 @@ class TraversalCommand(GraphCommand):
 
     @ staticmethod
     def complie(query: str):
-        """
-        compile 函数把一个查询字符串编译成一个 TraversalCommand。
-        我们还没有具体实现这个函数，但我们已经定义好了语法：
+        """compile 函数把一个查询字符串编译成一个 TraversalCommand。 我们还没有具体实现这个函数，但我们已经定义好了语法：
 
         查询字符串应该是下面的格式：
         SELECT  ["START"|"END"|"PATH"]
@@ -182,9 +180,7 @@ class TreeNode:
 
 class PatternTree(Iterable):
     def __init__(self, patterns: List[Callable], edges: List[List[int]]) -> None:
-        """
-        Pattern Tree 是一个用来表示图模式的结构体
-        这将在图中检索任意一个抽象树形结构
+        """Pattern Tree 是一个用来表示图模式的结构体 这将在图中检索任意一个抽象树形结构.
 
         你将使用 Pattern Tree 定义你的树结构
         使用 patterns 确定每一个节点需要满足的条件
@@ -306,11 +302,11 @@ class TypeExpr(Callable):
 
 class TreePatternMatcher:
     def __init__(self, pattern_tree: PatternTree) -> None:
-        """
-        TreePatternMatcher offers you a really powerful pattern matching tool that helps
-        you finding specific structure from your graph. Define your network structure with
-        pattern tree --- an internal data structure of PPQ, then extract corresponding graph
-            structures from ppq graph via TreePatternMatcher.
+        """TreePatternMatcher offers you a really powerful pattern matching
+        tool that helps you finding specific structure from your graph. Define
+        your network structure with pattern tree --- an internal data structure
+        of PPQ, then extract corresponding graph structures from ppq graph via
+        TreePatternMatcher.
 
         This feature will benefits you a lot when dealing with graph fusion and graph editing.
         PPQ use Depth First Search and Hungarian Algorithm to match pattern from your graph,
@@ -412,8 +408,7 @@ class TreePatternMatcher:
 
 
 class SearchableGraph(GraphCommandProcessor):
-    """
-        PPQ Graph Searching Engine.
+    """PPQ Graph Searching Engine.
 
     Args:
         GraphCommandProcessor ([type]): [description]
@@ -527,11 +522,9 @@ class SearchableGraph(GraphCommandProcessor):
         ep_expr: Callable,
         direction: str
         ) -> List[Path]:
-        """
-        path_matching is used for path searching on the
-        graph, and complete paths will be returned. Note
-        that it's possible for results to overflow when
-        there are numerous matchings
+        """path_matching is used for path searching on the graph, and complete
+        paths will be returned. Note that it's possible for results to overflow
+        when there are numerous matchings.
 
         path_matching 用于图检索，匹配完整路径
             一个最简单的例子：
@@ -587,10 +580,9 @@ class SearchableGraph(GraphCommandProcessor):
         ep_expr: Callable,
         direction: str = 'up'
         ) -> OperationSet:
-        """
-        opset_matching is used for operator set searching,
-        it returns relevant op set instead of specific paths,
-        should be used when results of path_matching overflow
+        """opset_matching is used for operator set searching, it returns
+        relevant op set instead of specific paths, should be used when results
+        of path_matching overflow.
 
         opset_matching 用于图检索，匹配算子集合（无序）
             一个最简单的例子：

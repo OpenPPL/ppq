@@ -16,19 +16,18 @@ from .base import QuantizationOptimizationPass
 
 
 class RuntimeCalibrationPass(QuantizationOptimizationPass):
-    """
-        PPQ Runtime Calibration Pass
-        For int8 quantization, you need to calibrate or estimate the value range,
-            i.e, (min, max) of all floating-point tensors in the model.
+    """PPQ Runtime Calibration Pass For int8 quantization, you need to
+    calibrate or estimate the value range, i.e, (min, max) of all floating-
+    point tensors in the model.
 
-        Unlike constant tensors such as weights and biases,
-            variable tensors such as model input, activations (outputs of intermediate layers)
-            and model output cannot be calibrated unless we run a few inference cycles.
+    Unlike constant tensors such as weights and biases,
+        variable tensors such as model input, activations (outputs of intermediate layers)
+        and model output cannot be calibrated unless we run a few inference cycles.
 
-        As a result, the converter requires a representative dataset to calibrate them.
-        This dataset is supposed to be a small subset (about 100~500 samples) of the training or validation data.
+    As a result, the converter requires a representative dataset to calibrate them.
+    This dataset is supposed to be a small subset (about 100~500 samples) of the training or validation data.
 
-        ATTENTION: DO NOT GIVE A LARGER DATASET THAN EXPECTED, PPQ WILL RAISE AN ERROR ABOUT IT.
+    ATTENTION: DO NOT GIVE A LARGER DATASET THAN EXPECTED, PPQ WILL RAISE AN ERROR ABOUT IT.
     """
     def __init__(self, method: str = None, override: bool = False) -> None:
         """
@@ -154,19 +153,18 @@ class RuntimeCalibrationPass(QuantizationOptimizationPass):
 
 
 class RuntimePerlayerCalibrationPass(RuntimeCalibrationPass):
-    """
-        PPQ Runtime Calibration Pass(Per layer calibration)
-        For int8 quantization, you need to calibrate or estimate the value range,
-            i.e, (min, max) of all floating-point tensors in the model.
+    """PPQ Runtime Calibration Pass(Per layer calibration) For int8
+    quantization, you need to calibrate or estimate the value range, i.e, (min,
+    max) of all floating-point tensors in the model.
 
-        Unlike constant tensors such as weights and biases,
-            variable tensors such as model input, activations (outputs of intermediate layers)
-            and model output cannot be calibrated unless we run a few inference cycles.
+    Unlike constant tensors such as weights and biases,
+        variable tensors such as model input, activations (outputs of intermediate layers)
+        and model output cannot be calibrated unless we run a few inference cycles.
 
-        As a result, the converter requires a representative dataset to calibrate them.
-        This dataset is supposed to be a small subset (around ~100-500 samples) of the training or validation data.
+    As a result, the converter requires a representative dataset to calibrate them.
+    This dataset is supposed to be a small subset (around ~100-500 samples) of the training or validation data.
 
-        ATTENTION: DO NOT GIVE A LARGER DATASET THAN EXPECTED, PPQ WILL RAISE AN ERROR ABOUT IT.
+    ATTENTION: DO NOT GIVE A LARGER DATASET THAN EXPECTED, PPQ WILL RAISE AN ERROR ABOUT IT.
     """
     def __init__(self, method: str) -> None:
         super().__init__()
@@ -216,14 +214,12 @@ class RuntimePerlayerCalibrationPass(RuntimeCalibrationPass):
 
 
 class PPLDSPTIReCalibrationPass(RuntimeCalibrationPass):
-    """
-       PPQ ReCalibration Pass For Computing Ops
-       This pass should only be turned on when the platform is one of PPL DSP TI series,
-            which needs a per-channel recalibration process for output variable of computing
-            op types.
+    """PPQ ReCalibration Pass For Computing Ops This pass should only be turned
+    on when the platform is one of PPL DSP TI series, which needs a per-channel
+    recalibration process for output variable of computing op types.
 
-       This pass does not interfere with the normal quantization process, and will be turned
-            off for most situations.
+    This pass does not interfere with the normal quantization process, and will
+    be turned      off for most situations.
     """
     def __init__(self, method: str = None, override: bool = False) -> None:
         super().__init__(method, override)

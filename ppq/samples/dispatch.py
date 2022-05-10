@@ -25,7 +25,7 @@ model = model.to(DEVICE)
 
 # dump model to disk
 dump_torch_to_onnx(
-    model=model, onnx_export_file='Output/onnx.model', 
+    model=model, onnx_export_file='Output/onnx.model',
     input_shape=[BATCHSIZE] + INPUT_SHAPE, input_dtype=torch.float)
 
 # create a setting for quantizing your network with PPL CUDA.
@@ -48,13 +48,13 @@ for name, _ in unquantized.operations.items():
 # Load training data for creating a calibration dataloader.
 calibration_dataset = load_calibration_dataset()
 calibration_dataloader = DataLoader(
-    dataset=calibration_dataset, 
+    dataset=calibration_dataset,
     batch_size=BATCHSIZE, shuffle=True)
 
 # quantize your model.
 quantized = quantize_torch_model(
     model=model, calib_dataloader=calibration_dataloader,
-    calib_steps=32, input_shape=[BATCHSIZE] + INPUT_SHAPE, 
+    calib_steps=32, input_shape=[BATCHSIZE] + INPUT_SHAPE,
     setting=quant_setting, collate_fn=collate_fn, platform=PLATFORM,
     onnx_export_file='Output/onnx.model', device=DEVICE, verbose=0)
 
@@ -62,6 +62,6 @@ quantized = quantize_torch_model(
 assert isinstance(quantized, BaseGraph)
 
 # export quantized graph.
-export_ppq_graph(graph=quantized, platform=PLATFORM, 
-                 graph_save_to='Output/quantized(onnx).onnx', 
+export_ppq_graph(graph=quantized, platform=PLATFORM,
+                 graph_save_to='Output/quantized(onnx).onnx',
                  config_save_to='Output/quantized(onnx).json')

@@ -6,10 +6,9 @@ from ppq.core import DataType, convert_any_to_numpy
 
 
 def convert_value(
-    value: Union[int, float, np.ndarray, torch.Tensor], 
+    value: Union[int, float, np.ndarray, torch.Tensor],
     export_as_float: bool, dtype: DataType = DataType.FP32) -> Union[float, list]:
-    """
-    Converting value from any to python native data dtype, ready for export.
+    """Converting value from any to python native data dtype, ready for export.
 
     Args:
         value (Union[int, float, np.ndarray, torch.Tensor]): exporting value.

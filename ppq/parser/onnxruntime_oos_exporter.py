@@ -19,15 +19,16 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
     @property
     def required_opsets(self):
         return {
-            "ai.onnx": 13,
-            "com.microsoft": 1,
+            'ai.onnx': 13,
+            'com.microsoft': 1,
         }
 
     @property
     def ONNX_QUANTABLE_TABLE(self):
-        """
-        Quantable operations for com.microsoft scope,
-        see https://github.com/microsoft/onnxruntime/blob/master/docs/ContribOperators.md for detail.
+        """Quantable operations for com.microsoft scope, see
+        https://github.com.
+
+        /microsoft/onnxruntime/blob/master/docs/ContribOperators.md for detail.
 
         com.microsoft.QAttention
         com.microsoft.QGemm
@@ -45,21 +46,21 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
             _type_: _description_
         """
         return {
-            "Add": "QLinearAdd",
-            "Mul": "QLinearMul",
-            "AveragePool": "QLinearAveragePool",
-            "Conv": "QLinearConv",
-            "GlobalAveragePool": "QLinearGlobalAveragePool",
-            "MatMul": "QLinearMatMul", # Qlinear Matmul is a standard onnx operation.
-            "Gemm": "QGemm",
-            "Concat": "Concat", # no need to convert concat.
-            "LeakyRelu": "QLinearLeakyRelu",
+            'Add': 'QLinearAdd',
+            'Mul': 'QLinearMul',
+            'AveragePool': 'QLinearAveragePool',
+            'Conv': 'QLinearConv',
+            'GlobalAveragePool': 'QLinearGlobalAveragePool',
+            'MatMul': 'QLinearMatMul', # Qlinear Matmul is a standard onnx operation.
+            'Gemm': 'QGemm',
+            'Concat': 'Concat', # no need to convert concat.
+            'LeakyRelu': 'QLinearLeakyRelu',
             # "ReduceMean": "QLinearReduceMean", # onnx not implemented.
-            "Sigmoid": "QLinearSigmoid"}
+            'Sigmoid': 'QLinearSigmoid'}
 
     def conversion_preprocess(self, op: Operation) -> Tuple[List[Variable], List[TensorMeta]]:
-        """
-        Detach all input variable from given op, prepare for inserting input variable for it.
+        """Detach all input variable from given op, prepare for inserting input
+        variable for it.
 
         Args:
             op (Operation): _description_
@@ -79,9 +80,8 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
     def convert_operation(self, graph: BaseGraph, op: QuantableOperation,
                           process_activation: bool, process_parameter: bool,
                           quant_param_to_int: bool):
-        """
-        Convert an operation to onnx operator oriented format.
-        There are 2 ways to represent quantized ONNX models:
+        """Convert an operation to onnx operator oriented format. There are 2
+        ways to represent quantized ONNX models:
 
         Operator Oriented. All the quantized operators have their own ONNX definitions,
             like QLinearConv, MatMulInteger and etc.

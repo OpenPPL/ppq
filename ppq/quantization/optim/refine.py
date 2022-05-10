@@ -19,47 +19,45 @@ from .base import QuantizationOptimizationPass
 
 
 class QuantizeReducePass(QuantizationOptimizationPass):
-    """
-        QuantizeReducePass 用来简化量化定点信息:通常每一个 Quantable 算子都有前后两个定点信息，
-        而运算时通常可以屏蔽一半定点信息以加速。QuantizeReducePass 被设计用来找出可以屏蔽的定点信息。
+    """QuantizeReducePass 用来简化量化定点信息:通常每一个 Quantable 算子都有前后两个定点信息，
+    而运算时通常可以屏蔽一半定点信息以加速。QuantizeReducePass 被设计用来找出可以屏蔽的定点信息。
 
-        对于两个相邻算子(op_1 -> op_2)而言，将会出现以下几种情况
-            1. op_1 与 op_2 均不量化，此时无需对数据流进行额外处理
-            2. op_1 量化，op_2 不量化，op_1 需要对结果进行量化
-            3. op_1 不量化，op_2 量化，此时需要按 op_2 的量化参数对数据流进行量化
-            4. op_1 与 op_2 均量化，此时分情况讨论:
-                4.1. op_1 量化位宽高于 op_2，此时按 op_2 的量化参数对数据流进行量化
-                4.2. op_1 量化位宽低于 op_2，此时按 op_1 的量化参数对数据流进行量化
-                4.3. op_1 量化位等于 op_2，此时按 op_1 的量化参数对数据流进行量化
+    对于两个相邻算子(op_1 -> op_2)而言，将会出现以下几种情况
+        1. op_1 与 op_2 均不量化，此时无需对数据流进行额外处理
+        2. op_1 量化，op_2 不量化，op_1 需要对结果进行量化
+        3. op_1 不量化，op_2 量化，此时需要按 op_2 的量化参数对数据流进行量化
+        4. op_1 与 op_2 均量化，此时分情况讨论:
+            4.1. op_1 量化位宽高于 op_2，此时按 op_2 的量化参数对数据流进行量化
+            4.2. op_1 量化位宽低于 op_2，此时按 op_1 的量化参数对数据流进行量化
+            4.3. op_1 量化位等于 op_2，此时按 op_1 的量化参数对数据流进行量化
 
-                                      ------> op_2
-        对于更为复杂的网络结构 op_1 ----+
-                                      ------> op_3
+                                  ------> op_2
+    对于更为复杂的网络结构 op_1 ----+
+                                  ------> op_3
 
-            op_1 如果有定点信息，则必须对数据流进行量化
-            op_2, op_3 则需要分别确认是否需要再次对输入数据执行再次量化
+        op_1 如果有定点信息，则必须对数据流进行量化
+        op_2, op_3 则需要分别确认是否需要再次对输入数据执行再次量化
 
-        总结:
-            当 下游节点 的量化位宽大于等于 上游节点 时，按 上游节点 的量化信息执行量化，此时量化操作发生在上游
-            当 下游节点 的量化位宽小于 上游节点 时，按 下游节点 的量化信息执行量化，此时量化操作发生在下游（上游量化未必可以省略）
+    总结:
+        当 下游节点 的量化位宽大于等于 上游节点 时，按 上游节点 的量化信息执行量化，此时量化操作发生在上游
+        当 下游节点 的量化位宽小于 上游节点 时，按 下游节点 的量化信息执行量化，此时量化操作发生在下游（上游量化未必可以省略）
 
-        QuantizeReducePass is used to reduce quantization fixation: we could block half of fixation points to accelerate
-        the inference
+    QuantizeReducePass is used to reduce quantization fixation: we could block half of fixation points to accelerate
+    the inference
 
-        for 2 neighbouring ops(op_1 -> op_2), there are several situations:
-            1. neither of op_1 and op_2 needs quantization
-            2. op_1 needs quantization while op_2 doesn't
-            3. op_2 needs quantization while op_1 does
-            4. both need quantization:
-                4.1. bit width of op_1 is larger than op_2, then we should use quantization parameters of op_2
-                4.2. bit width of op_2 is larger than op_1, then we should use quantization parameters of op_1
-                4.3. equal, we should use quantization parameters of op_1
+    for 2 neighbouring ops(op_1 -> op_2), there are several situations:
+        1. neither of op_1 and op_2 needs quantization
+        2. op_1 needs quantization while op_2 doesn't
+        3. op_2 needs quantization while op_1 does
+        4. both need quantization:
+            4.1. bit width of op_1 is larger than op_2, then we should use quantization parameters of op_2
+            4.2. bit width of op_2 is larger than op_1, then we should use quantization parameters of op_1
+            4.3. equal, we should use quantization parameters of op_1
 
-        Conclusion:
-            when the bit width of downstream op is larger or equal to that of upstream op, we should use quantization
-            information of upstream op, otherwise we should use quantization information of downstream op(and the upstream
-            quantization may not be omitted)
-
+    Conclusion:
+        when the bit width of downstream op is larger or equal to that of upstream op, we should use quantization
+        information of upstream op, otherwise we should use quantization information of downstream op(and the upstream
+        quantization may not be omitted)
     """
     def __init__(self) -> None:
         super().__init__(name='PPQ Quantize Point Reduce Pass')
@@ -98,23 +96,21 @@ class QuantizeReducePass(QuantizationOptimizationPass):
 
 
 class QuantizeRefinePass(QuantizationOptimizationPass):
-    """
-        修复算子上的定点错误，主要针对 Onnx 的一些特殊算子，其部分输入需要定点，而部分输入不需要定点
+    """修复算子上的定点错误，主要针对 Onnx 的一些特殊算子，其部分输入需要定点，而部分输入不需要定点.
 
-        例如对于 Reshape 算子而言，其存在 data, shape 两个输入，其中 shape 不需要定点
-        因此 QuantizeRefinePass 会纠正 Reshape 算子的 Quantization config，避免错误地对 shape 输入进行量化。
+    例如对于 Reshape 算子而言，其存在 data, shape 两个输入，其中 shape 不需要定点
+    因此 QuantizeRefinePass 会纠正 Reshape 算子的 Quantization config，避免错误地对 shape 输入进行量化。
 
-            目前我们针对 'Reshape', 'Slice', 'Gather', 'Clip', 'Pad', 'Resize', 'Split' 算子进行了详细讨论
-            修正了已知的所有量化行为错误
+        目前我们针对 'Reshape', 'Slice', 'Gather', 'Clip', 'Pad', 'Resize', 'Split' 算子进行了详细讨论
+        修正了已知的所有量化行为错误
 
-        对于所有平台的 Quantizer 而言，都应当调用 QuantizeRefinePass 修复上述量化行为错误
+    对于所有平台的 Quantizer 而言，都应当调用 QuantizeRefinePass 修复上述量化行为错误
 
-        customize quantization for special operators, more specifically, for certain op, some of inputs
-        need quantization while some don't, this pass refines quantization behaviors of
-        'Reshape', 'Slice', 'Gather', 'Clip', 'Pad', 'Resize', 'Split' ops
+    customize quantization for special operators, more specifically, for certain op, some of inputs
+    need quantization while some don't, this pass refines quantization behaviors of
+    'Reshape', 'Slice', 'Gather', 'Clip', 'Pad', 'Resize', 'Split' ops
 
-        this pass should be applied regardless of backend platforms
-
+    this pass should be applied regardless of backend platforms
     """
     def __init__(self) -> None:
         super().__init__(name='PPQ Quantization Config Refine Pass')
@@ -514,9 +510,7 @@ class PPLCudaAddConvReluMerge(QuantizationOptimizationPass):
 
 
 class QuantAlignmentPass(QuantizationOptimizationPass):
-    """
-        对多输入算子执行强制定点覆盖
-    """
+    """对多输入算子执行强制定点覆盖."""
     def __init__(self,
                  elementwise_merge_method: str = 'Align to Large',
                  concat_merge_method: str = 'Align to Output',
@@ -531,10 +525,9 @@ class QuantAlignmentPass(QuantizationOptimizationPass):
         super().__init__(name='PPQ Quantization Alignment Pass')
 
     def align_to_large(self, op: QuantableOperation) -> TensorQuantizationConfig:
-        """
-        Align quant scale and offset to larger input config.
-            The first input config will be set as master config,
-            all slave config will share the same scale and offset with master.
+        """Align quant scale and offset to larger input config. The first input
+        config will be set as master config, all slave config will share the
+        same scale and offset with master.
 
         Any change to slave config will be rejected since then.
         """
@@ -566,10 +559,9 @@ class QuantAlignmentPass(QuantizationOptimizationPass):
         return master_config
 
     def align_to_output(self, op: QuantableOperation) -> TensorQuantizationConfig:
-        """
-        Align quant scale and offset to output config.
-            All input configs would share a same scale and offset with output config.
-            (as a slave to output config)
+        """Align quant scale and offset to output config. All input configs
+        would share a same scale and offset with output config. (as a slave to
+        output config)
 
         Any change to slave config will be rejected since then.
         """

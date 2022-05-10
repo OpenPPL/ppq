@@ -11,8 +11,8 @@ from onnx import helper, mapping, numpy_helper
 
 class OnnxParser(GraphBuilder):
     def build_variables(
-        self, graph: BaseGraph, 
-        graph_inputs: List[str], graph_outputs: List[str], 
+        self, graph: BaseGraph,
+        graph_inputs: List[str], graph_outputs: List[str],
         op_inputs: Dict[str, list], op_outputs: Dict[str, list]) -> BaseGraph:
         var_list = []
 
@@ -70,7 +70,7 @@ class OnnxParser(GraphBuilder):
                     # The attribute of 'Cast' node is data type (represented in int), need to convert to numpy data type
                     value = mapping.TENSOR_TYPE_TO_NP_TYPE[value]
                 op.attributes[key] = value
-        
+
         graph_initializers = []
         for input_var in graph.inputs.values():
             # remove initilizer from graph.inputs
@@ -87,7 +87,7 @@ class OnnxParser(GraphBuilder):
 
     def build(self, file_path: str) -> BaseGraph:
         _rand_seed = 0 # used for name generation.
-        if not is_file_exist(file_path): 
+        if not is_file_exist(file_path):
             raise FileNotFoundError(f'file {file_path} does not exist, or it is a directory.')
         model_pb = onnx.load(file_path)
         opsets = model_pb.opset_import
@@ -105,7 +105,7 @@ class OnnxParser(GraphBuilder):
             if len(op_name) == 0: # some operation do not have a name, we just generate one.
                 op_name = 'generated_name_' + str(_rand_seed)
                 _rand_seed += 1
-            
+
             if op_name in graph.operations:
                 raise KeyError(f'Duplicated operation {op_name} was found.')
 

@@ -45,10 +45,9 @@ class TorchMetaDataTracingHook(RuntimeHook):
 
 
 class TorchQuantizeDelegate(Callable):
-    """
-    Since PPQ 0.6.2, Interface TorchQuantizeDelegate is introduced to customize quantization logic:
-        To be specific, you are suppose to inherit this class, and define your own computation logic
-        within function __call__.
+    """Since PPQ 0.6.2, Interface TorchQuantizeDelegate is introduced to
+    customize quantization logic: To be specific, you are suppose to inherit
+    this class, and define your own computation logic within function __call__.
 
         Pass your Delegate to TorchExecutor by TorchExecutor.register_quantize_delegate(c, d)
             Where c is the target quantization config, d is your delegator class.
@@ -127,10 +126,10 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
     def register_quantize_delegate(
         self, config: TensorQuantizationConfig,
         delegator: TorchQuantizeDelegate):
-        """
-        Since PPQ 0.6.2, Interface TorchQuantizeDelegate is introduced to customize quantization logic:
-            To be specific, you are suppose to inherit this class, and define your own computation logic
-            within function __call__.
+        """Since PPQ 0.6.2, Interface TorchQuantizeDelegate is introduced to
+        customize quantization logic: To be specific, you are suppose to
+        inherit this class, and define your own computation logic within
+        function __call__.
 
             Pass your Delegate to TorchExecutor by TorchExecutor.register_quantize_delegate(c, d)
                 Where c is the target quantization config, d is your delegator class.
@@ -155,10 +154,10 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
 
     def remove_quantize_delegate(
         self, config: TensorQuantizationConfig):
-        """
-        Since PPQ 0.6.2, Interface TorchQuantizeDelegate is introduced to customize quantization logic:
-            To be specific, you are suppose to inherit this class, and define your own computation logic
-            within function __call__.
+        """Since PPQ 0.6.2, Interface TorchQuantizeDelegate is introduced to
+        customize quantization logic: To be specific, you are suppose to
+        inherit this class, and define your own computation logic within
+        function __call__.
 
             Pass your Delegate to TorchExecutor by TorchExecutor.register_quantize_delegate(c, d)
                 Where c is the target quantization config, d is your delegator class.
@@ -179,8 +178,8 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
             self._delegates.pop(config)
 
     def deploy(self):
-        """
-            Deploy graph parameters towards target device.
+        """Deploy graph parameters towards target device.
+
         Raises:
             ValueError: [when target device is unacceptable]
         """
@@ -200,8 +199,7 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
         output_names:List[str] = None,
         hooks: Dict[str, RuntimeHook] = None
     ) -> List[torch.Tensor]:
-        """
-        Forward function of this executor.
+        """Forward function of this executor.
 
         Notice this forward function will never store and compute gradients.
 
@@ -247,8 +245,7 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
         output_names:List[str] = None,
         hooks: Dict[str, RuntimeHook] = None,
     ) -> List[torch.Tensor]:
-        """
-            forward function of this executor.
+        """forward function of this executor.
 
             Notice this one will store and compute gradient.
 
@@ -417,9 +414,9 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
         inputs: Union[dict, list, torch.Tensor],
         output_names: List[str] = None,
     ) -> None:
-        """
-        Tracing meta data for each operation, if there are some already created meta data with your operation,
-            They will be override without warrning.
+        """Tracing meta data for each operation, if there are some already
+        created meta data with your operation, They will be override without
+        warrning.
 
         Args:
             inputs (Union[dict, list, torch.Tensor]): [description]
@@ -457,10 +454,9 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
         else: return self._default_quant_fn(input, config)
 
     def dummy_forward(self, hooks: Dict[str, RuntimeHook] = None) -> None:
-        """
-        This function allows you to execute entire graph without feeding any data.
-        This feature is required for operation parameter quantization.
-            See also: ppq.quantization.optim.ParameterQuantizePass
+        """This function allows you to execute entire graph without feeding any
+        data. This feature is required for operation parameter quantization.
+        See also: ppq.quantization.optim.ParameterQuantizePass.
 
         This function fakes some input tensors via operation metadata.
             ATTENTION: operation must have metadata before invoking this function.
@@ -501,10 +497,10 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
         self, operations: List[Operation],
         feed_dict: Dict[str, torch.Tensor],
         output_names:List[str]) -> List[torch.Tensor]:
-        """
-        This forward function allows you to execute a series operations in your graph.
-            (only operations list in your params will be executed with this function)
-        Which serves as a great feature for quantization aware training.
+        """This forward function allows you to execute a series operations in
+        your graph. (only operations list in your params will be executed with
+        this function) Which serves as a great feature for quantization aware
+        training.
 
         Args:
             operations (List[Operation]):

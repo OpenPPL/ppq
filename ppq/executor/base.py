@@ -43,8 +43,7 @@ def register_operation_handler(handler: Callable, operation_type: str, platform:
 
 
 class RuntimeHook(metaclass=ABCMeta):
-    """
-        RuntimeHook is an abstract class designed for executor customizing
+    """RuntimeHook is an abstract class designed for executor customizing.
 
     Args:
         metaclass ([type], optional): [description]. Defaults to ABCMeta.
@@ -54,8 +53,7 @@ class RuntimeHook(metaclass=ABCMeta):
         self._op_meta = operation_meta
 
     def pre_forward_hook(self, inputs: list, **kwargs) -> list:
-        """
-            user-customized pre-processing procedure of input data
+        """user-customized pre-processing procedure of input data.
 
         Args:
             inputs (list): a list includes all input data.
@@ -66,8 +64,7 @@ class RuntimeHook(metaclass=ABCMeta):
         return inputs
 
     def post_forward_hook(self, outputs: list, **kwargs) -> list:
-        """
-            user-customized post-processing procedure of output data
+        """user-customized post-processing procedure of output data.
 
         Args:
             inputs (list): a list includes all output data.
@@ -79,8 +76,8 @@ class RuntimeHook(metaclass=ABCMeta):
 
 
 class QuantOPRuntimeHook(RuntimeHook, metaclass=ABCMeta):
-    """
-        QuantOPRuntimeHook is an abstract class designed for executor customizing
+    """QuantOPRuntimeHook is an abstract class designed for executor
+    customizing.
 
     Args:
         metaclass ([type], optional): [description]. Defaults to ABCMeta.
@@ -108,8 +105,7 @@ class QuantOPRuntimeHook(RuntimeHook, metaclass=ABCMeta):
 
 
 class BaseGraphExecutor(Callable, metaclass=ABCMeta):
-    """
-        PPQ Base Graph Executor
+    """PPQ Base Graph Executor.
 
     Args:
         Callable ([type]): [description]

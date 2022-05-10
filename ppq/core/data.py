@@ -1,9 +1,6 @@
-"""
-    PPQ Core Data Structure Abstraction
-    PPQ 核心数据结构抽象
+"""PPQ Core Data Structure Abstraction PPQ 核心数据结构抽象.
 
-    You are not allowed to modify this
-    请勿修改此文件
+You are not allowed to modify this 请勿修改此文件
 """
 from enum import Enum
 from typing import Any, List, Union
@@ -119,9 +116,9 @@ class TensorMeta:
     def __init__(
         self, dtype: DataType, shape: List[int],
         tensor_name: str = None) -> None:
-        """
-        TensorMeta structure described metadata of a tensor.
-            Which includes tensor's data type and shape.
+        """TensorMeta structure described metadata of a tensor.
+
+        Which includes tensor's data type and shape.
         TensorMeta is necessary to initialize quantization configuration and hooks,
         and is needed to compute the number of input channels.
         Args:
@@ -174,9 +171,10 @@ class OperationMeta:
     def __init__(self,
         input_metas: List[TensorMeta], output_metas: List[TensorMeta],
         operation_name: str, operation_type: str, executing_order: int) -> None:
-        """
-        OperationMeta structure describes all related tensor metadata of an operation.
-            It naturally is a collection of TensorMeta.
+        """OperationMeta structure describes all related tensor metadata of an
+        operation.
+
+        It naturally is a collection of TensorMeta.
         Take a look at TensorMeta to get more information.
         Args:
             input_metas (List[TensorMeta]):

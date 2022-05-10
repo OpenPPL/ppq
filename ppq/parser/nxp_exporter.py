@@ -13,7 +13,7 @@ class NxpExporter(GraphExporter):
 
     def export_operation(self, operation: Operation) -> onnx.OperatorProto:
         op_proto = helper.make_node(
-            op_type=operation.type, 
+            op_type=operation.type,
             inputs=[_.name for _ in operation.inputs],
             outputs=[_.name for _ in operation.outputs],
             name=operation.name,
@@ -45,13 +45,13 @@ class NxpExporter(GraphExporter):
 
         for operation in graph.operations.values():
             onnx_graph.node.append(self.export_operation(operation))
-    
+
         for variable in graph.variables.values():
             tensor_proto = self.export_var(variable)
 
             if variable.name in graph.inputs:
                 onnx_graph.input.append(tensor_proto)
-    
+
             if variable.name in graph.outputs:
                 onnx_graph.output.append(tensor_proto)
 
@@ -63,7 +63,7 @@ class NxpExporter(GraphExporter):
                 if variable.is_parameter and not export_param: continue
                 for config in configs:
                     if config is None: continue # source_op can be None
-                    if config.state in {QuantizationStates.ACTIVATED, QuantizationStates.BAKED, 
+                    if config.state in {QuantizationStates.ACTIVATED, QuantizationStates.BAKED,
                                         QuantizationStates.OVERLAPPED, QuantizationStates.PASSIVE_BAKED}:
                         if config.state == QuantizationStates.OVERLAPPED: config = config.dominated_by
                         tensor_range = config.scale * pow(2, config.num_of_bits - 1)

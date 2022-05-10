@@ -65,7 +65,7 @@ def load_calibration_dataset(directory: str, input_shape: List[int], batchsize: 
     for idx, tensor in enumerate(samples[: 5]):
         print(f'Loaded sample {idx}, shape: {tensor.shape}')
     assert len(batches) > 0, '你送入了空的数据集'
-    
+
     print(f'Batch Shape: {batches[0].shape}')
     return batches
 
@@ -116,7 +116,7 @@ def export(working_directory: str, quantized: BaseGraph, platform: TargetPlatfor
 
 
 def load_from_file(
-    filename: str, dtype: np.dtype = np.float32, 
+    filename: str, dtype: np.dtype = np.float32,
     shape: List[int] = None, format: str = '.npy') -> np.ndarray:
     if not os.path.exists(filename) or os.path.isdir(filename):
         raise FileNotFoundError(f'Can not load data from file: {filename}. '
@@ -135,14 +135,14 @@ def load_from_file(
 
 
 def dump_to_file(
-    filename: str, data: Union[torch.Tensor, np.ndarray], 
+    filename: str, data: Union[torch.Tensor, np.ndarray],
     format: str = '.npy') -> None:
     if os.path.isdir(filename):
         raise FileExistsError(f'Can not dump data to file: {filename}',
                               ' Cause it is a directory.')
     if os.path.exists(filename):
         ppq_warning(f'Overwritting file {filename} ...')
-    
+
     data = convert_any_to_numpy(data)
     if format == '.npy':
         np.save(file=filename, arr=data)
@@ -180,24 +180,24 @@ def compare_cosine_similarity_between_results(
 
     print(f'总计 {len(samples)} 个 Sample 被检出，{len(outputs)} 个待测输出 Variable')
     recorders = {name: MeasureRecorder(measurement=method) for name in outputs}
-    
+
     for sample_name in samples:
         for output in outputs:
 
             ref_file    = os.path.join(ref_dir, sample_name, output)
             target_file = os.path.join(target_dir, sample_name, output)
-            
+
             ref    = load_from_file(filename=ref_file, format='.dat')[:1000]
             target = load_from_file(filename=target_file, format='.dat')[:1000]
 
             recorders[output].update(
-                y_real=convert_any_to_torch_tensor(ref), 
+                y_real=convert_any_to_torch_tensor(ref),
                 y_pred=convert_any_to_torch_tensor(target))
 
     results = {}
     for output, recorder in recorders.items():
         results[output] = recorder.measure
-    
+
     method_str = 'MEASUREMENT'
     if method == 'snr': method_str = 'NOISE:SIGNAL POWER RATIO'
     if method == 'cosine': method_str = 'COSINE SIMILARITY'
@@ -206,7 +206,7 @@ def compare_cosine_similarity_between_results(
 
 
 def dump_internal_results(
-    graph: BaseGraph, dataloader: Iterable, 
+    graph: BaseGraph, dataloader: Iterable,
     dump_dir: str, executing_device: str, sample: bool = True):
 
     i_dir  = os.path.join(dump_dir, 'inputs')
@@ -218,12 +218,12 @@ def dump_internal_results(
     # 找出所有量化点，抽出所有中间结果.
     for var in graph.variables.values():
         if isinstance(var, QuantableVariable):
-            if (var.source_op_config is not None and 
+            if (var.source_op_config is not None and
                 var.source_op_config.state == QuantizationStates.ACTIVATED):
                 graph.outputs[var.name] = var # 直接标记为网络输出
 
     executor = TorchExecutor(graph, device=executing_device)
-    for batch_idx, batch in tqdm(enumerate(dataloader), 
+    for batch_idx, batch in tqdm(enumerate(dataloader),
                                  total=len(dataloader), desc='Dumping Results ...'):
         batch = batch.to(executing_device)
         outputs = executor.forward(batch)
@@ -234,11 +234,11 @@ def dump_internal_results(
             # 如果数字太多就抽样
             if output.numel() > 10000 and sample:
                 output = tensor_random_fetch(
-                    tensor=output, seed=10086, # 保证随机种子一致才能比对结果 
+                    tensor=output, seed=10086, # 保证随机种子一致才能比对结果
                     num_of_fetches=4096)
 
             dump_to_file(
-                filename=os.path.join(o_dir, str(batch_idx), name + '.dat'), 
+                filename=os.path.join(o_dir, str(batch_idx), name + '.dat'),
                 data=output, format='.dat')
 
         dump_to_file(
@@ -249,11 +249,11 @@ def split_result_to_directory(raw_dir: str, to_dir: str):
     print(f'正从 {raw_dir} 分割数据')
     data_files, sample_names = [], set()
     for file_name in os.listdir(raw_dir):
-        if file_name.endswith('.dat'): 
+        if file_name.endswith('.dat'):
             sample_name = file_name.split('_')[0]
             sample_names.add(sample_name)
             data_files.append((sample_name, file_name))
-        
+
     print(f'加载 {len(data_files)} 数据文件，总计 {len(sample_names)} 个样本')
     create_dir(to_dir)
     for sample_name in sample_names:

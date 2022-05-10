@@ -9,9 +9,8 @@ class TorchBackendContext:
         self.executing_device = executing_device
 
 def ASSERT_ALL_TENSORS_AT_CPU(op: Operation, values: List[torch.Tensor], force_convert: bool = False):
-    """
-    Dynamic Shape Platform Operations Process with shape related tensors,
-        which must not be quantized and must be computed with cpu.
+    """Dynamic Shape Platform Operations Process with shape related tensors,
+    which must not be quantized and must be computed with cpu.
 
     This function will check all inputs tensors' device, and move all cuda tensor to cpu(if force_convert is true).
     ATTENTION: do not set force_convert as True if not necessary. PPQ will automatically move
@@ -59,11 +58,10 @@ def ASSERT_NUM_OF_INPUT(op: Operation, values: List[torch.Tensor],
                          f'expects {min_num_of_input} inputs at least, however {len(values)} was given')
 
 def GET_ATTRIBUTE_FROM_OPERATION(op: Operation, attribute: str, compulsive: bool = False, default: Any = None):
-    """
-    Try to get an attribute from operation.
-    If an attribute is compulsive, then operation must give a value of it, otherwise an error will be thrown.
-    If an attribute is not compulsive, a default value will be given if operation.attributes do not holds a
-        value of requesting attribute.
+    """Try to get an attribute from operation. If an attribute is compulsive,
+    then operation must give a value of it, otherwise an error will be thrown.
+    If an attribute is not compulsive, a default value will be given if
+    operation.attributes do not holds a value of requesting attribute.
 
     Args:
         op (Operation): Operation instance.
@@ -82,8 +80,7 @@ def GET_ATTRIBUTE_FROM_OPERATION(op: Operation, attribute: str, compulsive: bool
             return default
 
 def ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op: Operation, values: List[torch.Tensor], device: str = None):
-    """
-    PPQ Default Backend Suppose all inputs are torch.Tensor at same device.
+    """PPQ Default Backend Suppose all inputs are torch.Tensor at same device.
 
     This function will check all inputs tensors' device.
 

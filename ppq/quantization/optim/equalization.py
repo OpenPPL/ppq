@@ -20,8 +20,7 @@ OPTIMIZATION_LAYERTYPE_CONFIG = {
 EQUALIZATION_OPERATION_TYPE = {'Conv', 'Gemm', 'ConvTranspose'}
 
 class LayerwiseEqualizationPass(QuantizationOptimizationPass):
-    """
-    PPQ Custimized Layerwise Equalization Pass
+    """PPQ Custimized Layerwise Equalization Pass.
 
     This is a highly custimized implementation of layerwise equalization from:
 
@@ -41,8 +40,7 @@ class LayerwiseEqualizationPass(QuantizationOptimizationPass):
         bias_mutiplier: float = 0.5, activation_mutiplier: float = 0.5,
         interested_layers: List[str] = None, optimize_level: int = 2,
         verbose:bool = False) -> None:
-        """
-        PPQ Custimized Layerwise Equalization Pass
+        """PPQ Custimized Layerwise Equalization Pass.
 
         This is a highly custimized implementation of layerwise equalization.
         With PPQ graph searching engine, this implementation can equalize mutilple layer at once,

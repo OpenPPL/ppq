@@ -21,8 +21,8 @@ from .util import convert_value
 logger = NaiveLogger.get_logger('PPQ')
 
 def convert_type(platform: TargetPlatform) -> str:
-    if platform == TargetPlatform.PPL_CUDA_INT8: return "INT8"
-    if platform == TargetPlatform.PPL_DSP_INT8: return "INT8"
+    if platform == TargetPlatform.PPL_CUDA_INT8: return 'INT8'
+    if platform == TargetPlatform.PPL_DSP_INT8: return 'INT8'
     if platform == TargetPlatform.SHAPE_OR_INDEX: return None
     if platform == TargetPlatform.FP32: return None
     raise TypeError(f'Unsupported platform type. ({str(platform)})')
@@ -92,8 +92,8 @@ class CaffeExporter(GraphExporter):
                 }
 
         exports = {
-            "quant_info": var_quant_info_recorder,
-            "op_info": op_platform_recorder}
+            'quant_info': var_quant_info_recorder,
+            'op_info': op_platform_recorder}
 
         with open(file=config_path, mode='w') as file:
             json.dump(exports, file, indent=4)
@@ -113,7 +113,7 @@ class CaffeExporter(GraphExporter):
                 for var in graph.inputs.values()}
         else:
             assert len([input_shapes]) == len(graph.inputs), (
-                "must provide equal number of input shapes for caffe export without quantization")
+                'must provide equal number of input shapes for caffe export without quantization')
             # assume all fp32 type, because that's the usual case
             inputs = [torch.randn(*shape, device=device) for shape in input_shapes]
         tracer = TorchExecutor(graph, device=device)
@@ -230,9 +230,9 @@ class SNPECaffeExporter(CaffeExporter):
         for idx in range(len(lines)):
             line = lines[idx]
             # snpe do not want hole and ceil_mode
-            if "hole" in line or "ceil_mode" in line: continue
+            if 'hole' in line or 'ceil_mode' in line: continue
             # snpe do not want quantize_param
-            if "quantize_param" in line:
+            if 'quantize_param' in line:
                 idx += 4
                 continue
             str_buffer = (str_buffer + line) + '\n'

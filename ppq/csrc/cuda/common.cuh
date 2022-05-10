@@ -55,7 +55,7 @@ int64_t NUM_OF_ELEMENT(Tensor t){
     return t.numel();
 }
 
-__host__ __inline__ 
+__host__ __inline__
 int64_t NUM_OF_BLOCK(int64_t elements){
     return std::min((elements + CUDA_NUM_THREADS - 1) / CUDA_NUM_THREADS, CUDA_TARGET_BLOCKS);
 }
@@ -82,7 +82,7 @@ void CheckTensor(const Tensor &tensor, const c10::ScalarType &type, const std::s
 
 __device__ __inline__
 int _round2int(
-    const float value, 
+    const float value,
     const int rounding
 ){
     switch(rounding){
@@ -112,12 +112,12 @@ template<typename Dtype, typename Stype, typename Otype>
 __device__ __inline__
 int QuantizeScalar(
     const Dtype value, const Stype scale, const Otype offset,
-    const int clip_min, const int clip_max, 
+    const int clip_min, const int clip_max,
     const Rounding rounding){
-    /** 
+    /**
      * PPQ Quantization Function implementation.
      * This function convert an float value to int32
-     * 
+     *
      * Say we have a float value f, and int value i
      * This Transformation satisfies: f = clip(i / s + o)
      * Where s is scale factor, and o is offset
@@ -130,14 +130,13 @@ template<typename Dtype, typename Stype, typename Otype>
 __device__ __inline__
 float DequantizeScalar(
     const Dtype value, const Stype scale, const Otype offset){
-    /** 
+    /**
      * PPQ Quantization Function implementation.
      * This function convert an int32 value to float
-     * 
+     *
      * Say we have a float value f, and int value i
      * This Transformation satisfies: f = (i - o) * s
      * Where s is scale factor, and o is offset
      */
     return (value - offset) * scale;
 }
-

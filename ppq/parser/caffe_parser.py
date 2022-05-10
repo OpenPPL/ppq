@@ -69,5 +69,3 @@ class CaffeParser(GraphBuilder):
             raise KeyError(
                 'seems you got an input/output variable that is not linked to any operation.')
         return graph
-
-        

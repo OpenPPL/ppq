@@ -1,9 +1,6 @@
-"""
-    PPQ Core Foreign Function Interface
-    PPQ 核心编程语言接口
+"""PPQ Core Foreign Function Interface PPQ 核心编程语言接口.
 
-    You are not allowed to modify this
-    请勿修改此文件
+You are not allowed to modify this 请勿修改此文件
 """
 
 import os
@@ -34,10 +31,10 @@ except Exception as e:
 
 # helper class for calling cuda methods.
 class CUDA:
-    """
-    CUDA is a helper class for invoking highly-effcient custimized cuda kernel.
-        PPQ developer team has implemented a series of quantization related cuda kernel,
-        They are 5-100x faster than torch kernels, with less gpu memory cost.
+    """CUDA is a helper class for invoking highly-effcient custimized cuda
+    kernel. PPQ developer team has implemented a series of quantization related
+    cuda kernel, They are 5-100x faster than torch kernels, with less gpu
+    memory cost.
 
     You can easily extend your cuda kernel via this class:
         Firstly, implement your kernel within ppq/csrc/cuda, write your own .cu file and .h file.
@@ -230,7 +227,5 @@ class CUDA:
 
     @ staticmethod
     def Sync():
-        """
-        Synchronize device.
-        """
+        """Synchronize device."""
         synchronize()

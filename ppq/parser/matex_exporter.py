@@ -21,12 +21,17 @@ from .onnx_exporter import OnnxExporter
 # legacy exporter since ppq 0.6.4
 # use onnxruntime exporter instead.
 class MetaxExporter(OnnxExporter):
-    """ONNXRUNTIME int8 QDQ format exporter, no further actions should be applied to the graph because we will modify the graph
-    in-place, and the modified graph can't be executed. We remove Clip and Relu ops(fuse into computing op) here when asym quantization
-    for activation is applied, and following the official implementation, when an variable has multiple outputs, we assume the same
-    quantization scales and offset. For parameters, we pre-quantize the value and only insert DequantizeLinear op, both per-layer/per-channel
-    and asym/sym quantizations are supported for export, the exported onnx model is tested to align with PPQ monitor when CUDAExecutionProvider
-    is applied in onnxruntime-gpu >= 1.8.1, i.e., to run the model correctly if you have gpu and onnxruntime-gpu version installed
+    """ONNXRUNTIME int8 QDQ format exporter, no further actions should be
+    applied to the graph because we will modify the graph in-place, and the
+    modified graph can't be executed. We remove Clip and Relu ops(fuse into
+    computing op) here when asym quantization for activation is applied, and
+    following the official implementation, when an variable has multiple
+    outputs, we assume the same quantization scales and offset. For parameters,
+    we pre-quantize the value and only insert DequantizeLinear op, both per-
+    layer/per-channel and asym/sym quantizations are supported for export, the
+    exported onnx model is tested to align with PPQ monitor when
+    CUDAExecutionProvider is applied in onnxruntime-gpu >= 1.8.1, i.e., to run
+    the model correctly if you have gpu and onnxruntime-gpu version installed.
 
     X     W      b             X        quant(W)   quant(b)
     \     |     /               \         |          /
@@ -217,7 +222,7 @@ class MetaxExporter(OnnxExporter):
 
     def required_opsets(self) -> Dict[str, int]:
         extra_domain_versions = [
-            ("ai.onnx", 13)
+            ('ai.onnx', 13)
             ]
         return dict(extra_domain_versions)
 
@@ -275,8 +280,8 @@ class MetaxExporter(OnnxExporter):
                 configs = [var.source_op_config] + var.dest_op_configs
                 for cfg in configs:
                     if cfg is not None and not QuantizationStates.can_export(cfg.state):
-                        raise AttributeError(f"quantization state of variable {var.name} is unexpected, \
-                        please check if you have finished the whole quantization process")
+                        raise AttributeError(f'quantization state of variable {var.name} is unexpected, \
+                        please check if you have finished the whole quantization process')
                     elif cfg is not None and cfg.state not in {QuantizationStates.FP32, QuantizationStates.SOI}:
                         quantable_vars.append((cfg, var))
                         break

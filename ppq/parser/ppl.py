@@ -10,7 +10,7 @@ from .util import convert_value
 
 
 def convert_type(platform: TargetPlatform) -> str:
-    if platform == TargetPlatform.PPL_CUDA_INT8: return "INT8"
+    if platform == TargetPlatform.PPL_CUDA_INT8: return 'INT8'
     if platform == TargetPlatform.SHAPE_OR_INDEX: return None
     if platform == TargetPlatform.FP32: return None
     raise TypeError(f'Unsupported platform type. ({str(platform)})')
@@ -72,8 +72,8 @@ class PPLBackendExporter(OnnxExporter):
                 }
 
         exports = {
-            "quant_info": var_quant_info_recorder,
-            "op_info": op_platform_recorder}
+            'quant_info': var_quant_info_recorder,
+            'op_info': op_platform_recorder}
 
         with open(file=config_path, mode='w') as file:
             json.dump(exports, file, indent=4)

@@ -17,11 +17,9 @@ logger = NaiveLogger.get_logger('PPQ')
 
 
 def build_temp_graph(initializer: Dict[str, dict], nodes: List[dict], inputs: List[str]=[], outputs: List[str]=[], graph: BaseGraph=None) -> BaseGraph:
-    """
-    could either build graph from scratch or append new nodes to a existing graph,
-    if build form scratch, graph should be None, otherwise we use the given graph
-    and append nodes and variables
-    """
+    """could either build graph from scratch or append new nodes to a existing
+    graph, if build form scratch, graph should be None, otherwise we use the
+    given graph and append nodes and variables."""
     from_scratch = False
     if graph is None:
         graph = BaseGraph(name='Infer', built_from=NetworkFramework.CAFFE)
@@ -103,7 +101,7 @@ def get_input_shape(net_def: ppl_caffe_pb2.NetParameter) -> Dict[str, list]:
         for layer in input_layer:
             input_shape[layer.top[0]] = list(layer.input_param.shape.dim)
     else:
-        raise TypeError("Unsupported network input format.")
+        raise TypeError('Unsupported network input format.')
 
     for k, v in input_shape.items():
         if v is None:
@@ -304,7 +302,7 @@ class BN(CaffeOpBuilder):
     def get_attr(self):
         batchnorm = self.layer.bn_param
         if batchnorm.moving_average:
-            logger.warning("Now cannot convert BatchNorm layer with moving_average==True. Change it to False")
+            logger.warning('Now cannot convert BatchNorm layer with moving_average==True. Change it to False')
         self.settings['epsilon'] = batchnorm.var_eps
         # Because only support moving_average == False, we do not parse 'decay' in BN layer
         return self.settings
@@ -334,7 +332,7 @@ class ReLU(CaffeOpBuilder):
 @register_class
 class PReLU(CaffeOpBuilder):
     def trans(self):
-        assert len(self.layer.blobs) == 1, "PReLU lacks of slope"
+        assert len(self.layer.blobs) == 1, 'PReLU lacks of slope'
         dim_info = self.layer.blobs[0].shape.dim
         # squeeze the PReLU slope [1, 128, 1, 1] to [1, 128] if input is 2-D
         # prelu only has one input data

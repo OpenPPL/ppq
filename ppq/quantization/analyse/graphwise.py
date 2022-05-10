@@ -44,8 +44,7 @@ def graphwise_error_analyse(
     graph: BaseGraph, running_device: str,
     dataloader: Iterator, collate_fn: Callable = None, method: str = 'snr',
     steps: int = 8, verbose: bool = True, fetchs: int = 4096) -> Dict[str, float]:
-    """
-    Measure the difference from a quantized graph to its dequantized graph.
+    """Measure the difference from a quantized graph to its dequantized graph.
 
     A dictionary contains output differences for all operation will be returned as a result.
 

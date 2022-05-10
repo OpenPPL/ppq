@@ -1,6 +1,4 @@
-'''
-    This file defines all ppq test models
-'''
+"""This file defines all ppq test models."""
 
 from enum import Enum
 from typing import Callable, List
@@ -15,7 +13,7 @@ class ModelType(Enum):
     SEGMENTATION = 3 # 图像分割
     SUPERRES     = 4 # 超分辨率
     POINTCLOUD   = 5 # 三维点云
-    OCR          = 6 # OCR 
+    OCR          = 6 # OCR
     TEXT_CLASSIFY = 7 # 文本分类
     TEXT_LABELING = 8 # 文本序列标注
     GAN          = 9 # 生成对抗网络
@@ -27,8 +25,8 @@ class ModelType(Enum):
 
 class PPQTestCase():
     def __init__(self, model_builder: Callable,
-                 input_generator: Callable, model_type: ModelType, 
-                 model_name: str, running_device = 'cuda', 
+                 input_generator: Callable, model_type: ModelType,
+                 model_name: str, running_device = 'cuda',
                  deploy_platforms: List[TargetPlatform] = None) -> None:
         self.deploy_platforms = deploy_platforms
         self.model_builder    = model_builder

@@ -27,18 +27,17 @@ class HostDeviceMem(object):
         self.host = host_mem
         self.device = device_mem
     def __str__(self):
-        return "Host:\n" + str(self.host) + "\nDevice:\n" + str(self.device)
+        return 'Host:\n' + str(self.host) + '\nDevice:\n' + str(self.device)
     def __repr__(self):
         return self.__str__()
 
 
 class TensorRTEngine():
-    """
-        TensorRT Engine is a helper class for tensorRT engine inference.
-        it wraps tensorRT Engine as a normal torch module.
+    """TensorRT Engine is a helper class for tensorRT engine inference. it
+    wraps tensorRT Engine as a normal torch module.
 
-        ATTENTION: you can not use this class together with other pytorch function.
-            it will cause some unexpected CUDNN errors.
+    ATTENTION: you can not use this class together with other pytorch function.
+        it will cause some unexpected CUDNN errors.
     """
     def __init__(self, engine_path: str) -> None:
         self._runtime = trt.Runtime(TRT_LOGGER)
@@ -76,9 +75,8 @@ class TensorRTEngine():
 
     def inference(self, inputs: List[HostDeviceMem], bindings: List[int],
         outputs: List[HostDeviceMem], context) -> List[numpy.ndarray]:
-        """
-        Inputs and outputs are expected to be lists of HostDeviceMem objects.
-        """
+        """Inputs and outputs are expected to be lists of HostDeviceMem
+        objects."""
         # Transfer input data to the GPU.
         [cuda.memcpy_htod_async(inp.device, inp.host, self._cuda_stream) for inp in inputs]
         # Run inference.

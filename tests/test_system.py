@@ -31,4 +31,3 @@ for scheme in TEST_SCHEMES:
         except NotImplementedError as e:
             print(f'{time.strftime("%Y-%m-%d %H:%M:%S")} | Error occurred: {e}')
             sys.exit(1)
-

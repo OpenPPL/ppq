@@ -42,7 +42,7 @@ class QuantableOperation(Operation):
 
     @ config.setter
     def set_config(self, config):
-        """ we will update variable's during this function
+        """we will update variable's during this function.
 
         Args:
             config ([type]): [description]
@@ -124,9 +124,8 @@ class QuantableOperation(Operation):
 
     @ property
     def config_with_variable(self) -> List[Tuple[TensorQuantizationConfig, Variable]]:
-        """
-        Just a helper function,
-            This function will list all related config and variable with current operation.
+        """Just a helper function, This function will list all related config
+        and variable with current operation.
 
         Returns:
             List[Tuple[TensorQuantizationConfig, Variable]]: [description]
@@ -193,10 +192,8 @@ class QuantableVariable(Variable):
 
 
 class DeviceSwitchOP(Operation):
-    """
-    DeviceSwitch is a PPQ internal operation.
-        This operation is inserted at platfrom's boundary
-        for transferring data between devices.
+    """DeviceSwitch is a PPQ internal operation. This operation is inserted at
+    platfrom's boundary for transferring data between devices.
 
     Args:
         Operation ([type]): [description]
@@ -273,17 +270,13 @@ class QuantableGraph(GraphCommandProcessor):
         else: return operation.dequantize()
 
     def dequantize_graph(self):
-        """
-            一个方便懒人的函数
-        """
+        """一个方便懒人的函数."""
         for operation in self.graph.operations.values():
             if isinstance(operation, QuantableOperation):
                 operation.dequantize()
 
     def restore_quantize_state(self):
-        """
-            一个方便懒人的函数
-        """
+        """一个方便懒人的函数."""
         for operation in self.graph.operations.values():
             if isinstance(operation, QuantableOperation):
                 operation.restore_quantize_state()

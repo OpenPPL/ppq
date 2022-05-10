@@ -221,8 +221,7 @@ class Operation(OperationBase, Serializable):
 
 
 class BaseGraph(Serializable):
-    """
-    Graph is a PPQ Internal Represtation Data Structure.
+    """Graph is a PPQ Internal Represtation Data Structure.
 
     A computational graph is a directed graph where the nodes correspond to operations or variables.
     Variables can feed their value into operations, and operations can feed their output into other operations.
@@ -390,9 +389,8 @@ class BaseGraph(Serializable):
             )
 
     def insert_op_on_var(self, inserting_op: Operation, var: str):
-        """
-        Insert one operation to current graph.
-            Inserting operation will replace var.dest_ops and automatically connect to inserting_op.
+        """Insert one operation to current graph. Inserting operation will
+        replace var.dest_ops and automatically connect to inserting_op.
 
         Before insertion:
             op1 -> var -> op2
@@ -439,9 +437,8 @@ class BaseGraph(Serializable):
             self.outputs[link_var.name] = link_var
 
     def insert_op_between_ops(self, inserting_op: Operation, up_op: Operation, down_op: Operation):
-        """
-        Insert one operation to current graph.
-            Inserting operation will just between up_op and down_op.
+        """Insert one operation to current graph. Inserting operation will just
+        between up_op and down_op.
 
         Example1(Insert Conv3 between Conv1 and Conv2):
             Before insertion: Conv1 -- Conv2
@@ -499,9 +496,8 @@ class BaseGraph(Serializable):
         down_op.inputs[down_op.inputs.index(variable)] = link_var
 
     def insert_op_between_var_and_op(self, inserting_op: Operation, up_var: Variable, down_op: Operation):
-        """
-        Insert one operation to current graph.
-            Inserting operation will just between up_var and down_op.
+        """Insert one operation to current graph. Inserting operation will just
+        between up_var and down_op.
 
         ATTENTION: Inserting operation must be an empty operation with no input and output variables linked to it.
 
@@ -543,10 +539,10 @@ class BaseGraph(Serializable):
         down_op.inputs[down_op.inputs.index(up_var)] = link_var
 
     def create_link_with_op(self, variable: Variable, upstream_op: Operation, downstream_op: Operation):
-        """
-        Create a link with given variable from upstream_op to downstream_op
-            variable will be appended to upstream_op's output and downstream_op's input
-        given variable must have empty source_op or its source_op == upstream_op
+        """Create a link with given variable from upstream_op to downstream_op
+        variable will be appended to upstream_op's output and downstream_op's
+        input given variable must have empty source_op or its source_op ==
+        upstream_op.
 
         Sometime you may want to link a single upstream_op to many downstream_ops with a same variable,
             you are supposed to invoke this function for each downstream_op then.
@@ -589,9 +585,9 @@ class BaseGraph(Serializable):
                           f'however Variable {variable.name} has already linked with downstream op {downstream_op.name}')
 
     def create_link_with_var(self, upstream_variable: Variable, downstream_variable: Variable):
-        """
-        connect upstream_variable.source_op with downstream_variable.dest_ops,
-            downstream variable will be eliminated by this function.
+        """connect upstream_variable.source_op with
+        downstream_variable.dest_ops, downstream variable will be eliminated by
+        this function.
 
         downstream_variable must have None as its source_op.
 
@@ -613,9 +609,9 @@ class BaseGraph(Serializable):
         return self
 
     def remove_operation(self, removing_op: Operation):
-        """
-        Remove operation from graph, this function will unlink removing operation from
-            current graph, pop it from graph.operations, and remove it from all its input and output variables.
+        """Remove operation from graph, this function will unlink removing
+        operation from current graph, pop it from graph.operations, and remove
+        it from all its input and output variables.
 
         Parameters of this removing operations will be removed from graph by this function, without warning.
 
@@ -649,9 +645,9 @@ class BaseGraph(Serializable):
         return self
 
     def remove_variable(self, removing_var: Variable):
-        """
-        Remove variable from graph, this function will unlink removing variable from
-            current graph, pop it from graph.variables, and remove it from its source op and dest ops
+        """Remove variable from graph, this function will unlink removing
+        variable from current graph, pop it from graph.variables, and remove it
+        from its source op and dest ops.
 
         Args:
             removing_var (Variable): [description]
@@ -688,10 +684,10 @@ class BaseGraph(Serializable):
     def create_operation(self, op_type: str,  name: str = None,
         attributes: Dict[str, Any] = None, platform: TargetPlatform = TargetPlatform.UNSPECIFIED,
         inputs: List[Variable] = None, outputs: List[Variable] = None, **kwargs) -> Operation:
-        """
-        Create an operation and attach it it current graph.
-        op_type is mandatory here, however op_name is not required.
-        PPQ will automatically generates a name for your operation: PPQ_Operation_{self._num_of_generated_op}.
+        """Create an operation and attach it it current graph. op_type is
+        mandatory here, however op_name is not required. PPQ will automatically
+        generates a name for your operation:
+        PPQ_Operation_{self._num_of_generated_op}.
 
         Use this function carefully, cause once your network is quantized,
             simply create an operation via this function might cause unexpected error.
@@ -730,9 +726,9 @@ class BaseGraph(Serializable):
 
     def create_variable(self, name: str = None, value: Any = None, is_parameter: bool = False,
         dest_ops: List[OperationBase] = None, source_op: OperationBase = None, **kwargs) -> Variable:
-        """
-        Create a variable and attach it it current graph.
-        PPQ will automatically generates a name for your variable: PPQ_Variable_{self._num_of_generated_op}.
+        """Create a variable and attach it it current graph. PPQ will
+        automatically generates a name for your variable:
+        PPQ_Variable_{self._num_of_generated_op}.
 
         Use this function carefully, cause once your network is quantized,
             simply create an variable via this function might cause unexpected error.
@@ -794,8 +790,7 @@ class BaseGraph(Serializable):
         return state
 
     def copy(self):
-        """
-        Clone this graph. Here a shallow copy will be returned as result.
+        """Clone this graph. Here a shallow copy will be returned as result.
 
         Shallow Copy: Shallow repetition is quicker.
         However, it’s “lazy” it handles pointers and references.

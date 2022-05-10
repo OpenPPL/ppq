@@ -39,9 +39,8 @@ class TensorRTExporter(ONNXRUNTIMExporter):
     def insert_quant_dequant_on_variable(
         self, graph: BaseGraph, var: QuantableVariable, op: QuantableOperation,
         config: TensorQuantizationConfig) -> None:
-        """
-        Insert Quant & Dequant Operation to graph
-        This insertion will strictly follows tensorRT format requirement.
+        """Insert Quant & Dequant Operation to graph This insertion will
+        strictly follows tensorRT format requirement.
 
         Inserted Quant & Dequant op will just between upstream variable and downstream operation,
 
@@ -58,7 +57,6 @@ class TensorRTExporter(ONNXRUNTIMExporter):
             var (Variable): upstream variable.
             config (TensorQuantizationConfig, optional): quantization config.
             op (Operation, optional): downstream operation.
-
         """
         meta = var.meta
 
@@ -99,10 +97,10 @@ class TensorRTExporter(ONNXRUNTIMExporter):
         dq_op.meta_data = dq_meta
 
     def prepare_graph(self, graph: BaseGraph) -> BaseGraph:
-        """
-        TensorRT Demands a custimized QAT model format as it input.
-            With this particular format, we only need export input quant config from ppq, and only a
-            part of operations is required  to dump its quant config.
+        """TensorRT Demands a custimized QAT model format as it input. With
+        this particular format, we only need export input quant config from
+        ppq, and only a part of operations is required  to dump its quant
+        config.
 
         Which are:
             _DEFAULT_QUANT_MAP = [_quant_entry(torch.nn, "Conv1d", quant_nn.QuantConv1d),
@@ -209,10 +207,10 @@ class TensorRTExporter(ONNXRUNTIMExporter):
 
                     if not shapes:
                         shapes = [(1, ) * inp.shape[0]] * 3
-                        print("Setting shape input to {:}. "
-                              "If this is incorrect, for shape input: {:}, "
-                              "please provide tuples for min, opt, "
-                              "and max shapes".format(shapes[0], inp.name))
+                        print('Setting shape input to {:}. '
+                              'If this is incorrect, for shape input: {:}, '
+                              'please provide tuples for min, opt, '
+                              'and max shapes'.format(shapes[0], inp.name))
 
                     if not isinstance(shapes, list) or len(shapes) != 3:
                         raise ValueError(f'Profiling shape must be a list with exactly 3 shapes(tuples of int), '
@@ -240,5 +238,5 @@ class TensorRTExporter(ONNXRUNTIMExporter):
         # end with
 
         engine_file = file_path.replace('.onnx', '.engine')
-        with open(engine_file, "wb") as file:
+        with open(engine_file, 'wb') as file:
             file.write(trt_engine.serialize())

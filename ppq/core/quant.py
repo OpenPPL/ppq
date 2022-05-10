@@ -1,9 +1,6 @@
-"""
-    PPQ Core Data Structure Abstraction
-    PPQ 核心量化结构抽象
+"""PPQ Core Data Structure Abstraction PPQ 核心量化结构抽象.
 
-    You are not allowed to modify this
-    请勿修改此文件
+You are not allowed to modify this 请勿修改此文件
 """
 
 import time  # for hash generation
@@ -25,11 +22,10 @@ class NetworkFramework(Enum):
 
 
 class TargetPlatform(Enum):
-    """
-    TargetPlatform is a core abstraction of PPQ framework,
-        it defines "platform" as an attribute of an operation.
-    Platform attribute of an operation indicates where this operation is going to be deployed.
-    This feature enables PPQ to simulate inter-device computing.
+    """TargetPlatform is a core abstraction of PPQ framework, it defines
+    "platform" as an attribute of an operation. Platform attribute of an
+    operation indicates where this operation is going to be deployed. This
+    feature enables PPQ to simulate inter-device computing.
 
     Platform attribute also tells PPQ how to quantize an operation, and how to execute it.
         ATTENTION: Different platform might bring different behaviour of a same operation.
@@ -105,9 +101,8 @@ class TargetPlatform(Enum):
 
 
 class RoundingPolicy(Enum):
-    """
-    RoundingPolicy is a core setting for PPQ quantization calculation.
-        It defines rounding behaviour inside quantization calculation.
+    """RoundingPolicy is a core setting for PPQ quantization calculation. It
+    defines rounding behaviour inside quantization calculation.
 
     Formula: quant(x) = clip(round(x / scale, RoundingPolicy), -128, 127)
 
@@ -128,9 +123,9 @@ class RoundingPolicy(Enum):
 
 
 class QuantizationProperty(Enum):
-    """
-    QuantizationProperty is a core abstraction for PPQ quantization calculation.
-    QuantizationProperty and QuantizationPolicy together build a bitmap to describe quantization policy.
+    """QuantizationProperty is a core abstraction for PPQ quantization
+    calculation. QuantizationProperty and QuantizationPolicy together build a
+    bitmap to describe quantization policy.
 
     A QuantizationPolicy instance contains multiple QuantizationProperty,
         QuantizationPolicy is used in PPQ (alone with other configuration) to describe how a tensor is quantized.
@@ -193,9 +188,9 @@ class QuantizationProperty(Enum):
 
 
 class QuantizationPolicy:
-    """
-    QuantizationPolicy is a core abstraction for PPQ quantization calculation.
-    QuantizationProperty and QuantizationPolicy together build a bitmap to describe quantization policy.
+    """QuantizationPolicy is a core abstraction for PPQ quantization
+    calculation. QuantizationProperty and QuantizationPolicy together build a
+    bitmap to describe quantization policy.
 
     A QuantizationPolicy instance contains multiple QuantizationProperty,
         QuantizationPolicy is used in PPQ (alone with other configuration) to describe how a tensor is quantized.
@@ -253,9 +248,9 @@ class QuantizationPolicy:
         }
 
     def to_dict(self) -> dict:
-        """
-        return a dictionary to describe this policy.
-            nothing funny.
+        """return a dictionary to describe this policy.
+
+        nothing funny.
         """
         return {
             property.name: self.has_property(property)
@@ -264,8 +259,7 @@ class QuantizationPolicy:
 
 
 class QuantizationStates(Enum):
-    """
-    QuantizationStates is a core data structure for PPQ quantization.
+    """QuantizationStates is a core data structure for PPQ quantization.
     QuantizationStates tells whether a quantization configuration is activated.
 
     ATTENTION: Changes of QuantizationState will greatly affect execution result.
@@ -335,9 +329,8 @@ class QuantizationStates(Enum):
 
 
 class TensorQuantizationConfig(Serializable):
-    """
-    TensorQuantizationConfig, as known as tensor quantization configuration, is the most
-        important data structure in PPQ system.
+    """TensorQuantizationConfig, as known as tensor quantization configuration,
+    is the most important data structure in PPQ system.
 
     PPQ generates quantization configuration for all tensors that need to be quantized, and control their
         quantization logic via this abstraction. As a basic building block of PPQ quantization system, tensor
@@ -372,8 +365,7 @@ class TensorQuantizationConfig(Serializable):
         inplace: bool = False,
         state: QuantizationStates = QuantizationStates.INITIAL
     ):
-        """
-        Create a PPQ Tensor Quantization Configuration Instance
+        """Create a PPQ Tensor Quantization Configuration Instance.
 
         Args:
             policy (QuantizationPolicy):
@@ -449,9 +441,9 @@ class TensorQuantizationConfig(Serializable):
 
     @ property
     def dominated_by(self):
-        """
-        dominated_by is a crucial feature for tensor quantization configuration in PPQ.
-        This property is actually maintained by union-find set data structure.
+        """dominated_by is a crucial feature for tensor quantization
+        configuration in PPQ. This property is actually maintained by union-
+        find set data structure.
 
         Every tensor quantization configuration(A) is created with dominated_by = self, and only when
             it is overlapped by other configuration(B), it shall set A.dominated_by = B.
@@ -630,9 +622,10 @@ class TensorQuantizationConfig(Serializable):
             self._quant_max = max
 
     def copy(self):
-        """
-            Create a tensor config from this one, keep policy and state unchanged.
-            if there is an non-empty scale and offset, they will be cloned too.
+        """Create a tensor config from this one, keep policy and state
+        unchanged.
+
+        if there is an non-empty scale and offset, they will be cloned too.
         """
         scale, offset = None, None
         if self.scale is not None:
@@ -661,8 +654,8 @@ class TensorQuantizationConfig(Serializable):
 
 
 class ChannelwiseTensorQuantizationConfig(TensorQuantizationConfig):
-    """
-    ChannelwiseTensorQuantizationConfig is a special case for tensor quantization configuration.
+    """ChannelwiseTensorQuantizationConfig is a special case for tensor
+    quantization configuration.
 
     Comparing with per-tensor quantization configuration, pre-channel quantization has a property
         "channel_axis" to indicate a channel axis where quantization takes effects.
@@ -719,8 +712,8 @@ class ChannelwiseTensorQuantizationConfig(TensorQuantizationConfig):
 
 
 class OperationQuantizationConfig(Iterable):
-    """
-    OperationQuantizationConfig serves as a collection of tensor quantization configuration.
+    """OperationQuantizationConfig serves as a collection of tensor
+    quantization configuration.
 
     See TensorQuantizationConfig for more information.
     """
@@ -730,8 +723,7 @@ class OperationQuantizationConfig(Iterable):
         output_quantization_configs: List[TensorQuantizationConfig] = None,
         is_positive_quant_op: bool = True
     ):
-        """
-        Create an operation quantization configuration.
+        """Create an operation quantization configuration.
 
         Args:
             input_quantization_configs (List[TensorQuantizationConfig], optional):
@@ -771,9 +763,10 @@ class OperationQuantizationConfig(Iterable):
         return (self.input_quantization_config + self.output_quantization_config).__iter__()
 
     def copy(self):
-        """
-            Create an operation config from this one, keep policy and state unchanged.
-            if this one has an non-empty scale or offset, they will be cloned too.
+        """Create an operation config from this one, keep policy and state
+        unchanged.
+
+        if this one has an non-empty scale or offset, they will be cloned too.
         """
         return OperationQuantizationConfig(
             input_quantization_configs=[_.copy() for _ in self.input_quantization_config],

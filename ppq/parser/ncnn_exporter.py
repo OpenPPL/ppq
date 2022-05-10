@@ -42,7 +42,7 @@ class NCNNExporter(GraphExporter):
                 fd.write('%f '% scale)
                 fd.write('\n')
         fd.close()
-    
+
     def export(self, file_path: str, graph: BaseGraph, config_path: str = None, input_shapes: List[List[int]] = [[1, 3, 224, 224]]):
         if config_path is not None:
             self.export_quantization_config(config_path, graph)

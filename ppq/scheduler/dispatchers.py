@@ -9,9 +9,8 @@ from .base import (GraphDispatcher, SOI_generators, SOI_receivers,
 
 
 class AggresiveDispatcher(GraphDispatcher):
-    """
-    Graph Dispatcher cuts a graph into parts, each part of graph will dispatch to a specific platform
-        for further execution and quantization.
+    """Graph Dispatcher cuts a graph into parts, each part of graph will
+    dispatch to a specific platform for further execution and quantization.
 
     For the most part, all operations within graph can be partitioned into quantable operations,
         Shape-Or-Index related operations and remaining operations, all sub classes of GraphDispatcher will
@@ -33,9 +32,8 @@ class AggresiveDispatcher(GraphDispatcher):
         SOI_platform: TargetPlatform,
         **kwargs
         ) -> Dict[str, TargetPlatform]:
-        """
-        Graph Dispatcher splits a graph into parts, each part of graph will be sent to a specific platform
-            for further execution and quantization.
+        """Graph Dispatcher splits a graph into parts, each part of graph will
+        be sent to a specific platform for further execution and quantization.
 
         There are 3 default platform during dispatching:
             quant_platform - all quantable parts of graph will be dispatched to this platform
@@ -128,9 +126,8 @@ class AggresiveDispatcher(GraphDispatcher):
 
 
 class ConservativeDispatcher(GraphDispatcher):
-    """
-    Graph Dispatcher cuts a graph into parts, each part of graph will dispatch to a specific platform
-        for further execution and quantization.
+    """Graph Dispatcher cuts a graph into parts, each part of graph will
+    dispatch to a specific platform for further execution and quantization.
 
     For the most part, all operations within graph can be partitioned into quantable operations,
         Shape-Or-Index related operations and remaining operations, all sub classes of GraphDispatcher will
@@ -154,9 +151,8 @@ class ConservativeDispatcher(GraphDispatcher):
         fp32_platform: TargetPlatform,
         SOI_platform: TargetPlatform, **kwargs
         ) -> Dict[str, TargetPlatform]:
-        """
-        Graph Dispatcher splits a graph into parts, each part of graph will be sent to a specific platform
-            for further execution and quantization.
+        """Graph Dispatcher splits a graph into parts, each part of graph will
+        be sent to a specific platform for further execution and quantization.
 
         There are 3 default platform during dispatching:
             quant_platform - all quantable parts of graph will be dispatched to this platform
@@ -267,9 +263,8 @@ class ConservativeDispatcher(GraphDispatcher):
 
 
 class PPLNNDispatcher(GraphDispatcher):
-    """
-    Graph Dispatcher cuts a graph into parts, each part of graph will dispatch to a specific platform
-        for further execution and quantization.
+    """Graph Dispatcher cuts a graph into parts, each part of graph will
+    dispatch to a specific platform for further execution and quantization.
 
     For the most part, all operations within graph can be partitioned into quantable operations,
         Shape-Or-Index related operations and remaining operations, all sub classes of GraphDispatcher will
@@ -293,9 +288,8 @@ class PPLNNDispatcher(GraphDispatcher):
         fp32_platform: TargetPlatform,
         SOI_platform: TargetPlatform, **kwargs
         ) -> Dict[str, TargetPlatform]:
-        """
-        Graph Dispatcher splits a graph into parts, each part of graph will be sent to a specific platform
-            for further execution and quantization.
+        """Graph Dispatcher splits a graph into parts, each part of graph will
+        be sent to a specific platform for further execution and quantization.
 
         There are 3 default platform during dispatching:
             quant_platform - all quantable parts of graph will be dispatched to this platform

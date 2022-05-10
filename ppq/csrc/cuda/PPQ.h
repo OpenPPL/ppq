@@ -12,8 +12,8 @@
     PPQ Supports 7 different rounding policies now.
     Take a look at https://en.wikipedia.org/wiki/Rounding
 
-    ATTENTION: RoundingPolicy greatly affects PPQ executor behaviour in some cases, 
-        to get a correct result from PPQ executor, 
+    ATTENTION: RoundingPolicy greatly affects PPQ executor behaviour in some cases,
+        to get a correct result from PPQ executor,
         make sure your RoundingPolicy is the same as your hardware.
     */
     # define PPQ_ROUND_HALF_EVEN     0
@@ -45,14 +45,14 @@
         Those parameters will have a PASSIVE_INIT state when created.
 
         ATTENTION: if there is any quantization configuration with INITIAL or PASSIVE_INIT state, PPQ will refuse
-            to deploy your model and an error will be thrown. 
+            to deploy your model and an error will be thrown.
             This inspection will be ignored when PPQ.core.config.DEBUG set as True.
-        
+
         OVERLAPPED: state OVERLAPPED means there is someone else takes control of current tensor,
         and overlapped tensor quantization configuration will be ignored by optimization algorithms and executor.
-        
+
         Graph fusion always generate overlapped quantization, for a typical conv - relu fusion,
-        the output quantization of convolution will be overlapped by the output tensor of relu. 
+        the output quantization of convolution will be overlapped by the output tensor of relu.
         State OVERLAPPED cares only about quantization behaviour that cross layers.
 
         DEACTIVATED: state DEACTIVATED is related with "dequantize" function, once an operation is dequantized,
@@ -67,8 +67,8 @@
 
         PASSIVE: means corresponding tensor is ready to be quantized with its configuration.
             (however its configuration is not stand alone, it still depends on someone else.)
-        
-        BAKED: means corresponding tensor has been pre-quantized, its value can directly 
+
+        BAKED: means corresponding tensor has been pre-quantized, its value can directly
             go forward without quantization.
     */
     # define PPQ_STATE_INITIAL       1   // 量化参数刚刚被初始化，当前 config 不生效，数据不能被使用
@@ -87,15 +87,15 @@
 
     A QuantizationPolicy instance contains multiple QuantizationProperty,
         QuantizationPolicy is used in PPQ (alone with other configuration) to describe how a tensor is quantized.
-    
+
     During simulating, executor will quantize tensor corresponding to its QuantizationPolicy.
         (QuantizationPolicy is included by TensorQuantizationConfig)
 
     There are 7 different quantization property(s) supported by PPQ now.
-    
+
         PER_TENSOR: Also known as per-layer quantization, which mean all parameters of this layer share the same scale and offset.
             (For Convulution layer and Gemm layer which has bias, bias layer will be negative quantized, they do not have a valid scale)
-        
+
         PER_CHANNEL: parameters are quantized alone channel axis, each channel has a stand-alone scale and offset.
 
         LINEAR: Indicates a linear quantization, follow formula: quant(x) = clip(round(x / scale))
@@ -109,10 +109,10 @@
         POWER_OF_2: Indicates a power-of-2 quantization, scale must be pow(2, k) in this mode.
 
     ATTENTION: Not all combinations of all 7 QuantizationProperty are valid, see QuantizationPolicy.__check_valid
-    ATTENTION: QuantizationPolicy is read-only, user can only assign its value when created, the only interface of 
+    ATTENTION: QuantizationPolicy is read-only, user can only assign its value when created, the only interface of
         QuantizationPolicy is function QuantizationPolicy.has_property.
     */
-    # define PPQ_QPROPERTY_PER_TENSOR   0x00000001 
+    # define PPQ_QPROPERTY_PER_TENSOR   0x00000001
     # define PPQ_QPROPERTY_PER_CHANNEL  0x00000002
     # define PPQ_QPROPERTY_LINEAR       0x00000004
     # define PPQ_QPROPERTY_EXPONENTIAL  0x00000008
@@ -129,8 +129,8 @@ class TensorQuantConfig {
     /*
     TensorQuantizationConfig, as known as tensor quantization configuration, is the most
         important data structure in PPQ system.
-    
-    PPQ generates quantization configuration for all tensors that need to be quantized, and control their 
+
+    PPQ generates quantization configuration for all tensors that need to be quantized, and control their
         quantization logic via this abstraction. As a basic building block of PPQ quantization system, tensor
         quantization is designed to store and manage all quantization related information like:
 
@@ -139,14 +139,14 @@ class TensorQuantConfig {
     ATTENTION: tensor(or variable in PPQ) might have more than one quantization configuration, since
         PPQ is designed as an operation-oriented quantization system, so to say tensor quantization configurations
         are created operation by operation. Considering a pattern conv - conv, both the upstream convolution layer
-        and the downstream convolution layer will hold a tensor quantization configuration of the middle variable. 
+        and the downstream convolution layer will hold a tensor quantization configuration of the middle variable.
         Duplicated quantization configuration will be disabled by optimization pass later.
 
     PPQ is designed as an operation-oriented quantization system, literally all tensor quantization configurations
         are managed by operations, through you can access their image by variable instance.
         (see the defination of PPQ.IR.quant.QuantableVariable for more information)
 
-    You are supposed to change tensor quantization configuration during optimization passes, this abstraction 
+    You are supposed to change tensor quantization configuration during optimization passes, this abstraction
         is widely tested among various platforms, it shall satisfy most of your quantization demands.
     */
 public:
@@ -166,41 +166,41 @@ public:
     TensorQuantConfig(const TensorQuantConfig &obj) = delete;
     TensorQuantConfig& operator=(const TensorQuantConfig& obj) = delete;
     TensorQuantConfig(
-        const int state, const int policy, const int num_of_bits, 
-        const int quant_min, const int quant_max, 
-        const int rounding, const int channel_axis, 
+        const int state, const int policy, const int num_of_bits,
+        const int quant_min, const int quant_max,
+        const int rounding, const int channel_axis,
         const Dtype *scale, const int *offset);
     /*
         Create a PPQ Tensor Quantization Configuration Instance
 
         Args:
-            policy (QuantizationPolicy): 
+            policy (QuantizationPolicy):
                 Quantization policy instance which defines the quantization behaviour from marco view.
-            
-            rounding (RoundingPolicy): Rounding policy used in quantization. 
-            
+
+            rounding (RoundingPolicy): Rounding policy used in quantization.
+
             num_of_bits (int): Quantization bits. (2 < num_of_bits < 32)
-            
+
             quant_min (int): An integer value represents the upper bound(inclusive) of quantized value.
-            
+
             quant_max (int): An integer value represents the lower bound(inclusive) of quantized value.
-            
-            scale (Any): 
+
+            scale (Any):
                 Scale of quantized value, for per-tensor quantization policy, we use a single float as its scale,
                 while for per-channel quantization policy, it will be an array that contains scales for each channel.
-            
-            offset (Any): Quantization offset for ASYMMETRICAL quantization policy, 
+
+            offset (Any): Quantization offset for ASYMMETRICAL quantization policy,
                 it will be set as 0 in SYMMETRICAL quantization schema.
-            
+
             observer_algorithm (str): A string represents an observing algorithm for this tensor.
                 PPQ support 'kl', 'minmax' observer now.
-            
-            detail (Any, optional): Only used by PPQ internal logic, detail is used to store some internal data, 
+
+            detail (Any, optional): Only used by PPQ internal logic, detail is used to store some internal data,
                 you are not supposed to use it.
-            
+
             inplace (bool, optional): Indicates whether quantization is taken inplace(rewrite tensor value).
 
-            state (QuantizationStates, optional): 
+            state (QuantizationStates, optional):
                 Defaults to QuantizationStates.INITIAL, see QuantizationStates for more detail.
     */
 
@@ -220,7 +220,7 @@ public:
     OperatorQuantConfig(const OperatorQuantConfig &obj) = delete;
     OperatorQuantConfig& operator=(const OperatorQuantConfig& obj) = delete;
     OperatorQuantConfig(
-        std::vector<TensorQuantConfig<ScaleType>> input_configs, 
+        std::vector<TensorQuantConfig<ScaleType>> input_configs,
         std::vector<TensorQuantConfig<ScaleType>> output_configs);
 
     /* TensorQuantConfig 内存由 PPQ 管理，不要释放其管理的内存 */

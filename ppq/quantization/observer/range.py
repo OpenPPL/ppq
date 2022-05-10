@@ -20,7 +20,7 @@ if USING_CUDA_KERNEL: from ppq.core import CUDA
 
 @ ppq_quant_param_computing_function
 def minmax_to_scale_offset(
-    min_val: float, max_val: float, 
+    min_val: float, max_val: float,
     config: TensorQuantizationConfig,
     scale_threshold: float=OBSERVER_MIN_SCALE
 ) -> Tuple[float, float]:
@@ -107,7 +107,7 @@ class TorchMinMaxObserver(BaseTensorObserver):
 
 
 class TorchHistObserver(TorchMinMaxObserver):
-    def __init__(self, watch_on: Variable, quant_cfg: TensorQuantizationConfig, 
+    def __init__(self, watch_on: Variable, quant_cfg: TensorQuantizationConfig,
                  hist_bins: int = OBSERVER_KL_HIST_BINS):
         self._phase = 'Detecting Minmax'
         self._hist  = None
@@ -122,12 +122,12 @@ class TorchHistObserver(TorchMinMaxObserver):
         elif self._phase == 'Collating Hist':
             if self._hist is None:
                 self._hist = torch.zeros(size=(self._hist_bins,), dtype=torch.int32, device=value.device)
-            if USING_CUDA_KERNEL and value.is_cuda: 
+            if USING_CUDA_KERNEL and value.is_cuda:
                 CUDA.Histogram_T(tensor=value, histogram=self._hist, scale=self._hist_scale)
-            else: 
+            else:
                 hist = torch.histc(torch.abs(value), self._hist_bins, min=0, max=self._hist_scale * self._hist_bins)
                 self._hist += hist.int()
-    
+
     @ ppq_quant_param_computing_function
     def hist_to_scale_offset(
         self, histogram: torch.Tensor, hist_bins: int, hist_scale: float,
@@ -143,7 +143,7 @@ class TorchHistObserver(TorchMinMaxObserver):
 
         only work for per-tensor symmetrical quantization policy for now.
         see also https://on-demand.gputechconf.com/gtc/2017/presentation/s7310-8-bit-inference-with-tensorrt.pdf
-        
+
         Args:
             histogram (torch.Tensor): histogram records activation's statistics.
             hist_bins (int): how many bins are included in histogram(also known as histogram length)
@@ -171,9 +171,9 @@ class TorchHistObserver(TorchMinMaxObserver):
         # now we should normalize both distributions, after that we can compute KL_divergence
         # P /= sum(P) Q /= sum(Q)
         # result = KL_divergence(P, Q)
-        # see also 
+        # see also
         # https://github.com/NVIDIA/TensorRT/blob/3835424af081db4dc8cfa3ff3c9f4a8b89844421/tools/pytorch-quantization/pytorch_quantization/calib/histogram.py#L147
- 
+
         losses, quant_bins = [], 2 ** (config.num_of_bits - 1)
 
         # following code is curcial, do not move
@@ -228,7 +228,7 @@ class TorchHistObserver(TorchMinMaxObserver):
             self._phase = 'Collating Hist'
         elif self._phase == 'Collating Hist':
             scale, offset = self.hist_to_scale_offset(
-                histogram=self._hist, hist_bins=self._hist_bins, 
+                histogram=self._hist, hist_bins=self._hist_bins,
                 hist_scale=self._hist_scale, config=self._quant_cfg)
             device = self._hist.device
             self._quant_cfg.scale  = torch.tensor([scale], dtype=torch.float32, device=device).squeeze(0)
@@ -284,7 +284,7 @@ class TorchPercentileObserver(BaseTensorObserver):
                 min_val = self._percentile_collector[1].item(),
                 max_val = self._percentile_collector[0].item(),
                 config=self._quant_cfg)
-            
+
             self._quant_cfg.scale  = torch.tensor([scale], dtype=torch.float32, device=device).squeeze(0)
             self._quant_cfg.offset = torch.tensor([offset], dtype=torch.float32, device=device).squeeze(0)
             self._quant_cfg.state = QuantizationStates.ACTIVATED
@@ -297,10 +297,10 @@ class TorchPercentileObserver(BaseTensorObserver):
 
             min_vals = torch.mean(torch.cat(self._percentile_mins, dim=-1), dim=-1, keepdim=False)
             max_vals = torch.mean(torch.cat(self._percentile_maxs, dim=-1), dim=-1, keepdim=False)
-            
+
             min_vals = min_vals.cpu()
             max_vals = max_vals.cpu()
-            
+
             assert(len(min_vals) == len(max_vals)), 'Min values and max values should at same length.'
             scales, offsets = [], []
             for min_val, max_val in zip(min_vals, max_vals):
@@ -317,18 +317,17 @@ class TorchPercentileObserver(BaseTensorObserver):
 
 
 class TorchMSEObserver(TorchHistObserver):
-    """
-    Histogram accelerated MSE Observer, inspired by LightGBM
-        This observer will collect data in histogram firstly, all mse computing will directly use
-        histogram rather than data itself.
-        
+    """Histogram accelerated MSE Observer, inspired by LightGBM This observer
+    will collect data in histogram firstly, all mse computing will directly use
+    histogram rather than data itself.
+
         Time complexity: O(Iteration * Num_of_Batch * Length(Data)) -> O(Iteration * Length(histogram))
         Space complexity: O(Num_of_Batch * Length(Data)) -> O(Iteration * Length(histogram))
 
     Args:
         TorchHistObserver ([type]): [description]
     """
-    def __init__(self, watch_on: Variable, quant_cfg: TensorQuantizationConfig, 
+    def __init__(self, watch_on: Variable, quant_cfg: TensorQuantizationConfig,
                  bins: int = OBSERVER_MSE_HIST_BINS):
         super().__init__(watch_on, quant_cfg)
         self._hist_bins = bins
@@ -345,11 +344,11 @@ class TorchMSEObserver(TorchHistObserver):
 
         if config.policy.has_property(QuantizationProperty.ASYMMETRICAL):
             raise PermissionError('Torch Mse observer do not support ASYMMETRICAL policy now, please wait.')
-        
+
         if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
             raise PermissionError('Torch Mse observer do not support PER_CHANNEL policy now, please wait.')
-        
-        if (config.policy.has_property(QuantizationProperty.SYMMETRICAL) and 
+
+        if (config.policy.has_property(QuantizationProperty.SYMMETRICAL) and
             config.policy.has_property(QuantizationProperty.PER_TENSOR)):
             scale = 1 # hist scale
             cover = scale * 2 ** (config.num_of_bits - 1)

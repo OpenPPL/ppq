@@ -3,7 +3,7 @@ This tutorial illustrates how you could quantize a model using high level API pr
 
 ## Preparation Work
 Before everything gets started, you need to prepare your model(usually in onnx format or caffe format, if you are using models in other format, you need to convert them to onnx/caffe first) and the corresponding calibration dataset. Note that the
-calibration dataset is commonly composed of a small subset(usually 200~1000 preprocessed input files in npy format or binary format) of training set. If you are using onnx model, generally the layout of your working directory could be 
+calibration dataset is commonly composed of a small subset(usually 200~1000 preprocessed input files in npy format or binary format) of training set. If you are using onnx model, generally the layout of your working directory could be
 
 ```
 |--working
@@ -14,7 +14,7 @@ calibration dataset is commonly composed of a small subset(usually 200~1000 prep
            |-- ...
       |--model.onnx
 ```
-or if your model is in caffe format, 
+or if your model is in caffe format,
 
 ```
 |--working
@@ -49,28 +49,28 @@ for example, if you want to deploy an onnx model on OpenPPL CUDA INT8 platform, 
 from ppq import *
 from ppq.api import *
 
-WORKING_DIRECTORY     = 'working'                            
+WORKING_DIRECTORY     = 'working'
 TARGET_PLATFORM       = TargetPlatform.PPL_CUDA_INT8
 MODEL_TYPE            = NetworkFramework.ONNX  #  MODEL_TYPE = NetworkFramwork.CAFFE for caffe model
-INPUT_LAYOUT          = 'chw'                  #  input data will be transposed to 'chw' if set 'hwc'      
-NETWORK_INPUTSHAPE    = [1, 3, 224, 224]       #  must be specified when input files are in binary format   
-CALIBRATION_BATCHSIZE = 16                     #  must be equal to 1 when input files are in dynamic shapes                 
+INPUT_LAYOUT          = 'chw'                  #  input data will be transposed to 'chw' if set 'hwc'
+NETWORK_INPUTSHAPE    = [1, 3, 224, 224]       #  must be specified when input files are in binary format
+CALIBRATION_BATCHSIZE = 16                     #  must be equal to 1 when input files are in dynamic shapes
 EXECUTING_DEVICE      = 'cuda'                 #  set to cpu if you don't have gpu or cuda installed
 REQUIRE_ANALYSE       = False
 DUMP_RESULT           = False
 
 
-dataloader = load_calibration_dataset(         # only support single-input situation, you need to create 
+dataloader = load_calibration_dataset(         # only support single-input situation, you need to create
     directory    = WORKING_DIRECTORY,          # your own dataloader when graph has multiple inputs
     input_shape  = NETWORK_INPUTSHAPE,
-    batchsize    = CALIBRATION_BATCHSIZE, 
+    batchsize    = CALIBRATION_BATCHSIZE,
     input_format = INPUT_LAYOUT)
 
 ```
 
 ## Quantization Setting
 
-Quantization setting is an essential part which guides the behavior of quantizer, it controls steps taken in quantization process, 
+Quantization setting is an essential part which guides the behavior of quantizer, it controls steps taken in quantization process,
 providing you the largest flexiability to adjust and customize the quantization process, for users who are not familiar with PPQ,
 we provide a simple API to create a fundamental setting which allows you to focus on a small subset of configurations.
 
@@ -80,7 +80,7 @@ SETTING = UnbelievableUserFriendlyQuantizationSetting(
     finetune_steps = 2500,        # number of total iterations in AdavancedOptimization algorithm
     finetune_lr = 1e-3,           # learning rate in AdavancedOptimization algorithm
     calibration = 'percentile',   # calibration algorithm controlling computation of quantization parameters
-    equalization = True,          # whether to perform data free quantization equalization 
+    equalization = True,          # whether to perform data free quantization equalization
     non_quantable_op = None       # concrete operations which need fp32 precision and shouldn't be quantized
 )
 SETTING = SETTING.convert_to_daddy_setting()
@@ -104,7 +104,7 @@ specified by *calibration*.
 
 For every target platform, PPQ will designate a quantizer to conduct execution logic in quantization process,
 for example, *PPLCUDAQuantizer* is responsible for *PPL_CUDA_INT8* platform, and *PPL_DSP_Quantizer* is responsible for
-*PPL_DSP_INT8* platform, check [interface.py](../../ppq/api/interface.py) for more details. The quantizer will 
+*PPL_DSP_INT8* platform, check [interface.py](../../ppq/api/interface.py) for more details. The quantizer will
 
 1. prepare parsed graph IR for calibration
 2. refine quantization behaviors for certain operations
@@ -122,7 +122,7 @@ quantized = quantize(
     dataloader=dataloader, calib_steps=32
 )
 ```
-Note that *calib_steps* specifies how many batches of data in dataloader will be referred in calibration, 
+Note that *calib_steps* specifies how many batches of data in dataloader will be referred in calibration,
 it should be in 8~512 in consideration of efficiency.
 
 ## Inference
@@ -145,12 +145,12 @@ Outputs = executor.forward(Input) # for fp32 mode
 
 ## Analysis
 
-PPQ has provided powerful analysis tools to analyse precision degradation in different layers of the quantized graph, 
-*graphwise_error_analysis* takes quantization error accumulation during execution into consideration while 
-*layerwise_error_analysis* considers quantization error layer-separetely, if you want to know the global performance 
+PPQ has provided powerful analysis tools to analyse precision degradation in different layers of the quantized graph,
+*graphwise_error_analysis* takes quantization error accumulation during execution into consideration while
+*layerwise_error_analysis* considers quantization error layer-separetely, if you want to know the global performance
 of quantized graph by analysing the signal noise ratio of fp32 outputs and quantized outputs of different layers.
 
-```python 
+```python
 
 graphwise_error_analyse(
     graph=quantized,
@@ -180,8 +180,8 @@ layerwise_error_analysis(
 
 To deploy your model on the target backend, appropriate format of quantized model and corresponding quantization
 parameters should be exported from the quantized PPQ IR graph. PPQ will designate different exporters for different
-target platforms. For example, if OpenPPL CUDA(*PPL_CUDA_INT8*) is the desired backend, *PPLBackendExporter* will 
-export an onnx model and a json file specifying quantization parameters, for more target platforms and exporters, 
+target platforms. For example, if OpenPPL CUDA(*PPL_CUDA_INT8*) is the desired backend, *PPLBackendExporter* will
+export an onnx model and a json file specifying quantization parameters, for more target platforms and exporters,
 please check [interface.py](../../ppq/api/interface.py)
 
 ```python

@@ -11,9 +11,9 @@ from .base import QuantizationOptimizationPass
 
 
 class PassiveParameterQuantizePass(QuantizationOptimizationPass):
-    """
-    PPQ PassiveParameterQuantizePass completes the quantization of passive parameters
-    It is the final parameter procedure during the quantization process for the most part.
+    """PPQ PassiveParameterQuantizePass completes the quantization of passive
+    parameters It is the final parameter procedure during the quantization
+    process for the most part.
 
     passive parameters are those parameters which required to be quantized during the computing,
     while holds no standalone quantization configuration, such as bias, padding value, etc.
@@ -92,10 +92,10 @@ class PassiveParameterQuantizePass(QuantizationOptimizationPass):
 
 
 class ParameterQuantizePass(QuantizationOptimizationPass):
-    """
-    PPQ PassiveParameterQuantizePass completes the quantization of positive parameters.
-    By default, all parameters with initial state will be quantized during this optimization,
-        all non-parameter tensors will be excluded from this pass by temporary dequantization.
+    """PPQ PassiveParameterQuantizePass completes the quantization of positive
+    parameters. By default, all parameters with initial state will be quantized
+    during this optimization, all non-parameter tensors will be excluded from
+    this pass by temporary dequantization.
 
     Then, operation observers will be established automatically to record necessary statistics,
         observers are also responsible for rendering quantization configuration (computing scale and offset).
