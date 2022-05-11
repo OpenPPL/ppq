@@ -66,7 +66,7 @@ python setup.py install
 
 * Install PPQ from Pip:
 
-1. pre-built wheels are maintained in [PPQ](https://pypi.org/project/ppq/0.5.2/#files), you could simply install ppq with the following command(You should notice that install from pypi might get an outdated version ...)
+1. pre-built wheels are maintained in [PPQ](https://pypi.org/project/ppq/), you could simply install ppq with the following command(You should notice that install from pypi might get an outdated version ...)
 
 ```bash
 python3 -m pip install ppq
