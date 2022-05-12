@@ -13,7 +13,7 @@ from .refine import (InplaceQuantizationSettingPass, MishFusionPass,
                      NxpInputRoundingRefinePass, NxpQuantizeFusionPass,
                      PPLCudaAddConvReluMerge, QuantAlignmentPass,
                      QuantizeFusionPass, QuantizeReducePass,
-                     QuantizeRefinePass, SwishFusionPass)
+                     QuantizeRefinePass, SwishFusionPass, NCNNRequantizePass)
 from .ssd import SSDEqualizationPass
 from .training import (AdaRoundPass, AdvancedQuantOptimization,
                        BiasCorrectionPass, BlockwiseReconstructionPass,

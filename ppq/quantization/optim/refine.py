@@ -679,3 +679,50 @@ class MishFusionPass(QuantizationOptimizationPass):
             softplus.config.output_quantization_config[0].dominated_by  = master_config
             mul.config.input_quantization_config[0].dominated_by        = master_config
             mul.config.input_quantization_config[1].dominated_by        = master_config
+
+class NCNNRequantizePass(QuantizationOptimizationPass):
+    def __init__(self, name: str = 'NCNN Requantize Scale Unify') -> None:
+        super().__init__(name)
+
+    def optimize(self, processor: GraphCommandProcessor, 
+                        dataloader: Iterable, executor: BaseGraphExecutor, **kwargs) -> None:
+
+        graph = processor.graph
+        search_engine = SearchableGraph(graph)
+
+        paths = search_engine.path_matching(
+            sp_expr=lambda x: isinstance(x, QuantableOperation) and x.type == 'Conv' \
+                and len(graph.get_downstream_operations(x)) == 1,
+            rp_expr=lambda x,y: y.type in {'Relu', 'Sigmoid', 'Clip', 'Mish', 'HardSwish'} \
+                and len(graph.get_downstream_operations(y)) == 1,
+            ep_expr=lambda x: x.type == 'Split',
+            direction='down'
+        )
+        for path in paths:
+            for operation in path:
+                if operation.type == 'Split':
+                    need_unify = True
+                    for op in graph.get_downstream_operations(operation):
+                        if op.type != 'Conv':
+                            need_unify = False
+                    if need_unify:
+                        scales = []
+                        for op in graph.get_downstream_operations(operation):
+                            assert isinstance(op, QuantableOperation)
+                            scale = op.config.input_quantization_config[0].scale
+                            if scale.ndim == 0:
+                                scales.append(scale.unsqueeze(0))
+                            else:
+                                scales.append(scale)
+                    
+                        unified_scale = torch.cat(scales).max(dim=0, keepdim=True)[0]
+                        for op in graph.get_downstream_operations(operation):
+                            assert isinstance(op, QuantableOperation)
+                            input_cfg = op.config.input_quantization_config[0]
+                            assert input_cfg.dominated_by == input_cfg
+                            if input_cfg.scale.ndim == 0:
+                                input_cfg.scale = unified_scale.squeeze(0)
+                            else:
+                                input_cfg.scale = unified_scale
+
+                    break

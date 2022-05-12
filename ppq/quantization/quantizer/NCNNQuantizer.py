@@ -8,7 +8,7 @@ from ppq.core import (ChannelwiseTensorQuantizationConfig, PASSIVE_OPERATIONS,
                       TargetPlatform)
 from ppq.executor.base import BaseGraphExecutor
 from ppq.IR import BaseGraph, GraphCommandProcessor, Operation
-from ppq.quantization.optim import QuantizationOptimizationPipeline, NCNNFormatGemmPass
+from ppq.quantization.optim import QuantizationOptimizationPipeline, NCNNFormatGemmPass, NCNNRequantizePass
 
 from .base import BaseQuantizer
 
@@ -26,9 +26,15 @@ class NCNNQuantizer(BaseQuantizer):
 
     def build_prequant_pipeline(
         self, setting: QuantizationSetting, executor: BaseGraphExecutor) -> QuantizationOptimizationPipeline:
-        return super().build_prequant_pipeline(setting, executor).append_optimization_to_pipeline(
-            NCNNFormatGemmPass(), at_front=True
-        )
+        pipeline = super().build_prequant_pipeline(setting, executor)
+        pipeline.append_optimization_to_pipeline(NCNNFormatGemmPass(), at_front=True)
+        return pipeline
+
+    def build_quant_pipeline(
+        self, setting: QuantizationSetting, executor: BaseGraphExecutor) -> QuantizationOptimizationPipeline:
+        pipeline = super().build_quant_pipeline(setting, executor)
+        pipeline.append_optimization_to_pipeline(NCNNRequantizePass())
+        return pipeline
 
     def init_quantize_config(
         self, operation: Operation) -> OperationQuantizationConfig:
@@ -87,8 +93,7 @@ class NCNNQuantizer(BaseQuantizer):
                 bias_config = base_quant_config.input_quantization_config[-1]
                 bias_config.state = QuantizationStates.FP32
 
-            if operation.type in PASSIVE_OPERATIONS:
-                base_quant_config.is_active_quant_op = False
+            base_quant_config.output_quantization_config[0].state = QuantizationStates.FP32
         return base_quant_config
 
     @ property
@@ -102,7 +107,7 @@ class NCNNQuantizer(BaseQuantizer):
     @ property
     def quant_operation_types(self) -> set:
         return {
-            'Conv', 'Gemm', 'Split'
+            'Conv', 'Gemm'
         }
 
     @ property
@@ -115,4 +120,4 @@ class NCNNQuantizer(BaseQuantizer):
 
     @ property
     def rounding_policy(self) -> RoundingPolicy:
-        return RoundingPolicy.ROUND_HALF_EVEN
+        return RoundingPolicy.ROUND_HALF_FAR_FORM_ZERO
