@@ -1069,7 +1069,7 @@ class AdvancedQuantOptimization(TrainingBasedPass):
         loss_ema    = EMARecorder(beta=0.98)
         cur_iter    = 0
         delegators  = []
-        device      = executor._executing_contenxt.executing_device
+        device      = executor._executing_context.executing_device
         output_var  = block.ep.outputs[0]
         input_var   = block.sp.inputs[0]
         dataset = RandomMemDataset(data=[[qt, fp] for qt, fp in zip(quant_inputs, fp32_outputs)])
@@ -1280,7 +1280,7 @@ class LearningToCalibPass(TrainingBasedPass):
                         delegators.append(BanditDelegator(arms=self.arms, config=cfg))
         delegators = [d for d in delegators if isinstance(d, BanditDelegator)]
         dataset = RandomMemDataset(data=[[qt, fp] for qt, fp in zip(quant_inputs, fp32_outputs)])
-        device  = executor._executing_contenxt.executing_device
+        device  = executor._executing_context.executing_device
         loss_ema    = EMARecorder(beta=0.98)
         output_var  = block.ep.outputs[0]
         input_var   = block.sp.inputs[0]

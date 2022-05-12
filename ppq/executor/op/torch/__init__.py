@@ -1,4 +1,4 @@
-from .default import (DEFAULT_BACKEND_TABLE, AveragePool_forward,
+from .default import (DEFAULT_BACKEND_TABLE, AveragePool_forward, AdaptiveAvgPool2d_forward,
                       BatchNormalization_forward, Cast_forward, Clip_forward,
                       Concat_forward, Constant_forward,
                       ConstantOfShape_forward, Conv_forward, Eltwise_forward,
