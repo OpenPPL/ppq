@@ -114,7 +114,7 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
         self._default_quant_fn = PPQLinearQuantFunction
         self._deployed = False
         self._device = device
-        self._executing_contenxt = TorchBackendContext(executing_device=self._device)
+        self._executing_context = TorchBackendContext(executing_device=self._device)
         super().__init__(graph)
         self._runnable_graph = RunnableGraph(self._graph)
         self._delegates = {}
@@ -363,7 +363,7 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
                     else: raise TypeError(f'invalid hook instance was given with operation: {operation}')
 
                 # forward and collecting result
-                outputs = operation_forward_func(operation, inputs, self._executing_contenxt)
+                outputs = operation_forward_func(operation, inputs, self._executing_context)
                 outputs = outputs if isinstance(outputs, (list, tuple)) else [outputs]
                 fp_outputs = outputs
 
