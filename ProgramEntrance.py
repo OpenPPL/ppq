@@ -15,7 +15,6 @@ if you are using caffe model:
 quantized model will be generated at: ~/working/quantized.onnx
 """
 from ppq import *
-from ppq.IR.processor import GraphCommandProcessor
 from ppq.api import *
 import os
 
