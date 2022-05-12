@@ -39,7 +39,7 @@ class NXPResizeModeChangePass(QuantizationOptimizationPass):
 
 
 class NCNNFormatGemmPass(QuantizationOptimizationPass):
-    def __init__(self, name: str = 'NCNN Format Gemm Pass') -> None:
+    def __init__(self, name: str = 'ncnn Format Gemm Pass') -> None:
         super().__init__(name)
 
     def optimize(self, processor: GraphCommandProcessor, dataloader: Iterable,

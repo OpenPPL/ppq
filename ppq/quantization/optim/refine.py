@@ -681,7 +681,7 @@ class MishFusionPass(QuantizationOptimizationPass):
             mul.config.input_quantization_config[1].dominated_by        = master_config
 
 class NCNNRequantizePass(QuantizationOptimizationPass):
-    def __init__(self, name: str = 'NCNN Requantize Scale Unify') -> None:
+    def __init__(self, name: str = 'ncnn Requantize Scale Unify') -> None:
         super().__init__(name)
 
     def optimize(self, processor: GraphCommandProcessor, 

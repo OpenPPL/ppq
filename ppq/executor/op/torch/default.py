@@ -23,7 +23,7 @@ __all__ = [
     'BatchNormalization_forward', 'Cast_forward', 'Clip_forward', 'Concat_forward',
     'Constant_forward', 'ConstantOfShape_forward', 'Conv_forward', 'Eltwise_forward', 'Equal_forward',
     'UnaryEltwise_forward', 'Expand_forward', 'Flatten_forward', 'Gather_forward', 'GatherND_forward', 'Gemm_forward',
-    'Grid_sampler_forward', 'AveragePool_forward', 'Greater_forward', 'Less_forward', 'MatMul_forward',
+    'Grid_sampler_forward', 'AdaptiveAvgPool2d_forward', 'AveragePool_forward', 'Greater_forward', 'Less_forward', 'MatMul_forward',
     'MaxPool2d_forward', '_NMS_forward', 'NonZero_forward', 'Not_forward', 'Range_forward',
     'ReduceL2_forward', 'ReduceMax_forward', 'Reshape_forward', 'Resize_forward', 'ScatterElements_forward',
     'ScatterND_forward', 'Shape_forward', 'Slice_forward', 'Softmax_forward', 'Squeeze_forward', 'Tile_forward',
@@ -481,6 +481,12 @@ def AveragePool_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBac
 
     output = F.avg_pool2d(input_value, kernel_size=kernel_size,
                           padding=padding, stride=stride, ceil_mode=ceil_mode)
+    return output
+
+
+def AdaptiveAvgPool2d_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
+    input_value, output_size = values
+    output = F.adaptive_avg_pool2d(input_value, output_size)
     return output
 
 
@@ -2128,6 +2134,7 @@ def Identity_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacken
 
 
 DEFAULT_BACKEND_TABLE = {
+    'AdaptiveAvgPool2d': AdaptiveAvgPool2d_forward,
     'Add': Add_forward,
     'ArgMax': ArgMax_forward,
     'AveragePool': AveragePool_forward,
