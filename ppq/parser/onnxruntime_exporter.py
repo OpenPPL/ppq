@@ -1,4 +1,3 @@
-from ast import Continue
 from typing import Dict, List
 
 import onnx
@@ -155,10 +154,12 @@ class ONNXRUNTIMExporter(OnnxExporter):
         # so it is safe to access op.inputs[0], op.outputs[0] as their input and output.
         for op in removed_activations:
             if not isinstance(op, QuantableOperation): continue
-            if len(graph.get_upstream_operations(op)) == 0: Continue
+            if len(graph.get_upstream_operations(op)) == 0: continue
+            quant_config = op.config.output_quantization_config[0]
 
             upstream_op = graph.get_upstream_operations(op)[0]
             if not isinstance(upstream_op, QuantableOperation): continue
+            if graph.get_downstream_operations(upstream_op) != 1: continue
             input_var, input_cfg = op.inputs[0], op.config.input_quantization_config[0]
             if not input_cfg.policy.has_property(QuantizationProperty.ASYMMETRICAL): continue
 
@@ -170,6 +171,14 @@ class ONNXRUNTIMExporter(OnnxExporter):
             input_var, output_var = op.inputs[0], op.outputs[0]
             graph.remove_operation(op)
             graph.create_link_with_var(input_var, output_var)
+
+            # insert quant & dequant op on var
+            self.insert_dequant_on_variable(
+                graph=graph, var=input_var, config=quant_config, 
+                related_op=upstream_op, meta=input_var.meta)
+            self.insert_quant_on_variable(
+                graph=graph, var=input_var, config=quant_config, 
+                related_op=upstream_op, meta=input_var.meta)
 
         formatter = GraphFormatter(graph)
         formatter(GraphCommand(GraphCommandType.DELETE_ISOLATED))
