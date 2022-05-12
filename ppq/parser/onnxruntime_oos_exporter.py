@@ -243,6 +243,7 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
         for op in quantize_extension:
             for input_var in op.inputs:
                 if input_var.is_parameter: continue
+                if op.type not in {'QGemm', 'QLinearConv', 'QLinearMatmul'}: continue
                 if input_var.source_op not in quantize_extension or input_var.source_op is None:
                     assert isinstance(op, QuantableOperation)
                     qconfig = op.config.input_quantization_config[op.inputs.index(input_var)]
