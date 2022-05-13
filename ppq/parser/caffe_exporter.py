@@ -246,7 +246,8 @@ class SNPECaffeExporter(CaffeExporter):
 
 
 class PPLDSPCaffeExporter(CaffeExporter):
-    def export(self, file_path: str, graph: BaseGraph, config_path: str = None, input_shapes: List[List[int]] = [[1, 3, 224, 224]]):
+    def export(self, file_path: str, graph: BaseGraph, config_path: str = None,
+               input_shapes: List[List[int]] = [[1, 3, 224, 224]], write_weight=False):
         # PPL3 DSP do not need a json config file, all quantization configuration will be merged into protobuf
         caffe_model, caffe_proto = self.prepare_model(graph, input_shapes)
         for idx in range(len(caffe_proto.layer)):
@@ -362,12 +363,25 @@ class PPLDSPCaffeExporter(CaffeExporter):
                         p.range_max = qt_max
 
             # step - 3 dump input config
-            for bottom in layer.bottom:
-                for cfg, var, in zip(op.config.input_quantization_config, op.inputs):
-                    if var.name == str(bottom):
-                        qt_min = convert_value(cfg.scale * (cfg.quant_min - cfg.offset), True, DataType.FP32)
-                        qt_max = convert_value(cfg.scale * (cfg.quant_max - cfg.offset), True, DataType.FP32)
-                        layer.quantize_param.add(type='bottom', range_min=qt_min, range_max=qt_max)
+            # only ops related with graph inputs record bottom param
+            # usually first conv op
+            record_bottom = False
+            for input_var in op.inputs:
+                if input_var.name in graph.inputs:
+                    record_bottom = True
+                    break
+            if record_bottom:
+                for bottom in layer.bottom:
+                    for cfg, var, in zip(op.config.input_quantization_config, op.inputs):
+                        if var.name == str(bottom):
+                            qt_min = convert_value(cfg.scale * (cfg.quant_min - cfg.offset), True, DataType.FP32)
+                            qt_max = convert_value(cfg.scale * (cfg.quant_max - cfg.offset), True, DataType.FP32)
+                            if var.name in graph.inputs:
+                                range_min = convert_value(cfg.detail.get('range_min', -1), True, DataType.FP32)
+                                # no negative values in input
+                                if range_min >= 0.0:
+                                    qt_min = 0.0
+                            layer.quantize_param.add(type='bottom', range_min=qt_min, range_max=qt_max)
 
             # step - 4 dump output config
             for top in layer.top:
