@@ -159,7 +159,7 @@ class ONNXRUNTIMExporter(OnnxExporter):
 
             upstream_op = graph.get_upstream_operations(op)[0]
             if not isinstance(upstream_op, QuantableOperation): continue
-            if graph.get_downstream_operations(upstream_op) != 1: continue
+            if len(graph.get_downstream_operations(upstream_op)) != 1: continue
             input_var, input_cfg = op.inputs[0], op.config.input_quantization_config[0]
             if not input_cfg.policy.has_property(QuantizationProperty.ASYMMETRICAL): continue
 
@@ -280,6 +280,8 @@ class ONNXRUNTIMExporter(OnnxExporter):
         for config, var in op.config_with_variable:
             meta = var.meta
             if var.is_parameter:
+                if not op.is_computing_op: continue
+                
                 assert len(var.dest_ops) == 1, (
                 f'Can not export variable {var.name}, cause it has more than 1 destination operations. '
                 'PPQ require all parameters to have only 1 destination operation.')

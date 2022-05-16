@@ -134,3 +134,14 @@ class FPGAQuantizer(BaseQuantizer):
     @ property
     def rounding_policy(self):
         return RoundingPolicy.ROUND_HALF_EVEN
+
+    @ property
+    def activation_fusion_types(self) -> set:
+        """
+        我不知道这个对不对, Xilinx FPGA 图融合做的并不少，
+        如果你的网络中有特殊的激活函数，我建议你手动调整这个融合选项
+
+        Returns:
+            set: _description_
+        """
+        return {'Relu', 'Clip'}

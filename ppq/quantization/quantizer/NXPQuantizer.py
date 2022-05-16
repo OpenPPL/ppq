@@ -136,3 +136,7 @@ class NXP_Quantizer(BaseQuantizer):
     @ property
     def rounding_policy(self):
         return RoundingPolicy.ROUND_HALF_UP
+
+    @ property
+    def activation_fusion_types(self) -> set:
+        return {'Relu', 'Clip'}

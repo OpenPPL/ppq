@@ -11,3 +11,4 @@ from .PPLQuantizer import (PPLCUDA_INT4_Quantizer,
 from .TRTQuantizer import TensorRTQuantizer
 from .FPGAQuantizer import FPGAQuantizer
 from .NCNNQuantizer import NCNNQuantizer
+from .OpenvinoQuantizer import OpenvinoQuantizer
