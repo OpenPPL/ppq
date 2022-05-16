@@ -326,8 +326,7 @@ class QuantizationStates(Enum):
     @ classmethod
     def can_export(cls, state)->bool:
         return state not in {QuantizationStates.INITIAL, QuantizationStates.DEACTIVATED,
-                             QuantizationStates.DEQUANTIZED, QuantizationStates.PASSIVE_INIT,
-                             QuantizationStates.FP32}
+                             QuantizationStates.DEQUANTIZED, QuantizationStates.PASSIVE_INIT}
 
 
 class TensorQuantizationConfig(Serializable):

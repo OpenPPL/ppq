@@ -279,6 +279,8 @@ def quantize_onnx_model(
         if verbose: quantizer.report()
         return quantizer._graph
     else:
+        executor = TorchExecutor(graph=ppq_ir, device=device)
+        executor.tracing_operation_meta(inputs=dummy_input)
         return quantizer._graph
 
 @ empty_ppq_cache
@@ -455,6 +457,8 @@ def quantize_caffe_model(
         if verbose: quantizer.report()
         return quantizer._graph
     else:
+        executor = TorchExecutor(graph=ppq_ir, device=device)
+        executor.tracing_operation_meta(inputs=dummy_input)
         return quantizer._graph
 
 @ empty_ppq_cache
@@ -549,6 +553,8 @@ def quantize_native_model(
         if verbose: quantizer.report()
         return quantizer._graph
     else:
+        executor = TorchExecutor(graph=ppq_ir, device=device)
+        executor.tracing_operation_meta(inputs=dummy_input)
         return quantizer._graph
 
 
