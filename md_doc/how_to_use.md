@@ -180,11 +180,13 @@ outputs = executor.forward(data) # execution in fp32 mode
 ## Analysis
 
 PPQ has provided powerful analysis tools to analyse precision degradation in different layers of the quantized graph,
-*graphwise_error_analysis* takes quantization error accumulation during execution into consideration while
-*layerwise_error_analysis* considers quantization error layer-separetely, if you want to know the global performance
+*graphwise_error_analyse* takes quantization error accumulation during execution into consideration while
+*layerwise_error_analyse* considers quantization error layer-separetely, if you want to know the global performance
 of quantized graph by analysing the signal noise ratio of fp32 outputs and quantized outputs of different layers.
 
 ```python
+
+from ppq.quantization.analyse import layerwise_error_analyse, graphwise_error_analyse
 
 graphwise_error_analyse(
     graph=quantized, # ppq ir graph
@@ -200,7 +202,7 @@ or you want to analyse quantization error brought in by every layer,
 
 ```python
 
-layerwise_error_analysis(
+layerwise_error_analyse(
     graph=quantized,
     running_device=EXECUTING_DEVICE,
     method='snr',  # the metric is signal noise ratio by default, adjust it to 'cosine' if that's desired
