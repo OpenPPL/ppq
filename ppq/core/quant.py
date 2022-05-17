@@ -99,7 +99,7 @@ class TargetPlatform(Enum):
             cls.PPL_DSP_INT8, cls.PPL_DSP_TI_INT8, cls.QNN_DSP_INT8, cls.TRT_INT8, cls.NCNN_INT8, cls.NXP_INT8,
             cls.SNPE_INT8, cls.PPL_CUDA_INT8, cls.PPL_CUDA_INT4, cls.EXTENSION, cls.PPL_CUDA_MIX, cls.ORT_OOS_INT8,
             cls.ACADEMIC_INT4, cls.ACADEMIC_INT8, cls.ACADEMIC_MIX, cls.METAX_INT8_C, cls.METAX_INT8_T, 
-            cls.OPENVINO_INT8}
+            cls.OPENVINO_INT8, cls.FPGA_INT8}
 
 
 class RoundingPolicy(Enum):

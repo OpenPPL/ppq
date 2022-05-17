@@ -1435,7 +1435,7 @@ def Split_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCo
     axis = op.attributes.get('axis', 0)
     split = op.attributes.get('split', 0)
     [input_value] = values
-    if split == 0:
+    if 'split' not in op.attributes:
         split = input_value.shape[axis] // len(op.outputs)  
     outputs = torch.split(input_value, split, axis)
     return outputs
