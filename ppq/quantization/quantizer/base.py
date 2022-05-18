@@ -211,6 +211,11 @@ class BaseQuantizer(metaclass = ABCMeta):
     def rounding_policy(self):
         raise NotImplementedError('Implement this first.')
 
+    @ abstractproperty
+    @ property
+    def activation_fusion_types(self) -> set:
+        raise NotImplementedError('Implement this first.')
+
     def report(self) -> str:
         debug_str = ''
         # stats:

@@ -90,6 +90,9 @@ class PPL_DSP_Quantizer(BaseQuantizer):
     def rounding_policy(self) -> RoundingPolicy:
         return RoundingPolicy.ROUND_HALF_EVEN
 
+    @ property
+    def activation_fusion_types(self) -> set:
+        return {'Relu', 'Clip'}
 
 
 class PPL_DSP_TI_Quantizer(PPL_DSP_Quantizer):
@@ -172,3 +175,7 @@ class PPL_DSP_TI_Quantizer(PPL_DSP_Quantizer):
             QuantizationProperty.LINEAR +
             QuantizationProperty.PER_TENSOR
         )
+
+    @ property
+    def activation_fusion_types(self) -> set:
+        return {'Relu', 'Clip'}

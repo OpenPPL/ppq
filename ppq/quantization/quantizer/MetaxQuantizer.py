@@ -95,6 +95,10 @@ class MetaxTensorwiseQuantizer(BaseQuantizer):
         return super().build_prequant_pipeline(setting, executor).append_optimization_to_pipeline(
             MetaxGemmSplitPass(), at_front=True)
 
+    @ property
+    def activation_fusion_types(self) -> set:
+        return {'Relu', 'Clip'}
+
 
 class MetaxChannelwiseQuantizer(BaseQuantizer):
     def __init__(
@@ -211,3 +215,7 @@ class MetaxChannelwiseQuantizer(BaseQuantizer):
         self, setting: QuantizationSetting, executor: BaseGraphExecutor) -> QuantizationOptimizationPipeline:
         return super().build_prequant_pipeline(setting, executor).append_optimization_to_pipeline(
             MetaxGemmSplitPass(), at_front=True)
+
+    @ property
+    def activation_fusion_types(self) -> set:
+        return {'Relu', 'Clip'}

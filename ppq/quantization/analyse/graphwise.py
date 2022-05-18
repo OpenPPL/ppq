@@ -92,8 +92,7 @@ def graphwise_error_analyse(
 
     # find all quantable operations.
     interested_op = [operation for operation in graph.operations.values()
-                     if (isinstance(operation, QuantableOperation) and
-                         operation.config.output_quantization_config[0].state == QuantizationStates.ACTIVATED)]
+                     if (isinstance(operation, QuantableOperation) and operation.is_computing_op)]
     if len(interested_op) == 0:
         print('Oops. you got nothing to analyse.')
         return

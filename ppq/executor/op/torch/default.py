@@ -11,29 +11,13 @@ from ppq.utils import process_attribute
 import torch
 import torch.nn.functional as F
 from torch import _VF
+
 from .base import *
 
 # Reference:
 # onnx op: https://github.com/onnx/onnx/blob/master/docs/Operators.md
 # torch func: https://pytorch.org/docs/stable/nn.functional.html
 
-# TODO:
-# Resize only support pytorch cases
-__all__ = [
-    'BatchNormalization_forward', 'Cast_forward', 'Clip_forward', 'Concat_forward',
-    'Constant_forward', 'ConstantOfShape_forward', 'Conv_forward', 'Eltwise_forward', 'Equal_forward',
-    'UnaryEltwise_forward', 'Expand_forward', 'Flatten_forward', 'Gather_forward', 'GatherND_forward', 'Gemm_forward',
-    'Grid_sampler_forward', 'AdaptiveAvgPool2d_forward', 'AveragePool_forward', 'Greater_forward', 'Less_forward', 'MatMul_forward',
-    'MaxPool2d_forward', '_NMS_forward', 'NonZero_forward', 'Not_forward', 'Range_forward',
-    'ReduceL2_forward', 'ReduceMax_forward', 'Reshape_forward', 'Resize_forward', 'ScatterElements_forward',
-    'ScatterND_forward', 'Shape_forward', 'Slice_forward', 'Softmax_forward', 'Squeeze_forward', 'Tile_forward',
-    'TopK_forward', 'Transpose_forward', 'Unsqueeze_forward', 'Where_forward', 'ReduceSum_forward', 'ArgMax_forward',
-    'Split_forward', 'ReduceMean_forward', 'PRelu_forward', 'Pad_forward', 'LeakyRelu_forward', 'ConvTranspose_forward',
-    'Sqrt_forward', 'Log_forward', 'Floor_forward', 'RoiAlign_forward', 'MMCVRoiAlign_forward', 'SpaceToDepth_forward',
-    'DepthToSpace_forward', 'Tanh_forward', 'Pow_forward', 'Crop_forward', 'ChannelShuffle_forward',
-    'InstanceNormalization_forward', 'Parameter_forward', 'Interp_forward', 'CaffeArgMax_forward',
-    'DEFAULT_BACKEND_TABLE',
-]
 logger = NaiveLogger.get_logger('PPQ')
 
 def Conv_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
@@ -748,6 +732,7 @@ def Unsqueeze_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
 
 def Gather_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
     input_data, indices = values
+    indices = indices.long()
     axis = op.attributes.get('axis', 0)
     if op.type == 'Gather':
         array_idx = [indices if axis == i else slice(
@@ -1445,12 +1430,15 @@ def ScatterND_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
 
 
 def Split_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
+    ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
+    ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
     axis = op.attributes.get('axis', 0)
     split = op.attributes.get('split', 0)
-    output_num = len(op.outputs)
     [input_value] = values
-    output = torch.split(input_value, split, axis)
-    return output
+    if 'split' not in op.attributes:
+        split = input_value.shape[axis] // len(op.outputs)  
+    outputs = torch.split(input_value, split, axis)
+    return outputs
 
 
 def Gemm_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
@@ -2132,6 +2120,98 @@ def Identity_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacken
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
     return values[0]
 
+def Onehot_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
+    """
+    Produces a one-hot tensor based on inputs. The locations represented by the index values in the 'indices' 
+    input tensor will have 'on_value' and the other locations will have 'off_value' in the output tensor, 
+    
+    where 'on_value' and 'off_value' are specified as part of required input argument 'values', 
+    which is a two-element tensor of format [off_value, on_value]. 
+    
+    The rank of the output tensor will be one greater than the rank of the input tensor. 
+    The additional dimension is for one-hot representation. The additional dimension will be inserted at the position specified by 'axis'. 
+    If 'axis' is not specified then then additional dimension will be inserted as the innermost dimension, 
+    i.e. axis=-1. The size of the additional dimension is specified by required scalar input 'depth'. 
+    
+    The type of the output tensor is the same as the type of the 'values' input. Any entries in the 'indices' 
+    input tensor with values outside the range [-depth, depth-1] will result in one-hot representation 
+    with all 'off_value' values in the output tensor.
+
+    when axis = 0:
+    output[input[i, j, k], i, j, k] = 1 for all i, j, k and 0 otherwise.
+
+    when axis = -1:
+    output[i, j, k, input[i, j, k]] = 1 for all i, j, k and 0 otherwise.
+    Version
+    This version of the operator has been available since version 11 of the default ONNX operator set.
+
+    Attributes
+    axis : int (default is -1)
+    (Optional) Axis along which one-hot representation in added. Default: axis=-1. axis=-1 means that 
+        the additional dimension will be inserted as the innermost/last dimension in the output tensor. 
+    Negative value means counting dimensions from the back. Accepted range is [-r-1, r] where r = rank(indices).
+    
+    Inputs
+    indices (non-differentiable) : T1
+        Input tensor containing indices. Any entries in the 'indices' input tensor with values outside the range [-depth, depth-1]
+            will result in one-hot representation with all 'off_value' values in the output tensor.In case 'indices' is of non-integer type, 
+            the values will be casted to int64 before use.
+    
+    depth (non-differentiable) : T2
+        Scalar specifying the number of classes in one-hot tensor. 
+        This is also the size of the one-hot dimension (specified by 'axis' attribute) added on in the output tensor.
+            The values in the 'indices' input tensor are expected to be in the range [-depth, depth-1]. 
+            In case 'depth' is of non-integer type, it will be casted to int64 before use.
+
+    values (non-differentiable) : T3
+        Rank 1 tensor containing exactly two elements, 
+        in the format [off_value, on_value], where 'on_value' is the value used for filling locations specified in 'indices' input tensor, 
+        and 'off_value' is the value used for filling locations other than those specified in 'indices' input tensor.
+
+    Outputs
+    output (non-differentiable) : T3
+        Tensor of rank one greater than input tensor 'indices', i.e. rank(output) = rank(indices) + 1. 
+        The data type for the elements of the output tensor is the same as the type of input 'values' is used.
+    """
+    # implementation from https://github.com/ToriML/onnx2pytorch/blob/master/onnx2pytorch/operations/onehot.py
+    ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=3, max_num_of_input=3)
+    axis = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='axis', default=-1)
+    indices, depth, values = values
+
+    off_value, on_value = values
+    out = F.one_hot(indices.to(int), depth.to(int).item())
+    out = out * (on_value - off_value) + off_value
+
+    rank = len(indices.shape)
+    if axis < 0:
+        axis += rank + 1
+    if not rank == axis:  # permute only if dim not last dimension
+        order = list(range(len(indices.shape)))
+        order.insert(axis, -1)
+        out = out.permute(order)
+    return out
+    
+def Reciprocal_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
+    """
+    Reciprocal takes one input data (Tensor) and produces one output data (Tensor) where the reciprocal is, 
+        y = 1/x, is applied to the tensor elementwise.
+
+    Version
+        This version of the operator has been available since version 13 of the default ONNX operator set.
+
+    Inputs
+        X (differentiable) : T Input tensor
+    Outputs
+        Y (differentiable) : T Output tensor
+
+    Constrain input and output types to float tensors.
+    """
+    ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
+    ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
+    [x] = values
+    return 1 / x
+
+
 
 DEFAULT_BACKEND_TABLE = {
     'AdaptiveAvgPool2d': AdaptiveAvgPool2d_forward,
@@ -2215,5 +2295,7 @@ DEFAULT_BACKEND_TABLE = {
     'Neg': Neg_forward,
     'GRU': GRU_forward,
     'PPQDeviceSwitch': PPQDeviceSwitch_forward,
-    'Identity': Identity_forward
+    'Identity': Identity_forward,
+    'OneHot': Onehot_forward,
+    'Reciprocal': Reciprocal_forward,
 }

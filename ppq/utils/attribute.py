@@ -6,7 +6,7 @@ logger = NaiveLogger.get_logger('PPQ')
 # attribute checker and preprocess
 def process_attribute(attr, input_shape, kernel_shape=None, op_type=None):
     # ASSUME input is 2D
-    assert len(input_shape) == 2
+    # assert len(input_shape) == 2
     # Get default attr value
     auto_pad = attr.get('auto_pad', 'NOTSET')
     strides = attr.get('strides', [1, 1])

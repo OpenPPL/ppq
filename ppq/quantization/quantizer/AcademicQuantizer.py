@@ -109,6 +109,10 @@ class ACADEMICQuantizer(BaseQuantizer):
 
         return RoundingPolicy.ROUND_HALF_EVEN
 
+    @ property
+    def activation_fusion_types(self) -> set:
+        return {}
+
 
 class ACADEMIC_INT4_Quantizer(ACADEMICQuantizer):
     def __init__(self, graph: BaseGraph, verbose: bool = True) -> None:
