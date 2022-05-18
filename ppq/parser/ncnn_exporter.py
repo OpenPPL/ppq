@@ -50,11 +50,9 @@ class NCNNExporter(GraphExporter):
         # no pre-determined export format, we export according to the
         # original model format
         if graph._built_from == NetworkFramework.CAFFE:
-            file_path = file_path + '.caffemodel'
             exporter = CaffeExporter()
             exporter.export(file_path=file_path, graph=graph, config_path=None, input_shapes=input_shapes)
 
         elif graph._built_from == NetworkFramework.ONNX:
-            file_path = file_path + '.onnx'
             exporter = OnnxExporter()
             exporter.export(file_path=file_path, graph=graph, config_path=None)
