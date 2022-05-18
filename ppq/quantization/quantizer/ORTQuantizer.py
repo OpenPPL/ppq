@@ -85,6 +85,11 @@ class ORT_PerTensorQuantizer(BaseQuantizer):
     def rounding_policy(self) -> RoundingPolicy:
         return RoundingPolicy.ROUND_HALF_EVEN
 
+    @ property
+    def activation_fusion_types(self) -> set:
+        return {'Relu', 'Clip'}
+
+
 class ORT_PerChannelQuantizer(BaseQuantizer):
     def __init__(
         self, graph: Union[BaseGraph, GraphCommandProcessor]
@@ -195,3 +200,7 @@ class ORT_PerChannelQuantizer(BaseQuantizer):
     @ property
     def rounding_policy(self) -> RoundingPolicy:
         return RoundingPolicy.ROUND_HALF_EVEN
+
+    @ property
+    def activation_fusion_types(self) -> set:
+        return {'Relu', 'Clip'}

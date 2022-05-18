@@ -5,25 +5,26 @@ import torch
 from ppq.core import (NetworkFramework, TargetPlatform, empty_ppq_cache,
                       ppq_warning)
 from ppq.executor import TorchExecutor
+from ppq.executor.base import BaseGraphExecutor
 from ppq.IR import (BaseGraph, GraphCommand, GraphCommandType, GraphFormatter,
                     GraphMerger)
 from ppq.IR.morph import GraphDeviceSwitcher
-from ppq.executor.base import BaseGraphExecutor
 from ppq.parser import *
 from ppq.quantization.optim.base import QuantizationOptimizationPass
 from ppq.quantization.quantizer import (ACADEMIC_INT4_Quantizer,
                                         ACADEMIC_Mix_Quantizer,
                                         ACADEMICQuantizer, BaseQuantizer,
-                                        ExtQuantizer,
+                                        ExtQuantizer, FPGAQuantizer,
                                         MetaxChannelwiseQuantizer,
                                         MetaxTensorwiseQuantizer,
-                                        NXP_Quantizer, ORT_PerChannelQuantizer,
+                                        NCNNQuantizer, NXP_Quantizer,
+                                        OpenvinoQuantizer,
+                                        ORT_PerChannelQuantizer,
                                         ORT_PerTensorQuantizer,
                                         PPL_DSP_Quantizer,
                                         PPL_DSP_TI_Quantizer,
                                         PPLCUDA_INT4_Quantizer,
                                         PPLCUDAMixPrecisionQuantizer,
-                                        NCNNQuantizer, FPGAQuantizer,
                                         PPLCUDAQuantizer, TensorRTQuantizer)
 from ppq.scheduler import DISPATCHER_TABLE, GraphDispatcher
 from torch.utils.data import DataLoader
@@ -49,7 +50,8 @@ QUANTIZER_COLLECTION = {
     TargetPlatform.ACADEMIC_INT8: ACADEMICQuantizer,
     TargetPlatform.ACADEMIC_INT4: ACADEMIC_INT4_Quantizer,
     TargetPlatform.ACADEMIC_MIX:  ACADEMIC_Mix_Quantizer,
-    TargetPlatform.FPGA_INT8   :  FPGAQuantizer
+    TargetPlatform.FPGA_INT8   :  FPGAQuantizer,
+    TargetPlatform.OPENVINO_INT8: OpenvinoQuantizer
 }
 
 PARSERS = {
@@ -67,6 +69,7 @@ EXPORTERS = {
     TargetPlatform.NXP_INT8:      NxpExporter,
     TargetPlatform.ONNX:          OnnxExporter,
     TargetPlatform.ONNXRUNTIME:   ONNXRUNTIMExporter,
+    TargetPlatform.OPENVINO_INT8: ONNXRUNTIMExporter,
     TargetPlatform.CAFFE:         CaffeExporter,
     TargetPlatform.NATIVE:        NativeExporter,
     TargetPlatform.EXTENSION:     ExtensionExporter,
@@ -276,6 +279,8 @@ def quantize_onnx_model(
         if verbose: quantizer.report()
         return quantizer._graph
     else:
+        executor = TorchExecutor(graph=ppq_ir, device=device)
+        executor.tracing_operation_meta(inputs=dummy_input)
         return quantizer._graph
 
 @ empty_ppq_cache
@@ -452,6 +457,8 @@ def quantize_caffe_model(
         if verbose: quantizer.report()
         return quantizer._graph
     else:
+        executor = TorchExecutor(graph=ppq_ir, device=device)
+        executor.tracing_operation_meta(inputs=dummy_input)
         return quantizer._graph
 
 @ empty_ppq_cache
@@ -546,6 +553,8 @@ def quantize_native_model(
         if verbose: quantizer.report()
         return quantizer._graph
     else:
+        executor = TorchExecutor(graph=ppq_ir, device=device)
+        executor.tracing_operation_meta(inputs=dummy_input)
         return quantizer._graph
 
 
@@ -578,10 +587,12 @@ def export_ppq_graph(
             directly into the model file, this parameter won't have effect at
             this situation
     """
+    # 如果没有后缀名，就添加一个后缀名上来
     postfix = ''
-    if platform in EXPORTING_POSTFIX:
-        postfix = EXPORTING_POSTFIX[platform]
-    graph_save_to += postfix
+    if '.'  not in str(graph_save_to):
+        if platform in EXPORTING_POSTFIX:
+            postfix = EXPORTING_POSTFIX[platform]
+        graph_save_to += postfix
 
     for save_path in [graph_save_to, config_save_to]:
         if save_path is None: continue

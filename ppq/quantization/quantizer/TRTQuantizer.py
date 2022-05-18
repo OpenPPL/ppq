@@ -97,3 +97,8 @@ class TensorRTQuantizer(BaseQuantizer):
     @ property
     def rounding_policy(self) -> RoundingPolicy:
         return RoundingPolicy.ROUND_HALF_EVEN
+
+    @ property
+    def activation_fusion_types(self) -> set:
+        # TensorRT 只对输入定点，不需要考虑激活函数融合
+        return {'Relu', 'Clip'}

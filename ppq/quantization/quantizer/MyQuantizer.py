@@ -177,3 +177,13 @@ class ExtQuantizer(BaseQuantizer):
             RoundingPolicy: [description]
         """
         return RoundingPolicy.ROUND_HALF_EVEN
+
+    @ property
+    def activation_fusion_types(self) -> set:
+        """activation_fusion_types 指明了所有要参与图融合的激活函数类型 被后续 activation fustion pass 所使用的
+        所有被列举在此的激活函数将会尝试和之前的计算节点进行联合定点。
+
+        Returns:
+            set: _description_
+        """
+        return {'Relu', 'Clip'}

@@ -120,6 +120,10 @@ class PPLCUDAQuantizer(BaseQuantizer):
     def rounding_policy(self) -> RoundingPolicy:
         return RoundingPolicy.ROUND_HALF_EVEN
 
+    @ property
+    def activation_fusion_types(self) -> set:
+        return {'Relu', 'Clip', 'Sigmoid', 'LeakyRelu'}
+
 
 class PPLCUDAMixPrecisionQuantizer(PPLCUDAQuantizer):
     def __init__(

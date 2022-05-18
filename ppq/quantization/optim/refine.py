@@ -191,7 +191,7 @@ class QuantizeRefinePass(QuantizationOptimizationPass):
                     assert len(operation.config.input_quantization_config) in {1, 2, 3}, f'Clip Operation {operation.name} should have 1 - 3 inputs, '\
                         f'while {len(operation.config.input_quantization_config)} was given, is graph definition different from onnx opset 11?'
                     for config in  operation.config.input_quantization_config[1: ]:
-                        config.state = QuantizationStates.PASSIVE_INIT
+                        config.state = QuantizationStates.FP32
                     continue
 
                 if operation.type == 'Pad':

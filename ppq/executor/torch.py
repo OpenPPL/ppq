@@ -337,7 +337,8 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
                 if operation.type not in platform_dispatching_table:
                     raise NotImplementedError(
                         f'Graph op: {operation.name}({operation.type}) '
-                        f'has no backend implementation on target platform {operation.platform}')
+                        f'has no backend implementation on target platform {operation.platform}.'
+                        'Register this op to ppq.executor.base.py and ppq.executor.op first')
                 operation_forward_func = platform_dispatching_table[operation.type]
                 operation_runtime_hook = hooks[operation.name] if (hooks is not None) and (operation.name in hooks) else None
                 inputs = [var.value for var in operation.inputs]

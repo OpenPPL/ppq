@@ -652,9 +652,15 @@ class GraphDeviceSwitcher(GraphCommandProcessor):
 
             for var in operation.inputs:
                 source_op = var.source_op
-                # TODO refine here.
-                if source_op is None: continue
-                if source_op.platform != TargetPlatform.SHAPE_OR_INDEX and not source_op.is_soi_generator:
+
+                if source_op is None and var.name in self.graph.inputs:
+                    boundary_op = DeviceSwitchOP(name='input_' + operation.name)
+                    self._graph.insert_op_between_var_and_op(inserting_op=boundary_op, up_var=var, down_op=operation)
+                    boundary_op.platform = TargetPlatform.SHAPE_OR_INDEX
+
+                elif (source_op is not None 
+                      and source_op.platform != TargetPlatform.SHAPE_OR_INDEX 
+                      and not source_op.is_soi_generator):
                     boundary_op = DeviceSwitchOP(name=source_op.name + '_' + operation.name)
                     self._graph.insert_op_between_ops(inserting_op=boundary_op, up_op=source_op, down_op=operation)
                     boundary_op.platform = TargetPlatform.SHAPE_OR_INDEX

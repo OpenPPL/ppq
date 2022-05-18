@@ -1,13 +1,12 @@
-from email import policy
 from typing import List
 
-from ppq.core import QuantizationStates, QuantizationProperty, DataType, NetworkFramework
+from ppq.core import (DataType, NetworkFramework, QuantizationProperty,
+                      QuantizationStates)
 from ppq.IR import BaseGraph, GraphExporter, QuantableOperation
 
-from .util import convert_value
-from .onnx_exporter import OnnxExporter
 from .caffe_exporter import CaffeExporter
-
+from .onnx_exporter import OnnxExporter
+from .util import convert_value
 
 
 class NCNNExporter(GraphExporter):
