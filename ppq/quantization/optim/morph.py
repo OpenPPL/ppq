@@ -888,7 +888,7 @@ class MetaxGemmSplitPass(QuantizationOptimizationPass):
             if op.attributes.get('transA') == 1:
                 raise ValueError(f'Can not process with operation {op.name}, transA=1 is not allowed.')
             if op.attributes.get('transB') == 1:
-                matmul.inputs[1].value = torch.permute(matmul.inputs[1].value, (1, 0))
+                matmul.inputs[1].value = matmul.inputs[1].value.permute(1, 0)
 
 
 class GRUSplitPass(QuantizationOptimizationPass):

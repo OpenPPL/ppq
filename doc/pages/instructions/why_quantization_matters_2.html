@@ -97,7 +97,7 @@
 
               <h2 id="headings">让我们开始一个实验</h2>
               <p>你一定正在好奇量化是如何加速你的网络的，接下来我们将深入了解这些运算背后的故事。在这里，我希望向你展示量化计算中的那些关键内容，但我们并不会深入到具体的硬件实现细节。如果您对于抱有更深入的兴趣，推荐您访问本文后附的相关文档进行更加深入的了解。</p>
-              
+
               <p>首先，我们给出一个测试程序帮助你来对此进行测试：</p>
               <pre class="line-numbers code-dark"><code class="language-markup">#include "ctime"
 #include "iostream" // 请你把引号改成尖括号
@@ -164,7 +164,7 @@ int main(){
   cout << retf << reti << retc;
 }</code></pre>
               <p>你需要注意，请将你的编译器优化关闭，再尝试运行上面的程序，否则你将得到截然不同的结果。如果你使用visual studio这样强大的ide，请将代码编译模式调节为release而非debug，从而防止额外的debug指令被编译到程序当中。</p>
-              
+
               <p>运行程序，你将获得这样的结果：</p>
               <ul>
                 <li>Float cost: 175ms</li>
@@ -184,7 +184,7 @@ int main(){
               <p><code>请注意上述结果可能因为编译环境的不同而产生显著差异。</code></p>
 
               <p>故事变得错综复杂起来了，但是没有关系，在解答你的疑问之前，不妨试试将程序中的+=运算改为/=，再次编译并运行（保持编译优化选项开启），你将得到如下的结果：</p>
-              
+
               <p>再次运行程序，你将得到如下结果：</p>
               <ul>
                 <li>Float cost: 236ms</li>
@@ -192,7 +192,7 @@ int main(){
                 <li>Char cost: 257ms</li>
               </ul>
               <p><code>请注意上述结果可能因为编译环境的不同而产生显著差异。</code></p>
-              
+
               <hr class="my-8">
 
               <h2 id="headings">现在，让我们谈谈量化</h2>
@@ -208,17 +208,17 @@ int main(){
               <p>借助反汇编工具，我们可以观察到测试程序的汇编代码，这反映了程序在CPU上的实际执行过程，你需要注意到这里我们展示的是未经编译器优化的汇编代码：</p>
 
               <pre class="line-numbers code-dark"><code class="language-markup">// 浮点加法：
-00CC1028  mov         edx,dword ptr [ebp-4]  
-00CC102B  mov         eax,dword ptr [arr]  
-00CC102E  movss       xmm0,dword ptr [sum]  
-00CC1033  addss       xmm0,dword ptr [eax+edx*4]  
+00CC1028  mov         edx,dword ptr [ebp-4]
+00CC102B  mov         eax,dword ptr [arr]
+00CC102E  movss       xmm0,dword ptr [sum]
+00CC1033  addss       xmm0,dword ptr [eax+edx*4]
 00CC1038  movss       dword ptr [sum], xmm0
 
 // 整数加法：
-00CC1077  mov         edx,dword ptr [ebp-4]  
-00CC107A  mov         eax,dword ptr [arr]  
-00CC107D  mov         ecx,dword ptr [sum]  
-00CC1080  add         ecx,dword ptr [eax+edx*4]  
+00CC1077  mov         edx,dword ptr [ebp-4]
+00CC107A  mov         eax,dword ptr [arr]
+00CC107D  mov         ecx,dword ptr [sum]
+00CC1080  add         ecx,dword ptr [eax+edx*4]
 00CC1083  mov         dword ptr [sum],ecx</code></pre>
 
               <p>不用害怕，你并不需要了解这些代码的细节，事实上在汇编层面上，浮点加法与整数加法只有三条指令存在区别，即最后mov, add指令；在FP32数据类型上，CPU需要使用浮点版本的 movss, addss 指令完成计算。在这里我可以告诉你的是，movss, addss指令的执行确实比mov, add要慢一些，其中一部分原因是movss, addss在一些CPU上可能会被拆分成多条微指令发射执行，而mov, add则并不需要。附录中我们展示了这些指令的执行细节情况，如果你有兴趣可以继续查阅这些资料：</p>
@@ -266,29 +266,29 @@ int main(){
               <p><code>请注意上述结果可能因为编译环境的不同而产生显著差异。</code></p>
               <p>上述代码段是未经编译器优化的，而当开启了编译优化选项后，编译后的程序逻辑将发生大幅度的变化：</p>
               <pre class="line-numbers code-dark"><code class="language-markup">// 浮点加法（编译优化）：
-00811010  addss       xmm0,dword ptr [edx-8]  
-00811015  addss       xmm0,dword ptr [edx-4]  
-0081101A  addss       xmm0,dword ptr [edx]  
-0081101E  addss       xmm0,dword ptr [edx+4]  
-00811023  addss       xmm0,dword ptr [edx+8]  
-00811028  addss       xmm0,dword ptr [edx+0Ch]  
-0081102D  addss       xmm0,dword ptr [edx+10h]  
-00811032  addss       xmm0,dword ptr [edx+14h]  
-00811037  addss       xmm0,dword ptr [edx+18h]  
-0081103C  addss       xmm0,dword ptr [edx+1Ch]  
-00811041  add         edx,28h  
-                
+00811010  addss       xmm0,dword ptr [edx-8]
+00811015  addss       xmm0,dword ptr [edx-4]
+0081101A  addss       xmm0,dword ptr [edx]
+0081101E  addss       xmm0,dword ptr [edx+4]
+00811023  addss       xmm0,dword ptr [edx+8]
+00811028  addss       xmm0,dword ptr [edx+0Ch]
+0081102D  addss       xmm0,dword ptr [edx+10h]
+00811032  addss       xmm0,dword ptr [edx+14h]
+00811037  addss       xmm0,dword ptr [edx+18h]
+0081103C  addss       xmm0,dword ptr [edx+1Ch]
+00811041  add         edx,28h
+
 // 整数加法（编译优化）：
-00811060  movups      xmm0,xmmword ptr [edx+eax*4]  
-00811064  paddd       xmm2,xmm0  
-00811068  movups      xmm0,xmmword ptr [edx+eax*4+10h]  
-0081106D  add         eax,8  
-00811070  paddd       xmm1,xmm0  
-00811074  cmp         eax,5F5E100h  
-00811079  jl          intSum+10h (0811060h)  
+00811060  movups      xmm0,xmmword ptr [edx+eax*4]
+00811064  paddd       xmm2,xmm0
+00811068  movups      xmm0,xmmword ptr [edx+eax*4+10h]
+0081106D  add         eax,8
+00811070  paddd       xmm1,xmm0
+00811074  cmp         eax,5F5E100h
+00811079  jl          intSum+10h (0811060h)
 </code></pre>
               <p>同样地，你并不需要了解这些编译的细节。在浮点加法程序当中，编译器执行了循环展开的优化，这让他的循环逻辑看起来十分奇怪——这并不是很重要。而在整数加法程序中，编译器使用了SSE指令集对程序进行了优化，该指令集在一系列128bit宽度的寄存器的基础上，提供了一系列“批处理”指令，从而使得一条指令可以对4个int32,或16个int8进行数值求和。这显然大大提升了程序的执行效率。记住SSE指令集能够使得原来4次运算才能完成的任务，缩短为一次，这就是问题的<strong>核心内容</strong>。</p>
-              
+
               <table class="table">
                 <thead>
                   <tr>
@@ -344,7 +344,7 @@ int main(){
                   </tr>
                 </tbody>
               </table>
-              
+
               <p>注意：int8运算发挥高效的重要原因是这些特殊指令集的运用，在开启编译优化选项后，int8的求和运算直接受益于SSE指令集，此时一次将完成16个int8数值的求和，这使得int8的运算速度大幅度快于fp32。</p>
 
               <p>对于除法而言，我们发现整数除法，浮点除法，int8除法没有任何性能差别，甚至浮点除法最快；这也与硬件有关，事实上x86 cpu中对于除法而言，整数运算没有任何优势。</p>
@@ -352,7 +352,7 @@ int main(){
 
               <h2 id="headings">最后，你还需要知道</h2>
               <p>除了指令集之外地你还需要认识到，一次计算的完成并非只有指令执行这一个短暂的阶段，还要包括<strong>“取指”，“译码”，“访存”</strong>等多个过程。下图向你展示了他们的关系：</p>
-              
+
               <div class="text-center">
                 <figure class="figure img-thumbnail bg-lighter">
                     <img src="../../assets/pic/InsturctionExecution.png" class="figure-img img-fluid" alt="Image">
@@ -361,7 +361,7 @@ int main(){
               </div>
 
               <p>是的，对于现代计算机而言，访存所需要花费的时间远远高于执行指令所需的时间，但得益于内存排布的合理优化，指令流水线的应用，以及内存的相关访存优化，我们能够大幅度的掩盖程序中的访存延迟。当你仍需注意到，对于int8量化的程序而言，它所需要的访存总量总是浮点程序的四分之一，这也是量化计算高效的一大重要原因。</p>
-              
+
               <p>总结而言，你的程序运行的性能至少将受到以下几个方面因素的影响：</p>
               <ol>
                 <li>编译器，以及相关的编译优化。</li>

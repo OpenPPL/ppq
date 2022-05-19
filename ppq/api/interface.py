@@ -3,7 +3,7 @@ from typing import Any, Callable, List
 
 import torch
 from ppq.core import (NetworkFramework, TargetPlatform, empty_ppq_cache,
-                      ppq_warning, PPQ_CONFIG)
+                      ppq_warning)
 from ppq.executor import TorchExecutor
 from ppq.executor.base import BaseGraphExecutor
 from ppq.IR import (BaseGraph, GraphCommand, GraphCommandType, GraphFormatter,

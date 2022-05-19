@@ -65,7 +65,7 @@ def load_calibration_dataset(
         sample = sample.float()
 
         if sample.ndim == 3: sample = sample.unsqueeze(0)
-        if input_format == 'hwc': sample = torch.permute(sample, [0, 3, 1, 2])
+        if input_format == 'hwc': sample = sample.permute([0, 3, 1, 2])
 
         assert sample.shape[1] == 1 or sample.shape[1] == 3 or sample.shape[1] == 4, (
             f'你的文件 {os.path.join(directory, file)} 拥有 {sample.shape[1]} 个输入通道. '

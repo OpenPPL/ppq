@@ -409,7 +409,7 @@ class ONNXRUNTIMExporter(OnnxExporter):
             opsets.append(op)
 
         onnx_model = helper.make_model(
-            graph_def, producer_name=PPQ_CONFIG.PPQ_DEBUG, opset_imports=opsets)
+            graph_def, producer_name=PPQ_CONFIG.NAME, opset_imports=opsets)
         onnx_model.ir_version = 7
         # onnx.checker.check_model(onnx_model)
         onnx.save(onnx_model, file_path)
