@@ -291,16 +291,15 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
         output_names:List[str] = None,
         hooks: Dict[str, RuntimeHook] = None,
     ) -> List[torch.Tensor]:
-
         # processing with different input format
         if isinstance(inputs, dict):
             # directly feed value into variables
             for name, value in inputs.items():
-                if name not in self._graph.variables:
-                    raise KeyError(f'Can not find variable {name} in your graph.')
-                else:
+                if name in self._graph.variables:
                     var = self._graph.variables[name]
                     var.value = value
+                else:
+                    print(f'Can not find variable {name} in your graph, please check.')
         else:
             inputs = self.prepare_input(inputs=inputs)
             for key, value in inputs.items():
