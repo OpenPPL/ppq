@@ -73,11 +73,11 @@ class RuntimeCalibrationPass(QuantizationOptimizationPass):
         self._collate_fn = collate_fn
         self._calib_steps = calib_steps
         assert calib_steps >= 8, 'Insufficient Calibration Detected, to better quantize your network, '\
-            'more calibration steps is demonded, we strongly recommend you to prepare more calibration data '\
+            'more calibration steps is required, we strongly recommend you to prepare more calibration data '\
             'and more calibration steps is preferred here. (at least 8)'
 
-        assert calib_steps <= 512, 'Calibration steps is too large, ppq is capable for quantizing your network within 32-128 '\
-            'calibration steps. More calibraiton steps will greatly delay ppq\'s calibration procedure. '\
+        assert calib_steps <= 512, 'Calibration steps is too large, ppq is capable for quantizing your network within 8-512 '\
+            'calibration steps. More calibration steps will greatly delay ppq\'s calibration procedure. '\
             'Reset your calib_steps parameter please.'
 
         # -------------------------------------------------
