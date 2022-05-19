@@ -1,6 +1,6 @@
 from pickle import dump, load
 
-from ppq.core import PPQ_VERSION
+from ppq.core import PPQ_CONFIG
 from ppq.IR import BaseGraph, GraphExporter
 from ppq.IR.base.graph import GraphBuilder
 
@@ -16,7 +16,7 @@ class NativeExporter(GraphExporter):
         with open(file_path, 'wb') as file:
             dump_elements_to_file(file, elements=[
                 'PPQ GRAPH DEFINITION', # PPQ Signature.
-                PPQ_VERSION,            # PPQ Signature.
+                PPQ_CONFIG.VERSION,            # PPQ Signature.
                 graph,
             ])
 
@@ -34,9 +34,9 @@ class NativeImporter(GraphBuilder):
             signature, version, graph = load_elements_from_file(file, 3)
             if signature != 'PPQ GRAPH DEFINITION':
                 raise Exception('File format parsing error. Graph Signature has been damaged.')
-            if str(version) > PPQ_VERSION:
+            if str(version) > PPQ_CONFIG.VERSION:
                 print(f'\033[31mWarning: Dump file is created by PPQ({str(version)}), '
-                f'however you are using PPQ({PPQ_VERSION}).\033[0m')
+                f'however you are using PPQ({PPQ_CONFIG.VERSION}).\033[0m')
 
         assert isinstance(graph, BaseGraph), (
             'File format parsing error. Graph Definition has been damaged.')

@@ -59,9 +59,7 @@ from .defs    import *
 from .storage import *
 from .config  import *
 from .common  import *
-
-if USING_CUDA_KERNEL:
-  from .ffi import CUDA
+from .ffi import CUDA
 
 print("""
       ____  ____  __   ____                    __              __

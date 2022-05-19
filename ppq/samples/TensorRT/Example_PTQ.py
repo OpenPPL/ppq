@@ -25,7 +25,7 @@ REQUIRE_ANALYSE  = True
 # -------------------------------------------------------------------
 # 下面向你展示了常用参数调节选项：
 # -------------------------------------------------------------------
-if USING_CUDA_KERNEL:
+if PPQ_CONFIG.USING_CUDA_KERNEL:
     QS.advanced_optimization = FINETUNE                             # 启动网络再训练过程，降低量化误差
     QS.advanced_optimization_setting.steps = 2500                   # 再训练步数，影响训练时间，2500步大概几分钟
     QS.advanced_optimization_setting.collecting_device = 'executor' # 缓存数据放在那，executor 就是放在gpu，如果显存超了你就换成 'cpu'

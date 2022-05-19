@@ -5,7 +5,7 @@ from typing import Iterable, List, Tuple, Union
 
 import numpy as np
 import torch
-from ppq.core import (NUM_OF_CHECKPOINT_FETCHS, USING_CUDA_KERNEL,
+from ppq.core import (NUM_OF_CHECKPOINT_FETCHS, PPQ_CONFIG,
                       ChannelwiseTensorQuantizationConfig, NetworkFramework,
                       QuantizationProperty, QuantizationStates, RoundingPolicy,
                       TensorQuantizationConfig, convert_any_to_torch_tensor)
@@ -17,11 +17,11 @@ from ppq.utils.fetch import batch_random_fetch
 from ppq.utils.round import ppq_tensor_round
 from torch.autograd import Function
 
-if USING_CUDA_KERNEL:
+if PPQ_CONFIG.USING_CUDA_KERNEL:
     from ppq.core import CUDA
 
 
-if not USING_CUDA_KERNEL:
+if not PPQ_CONFIG.USING_CUDA_KERNEL:
     class Clip_T(Function):
         """Tensorwise Clip function requires an input tensor t, a reference
         tensor r, and a limit tensor.
@@ -106,7 +106,7 @@ if not USING_CUDA_KERNEL:
             return torch.sum(torch.abs(qt - tensor)) / sqrt(qt.numel())
 
 
-else: # if USING_CUDA_KERNEL:
+else: # if PPQ_CONFIG.USING_CUDA_KERNEL:
     class Clip_T(Function):
         """Tensorwise Clip function requires an input tensor t, a reference
         tensor r, and a limit tensor.
@@ -295,7 +295,7 @@ class RQTDelegator(TorchQuantizeDelegate):
     USE THIS FUNCTION TO REPLACE PPQ EXECUTOR'S QUANTIZATION LOGIC WITH
         executor.register_quant_delegator(config, RQTDelegator())
 
-    ATTENTION: RQT FUNCTIONS ARE AVAILABLE WITH USING_CUDA_KERNEL = True
+    ATTENTION: RQT FUNCTIONS ARE AVAILABLE WITH PPQ_CONFIG.USING_CUDA_KERNEL = True
     """
     def __init__(
         self, binding: Variable, config: TensorQuantizationConfig, limit: float) -> None:
@@ -331,7 +331,7 @@ class RQTDelegator(TorchQuantizeDelegate):
                  config: TensorQuantizationConfig) -> torch.Tensor:
         if not QuantizationStates.is_activated(config.state): return tensor
         if self.limit == 0: return PPQLinearQuantFunction(tensor, config)
-        if not USING_CUDA_KERNEL: return PPQLinearQuantFunction(tensor, config)
+        if not PPQ_CONFIG.USING_CUDA_KERNEL: return PPQLinearQuantFunction(tensor, config)
 
         return PPQTensorClip(
             tensor=PPQLinearQuantFunction(tensor, config),
@@ -349,7 +349,7 @@ class LSQDelegator(TorchQuantizeDelegate):
     USE THIS FUNCTION TO REPLACE PPQ EXECUTOR'S QUANTIZATION LOGIC WITH
         executor.register_quant_delegator(config, LSQDelegator())
 
-    ATTENTION: THIS FUNCTION IS AVAILABLE ONLY WITH USING_CUDA_KERNEL = True
+    ATTENTION: THIS FUNCTION IS AVAILABLE ONLY WITH PPQ_CONFIG.USING_CUDA_KERNEL = True
     """
     def __init__(self, binding: Variable,
                  config: TensorQuantizationConfig, dropout: float) -> None:

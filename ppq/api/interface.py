@@ -3,7 +3,7 @@ from typing import Any, Callable, List
 
 import torch
 from ppq.core import (NetworkFramework, TargetPlatform, empty_ppq_cache,
-                      ppq_warning)
+                      ppq_warning, PPQ_CONFIG)
 from ppq.executor import TorchExecutor
 from ppq.executor.base import BaseGraphExecutor
 from ppq.IR import (BaseGraph, GraphCommand, GraphCommandType, GraphFormatter,
@@ -927,13 +927,12 @@ class ENABLE_CUDA_KERNEL:
         self._state = False
 
     def __enter__(self):
-        global USING_CUDA_KERNEL
-        self._state = USING_CUDA_KERNEL
-        USING_CUDA_KERNEL = True
-    
-    def __exit__(self):
-        global USING_CUDA_KERNEL
-        USING_CUDA_KERNEL = self._state
+        self._state = PPQ_CONFIG.USING_CUDA_KERNEL
+        PPQ_CONFIG.USING_CUDA_KERNEL = True
+
+    def __exit__(self, *args):
+        PPQ_CONFIG.USING_CUDA_KERNEL = self._state
+
 
 class DISABLE_CUDA_KERNEL:
     """ Any code surrounded by 
@@ -949,13 +948,11 @@ class DISABLE_CUDA_KERNEL:
         pass
     
     def __enter__(self):
-        global USING_CUDA_KERNEL
-        self._state = USING_CUDA_KERNEL
-        USING_CUDA_KERNEL = False
+        self._state = PPQ_CONFIG.USING_CUDA_KERNEL
+        PPQ_CONFIG.USING_CUDA_KERNEL = False
     
-    def __exit__(self):
-        global USING_CUDA_KERNEL
-        USING_CUDA_KERNEL = self._state
+    def __exit__(self, *args):
+        PPQ_CONFIG.USING_CUDA_KERNEL = self._state
 
 
 __all__ = ['load_graph', 'load_onnx_graph', 'load_caffe_graph',

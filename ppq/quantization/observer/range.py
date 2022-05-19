@@ -2,9 +2,9 @@
 from typing import Tuple
 
 import torch
-from ppq.core import (OBSERVER_KL_COMPUTING_DEVICE, OBSERVER_KL_HIST_BINS,
-                      OBSERVER_MIN_SCALE, OBSERVER_MSE_HIST_BINS,
-                      OBSERVER_PERCENTILE, USING_CUDA_KERNEL,
+from ppq.core import (CUDA, OBSERVER_KL_COMPUTING_DEVICE,
+                      OBSERVER_KL_HIST_BINS, OBSERVER_MIN_SCALE,
+                      OBSERVER_MSE_HIST_BINS, OBSERVER_PERCENTILE, PPQ_CONFIG,
                       ChannelwiseTensorQuantizationConfig,
                       QuantizationProperty, QuantizationStates, RoundingPolicy,
                       TensorQuantizationConfig, convert_any_to_numpy,
@@ -14,8 +14,6 @@ from ppq.quantization.measure import torch_KL_divergence
 from ppq.utils.round import ppq_numerical_round, ppq_round_to_power_of_2
 
 from .base import BaseTensorObserver
-
-if USING_CUDA_KERNEL: from ppq.core import CUDA
 
 
 @ ppq_quant_param_computing_function
@@ -122,7 +120,7 @@ class TorchHistObserver(TorchMinMaxObserver):
         elif self._phase == 'Collating Hist':
             if self._hist is None:
                 self._hist = torch.zeros(size=(self._hist_bins,), dtype=torch.int32, device=value.device)
-            if USING_CUDA_KERNEL and value.is_cuda:
+            if PPQ_CONFIG.USING_CUDA_KERNEL and value.is_cuda:
                 CUDA.Histogram_T(tensor=value, histogram=self._hist, scale=self._hist_scale)
             else:
                 hist = torch.histc(torch.abs(value), self._hist_bins, min=0, max=self._hist_scale * self._hist_bins)
@@ -249,15 +247,17 @@ class TorchPercentileObserver(BaseTensorObserver):
         assert value.numel() > 0, (f'You are observing an empty tensor({self._watch_on.name}).')
         assert isinstance(value, torch.Tensor), 'TorchMinMaxObserver can only deal with torch Tensor values'
         if self._quant_cfg.state == QuantizationStates.INITIAL:
-            if value.numel() >= pow(2, 24) and not USING_CUDA_KERNEL:
-                raise Exception('You got a tensor with more than 16777216 values, '
-                    'torch.quantile can not handle such many values. '
-                    'Use other observe algorithm instead.')
             if self._quant_cfg.policy.has_property(QuantizationProperty.PER_TENSOR):
-                if not USING_CUDA_KERNEL or (not value.is_cuda):
-                    min = -(-value).flatten().quantile(q=self._percentile).view(1, -1)
-                    max = value.flatten().quantile(q=self._percentile).view(1, -1)
-                    self._percentile_collector.append(torch.cat([max, min], dim=-1))
+                if not PPQ_CONFIG.USING_CUDA_KERNEL or (not value.is_cuda):
+                    numel = value.numel()
+                    
+                    min_idx, max_idx = int(numel * (1 - self._percentile)), int(numel * (self._percentile))
+                    # torch.kthvalue needs index from 1 to numel ...
+                    min_idx = max(0, min_idx) + 1
+                    max_idx = min(max_idx, numel - 1) + 1
+                    _min = torch.kthvalue(value.flatten(), k = min_idx, dim=0)[0].view(1, -1)
+                    _max = torch.kthvalue(value.flatten(), k = max_idx, dim=0)[0].view(1, -1)
+                    self._percentile_collector.append(torch.cat([_max, _min], dim=-1))
                 else:
                     self._percentile_collector.append(CUDA.Quantile(value, self._percentile).view(1, -1))
             elif self._quant_cfg.policy.has_property(QuantizationProperty.PER_CHANNEL):

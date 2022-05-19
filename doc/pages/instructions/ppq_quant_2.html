@@ -100,7 +100,7 @@
               <h2 id="headings">Quantizer</h2>
               <p>Quantizer(量化器) 在 PPQ 中扮演着中枢的角色，它负责说明网络中哪些部分需要量化，如何量化；而那些部分不需要被量化。同时负责调用其他 PPQ 组件完成这些量化。</p>
               <p>你总是可以在 ppq.api.QUANTIZER_COLLECTION 里面找到 PPQ 目前所支持的所有量化器，也可以尝试自己写一个注册到这里。每一个量化器都对一个部署平台（或几个）负责，用来确保量化的网络满足平台的部署要求。</p>
-
+              
               <p>下表展示了 PPQ 部署平台的差异性：</p>
               <table class="table small" >
                 <thead>
@@ -122,7 +122,7 @@
                     <td>ROUND_TO_NEAR_EVEN</td>
                     <td>PPL_CUDA_INT8, TensorRT</td>
                   </tr>
-
+                  
                   <tr>
                     <th scope="row">NXP_INT8</th>
                     <td>逐通道线性对称量化(参数，Power-of-2)，逐层线性对称量化(激活值，Power-of-2)</td>
@@ -142,9 +142,9 @@
                   </tr>
                 </tbody>
               </table>
-
+              
               <p>是的，上述所有量化策略、位宽、图融合、取整策略，都是由量化器根据目标平台特性决定的。量化器会为每一个需要量化的算子初始化它们的量化信息(Tensor Quantization Config)，并组建一个网络优化队列(QuantizationOptimPipeline)来完成量化，这就是它的全部核心逻辑。</p>
-
+              
               <hr>
               <h2 id="headings">Quantization Optimization Pipeline</h2>
               <p>Quantization Optimization Pipeline(优化管线) 又是一个十分重要的抽象结构，它是 Opimization Pass 的容器，这些 Opimization Pass 将对图做出一系列更改，从而完成图的量化过程。常用到的 Opimization Pass 包括：</p>
@@ -165,7 +165,7 @@
               </div>
               <p><strong>请记住：</strong>在PPQ中所有实际的量化过程都是由Quantization Optimization Pipeline与Quantization Optimization Pass完成的，这是 PPQ 量化的核心逻辑之一，作为终端用户，您可以使用 PPQ 已经提供的所有优化过程完成网络的量化，它们通常是平台无关的。也可以自定义新的优化过程实现自定义的量化逻辑。</p>
               <p>你可以使用 ppq.api.setting 来向 Quantizer 与 Quantization Optimization Pipeline 传递参数，并控制它们的量化逻辑。针对未知的硬件平台，你可以创建新的 Quantizer 与 Quantization Optimization Pass 来实现自定义的逻辑。</p>
-
+              
               <hr>
               <h2 id="headings">Dequantize & Graph Anaylse</h2>
               <p>PPQ 使用一种自定义的，面向量化的计算图表示神经网络，其定义于ppq.ir.base.graph.py，与Pytorch、tensorflow这样的面向训练的神经网络框架不同，在PPQ中的计算图结构原生地包含了所有量化信息，它是为了完成量化操作而设计的。</p>
@@ -173,7 +173,7 @@
               <p><strong>operation.dequantize()</strong>方法重置算子的权重为浮点值，同时将算子上所有 Tensor Quantization Config 的状态置为 dequantized。</p>
               <p>在此基础上，PPQ 提供了一种函数用来帮助你确定网络量化中可能出现的问题: <strong>ppq.graph_similarity_analyse()</strong> 函数会在量化模式与非量化模式中不停切换，从而测量网络中每一个量化算子的量化误差。所谓量化误差即量化模式中算子的输出值与非量化模式中算子输出值的差异。</p>
               <p>你总是可以利用该方法快速地探测到量化误差较大的算子，并针对性地解决，这大大提升了量化的效率。</p>
-
+            
             </article>
           </div>
         </div>

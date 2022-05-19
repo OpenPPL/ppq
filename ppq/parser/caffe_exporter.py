@@ -4,7 +4,7 @@ from copy import deepcopy
 from typing import List
 
 import torch
-from ppq.core import (EXPORT_DEVICE_SWITCHER, DataType, QuantizationProperty,
+from ppq.core import (PPQ_CONFIG, DataType, QuantizationProperty,
                       QuantizationStates, TargetPlatform,
                       TensorQuantizationConfig, convert_any_to_torch_tensor)
 from ppq.executor.torch import TorchExecutor
@@ -100,7 +100,7 @@ class CaffeExporter(GraphExporter):
 
     def prepare_model(self, graph: BaseGraph, input_shapes: List[List[int]]):
         # remove device switcher if necessary
-        if not EXPORT_DEVICE_SWITCHER:
+        if not PPQ_CONFIG.EXPORT_DEVICE_SWITCHER:
             processor = GraphDeviceSwitcher(graph)
             processor.remove_switcher()
 

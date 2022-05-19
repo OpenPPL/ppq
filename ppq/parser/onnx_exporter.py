@@ -5,14 +5,13 @@ import numpy as np
 import onnx
 import torch
 from onnx import helper, numpy_helper
-from ppq.core import (EXPORT_DEVICE_SWITCHER, EXPORT_PPQ_INTERNAL_INFO,
-                      ONNX_EXPORT_NAME, ONNX_EXPORT_OPSET, ONNX_VERSION,
-                      PPQ_NAME, DataType, convert_any_to_numpy)
+from ppq.core import (ONNX_EXPORT_OPSET, ONNX_VERSION, PPQ_CONFIG, DataType,
+                      convert_any_to_numpy)
+from ppq.core.defs import ppq_warning
 from ppq.IR import (BaseGraph, GraphExporter, Operation, OperationExporter,
                     Variable)
 from ppq.IR.morph import GraphDeviceSwitcher
 from ppq.IR.quantize import QuantableOperation
-from ppq.core.defs import ppq_warning
 
 
 class ConstantOfShapeExporter(OperationExporter):
@@ -123,7 +122,7 @@ class OnnxExporter(GraphExporter):
             if isinstance(value, torch.Tensor):
                 attributes[key] = convert_any_to_numpy(value)
 
-        if EXPORT_PPQ_INTERNAL_INFO:
+        if PPQ_CONFIG.EXPORT_PPQ_INTERNAL_INFO:
             attributes['platform'] = operation.platform.name
         op_proto = helper.make_node(
             op_type=operation.type,
@@ -172,12 +171,12 @@ class OnnxExporter(GraphExporter):
         # so there have to take a clone of it.
         # graph = graph.copy()
         # remove switchers.
-        if not EXPORT_DEVICE_SWITCHER:
+        if not PPQ_CONFIG.EXPORT_DEVICE_SWITCHER:
             processor = GraphDeviceSwitcher(graph)
             processor.remove_switcher()
 
         name = graph._name
-        if not name: name = ONNX_EXPORT_NAME
+        if not name: name = f'{PPQ_CONFIG.NAME} - v({PPQ_CONFIG.VERSION})'
 
         # if a valid config path is given, export quantization config to there.
         if config_path is not None:
@@ -219,7 +218,7 @@ class OnnxExporter(GraphExporter):
                 opsets.append(op)
 
         onnx_model = helper.make_model(
-            graph_def, producer_name=PPQ_NAME, opset_imports=opsets)
+            graph_def, producer_name=PPQ_CONFIG.NAME, opset_imports=opsets)
         onnx_model.ir_version = ONNX_VERSION
         # onnx.checker.check_model(onnx_model)
         onnx.save(onnx_model, file_path)

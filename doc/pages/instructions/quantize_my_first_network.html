@@ -106,9 +106,9 @@
                 <li>一个完整的测试数据集(test dataset)，用于测试量化模型的精度</li>
                 <li>一块 Nvidia GPU，必须插在您的主板上并且正常供电；是的，拿在手上的不行</li>
               </ul>
-
+              
               <p>在这里我必须要提醒你校准数据集的要求，PPQ 要求校准数据集必须具有<strong> 8~512 </strong>个样本数据，与此同时它们不需要带有 <strong>标签</strong>。然而我需要提醒你请不要使用 calib_dataset = train_dataset[:512] 这样的作法，为了使我们的校准数据尽可能分散，我们希望你使用随机采样的方法从网络训练集或者其他什么地方构建校准集合。</p>
-
+              
               <hr>
               <h2 id="headings">加载我的神经网络模型</h2>
               <p>这里我们以 pytorch 中的 resnet 18 模型为例，向你展示如何通过 ppq.api 完成网络的量化，事实上它非常简单，仅仅需要一个函数调用就可以完成：</p>
@@ -123,9 +123,9 @@ dataloader = load_imagenet_from_directory(directory='YOUR IMAGENET PATH HERE.', 
 
 # quantize your network with only following call.
 quantized_model = quantize_torch_model(
-    model=model, calib_dataloader=dataloader, calib_steps=16,
-    input_shape=[32, 3, 224, 224], collate_fn=lambda x: x.to('cuda'),
-    platform=TargetPlatform.PPL_CUDA_INT8, device='cuda')
+    model=model, calib_dataloader=dataloader, calib_steps=16, 
+    input_shape=[32, 3, 224, 224], collate_fn=lambda x: x.to('cuda'), 
+    platform=TargetPlatform.PPL_CUDA_INT8, device='cuda')   
 </code></pre>
               <p>哦，我已经听到了你的惊呼，这个函数所需要的参数真是太多了！它们都是做什么的？让我来为你一一解答：</p>
               <ul>
@@ -149,16 +149,16 @@ dataloader = load_imagenet_from_directory(directory='YOUR IMAGENET PATH HERE.', 
 
 # quantize your network with only following call.
 quantized_model = quantize_onnx_model(
-    onnx_import_file='YOUR ONNX FILE PATH HERE', calib_dataloader=dataloader, calib_steps=16,
-    input_shape=[32, 3, 224, 224], collate_fn=lambda x: x.to('cuda'),
+    onnx_import_file='YOUR ONNX FILE PATH HERE', calib_dataloader=dataloader, calib_steps=16, 
+    input_shape=[32, 3, 224, 224], collate_fn=lambda x: x.to('cuda'), 
     platform=TargetPlatform.PPL_CUDA_INT8, device='cuda')
 
 quantized_model = quantize_caffe_model(
     caffe_import_file='YOUR CAFFE FILE PATH HERE',
     caffe_weight_file='YOUR CAFFE FILE PATH HERE',
-    calib_dataloader=dataloader, calib_steps=16,
-    input_shape=[32, 3, 224, 224], collate_fn=lambda x: x.to('cuda'),
-    platform=TargetPlatform.PPL_CUDA_INT8, device='cuda')
+    calib_dataloader=dataloader, calib_steps=16, 
+    input_shape=[32, 3, 224, 224], collate_fn=lambda x: x.to('cuda'), 
+    platform=TargetPlatform.PPL_CUDA_INT8, device='cuda')   
 </code></pre>
 
               <p>是的，正如你所看到的那样，我们使用几乎相同的接口来量化 onnx, caffe, pytorch 的模型。</p>
@@ -168,9 +168,9 @@ quantized_model = quantize_caffe_model(
               <p>你或许已经注意到，在完成量化之后我们获得了一个被称为是 quantized_model 的对象，它是 ppq.IR.BaseGraph 的一个实例。 quantized_model 包含了 PPQ 完整的计算图定义，其地位与 pytorch 中的 Model 是等价的。这个对象包含了网络量化所需的一切信息——它十分复杂，我们还不能够向你完全介绍它的内部结构，但我们会逐渐揭开它的神秘面纱，这对理解量化而言是至关重要的。</p>
 
               <p>在进一步了解 Quantized Model 的内部构造之前，我们还需要完成量化的最后一个环节：生成硬件 Runtime 支持的量化配置文件和网络信息，PPQ 已经做好了许多量化平台的支持，你只需要通过 ppq.api.export_ppq_graph 来使用这些功能：</p>
-
-              <pre class="line-numbers code-dark"><code class="language-markup">export_ppq_graph(graph=quantized_model, platform=TargetPlatform.PPL_CUDA_INT8,
-            graph_save_to='MODEL SAVE PATH HERE',
+              
+              <pre class="line-numbers code-dark"><code class="language-markup">export_ppq_graph(graph=quantized_model, platform=TargetPlatform.PPL_CUDA_INT8, 
+            graph_save_to='MODEL SAVE PATH HERE', 
             config_save_to='CONFIG SAVE PATH HERE')</code></pre>
 
               <ul>
@@ -179,7 +179,7 @@ quantized_model = quantize_caffe_model(
                 <li>参数 graph_save_to: 一个字符串，网络模型将被保存到此处</li>
                 <li>参数 config_save_to: 一个字符串，量化参数信息将被保存到此处（如果目标平台需要）</li>
               </ul>
-
+              
               <p>PPQ 目前支持导出 PPL.CUDA, PPL.DSP, TensorRT, Onnx, Caffe, Native, Nxp 七种平台的模型文件与部署信息。这些导出文件将被用于在硬件端上完成部署。</p>
 
               <p>至此，你已经完成了网络量化的全部过程。接下来我们将向你介绍系统更为复杂的使用案例。</p>

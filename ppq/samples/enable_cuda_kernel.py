@@ -1,7 +1,7 @@
-# Since ppq 0.6.4, USING_CUDA_KERNEL = False is the defualt execution option in ppq.
+# Since ppq 0.6.4, PPQ_CONFIG.USING_CUDA_KERNEL = False is the defualt execution option in ppq.
 # However you should notice that if you are able to compile ppq kernel functions, the execution speed wiil boost at least 3x.
 # This example will show you how to enable kernel function within ppq.
-# if you want to use kernel function everywhere, just rewrite ppq.core.config.USING_CUDA_KERNEL = True
+# if you want to use kernel function everywhere, just rewrite ppq.core.config.PPQ_CONFIG.USING_CUDA_KERNEL = True
 
 from typing import Iterable
 

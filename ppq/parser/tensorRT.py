@@ -17,7 +17,7 @@
 from typing import Dict
 
 import torch
-from ppq.core import (EXPORT_DEVICE_SWITCHER, DataType, OperationMeta,
+from ppq.core import (PPQ_CONFIG, DataType, OperationMeta,
                       TensorMeta, TensorQuantizationConfig,
                       convert_any_to_torch_tensor, ppq_warning)
 from ppq.IR import BaseGraph
@@ -127,7 +127,7 @@ class TensorRTExporter(ONNXRUNTIMExporter):
         self.convert_operation_from_opset11_to_opset13(graph)
 
         # remove switchers.
-        if not EXPORT_DEVICE_SWITCHER:
+        if not PPQ_CONFIG.EXPORT_DEVICE_SWITCHER:
             processor = GraphDeviceSwitcher(graph)
             processor.remove_switcher()
 

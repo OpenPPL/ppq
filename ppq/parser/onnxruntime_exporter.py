@@ -3,9 +3,8 @@ from typing import Dict, List
 import onnx
 import torch
 from onnx import helper
-from ppq.core import (EXPORT_DEVICE_SWITCHER, PPQ_NAME,
-                      ChannelwiseTensorQuantizationConfig, DataType,
-                      OperationMeta, QuantizationProperty,
+from ppq.core import (PPQ_CONFIG, ChannelwiseTensorQuantizationConfig,
+                      DataType, OperationMeta, QuantizationProperty,
                       QuantizationStates, TensorMeta, TensorQuantizationConfig,
                       convert_any_to_torch_tensor)
 from ppq.IR import BaseGraph, Operation, QuantableOperation, QuantableVariable
@@ -341,7 +340,7 @@ class ONNXRUNTIMExporter(OnnxExporter):
         self.convert_operation_from_opset11_to_opset13(graph)
 
         # remove switchers.
-        if not EXPORT_DEVICE_SWITCHER:
+        if not PPQ_CONFIG.EXPORT_DEVICE_SWITCHER:
             processor = GraphDeviceSwitcher(graph)
             processor.remove_switcher()
 
@@ -410,7 +409,7 @@ class ONNXRUNTIMExporter(OnnxExporter):
             opsets.append(op)
 
         onnx_model = helper.make_model(
-            graph_def, producer_name=PPQ_NAME, opset_imports=opsets)
+            graph_def, producer_name=PPQ_CONFIG.PPQ_DEBUG, opset_imports=opsets)
         onnx_model.ir_version = 7
         # onnx.checker.check_model(onnx_model)
         onnx.save(onnx_model, file_path)
