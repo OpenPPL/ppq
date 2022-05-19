@@ -224,19 +224,23 @@ if REQUIRE_ANALYSE:
 
 # 所有导出平台被列举在ppq.api.interface.py文件中：
 # EXPORTERS = {
-# TargetPlatform.PPL_DSP_INT8: PPLDSPCaffeExporter,
-# TargetPlatform.PPL_DSP_TI_IN8: PPLDSPTICaffeExporter,
+# TargetPlatform.PPL_DSP_INT8:  PPLDSPCaffeExporter,
+# TargetPlatform.PPL_DSP_TI_INT8: PPLDSPTICaffeExporter,
+# TargetPlatform.QNN_DSP_INT8:  QNNDSPExporter,
 # TargetPlatform.PPL_CUDA_INT8: PPLBackendExporter,
-# TargetPlatform.SNPE_INT8: SNPECaffeExporter,
-# TargetPlatform.NXP_INT8: NxpExporter,
-# TargetPlatform.ONNX: OnnxExporter,
-# TargetPlatform.ONNXRUNTIME: ONNXRUNTIMExporter,
-# TargetPlatform.CAFFE: CaffeExporter,
-# TargetPlatform.NATIVE: NativeExporter,
-# TargetPlatform.EXTENSION: ExtensionExporter,
-# TargetPlatform.ORT_OOS_INT8: ORTOOSExporter,
-# TargetPlatform.METAX_INT8_C: ONNXRUNTIMExporter,
-# TargetPlatform.METAX_INT8_T: ONNXRUNTIMExporter,
+# TargetPlatform.SNPE_INT8:     SNPECaffeExporter,
+# TargetPlatform.NXP_INT8:      NxpExporter,
+# TargetPlatform.ONNX:          OnnxExporter,
+# TargetPlatform.ONNXRUNTIME:   ONNXRUNTIMExporter,
+# TargetPlatform.OPENVINO_INT8: ONNXRUNTIMExporter,
+# TargetPlatform.CAFFE:         CaffeExporter,
+# TargetPlatform.NATIVE:        NativeExporter,
+# TargetPlatform.EXTENSION:     ExtensionExporter,
+# TargetPlatform.ORT_OOS_INT8:  ORTOOSExporter,
+# TargetPlatform.METAX_INT8_C:  MetaxExporter,
+# TargetPlatform.METAX_INT8_T:  MetaxExporter,
+# TargetPlatform.TRT_INT8:      TensorRTExporter,
+# TargetPlatform.NCNN_INT8:     NCNNExporter
 # }
 # -------------------------------------------------------------------
 print('网络量化结束，正在生成目标文件:')

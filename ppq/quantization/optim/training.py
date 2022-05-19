@@ -1028,7 +1028,7 @@ class AdvancedQuantOptimization(TrainingBasedPass):
             interested_outputs=interested_outputs, verbose=verbose)
 
         if not USING_CUDA_KERNEL:
-            raise PermissionError(
+            raise NotImplementedError(
                 'Advanced Quant Optimization requires compliation of ppq cuda kernels. '
                 'This method is no longer available with pure torch execution Since PPQ 0.6.4, '
                 'set PPQ.USING_CUDA_KERNEL = True or use LSQ optimization instead.')

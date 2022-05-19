@@ -1,5 +1,5 @@
 # 是否启动 cuda kernel 加速计算
-USING_CUDA_KERNEL = True
+USING_CUDA_KERNEL = False
 if USING_CUDA_KERNEL:
     import os
     # 这玩意我也不知道是干嘛的，但是 cuda 报错了它就总是让我设置这个为 1
