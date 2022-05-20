@@ -1,13 +1,10 @@
 from setuptools import find_packages, setup
-from ppq.core.config import PPQ_VERSION
-
+from ppq.core.config import PPQ_CONFIG
 
 def readme():
     with open('README.md', encoding='utf-8') as f:
         content = f.read()
     return content
-
-
 
 setup(author='ppq',
       author_email='dcp-ppq@sensetime.com',
@@ -29,6 +26,6 @@ setup(author='ppq',
         ],
       license='Apache License 2.0',
       include_package_data=True,
-      version=PPQ_VERSION,
+      version=PPQ_CONFIG.VERSION,
       zip_safe=False
     )
