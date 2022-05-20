@@ -7,7 +7,7 @@ import gc
 from typing import Callable
 from torch.cuda import empty_cache
 
-from .config import PPQ_DEBUG
+from .config import PPQ_CONFIG
 
 
 class SingletonMeta(type):
@@ -73,7 +73,7 @@ def ppq_debug_function(func: Callable):
         func (Callable): decorated function
     """
     def _wrapper(*args, **kwargs):
-        if PPQ_DEBUG:
+        if PPQ_CONFIG.PPQ_DEBUG:
             debug_str = func(*args, **kwargs)
             if debug_str is None: return None
             assert isinstance(debug_str, str), (

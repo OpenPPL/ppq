@@ -1,14 +1,14 @@
 from typing import Any
 
 import torch
-from ppq.core import (USING_CUDA_KERNEL, ChannelwiseTensorQuantizationConfig,
+from ppq.core import (PPQ_CONFIG, ChannelwiseTensorQuantizationConfig,
                       QuantizationProperty, QuantizationStates, RoundingPolicy,
                       TensorQuantizationConfig)
 from ppq.quantization.qfunction import BaseQuantFunction
 from ppq.utils.round import ppq_tensor_round
 from torch.autograd import Function
 
-if USING_CUDA_KERNEL: from ppq.core import CUDA
+if PPQ_CONFIG.USING_CUDA_KERNEL: from ppq.core import CUDA
 
 
 class LinearQuantFunction(BaseQuantFunction):
@@ -19,7 +19,7 @@ class LinearQuantFunction(BaseQuantFunction):
         return super().__call__(input_tensor, quantization_config, **kwargs)
 
 
-if not USING_CUDA_KERNEL:
+if not PPQ_CONFIG.USING_CUDA_KERNEL:
     class TensorwiseLinearQuantImpl(Function):
         """Torch Tensorwise quantize is designed to quantize a torch Tensor
         with a given configuration. All quantization within PPQ will invoke
@@ -81,7 +81,7 @@ if not USING_CUDA_KERNEL:
             return dy, None, None, None, None, None, None, None, None, None
 
 
-else: # if USING_CUDA_KERNEL:
+else: # if PPQ_CONFIG.USING_CUDA_KERNEL:
     class TensorwiseLinearQuantImpl(Function):
         """Torch Tensorwise quantize is designed to quantize a torch Tensor
         with a given configuration. All quantization within PPQ will invoke

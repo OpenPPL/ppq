@@ -169,8 +169,8 @@ class ActivationQuantizationSetting():
         # whether to calibrate activation per - layer.
         self.per_layer_calibration = False
 
-        # 激活值原地量化，设置为 True 且 USING_CUDA_KERNEL = True，则所有激活值原地量化，不产生额外显存
-        # inplace quantization, if USING_CUDA_KERNEL = True,
+        # 激活值原地量化，设置为 True 且 PPQ_CONFIG.USING_CUDA_KERNEL = True，则所有激活值原地量化，不产生额外显存
+        # inplace quantization, if PPQ_CONFIG.USING_CUDA_KERNEL = True,
         # quantize all activations inplace, do not require extra memory.
         self.inplace_act_quantization = False
 
@@ -416,8 +416,8 @@ class QuantizationSetting():
         self.extension_setting               = TemplateSetting()
 
         # 程序签名
-        self.version                         = PPQ_VERSION
-        self.signature                       = PPQ_NAME
+        self.version                         = PPQ_CONFIG.VERSION
+        self.signature                       = PPQ_CONFIG.NAME
 
         # 算子调度表，你可以编辑它来手动调度算子。
         self.dispatching_table               = DispatchingTable()
@@ -495,7 +495,7 @@ class QuantizationSettingFactory:
             ppq_warning('Can not find a valid version from your json input, input might not be correctly parsed.')
         else:
             version = setting_dict['version']
-            if version < PPQ_VERSION:
+            if version < PPQ_CONFIG.VERSION:
                 ppq_warning(f'You are loading a json quantization setting created by PPQ of another version: '
                             f'({version}), input setting might not be correctly parsed. '
                             'And all missing attributes will set as default without warning.')

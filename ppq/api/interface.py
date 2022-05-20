@@ -912,9 +912,52 @@ def manop(graph: BaseGraph, list_of_passes: List[QuantizationOptimizationPass],
     return graph
 
 
+class ENABLE_CUDA_KERNEL:
+    """ Any code surrounded by 
+    with ENABLE_CUDA_KERNEL():
+    will invoke ppq's kernel functions for speed boost.
+    
+    This is a helper class for invoking highly-effcient custimized cuda
+    kernel. PPQ developer team has implemented a series of quantization related
+    cuda kernel, They are 5-100x faster than torch kernels, with less gpu
+    memory cost.
+    """
+    def __init__(self) -> None:
+        ppq_warning('Compling CUDA Kernels. Please wait...')
+        self._state = False
+
+    def __enter__(self):
+        self._state = PPQ_CONFIG.USING_CUDA_KERNEL
+        PPQ_CONFIG.USING_CUDA_KERNEL = True
+
+    def __exit__(self, *args):
+        PPQ_CONFIG.USING_CUDA_KERNEL = self._state
+
+
+class DISABLE_CUDA_KERNEL:
+    """ Any code surrounded by 
+    with DISABLE_CUDA_KERNEL():
+    will block ppq's kernel functions.
+    
+    This is a helper class for blocking ppq custimized cuda
+    kernel. PPQ developer team has implemented a series of quantization related
+    cuda kernel, They are 5-100x faster than torch kernels, with less gpu
+    memory cost.
+    """
+    def __init__(self) -> None:
+        pass
+    
+    def __enter__(self):
+        self._state = PPQ_CONFIG.USING_CUDA_KERNEL
+        PPQ_CONFIG.USING_CUDA_KERNEL = False
+    
+    def __exit__(self, *args):
+        PPQ_CONFIG.USING_CUDA_KERNEL = self._state
+
+
 __all__ = ['load_graph', 'load_onnx_graph', 'load_caffe_graph',
            'dispatch_graph', 'dump_torch_to_onnx', 'quantize_onnx_model',
            'quantize_torch_model', 'quantize_caffe_model',
            'export_ppq_graph', 'format_graph', 'quantize', 'export',
            'UnbelievableUserFriendlyQuantizationSetting', 'manop',
-           'quantize_native_model']
+           'quantize_native_model', 'ENABLE_CUDA_KERNEL', 'DISABLE_CUDA_KERNEL']

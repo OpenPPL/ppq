@@ -12,7 +12,6 @@ from torch.cuda import synchronize
 
 from .defs import ppq_warning
 
-ppq_warning('Compling CUDA Kernels. Please wait...')
 try:
     __CUDA_EXTENTION__ = load(
         name='PPQ_Cuda_Impls',
@@ -26,8 +25,9 @@ try:
         with_cuda=True,
         extra_cflags=['-O3'])
 except Exception as e:
-    raise SystemError('PPQ can not complie cuda extensions, please check your compiler and system environment, '
-                      'or simply set ppq.core.config.USING_CUDA_KERNEL = False.')
+    ppq_warning('PPQ can not complie cuda extensions, please check your compiler and system environment, '
+                'PPQ will disable CUDA KERNEL for now.')
+    pass
 
 # helper class for calling cuda methods.
 class CUDA:

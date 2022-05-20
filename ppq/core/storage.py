@@ -8,7 +8,7 @@ from typing import Any
 import numpy as np
 import torch
 
-from .config import PPQ_VERSION, DUMP_VALUE
+from .config import PPQ_CONFIG
 from .data import DataType, convert_any_to_numpy, convert_any_to_torch_tensor
 from .defs import ppq_file_io, ppq_warning
 import pickle
@@ -29,14 +29,14 @@ class Serializable():
     """An interface which means a class instance is binary serializable,
     nothing funny."""
     def __init__(self) -> None:
-        self._export_value = DUMP_VALUE
+        self._export_value = PPQ_CONFIG.DUMP_VALUE_WHEN_EXPORT
 
     def __setstate__(self, state: dict):
         if not isinstance(state, dict):
             raise TypeError(f'PPQ Data Load Failure. Can not load data from {type(state)}, '
                 'Your data might get damaged.')
 
-        if '__version__' not in state or state['__version__'] != PPQ_VERSION:
+        if '__version__' not in state or state['__version__'] != PPQ_CONFIG.VERSION:
             ppq_warning(
                 'You are loading an object created by PPQ with different version,'
                 ' it might cause some problems.')
@@ -49,7 +49,7 @@ class Serializable():
 
     def __getstate__(self) -> dict:
         attribute_dicts = self.__dict__
-        attribute_dicts['__version__'] = PPQ_VERSION
+        attribute_dicts['__version__'] = PPQ_CONFIG.VERSION
         serialized = dict()
 
         for name, value in attribute_dicts.items():

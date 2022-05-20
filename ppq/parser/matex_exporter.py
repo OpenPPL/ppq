@@ -4,7 +4,7 @@ from typing import Dict, List, Tuple
 import onnx
 import torch
 from onnx import helper
-from ppq.core import (COMPELING_OP_TYPES, EXPORT_DEVICE_SWITCHER, PPQ_NAME,
+from ppq.core import (COMPELING_OP_TYPES, PPQ_CONFIG,
                       ChannelwiseTensorQuantizationConfig, DataType,
                       OperationMeta, QuantizationProperty, QuantizationStates,
                       TensorMeta, TensorQuantizationConfig,
@@ -260,7 +260,7 @@ class MetaxExporter(OnnxExporter):
 
     def export(self, file_path: str, graph: BaseGraph, config_path: str = None) -> None:
         # remove switchers.
-        if not EXPORT_DEVICE_SWITCHER:
+        if not PPQ_CONFIG.EXPORT_DEVICE_SWITCHER:
             processor = GraphDeviceSwitcher(graph)
             processor.remove_switcher()
 
@@ -361,7 +361,7 @@ class MetaxExporter(OnnxExporter):
             opsets.append(op)
 
         onnx_model = helper.make_model(
-            graph_def, producer_name=PPQ_NAME, opset_imports=opsets)
+            graph_def, producer_name=PPQ_CONFIG.NAME, opset_imports=opsets)
         onnx_model.ir_version = 7
         # onnx.checker.check_model(onnx_model)
         onnx.save(onnx_model, file_path)
