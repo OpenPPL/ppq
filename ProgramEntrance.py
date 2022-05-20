@@ -144,8 +144,8 @@ quantized = quantize_native_model(
     calib_steps=32,
     input_shape=NETWORK_INPUTSHAPE, # 如果你的网络只有一个输入，使用这个参数传参
     inputs=None,                    # 如果你的网络有多个输入，使用这个参数传参
-    collate_fn=lambda x: x.cuda(),  # collate_fn 跟 torch dataloader 的 collate fn 是一样的，用于数据预处理，
-                                    # 你当然也可以用 torch dataloader 的那个，然后设置这个为 None
+    collate_fn=lambda x: x.to(EXECUTING_DEVICE),  # collate_fn 跟 torch dataloader 的 collate fn 是一样的，用于数据预处理，
+                                                  # 你当然也可以用 torch dataloader 的那个，然后设置这个为 None
     platform=TARGET_PLATFORM,
     device=EXECUTING_DEVICE,
     do_quantize=True)
@@ -173,7 +173,7 @@ manop(graph=graph, list_of_passes=custimized_postquant_passes,
 # 这个 executor 的行为和 torch.Module 是类似的，你可以利用这个东西来获取执行结果
 # 请注意，必须在 export 之前执行此操作。
 # -------------------------------------------------------------------
-executor = TorchExecutor(graph=quantized)
+executor = TorchExecutor(graph=quantized, device=EXECUTING_DEVICE)
 # output = executor.forward(input)
 
 # -------------------------------------------------------------------
