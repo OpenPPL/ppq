@@ -1,8 +1,3 @@
-
-<div align="center">
-  <img src="doc/assets/img/banner.jpg" width="1280"/>
-</div>
-
 # PPL Quantization Tool 0.6.4(PPL 量化工具)
 PPL QuantTool (PPQ) is a highly efficient neural network quantization tool with custimized IR, cuda based executor, automatic dispacher and powerful optimization passes. Together with OpenPPL ecosystem, we offer you this industrial-grade network deploy tool that empowers AI developers to unleash the full potential of AI hardware. With quantization and other optimizations, nerual network model can run 5~10x faster than ever.
 
