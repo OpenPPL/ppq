@@ -14,8 +14,45 @@ PPQ 使用量化计算图(QIR)描述量化细节，即便在网络极度复杂�
 PyTorch | TensorFlow | Caffe | ONNX | MMlab
 
 ### Deploy Platform:
-TensorRT | OpenPPL-CUDA | OpenPPL-DSP | SNPE(Qualcomm) | NXP | Metax | Tengine(Developing) | Ncnn(Developing)
- |
+TensorRT | OpenPPL-Cuda | OpenPPL-DSP | SNPE(Qualcomm) | NXP | Metax | Tengine(Developing) | ncnn | Openvino
+
+# Code Example
+| **使用例子(Examples)** | **网络部署平台(Platform)** | **输入模型格式(Format)** | **链接(Link)** | **相关视频(Video)** |
+| :- | :-: | :-: | :-: | :-: |
+| `新手上路` |  |  |  | [link](https://www.bilibili.com/video/BV1oT4y1h73e "Analysing Your Model") |
+| 量化你的第一个 pytorch 网络 | - | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/quantize_torch_model.py) | |
+| 量化你的第一个 onnx 网络 | - | onnx | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/quantize_onnx_model.py) | |
+| 量化你的第一个 caffe 网络 | - | caffe | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/quantize_caffe_model.py) | |
+| 走进 PPQ | - | onnx | [link](https://github.com/openppl-public/ppq/blob/master/md_doc/how_to_use.md) | [link](https://www.bilibili.com/video/BV1934y147p2 "PPQ User Guide") |
+| 量化误差分析 | - | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/analyse.py) | [link](https://www.bilibili.com/video/BV1xY411A7ea "Graph Dispatching & Pattern Matching.") |
+| 算子调度 | - | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/dispatch.py) | [link](https://www.bilibili.com/video/BV1xY411A7ea "Graph Dispatching & Pattern Matching.") |
+| 执行量化网络 | PPQ Executor | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/execute.py) ||
+| 启动 cuda kernel 加速执行 | PPQ Executor | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/enable_cuda_kernel.py) ||
+| `TensorRT` |  |  |  |  |
+| 使用 Torch2trt 加速你的网络 | pytorch | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/TensorRT/Example_Torch2trt.py) ||
+| TensorRT 量化训练 | TensorRT | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/TensorRT/Example_QAT.py) ||
+| TensorRT 后训练量化(PPQ) | TensorRT | onnx | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/TensorRT/Example_PTQ.py) ||
+| TensorRT fp32 部署 | TensorRT | onnx | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/TensorRT/Example_Fp32.py) ||
+| TensorRT 性能比较 | TensorRT | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/TensorRT/Example_Benchmark.py) ||
+| `onnxruntime` |  |  |  |  |
+| 使用 onnxruntime 加速你的网络 | onnxruntime | onnx | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/Onnxruntime/Example_Fp32.py) | [link](https://www.bilibili.com/video/BV1t34y1E7Fz "Network Deploy") |
+| onnx 后训练量化(PPQ) | onnxruntime | onnx | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/Onnxruntime/Example_PTQ.py) | [link](https://www.bilibili.com/video/BV1t34y1E7Fz "Network Deploy") |
+| onnxruntime 性能比较 | onnxruntime | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/Onnxruntime/Example_Benchmark.py) | [link](https://www.bilibili.com/video/BV1t34y1E7Fz "Network Deploy") |
+| `openvino` |  |  |  |  |
+| 使用 openvino 加速你的网络 | openvino | onnx |  ||
+| openvino 后训练量化(PPQ) | openvino | onnx |  ||
+| openvino 性能比较 | openvino | pytorch |  ||
+| `snpe` |  |  |  |  |
+| snpe 后训练量化(PPQ) | snpe | caffe |  ||
+| `ncnn` |  |  |  |  |
+| ncnn 后训练量化(PPQ) | ncnn | onnx | [link](https://github.com/openppl-public/ppq/blob/master/md_doc/inference_with_ncnn.md) ||
+| `OpenPPL` |  |  |  |  |
+| ppl cuda 后训练量化(PPQ) | ppl cuda | onnx | [link](https://github.com/openppl-public/ppq/blob/master/md_doc/inference_with_ppl_cuda.md) ||
+| `自定义量化` |  |  |  |  |
+| 添加自定义量化平台 1 | - | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/md_doc/add_new_platform.md) ||
+| 添加自定义量化平台 2 | - | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/create_your_platform.py) ||
+
+
 # Video Tutorial(Bilibili 视频教程)
 Watch video tutorial series on www.bilibili.com, following are links of PPQ tutorial links(Only Chinese version).
 
@@ -27,7 +64,7 @@ Watch video tutorial series on www.bilibili.com, following are links of PPQ tuto
 * 量化计算原理(Part 2)：[https://www.bilibili.com/video/BV1qA4y1Q7Uh](https://www.bilibili.com/video/BV1qA4y1Q7Uh "Quantized Computing")
 * 图优化与量化模拟：[https://www.bilibili.com/video/BV1Kr4y1n7cy](https://www.bilibili.com/video/BV1Kr4y1n7cy "Graph Optimization & quantization simulating.")
 * 图调度与模式匹配：[https://www.bilibili.com/video/BV1xY411A7ea](https://www.bilibili.com/video/BV1xY411A7ea "Graph Dispatching & Pattern Matching.")
-
+* 神经网络部署: [https://www.bilibili.com/video/BV1t34y1E7Fz](https://www.bilibili.com/video/BV1t34y1E7Fz "Network Deploy")
 * 其他教程: 等待缓慢更新...
 
 # Installation
@@ -70,31 +107,6 @@ python setup.py install
 
 ```bash
 python3 -m pip install ppq
-```
-
-# Tutorials and Running Examples
-
-1. User guide, system design doc can be found at /doc/pages/instructions of this repository, PPL Quantization Tool documents are written with pure html5.
-2. Examples can be found at /ppq/samples.
-3. Let's quantize your network with following code:
-
-```python
-from ppq.api import export_ppq_graph, quantize_torch_model
-from ppq import TargetPlatform
-
-# quantize your model within one single line:
-quantized = quantize_torch_model(
-    model=model, calib_dataloader=calibration_dataloader,
-    calib_steps=32, input_shape=(1, 3, 224, 224),
-    setting=quant_setting, collate_fn=collate_fn,
-    platform=TargetPlatform.PPL_CUDA_INT8,
-    device=DEVICE, verbose=0)
-
-# export quantized graph with another line:
-export_ppq_graph(
-    graph=quantized, platform=TargetPlatform.PPL_CUDA_INT8,
-    graph_save_to='Output/quantized(onnx).onnx',
-    config_save_to='Output/quantized(onnx).json')
 ```
 
 # Contact Us
