@@ -601,12 +601,16 @@ class BlockwiseReconstructionPass(TrainingBasedPass):
         for op in block.rps:
             if isinstance(op, QuantableOperation):
                 for (cfg, var) in op.config_with_variable:
+                    # skip activation scale tuning when tune_act_scale == False
                     if (not self.tune_act_scale and not var.is_parameter) or cfg in params:
+                        continue
+                    # safe guard for power-of-2 policy in case tune_act_scale == True
+                    if cfg.policy.has_property(QuantizationProperty.POWER_OF_2) and not var.is_parameter:
                         continue
                     masters = []
                     scale_multiplier = 1.0
+                    # for bias only
                     if cfg.state == QuantizationStates.PASSIVE:
-                        # bias
                         if op.is_computing_op:
                             scale_multiplier = self.scale_multuplier
                             for cfg_ in op.config.input_quantization_config[:2]:
@@ -624,6 +628,8 @@ class BlockwiseReconstructionPass(TrainingBasedPass):
                     elif cfg.state == QuantizationStates.ACTIVATED:
                         delegator = BlockwiseReconstructionDelegator(var, cfg, reg, scale_multiplier, device)
                         params[cfg] = delegator
+
+                    # for special ops like Add, Concat, where a joint quantization is applied
                     elif cfg.state == QuantizationStates.SLAVE and cfg.dominated_by == cfg:
                         delegator = BlockwiseReconstructionDelegator(var, cfg, reg, scale_multiplier, device)
                         params[cfg] = delegator
@@ -681,29 +687,34 @@ class BlockwiseReconstructionPass(TrainingBasedPass):
                 collate_fn: Callable,
                 **kwargs
     ) -> None:
+        logger.info('Launch Blockwise Reconstruction Optimization ...')
         graph = processor.graph
         all_blocks = find_all_blocks(graph, executor._executing_order)
+        logger.info(f'Graph partition finished, {len(all_blocks)} trainable blocks in total')
+
         for blk_idx, block in enumerate(all_blocks):
+            logger.info('=' * 80)
+            logger.info(f'Optimize block {blk_idx + 1}/{len(all_blocks)} : {block.sp.name} -> ... -> {block.ep.name}, '
+                        f'{len(block.rps)} ops in total')
+            logger.info(f'Collecting block input and output ...')
             block_dataloader = collect_block_input_output(block, executor, dataloader, collate_fn, self.collecting_device)
             # if interested_layers are not empty, we only optimize block which contains
             # desired ops specified in interested_layers
             if len(self.interested_layers) > 0 and all([op.name not in self.interested_layers for op in block.rps]):
                 continue
 
-            logger.info(f'Optimize block {blk_idx + 1}/{len(all_blocks)} : {block.sp.name} -> ... -> {block.ep.name}, '
-                        f'{len(block.rps)} ops in total')
             # tune weight scale first
             output_names = [var.name for var in block.ep.outputs]
-
             self.tune_block_weight_scale(block, executor._device)
 
             # compute original loss for loss checking
-            logger.info('Computing Original Loss ...')
+            logger.info('Computing original loss ...')
             original_loss = compute_loss(output_names, graph, \
                 dataloader, collate_fn, executor, loss_fn=Lp_norm)
             original_loss = sum(list(original_loss.values()))
 
             # rounding loss initialization
+            logger.info('Initializing trainable parameters ...')
             reg = AdaroundRegTerm(max_iter=len(dataloader) * self.epochs)
             all_params = self.initiate_block_params(block, reg, executor._device)
             scale_params, continue_vs = [], []
@@ -782,9 +793,9 @@ class BlockwiseReconstructionPass(TrainingBasedPass):
                     break
 
             if  early_stop_flag:
-                logger.info('Already converged, stop training...')
+                logger.info('Already converged, stop training ...')
 
-            logger.info(f'Original Reconstruction Loss {original_loss} || Optimized Reconstruction loss {avg_recon_loss}')
+            logger.info(f'Original Reconstruction Loss {original_loss :.5f} || Optimized Reconstruction loss {avg_recon_loss :.5f}')
             if avg_recon_loss < original_loss:
                 for (cfg, delegator) in all_params.items():
                     delegator.finalize()
@@ -920,11 +931,14 @@ class LearningStepSizeOptimization(TrainingBasedPass):
                 executor: TorchExecutor
     ) -> None:
         for blk_idx, blk in enumerate(blocks):
+            logger.info('=' * 64)
+            logger.info(f'Optimizing block {blk.sp.name} --> ... --> {blk.ep.name}, total {len(blk.rps)} ops')
+            logger.info(f'Collecting block input and output ...')
             block_dataloader = collect_block_input_output(blk, executor, dataloader, collate_fn, self.collecting_device)
             output_names = [var.name for var in blk.ep.outputs]
-            logger.info(f'Optimizing block {blk.sp.name} --> ... --> {blk.ep.name}, total {len(blk.rps)} ops')
-            logger.info('Computing Original Loss ...')
+            logger.info('Computing original loss ...')
             original_loss = compute_loss(output_names, graph, dataloader, collate_fn, executor)
+            logger.info(f'Initializing trainable parameters ...')
             params = self.initiate_param(blk, executor._device)
             block_params = []
             self.enable_grad(blk)
@@ -979,9 +993,11 @@ class LearningStepSizeOptimization(TrainingBasedPass):
                  collate_fn: Callable,
                  **kwargs) -> None:
         graph = processor.graph
+        logger.info(f'Launch Learned Step Quantization ...')
         blocks = find_all_blocks(graph, executor._executing_order)
+        logger.info(f'Graph partition finished, {len(blocks)} trainable blocks in total')
         if len(self.interested_layers) == 0:
-            logger.info('No layers are given, all blocks will be tuned by default')
+            logger.info('NO INTERESTED LAYERS GIVENS, ALL BLOCKS WILL BE TUNED BY DEFAULT')
             final_blocks = blocks
         else:
             final_blocks = []

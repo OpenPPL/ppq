@@ -40,7 +40,7 @@ quantizer = QUANTIZER_COLLECTION[target_platform](graph=ppq_graph_ir)
 
 # run quantization
 calib_steps = max(min(512, len(dataloader)), 8)     # 8 ~ 512
-dummy_input = dataloader[0]                         # random input for meta tracing
+dummy_input = dataloader[0].to(EXECUTING_DEVICE)    # random input for meta tracing
 quantizer.quantize(
         inputs=dummy_input,                         # some random input tensor, should be list or dict for multiple inputs
         calib_dataloader=dataloader,                # calibration dataloader

@@ -48,7 +48,7 @@ quantizer = QUANTIZER_COLLECTION[target_platform](graph=ppq_graph_ir)
 
 # run quantization
 calib_steps = max(min(512, len(dataloader)), 8)     # 8 ~ 512
-dummy_input = dataloader[0]                         # random input for meta tracing
+dummy_input = dataloader[0].to(EXECUTING_DEVICE)    # random input for meta tracing
 quantizer.quantize(
         inputs=dummy_input,                         # some random input tensor, should be list or dict for multiple inputs
         calib_dataloader=dataloader,                # calibration dataloader
@@ -156,8 +156,8 @@ and if you want to obtain the final probability and print top-5 predictions
     }
 }
 ```
-note that if you are using gpu which is supported by vulkan, you just need to turn on vulkan switch after initializing the
-network
+note that if you are using gpu which is supported by vulkan, you just need to correctly install vulkan, compile ncnn with 
+vulkan option enabled, and turn on vulkan switch after initializing the network
 ```c++
 ncnn::Net shufflenetv2;
 shufflenetv2.opt.use_vulkan_compute = true;
