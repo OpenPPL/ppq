@@ -92,13 +92,13 @@ class NaiveLogger(object):
         initialized_loggers[name] = logger
         return logger
 
-    def wrap_header(self, msg:str, type:str) -> str:
+    def wrap_header(self, type:str) -> str:
         cur_time = get_current_time()
-        return '{}:{}:{}: {}'.format(type, self._name, cur_time, msg)
+        return '[{}][{}][{}]: '.format(type, self._name, cur_time)
 
     def info(self, msg: str):
-        msg = self.wrap_header(msg, 'INFO')
-        print_msg = G_BEGIN + msg + COLOR_END
+        header = self.wrap_header('INFO')
+        print_msg = G_BEGIN + header + COLOR_END + msg
 
         for handler in self._handlers.values():
             if handler._file_name is not None:
@@ -107,8 +107,8 @@ class NaiveLogger(object):
                 handler.process(print_msg, LEVEL.INFO)
 
     def warning(self, msg:str):
-        msg = self.wrap_header(msg, 'WARNING')
-        print_msg = Y_BEGIN + msg + COLOR_END
+        header = self.wrap_header('WARNING')
+        print_msg = Y_BEGIN + header + COLOR_END + msg
 
         for handler in self._handlers.values():
             if handler._file_name is not None:
@@ -117,8 +117,8 @@ class NaiveLogger(object):
                 handler.process(print_msg, LEVEL.WARNING)
 
     def error(self, msg:str):
-        msg = self.wrap_header(msg, 'ERROR')
-        print_msg = R_BEGIN + msg + COLOR_END
+        header = self.wrap_header('ERROR')
+        print_msg = R_BEGIN + header + COLOR_END + msg
 
         for handler in self._handlers.values():
             if handler._file_name is not None:
@@ -127,8 +127,8 @@ class NaiveLogger(object):
                 handler.process(print_msg, LEVEL.ERROR)
 
     def debug(self, msg: str):
-        msg = self.wrap_header(msg, 'DEBUG')
-        print_msg = G_BEGIN + msg + COLOR_END
+        header = self.wrap_header('DEBUG')
+        print_msg = G_BEGIN + header + COLOR_END + msg
 
         for handler in self._handlers.values():
             if handler._file_name is not None:
