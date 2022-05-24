@@ -8,7 +8,7 @@ from ppq.core import (COMPELING_OP_TYPES, PPQ_CONFIG,
                       ChannelwiseTensorQuantizationConfig, DataType,
                       OperationMeta, QuantizationProperty, QuantizationStates,
                       TensorMeta, TensorQuantizationConfig,
-                      convert_any_to_torch_tensor)
+                      convert_any_to_torch_tensor, ppq_legacy)
 from ppq.IR import (BaseGraph, Operation, QuantableOperation,
                     QuantableVariable, Variable)
 from ppq.IR.base.command import GraphCommand, GraphCommandType
@@ -55,6 +55,7 @@ class MetaxExporter(OnnxExporter):
 
     def __init__(self, removed_activation_types: List[str] = ['Relu', 'Clip']) -> None:
         super().__init__()
+        ppq_legacy('Metax Exporter', version='0.6.4', adapt_to='ONNXRUNTIME Exporter')
         self.removed_activation_types = removed_activation_types
 
     def inplace_quantization(self, var: QuantableVariable, is_bias: bool) -> Tuple[torch.Tensor, torch.Tensor, int]:

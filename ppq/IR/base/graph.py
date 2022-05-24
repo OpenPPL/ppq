@@ -708,9 +708,16 @@ class BaseGraph(Serializable):
         Returns:
             Operation: _description_
         """
+        if inputs is None:  inputs = []
+        if outputs is None: outputs = []
+
         if name is None:
             name = f'PPQ_Operation_{self._num_of_generated_op}'
             self._num_of_generated_op += 1
+
+        if not isinstance(inputs, list):
+            raise TypeError(f'A list of input variable is required for creating operation, '
+                            f'however {type(inputs)} was given')
 
         if attributes is None: attributes = {}
         created = Operation(
@@ -722,6 +729,21 @@ class BaseGraph(Serializable):
             outputs=outputs
         )
         self.append_operation(created)
+        
+        for item in inputs:
+            if not isinstance(item, Variable):
+                raise TypeError(f'A list contains variables is required for creating operation, '
+                                f'however there is a {type(item)} in your input list.')
+            item.dest_ops.append(created)
+        
+        if not isinstance(outputs, list):
+            raise TypeError(f'A list of output variable is required for creating operation, '
+                            f'however {type(inputs)} was given')
+        for item in outputs:
+            if not isinstance(item, Variable):
+                raise TypeError(f'A list contains variables is required for creating operation, '
+                                f'however there is a {type(item)} in your output list.')
+            item.source_op = created
         return created
 
     def create_variable(self, name: str = None, value: Any = None, is_parameter: bool = False,

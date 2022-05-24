@@ -571,17 +571,87 @@ class GraphMerger(GraphCommandProcessor):
             self.graph.append_variable(weight_var)
             self.graph.append_variable(bias_var)
 
+    def fuse_gemm(self):
+        """ Fuse Matmul + add into a singal Gemm
+        
+        Returns:
+            _type_: _description_
+        """
+        search_engine = SearchableGraph(graph=self.graph)
+        patterns = search_engine.pattern_matching(patterns=['Matmul', 'Add'], edges=[[0, 1]], exclusive=True)
+        for pattern in patterns:
+            matmul, add = pattern
+            
+            matmul_out = matmul.outputs[0]
+            add_out    = add.outputs[0]
+
+            assert len(add.inputs) == 2, 'Oops, seems we got some problem here.'
+            var1, var2 = add.inputs
+            bias_var   = None
+            
+            if var1.source_op == matmul:
+                if var2.is_parameter == True:
+                    bias_var = var2
+            
+            if var2.source_op == matmul:
+                if var1.is_parameter == True:
+                    bias_var = var1
+            
+            # can not find a valid bias, just skip add.
+            if bias_var is None: 
+                matmul.type = 'Gemm'
+                continue
+            
+            if len(bias_var.value.shape) == 1 and bias_var.value.shape[0] == matmul.parameters[0].value.shape[-1]:
+                bias_var.dest_ops.clear()
+                add.inputs.remove(bias_var)
+                
+                # remove bias add, move bias to matmul
+                self.graph.remove_operation(add)
+                self.graph.create_link_with_op(variable=bias_var, upstream_op=None, downstream_op=matmul)
+                self.graph.create_link_with_var(upstream_variable=matmul_out, downstream_variable=add_out)
+                matmul.type = 'Gemm'
+            else:
+                # add is found however it is not a valid bias add.
+                matmul.type = 'Gemm'
+                continue
 
 
 class GraphDecomposer(GraphCommandProcessor):
     """Since PPQ 0.6.4, GraphDecomposer is introduced to split some complex
-    operations For example, Gemm can be split with Matmul with Bias add Gru can
-    be split with Matmul, Sigmoid, Tanh.
+    operations For example, Gemm can be split with Matmul with Bias add.
 
-    Operation decomposition is required for quantize complex operations, which
-    can not be     correctly described by input & output tensor quant
-    configurations. By splitting operation into a series lower operations, we
-    can have more quant configurations to     control its quantization logic
+    Gemm
+    General Matrix multiplication: https://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms#Level_3
+
+    A' = transpose(A) if transA else A
+
+    B' = transpose(B) if transB else B
+
+    Compute Y = alpha * A' * B' + beta * C, where input tensor A has shape (M, K) or (K, M), 
+        input tensor B has shape (K, N) or (N, K), input tensor C is broadcastable to shape (M, N), 
+        and output tensor Y has shape (M, N). A will be transposed before doing the computation if attribute transA is non-zero, 
+        same for B and transB. 
+    
+    This operator supports unidirectional broadcasting (tensor C should be unidirectional broadcastable to tensor A * B); 
+        for more details please check the doc. This operator has optional inputs/outputs. 
+        
+    See the doc for more details about the representation of optional arguments. 
+    An empty string may be used in the place of an actual argument's name to indicate a missing argument. 
+    Trailing optional arguments (those not followed by an argument that is present) may also be simply omitted.
+
+    Attributes
+        alpha : float (default is 1.0)
+        Scalar multiplier for the product of input tensors A * B.
+    
+        beta : float (default is 1.0)
+        Scalar multiplier for input tensor C.
+    
+        transA : int (default is 0)
+        Whether A should be transposed
+    
+        transB : int (default is 0)
+        Whether B should be transposed
     """
 
     def process(self, command: GraphCommand) -> Any:
@@ -590,10 +660,46 @@ class GraphDecomposer(GraphCommandProcessor):
     def _acceptable_command_types(self) -> List[GraphCommandType]:
         return super()._acceptable_command_types
 
-    def decompose_gemm():
-        pass
+    def decompose_gemm(self):
+        graph = self.graph
+        interested_ops = []
+        for operation in graph.operations.values():
+            if operation.type == 'Gemm':
+                interested_ops.append(operation)
 
-    def decompose_gru():
+        for op in interested_ops:
+            assert isinstance(op, Operation)
+            output_var = op.outputs[0]
+
+            if op.num_of_input == 3:
+                bias_add  = graph.create_operation(op_type='Add')
+                bias_var  = op.inputs[-1]
+
+                graph.create_link_with_op(
+                    variable=graph.create_variable(),
+                    upstream_op=op, downstream_op=bias_add)
+
+                graph.create_link_with_op(
+                    variable=graph.create_variable(
+                        value=bias_var.value * op.attributes.get('beta', 1), is_parameter=True),
+                    upstream_op=None, downstream_op=bias_add)
+
+                graph.remove_variable(bias_var)
+                output_var.source_op = bias_add
+                bias_add.outputs.append(output_var)
+                op.outputs.remove(output_var)
+
+            if op.attributes.get('transA', 0) == 1:
+                raise ValueError(f'Can not process with operation {op.name}, transA=1 is not allowed.')
+            if op.attributes.get('alpha', 1) != 1:
+                op.parameters[0].value *= op.attributes.get('alpha')
+            if op.attributes.get('transB', 0) == 1:
+                op.inputs[1].value = op.inputs[1].value.permute(1, 0)
+
+            op.type = 'Matmul'
+            op.attributes.clear()
+
+    def decompose_gru(self):
         pass
 
 

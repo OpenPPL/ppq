@@ -396,3 +396,71 @@ class PPLNNDispatcher(GraphDispatcher):
                     dispatching_table[operation.name] = dispatching_table[source_op.name]
 
         return dispatching_table
+
+
+class PointDispatcher(ConservativeDispatcher):
+    """Graph Dispatcher cuts a graph into parts, each part of graph will
+    dispatch to a specific platform for further execution and quantization.
+
+    For the most part, all operations within graph can be partitioned into quantable operations,
+        Shape-Or-Index related operations and remaining operations, all sub classes of GraphDispatcher will
+        give an implementation of function "dispatch" to send all operations to their proper platform.
+
+    Point Dispatch send all computing op to quantable platform, while other ops remain unchanged.
+
+    ATTENTION: platform attribute will greatly affect quantizer's quantization logic, and the execution result.
+        If operation is sent to a quantable platform, then its inputs and outputs will be quantized if necessary.
+        if operation is classified as shape-or-index related operation, then its execution will be taken with cpu.
+        if operation is sent to a fp32 platform, then its inputs and outputs shall never be quantized.
+
+    ATTENTION: this dispatcher will insert necessary DeviceSwitch operations
+        between shape-or-index operations and others.
+    """
+    @staticmethod
+    def dispatch(
+        graph: BaseGraph, quant_types: Set[str],
+        quant_platform: TargetPlatform,
+        fp32_platform: TargetPlatform,
+        SOI_platform: TargetPlatform, **kwargs
+        ) -> Dict[str, TargetPlatform]:
+        """Graph Dispatcher splits a graph into parts, each part of graph will
+        be sent to a specific platform for further execution and quantization.
+
+        There are 3 default platform during dispatching:
+            quant_platform - all quantable parts of graph will be dispatched to this platform
+            SOI_platform   - Aka. Shape or Index related operations will be dispatched to this platform.
+            fp32_platform  - there are some operations receiving results from both quant_platform and SOI_platform,
+                they will be dispatched to fp32_platform.
+
+        ATTENTION: Quantization follows this dispatching,
+            and only the operations within quantable platform will be quantized in the future.
+
+        ATTENTION: this dispatcher will insert necessary DeviceSwitch operations between
+            shape-or-index operations and others.
+
+        Args:
+            graph (BaseGraph): graph object which going to be dispatched by this dispatcher.
+
+            quant_types(Set[str]): all quantable types for given platforms.
+
+            quant_platform (TargetPlatform): =
+                platform object where quantable parts will goes to.
+
+            fp32_platform (TargetPlatform):
+                platform object where SOI parts will goes to.
+
+            SOI_platform (TargetPlatform):
+                platform object where remaining parts will goes to.
+
+        Returns:
+            Dict[str, TargetPlatform]: [description]
+        """
+        dispatch_table = super().dispatch(graph=graph, quant_types=quant_types, quant_platform=quant_platform, 
+                                          fp32_platform=fp32_platform, SOI_platform=SOI_platform, kwargs=kwargs)
+        for op in graph.operations.values():
+            if op.type in quant_types and op.is_computing_op:
+                dispatch_table[op.name] = quant_platform
+            else:
+                if dispatch_table[op.name] == quant_platform:
+                    dispatch_table[op.name] = fp32_platform
+        return dispatch_table
