@@ -3,6 +3,7 @@ from typing import Callable, Iterable, List, Tuple, Union
 
 import numpy as np
 import torch
+from ppq.IR.morph import GraphDecomposer
 from ppq.core import (NetworkFramework, OperationQuantizationConfig,
                       QuantizationStates, TensorMeta, TensorQuantizationConfig,
                       empty_ppq_cache, ppq_warning)
@@ -856,39 +857,8 @@ class MetaxGemmSplitPass(QuantizationOptimizationPass):
     # Implementation of Gemm Split will move to IR.morph soon.
     def optimize(self, processor: GraphCommandProcessor,
                  dataloader: Iterable, executor: BaseGraphExecutor, **kwargs) -> None:
-        graph, morpher = processor.graph, GraphReplacer(processor)
-        interested_ops = []
-        for operation in processor.graph.operations.values():
-            if operation.type == 'Gemm':
-                interested_ops.append(operation)
-
-        for op in interested_ops:
-            assert isinstance(op, Operation)
-            output_var = op.outputs[0]
-            matmul = Operation(name=f'{op.name}', op_type='Gemm', attributes={})
-            morpher.replace_op(op_name=op.name, replace_to=matmul)
-
-            if op.num_of_input == 3:
-                bias_add  = graph.create_operation(op_type='Add')
-                bias_var  = matmul.inputs[-1]
-
-                graph.create_link_with_op(
-                    variable=graph.create_variable(),
-                    upstream_op=matmul, downstream_op=bias_add)
-
-                graph.create_link_with_op(
-                    variable=graph.create_variable(value=bias_var.value, is_parameter=True),
-                    upstream_op=None, downstream_op=bias_add)
-
-                graph.remove_variable(bias_var)
-                output_var.source_op = bias_add
-                bias_add.outputs.append(output_var)
-                matmul.outputs.remove(output_var)
-
-            if op.attributes.get('transA') == 1:
-                raise ValueError(f'Can not process with operation {op.name}, transA=1 is not allowed.')
-            if op.attributes.get('transB') == 1:
-                matmul.inputs[1].value = matmul.inputs[1].value.permute(1, 0)
+        morpher = GraphDecomposer(processor)
+        morpher.decompose_gemm()
 
 
 class GRUSplitPass(QuantizationOptimizationPass):

@@ -284,9 +284,9 @@ class BaseQuantizer(metaclass = ABCMeta):
                 list_of_passes.append(QuantizeRefinePass())
 
             list_of_passes.append(QuantizeFusionPass(
-                platform=self.target_platform,
                 fuse_activation=fusion_setting.fuse_activation,
-                fuse_passive_op=fusion_setting.fuse_passive_op
+                fuse_passive_op=fusion_setting.fuse_passive_op,
+                activation_type=self.activation_fusion_types
             ))
 
             if fusion_setting.fuse_conv_add:

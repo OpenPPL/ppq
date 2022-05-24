@@ -1,12 +1,10 @@
 from collections import defaultdict
-from typing import Iterable, List
+from typing import Iterable, List, Set
 
 import torch
-from ppq.core import (COMPELING_OP_TYPES, LINEAR_ACTIVATIONS,
-                      ORT_OOS_FUSE_START_OPS, PPLCUDA_ACTIVATIONS,
+from ppq.core import (COMPELING_OP_TYPES, PPLCUDA_ACTIVATIONS,
                       QuantizationProperty, QuantizationStates, RoundingPolicy,
-                      TargetPlatform, TensorQuantizationConfig,
-                      empty_ppq_cache)
+                      TensorQuantizationConfig, empty_ppq_cache)
 from ppq.core.defs import ppq_warning
 from ppq.executor import BaseGraphExecutor
 from ppq.IR import GraphCommandProcessor, QuantableOperation, Variable
@@ -329,15 +327,13 @@ class NxpQuantizeFusionPass(QuantizationOptimizationPass):
 
 
 class QuantizeFusionPass(QuantizationOptimizationPass):
-    def __init__(self, platform: TargetPlatform,
-                 fuse_concat: bool = False,
+    def __init__(self,
+                 activation_type: Set[str],
                  fuse_activation: bool = True,
-                 fuse_passive_op: bool = True,
-                 ) -> None:
-        self.platform        = platform
-        self.fuse_concat     = fuse_concat
+                 fuse_passive_op: bool = True) -> None:
         self.fuse_activation = fuse_activation
         self.fuse_passive_op = fuse_passive_op
+        self.activation_types = activation_type
         super().__init__(name='PPQ Quantization Fusion Pass')
 
     def is_same_platform(self, operations: List[Operation]):
@@ -357,31 +353,33 @@ class QuantizeFusionPass(QuantizationOptimizationPass):
 
         # fuse computing operations and its following activation.
         if self.fuse_activation:
+            patterns = processor.pattern_matching(
+                patterns=[lambda x: x.is_computing_op, lambda x: x.type in self.activation_types],
+                edges=[[0, 1]], exclusive=True)
 
-            # find all activation operations
-            act_ops = []
-            for op in graph.operations.values():
-                if not isinstance(op, QuantableOperation): continue
-                if op.type in LINEAR_ACTIVATIONS: act_ops.append(op)
-                elif self.platform == TargetPlatform.PPL_CUDA_INT8:
-                    if op.type in PPLCUDA_ACTIVATIONS: act_ops.append(op)
-                else: continue
+            for pattern in patterns:
+                computing_op, act_op = pattern
+                if not isinstance(computing_op, QuantableOperation): 
+                    continue
 
-            # fusion
-            for op in act_ops:
-                assert isinstance(op, QuantableOperation)
-                upstream_ops = graph.get_upstream_operations(op)
-                assert len(upstream_ops) == 1, 'Oops, we got some problem here.'
-
-                upstream_op = upstream_ops[0]
-                if self.platform == TargetPlatform.ORT_OOS_INT8:
-                    if not upstream_op.type in ORT_OOS_FUSE_START_OPS: continue
-
-                if (isinstance(upstream_op, QuantableOperation) and
-                    len(graph.get_downstream_operations(upstream_op)) == 1 and
-                    upstream_op.platform == op.platform):
-                    upstream_op.config.output_quantization_config[0].dominated_by = (
-                        op.config.output_quantization_config[0])
+                if (computing_op.platform != act_op.platform and 
+                    computing_op.config.output_quantization_config[0].state != QuantizationStates.FP32):
+                    ppq_warning(f'Unexpected dispatching was found: '
+                                f'Op {computing_op.name} and {act_op.name} should be send to a same platform.')
+                    continue
+            
+                if not isinstance(act_op, QuantableOperation):
+                    ppq_warning(f'Unexpected dispatching was found: '
+                                f'Op {computing_op.name} and {act_op.name} should both be quantized operation.')
+                    continue
+                
+                assert isinstance(act_op, QuantableOperation)
+                if (len(graph.get_downstream_operations(computing_op)) == 1 and 
+                    len(graph.get_upstream_operations(act_op)) == 1):
+                    computing_op.config.output_quantization_config[0].dominated_by = (
+                        act_op.config.output_quantization_config[0])
+                    act_op.config.input_quantization_config[0].dominated_by = (
+                        act_op.config.output_quantization_config[0])
 
         if self.fuse_passive_op:
             # all passive operations should never changes quantization configuration of its input

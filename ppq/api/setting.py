@@ -1,5 +1,6 @@
 import json
 import copy
+from typing import Union
 from ppq.core import *
 
 

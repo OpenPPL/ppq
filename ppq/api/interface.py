@@ -75,8 +75,8 @@ EXPORTERS = {
     TargetPlatform.EXTENSION:     ExtensionExporter,
     # TargetPlatform.ORT_OOS_INT8:  ONNXRUNTIMExporter,
     TargetPlatform.ORT_OOS_INT8:  ORTOOSExporter,
-    TargetPlatform.METAX_INT8_C:  MetaxExporter,
-    TargetPlatform.METAX_INT8_T:  MetaxExporter,
+    TargetPlatform.METAX_INT8_C:  ONNXRUNTIMExporter,
+    TargetPlatform.METAX_INT8_T:  ONNXRUNTIMExporter,
     TargetPlatform.TRT_INT8:      TensorRTExporter,
     TargetPlatform.NCNN_INT8:     NCNNExporter
 }
