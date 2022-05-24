@@ -245,6 +245,7 @@ class ONNXRUNTIMExporter(OnnxExporter):
                 op.meta_data.input_metas.append(TensorMeta.parsing_from_torch_tensor(var.value, var.name))
 
             elif op.type == 'Split':
+                if 'split' not in op.attributes: continue # split is already v13
                 split = convert_any_to_torch_tensor(op.attributes.pop('split'), dtype=torch.int64)
                 var = graph.create_variable(name=None, value=split, is_parameter=True)
                 graph.create_link_with_op(variable=var, upstream_op=None, downstream_op=op)

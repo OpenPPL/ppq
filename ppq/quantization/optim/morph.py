@@ -847,7 +847,7 @@ class ChannelSplitPass(QuantizationOptimizationPass):
 class MetaxGemmSplitPass(QuantizationOptimizationPass):
     """Metax 不支持 Gemm 的量化，这个 pass 将 Gemm 拆分成.
 
-    --- Matmul -----|
+    --- MatMul -----|
                     + --- Add ---
         bias   -----|
     """

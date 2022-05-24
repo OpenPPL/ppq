@@ -18,7 +18,7 @@ OBSERVER_MSE_HIST_BINS = 8192
 # PPLCUDA 中所有需要与 Conv 融合的激活函数
 PPLCUDA_ACTIVATIONS = {'Clip', 'LeakyRelu', 'Relu', 'Sigmoid'}
 
-ORT_OOS_FUSE_START_OPS = {'Conv', 'GlobalAveragePool', 'AveragePool', 'Add', 'Mul', 'Matmul'}
+ORT_OOS_FUSE_START_OPS = {'Conv', 'GlobalAveragePool', 'AveragePool', 'Add', 'Mul', 'MatMul'}
 
 # PASSIVE OPERATIONS 是那些不参与计算的 Op, 这些 op 的输入与输出将直接共享 scale
 PASSIVE_OPERATIONS = {
@@ -29,7 +29,7 @@ PASSIVE_OPERATIONS = {
 LINEAR_ACTIVATIONS = {'Relu', 'Clip'}
 
 # COPUTING OP 是所有计算层，该属性被用于联合定点和子图切分
-COMPUTING_OP = {'Conv', 'Gemm', 'ConvTranspose'}
+COMPUTING_OP = {'Conv', 'Gemm', 'ConvTranspose', 'MatMul'}
 # SOI OP 是所有产生 SOI 输出的节点类型，该属性被用于子图切分
 SOI_OP = {'TopK', 'Shape', 'NonMaxSuppression'}
 # 强制联合定点的算子种类

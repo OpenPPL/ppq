@@ -82,9 +82,8 @@ class TensorRTQuantizer(BaseQuantizer):
     @ property
     def quant_operation_types(self) -> set:
         return {
-            'Conv', 'Gemm', 'ConvTranspose',
-            'AveragePool', 'GlobalAveragePool'
-        }
+            'Conv', 'Gemm', 'ConvTranspose', 'MatMul',
+            'AveragePool', 'GlobalAveragePool'}
 
     @ property
     def quantize_policy(self) -> QuantizationPolicy:

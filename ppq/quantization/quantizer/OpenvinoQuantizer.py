@@ -99,7 +99,7 @@ class OpenvinoQuantizer(BaseQuantizer):
     @ property
     def quant_operation_types(self) -> set:
         OPENVINO_QUANTTYPE = {
-            'Relu', 'Clip', 'Conv', 'GlobalAveragePool', 
+            'Relu', 'Clip', 'Conv', 'GlobalAveragePool',
             'AveragePool', 'Add', 'Mul', 'Sigmoid',
             'MatMul', 'Gemm', 'Concat', 'LeakyRelu'}
         OPENVINO_QUANTTYPE.update(PASSIVE_OPERATIONS)
