@@ -572,54 +572,53 @@ class GraphMerger(GraphCommandProcessor):
             self.graph.append_variable(bias_var)
 
     def fuse_gemm(self):
-        """ Fuse Matmul + add into a singal Gemm
+        """ Fuse MatMul + add into a singal Gemm
+            Single Matmul will be replaced with Gemm
         
         Returns:
             _type_: _description_
         """
         search_engine = SearchableGraph(graph=self.graph)
-        patterns = search_engine.pattern_matching(patterns=['Matmul', 'Add'], edges=[[0, 1]], exclusive=True)
+        patterns = search_engine.pattern_matching(patterns=['MatMul', 'Add'], edges=[[0, 1]], exclusive=True)
         for pattern in patterns:
             matmul, add = pattern
-            
+            matmul.type = 'Gemm'
+
             matmul_out = matmul.outputs[0]
             add_out    = add.outputs[0]
 
             assert len(add.inputs) == 2, 'Oops, seems we got some problem here.'
             var1, var2 = add.inputs
             bias_var   = None
-            
-            if var1.source_op == matmul:
-                if var2.is_parameter == True:
-                    bias_var = var2
-            
-            if var2.source_op == matmul:
-                if var1.is_parameter == True:
-                    bias_var = var1
-            
+
+            if var1.source_op == matmul and var2.is_parameter:
+                bias_var = var2
+
+            if var2.source_op == matmul and var1.is_parameter:
+                bias_var = var1
+
             # can not find a valid bias, just skip add.
             if bias_var is None: 
-                matmul.type = 'Gemm'
                 continue
-            
+
             if len(bias_var.value.shape) == 1 and bias_var.value.shape[0] == matmul.parameters[0].value.shape[-1]:
                 bias_var.dest_ops.clear()
                 add.inputs.remove(bias_var)
-                
+
                 # remove bias add, move bias to matmul
                 self.graph.remove_operation(add)
                 self.graph.create_link_with_op(variable=bias_var, upstream_op=None, downstream_op=matmul)
                 self.graph.create_link_with_var(upstream_variable=matmul_out, downstream_variable=add_out)
-                matmul.type = 'Gemm'
-            else:
-                # add is found however it is not a valid bias add.
-                matmul.type = 'Gemm'
-                continue
+
+        # process single gemm
+        for op in self.graph.operations.values():
+            if op.type == 'MatMul':
+                op.type = 'Gemm'
 
 
 class GraphDecomposer(GraphCommandProcessor):
     """Since PPQ 0.6.4, GraphDecomposer is introduced to split some complex
-    operations For example, Gemm can be split with Matmul with Bias add.
+    operations For example, Gemm can be split with MatMul with Bias add.
 
     Gemm
     General Matrix multiplication: https://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms#Level_3
@@ -696,7 +695,7 @@ class GraphDecomposer(GraphCommandProcessor):
             if op.attributes.get('transB', 0) == 1:
                 op.inputs[1].value = op.inputs[1].value.permute(1, 0)
 
-            op.type = 'Matmul'
+            op.type = 'MatMul'
             op.attributes.clear()
 
     def decompose_gru(self):

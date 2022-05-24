@@ -51,7 +51,7 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
             'AveragePool': 'QLinearAveragePool',
             'Conv': 'QLinearConv',
             'GlobalAveragePool': 'QLinearGlobalAveragePool',
-            'MatMul': 'QLinearMatMul', # Qlinear Matmul is a standard onnx operation.
+            'MatMul': 'QLinearMatMul', # Qlinear MatMul is a standard onnx operation.
             'Gemm': 'QGemm',
             'Concat': 'Concat', # no need to convert concat.
             'LeakyRelu': 'QLinearLeakyRelu',
@@ -213,10 +213,10 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
         super().prepare_graph(graph, process_activation, process_parameter,
                               remove_activation_fn, quant_parameter_to_int)
         FP32_ONLY_TYPES = {'Add', 'Mul', 'Relu', 'Clip', 'Gemm', 'Conv', 'AveragePool',
-                           'GlobalAveragePool', 'Matmul', 'LeakyRelu', 'Sigmoid', 'ReduceMean'}
+                           'GlobalAveragePool', 'MatMul', 'LeakyRelu', 'Sigmoid', 'ReduceMean'}
         quantized_op = set()
         for op in graph.operations.values():
-            if op.type in {'QGemm', 'QLinearConv', 'QLinearMatmul', 'QuantizeLinear',
+            if op.type in {'QGemm', 'QLinearConv', 'QLinearMatMul', 'QuantizeLinear',
                            'QLinearAdd', 'QLinearAveragePool', 'QLinearConcat', 'QLinearGlobalAveragePool',
                            'QLinearLeakyRelu', 'QLinearMul', 'QLinearReduceMean', 'QLinearSigmoid'}:
                 quantized_op.add(op)
@@ -243,7 +243,7 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
         for op in quantize_extension:
             for input_var in op.inputs:
                 if input_var.is_parameter: continue
-                if op.type not in {'QGemm', 'QLinearConv', 'QLinearMatmul'}: continue
+                if op.type not in {'QGemm', 'QLinearConv', 'QLinearMatMul'}: continue
                 if input_var.source_op not in quantize_extension or input_var.source_op is None:
                     assert isinstance(op, QuantableOperation)
                     qconfig = op.config.input_quantization_config[op.inputs.index(input_var)]

@@ -90,8 +90,7 @@ class ACADEMICQuantizer(BaseQuantizer):
     @ property
     def quant_operation_types(self) -> set:
         return {
-            'Conv', 'Gemm', 'ConvTranspose'
-        }
+            'Conv', 'Gemm', 'ConvTranspose'}
 
 
     @ property

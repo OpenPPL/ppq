@@ -455,12 +455,17 @@ class PointDispatcher(ConservativeDispatcher):
         Returns:
             Dict[str, TargetPlatform]: [description]
         """
-        dispatch_table = super().dispatch(graph=graph, quant_types=quant_types, quant_platform=quant_platform, 
-                                          fp32_platform=fp32_platform, SOI_platform=SOI_platform, kwargs=kwargs)
+        dispatch_table = ConservativeDispatcher.dispatch(
+            graph=graph, quant_types=quant_types, quant_platform=quant_platform, 
+            fp32_platform=fp32_platform, SOI_platform=SOI_platform, kwargs=kwargs)
+        
+        skip_ops = set()
         for op in graph.operations.values():
+            if op in skip_ops: continue
             if op.type in quant_types and op.is_computing_op:
                 dispatch_table[op.name] = quant_platform
             else:
                 if dispatch_table[op.name] == quant_platform:
                     dispatch_table[op.name] = fp32_platform
+        
         return dispatch_table
