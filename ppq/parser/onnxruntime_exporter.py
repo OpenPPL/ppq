@@ -280,8 +280,9 @@ class ONNXRUNTIMExporter(OnnxExporter):
         for config, var in op.config_with_variable:
             meta = var.meta
             if var.is_parameter:
-                if not op.is_computing_op: continue
-                
+                # we do not want to process clip value here.
+                if op.type in {'Clip'}: continue
+
                 assert len(var.dest_ops) == 1, (
                 f'Can not export variable {var.name}, cause it has more than 1 destination operations. '
                 'PPQ require all parameters to have only 1 destination operation.')
@@ -293,7 +294,7 @@ class ONNXRUNTIMExporter(OnnxExporter):
                 if config.state == QuantizationStates.PASSIVE_BAKED:
                     config.state = QuantizationStates.PASSIVE
 
-                if QuantizationStates.is_activated(config.state):
+                if QuantizationStates.can_export(config.state):
                     # if not quant parameter to int, all parameter should export as fp32.
                     # needs insert both quant and dequant op for them
                     if not quant_param_to_int:
@@ -309,7 +310,7 @@ class ONNXRUNTIMExporter(OnnxExporter):
             else:
                 if not process_activation: continue
 
-                if QuantizationStates.is_activated(config.state):
+                if QuantizationStates.can_export(config.state):
                     created = self.insert_quant_on_variable(
                         graph=graph, var=var, config=config, related_op=op, meta=meta)
                     var = created.outputs[0]

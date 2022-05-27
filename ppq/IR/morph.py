@@ -671,7 +671,7 @@ class GraphDecomposer(GraphCommandProcessor):
             output_var = op.outputs[0]
 
             if op.num_of_input == 3:
-                bias_add  = graph.create_operation(op_type='Add')
+                bias_add  = graph.create_operation(op_type='Add', platform=op.platform)
                 bias_var  = op.inputs[-1]
 
                 graph.create_link_with_op(
