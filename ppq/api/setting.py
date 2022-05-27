@@ -437,6 +437,14 @@ class QuantizationSettingFactory:
     def academic_setting() -> QuantizationSetting:
         default_setting = QuantizationSetting()
         default_setting.fusion = False
+        default_setting.dispatcher = 'pointwise'
+        return default_setting
+    
+    @staticmethod
+    def ncnn_setting() -> QuantizationSetting:
+        default_setting = QuantizationSetting()
+        default_setting.fusion = False
+        default_setting.dispatcher = 'pointwise'
         return default_setting
 
     @ staticmethod

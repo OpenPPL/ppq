@@ -8,7 +8,7 @@ from ppq.core import (ChannelwiseTensorQuantizationConfig, PASSIVE_OPERATIONS,
                       TargetPlatform)
 from ppq.executor.base import BaseGraphExecutor
 from ppq.IR import BaseGraph, GraphCommandProcessor, Operation
-from ppq.quantization.optim import QuantizationOptimizationPipeline, NCNNFormatGemmPass, NCNNRequantizePass
+from ppq.quantization.optim import QuantizationOptimizationPipeline, NCNNFormatGemmPass
 
 from .base import BaseQuantizer
 
@@ -28,12 +28,6 @@ class NCNNQuantizer(BaseQuantizer):
         self, setting: QuantizationSetting, executor: BaseGraphExecutor) -> QuantizationOptimizationPipeline:
         pipeline = super().build_prequant_pipeline(setting, executor)
         pipeline.append_optimization_to_pipeline(NCNNFormatGemmPass(), at_front=True)
-        return pipeline
-
-    def build_quant_pipeline(
-        self, setting: QuantizationSetting, executor: BaseGraphExecutor) -> QuantizationOptimizationPipeline:
-        pipeline = super().build_quant_pipeline(setting, executor)
-        pipeline.append_optimization_to_pipeline(NCNNRequantizePass())
         return pipeline
 
     def init_quantize_config(
