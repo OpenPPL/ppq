@@ -106,17 +106,14 @@ def layerwise_error_analyse(
             fp_outputs = executor.forward(inputs=batch, output_names=interested_outputs)
 
             # manually override quantization state
-            for cfg, _ in operation.config_with_variable:
-                cfg.state = QuantizationStates.ACTIVATED
+            operation.restore_quantize_state()
             qt_outputs = executor.forward(inputs=batch, output_names=interested_outputs)
 
             for fp_output, qt_output in zip(fp_outputs, qt_outputs):
                 recorder.update(y_pred = qt_output, y_real = fp_output)
 
             # manually override quantization state
-            for cfg, _ in operation.config_with_variable:
-                cfg.state = QuantizationStates.DEQUANTIZED
-
+            operation.dequantize()
             if idx >= steps: break
 
     # restore quantization states
