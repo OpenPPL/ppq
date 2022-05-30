@@ -1,7 +1,7 @@
 # Inference with PPL CUDA
 this tutorial gives you a simple illustration how you could actually use PPQ to quantize your model and export
 quantization parameter file to inference with ppl cuda as your backend. Similar to [inference_with_ncnn](./inference_with_ncnn.md), we use an onnx model, shufflenet-v2, as an example here to illustrate the whole process
-going from ready-to-quantize model to ready-to-deploy model and corresponding quantization parameter 
+going from ready-to-quantize model to ready-to-deploy polished onnx model, with quantization parameter file generated
 
 ## Quantize Your Network
 as we have specified in [how_to_use](./how_to_use.md), we should prepare our calibration dataloader, confirm
@@ -21,21 +21,21 @@ model_path = '/models/shufflenet-v2.onnx'
 data_path  = '/data/ImageNet/calibration'
 EXECUTING_DEVICE = 'cuda'
 
-# initialize dataloader 
+# initialize dataloader, suppose preprocessed input data is in binary format
 INPUT_SHAPE = [1, 3, 224, 224]
 npy_array = [np.fromfile(os.path.join(data_path, file_name), dtype=np.float32).reshape(*INPUT_SHAPE) for file_name in os.listdir(data_path)]
 dataloader = [torch.from_numpy(np.load(npy_tensor)) for npy_tensor in npy_array]
 
 # confirm platform and setting
 target_platform = TargetPlatform.PPL_CUDA_INT8
-setting = QuantizationSettingFactory.pplcuda_setting() # for ncnn, no fusion
+setting = QuantizationSettingFactory.pplcuda_setting()
 
 # load and schedule graph
 ppq_graph_ir = load_onnx_graph(model_path)
 ppq_graph_ir = dispatch_graph(ppq_graph_ir, target_platform, setting)
 
 # intialize quantizer and executor
-executor = TorchExecutor(ppq_graph_ir, device='cuda')
+executor = TorchExecutor(ppq_graph_ir, device=EXECUTING_DEVICE)
 quantizer = QUANTIZER_COLLECTION[target_platform](graph=ppq_graph_ir)
 
 # run quantization

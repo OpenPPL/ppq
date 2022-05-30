@@ -29,21 +29,21 @@ model_path = '/models/shufflenet-v2-sim.onnx' # onnx simplified model
 data_path  = '/data/ImageNet/calibration' # calibration data folder
 EXECUTING_DEVICE = 'cuda'
 
-# initialize dataloader 
+# initialize dataloader, suppose preprocessed calibration data is in binary format
 INPUT_SHAPE = [1, 3, 224, 224]
 npy_array = [np.fromfile(os.path.join(data_path, file_name), dtype=np.float32).reshape(*INPUT_SHAPE) for file_name in os.listdir(data_path)]
 dataloader = [torch.from_numpy(np.load(npy_tensor)) for npy_tensor in npy_array]
 
 # confirm platform and setting
 target_platform = TargetPlatform.NCNN_INT8
-setting = QuantizationSettingFactory.academic_setting() # for ncnn, no fusion
+setting = QuantizationSettingFactory.ncnn_setting()
 
 # load and schedule graph
 ppq_graph_ir = load_onnx_graph(model_path)
 ppq_graph_ir = dispatch_graph(ppq_graph_ir, target_platform, setting)
 
 # intialize quantizer and executor
-executor = TorchExecutor(ppq_graph_ir, device='cuda')
+executor = TorchExecutor(ppq_graph_ir, device=EXECUTING_DEVICE)
 quantizer = QUANTIZER_COLLECTION[target_platform](graph=ppq_graph_ir)
 
 # run quantization
@@ -61,8 +61,7 @@ quantizer.quantize(
 # export quantization param file and model file
 export_ppq_graph(graph=ppq_ir_graph, platform=TargetPlatform.NCNN_INT8, graph_save_to='shufflenet-v2-sim-ppq', config_save_to='shufflenet-v2-sim-ppq.table')
 ```
-note that your dataloader should provide batch data which is in the same shape of the input of simplified model, because
-simplified model can't take dynamic-shape inputs.
+note that your dataloader should provide batch data which is in the same shape of the input of simplified model, because simplified model can't take dynamic-shape inputs.
 
 ## Convert Your Model
 if you have compiled ncnn correctly, there should be executables in the installation binary folder which can convert onnx model
