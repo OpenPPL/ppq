@@ -75,7 +75,7 @@ class PPL_DSP_Quantizer(BaseQuantizer):
             'GlobalMaxPool', 'GlobalAveragePool', 'Softmax',
             'Mul', 'Add', 'Max', 'Sub', 'Div', 'Reshape',
             'LeakyRelu', 'Concat', 'Sigmoid', 'Slice', 'Interp',
-            'ReduceMean'
+            'ReduceMean', 'Flatten',
         }
 
     @ property
