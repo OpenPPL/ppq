@@ -1,3 +1,4 @@
+import os
 from typing import List
 
 from ppq.core import (DataType, NetworkFramework, QuantizationProperty,
@@ -46,9 +47,17 @@ class NCNNExporter(GraphExporter):
         if config_path is not None:
             self.export_quantization_config(config_path, graph)
 
+        _, ext = os.path.splitext(file_path)
+        if ext == '.onnx':
+            exporter = OnnxExporter()
+            exporter.export(file_path=file_path, graph=graph, config_path=None)
+        elif ext in {'.prototxt', '.caffemodel'}:
+            exporter = CaffeExporter()
+            exporter.export(file_path=file_path, graph=graph, config_path=None, input_shapes=input_shapes)
+        
         # no pre-determined export format, we export according to the
         # original model format
-        if graph._built_from == NetworkFramework.CAFFE:
+        elif graph._built_from == NetworkFramework.CAFFE:
             exporter = CaffeExporter()
             exporter.export(file_path=file_path, graph=graph, config_path=None, input_shapes=input_shapes)
 
