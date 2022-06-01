@@ -62,7 +62,7 @@ class TorchMinMaxObserver(BaseTensorObserver):
                     'Your quantization config has PER_CHANNEL while it is not a '\
                     'ChannelwiseTensorQuantizationConfig instance.'
                 channel_axis = self._quant_cfg.channel_axis
-                channelwise_view = value.transpose(dim0=0, dim1=channel_axis)
+                channelwise_view = value.transpose(dim0=0, dim1=channel_axis).unsqueeze(-1)
                 channelwise_view = torch.flatten(channelwise_view, start_dim=1)
                 self._min_val_collector.append(torch.min(channelwise_view, dim=1, keepdim=True)[0])
                 self._max_val_collector.append(torch.max(channelwise_view, dim=1, keepdim=True)[0])

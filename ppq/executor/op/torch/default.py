@@ -2253,6 +2253,14 @@ def Reciprocal_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBack
     return 1 / x
 
 
+def LogSoftmax_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
+    ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
+    ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
+ 
+    x = Softmax_forward(op=op, values=values, ctx=ctx, kwargs=kwargs)
+    x = Log_forward(op=op, values=[x], ctx=ctx, kwargs=kwargs)
+    return x
+
 
 DEFAULT_BACKEND_TABLE = {
     'AdaptiveAvgPool2d': AdaptiveAvgPool2d_forward,
@@ -2284,6 +2292,7 @@ DEFAULT_BACKEND_TABLE = {
     'LayerNorm': LayerNorm_forward,
     'LeakyRelu': LeakyRelu_forward,
     'Less': Less_forward,
+    'LogSoftmax': LogSoftmax_forward,
     'MatMul': MatMul_forward,
     'Max': Eltwise_forward,
     'MaxPool': MaxPool2d_forward,
@@ -2342,4 +2351,5 @@ DEFAULT_BACKEND_TABLE = {
     'Identity': Identity_forward,
     'OneHot': Onehot_forward,
     'Reciprocal': Reciprocal_forward,
+
 }
