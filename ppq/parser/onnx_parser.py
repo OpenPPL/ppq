@@ -8,6 +8,8 @@ from ppq.IR import BaseGraph, GraphBuilder, Operation, Variable
 import onnx
 from onnx import helper, mapping, numpy_helper
 
+import json
+
 
 class OnnxParser(GraphBuilder):
     def build_variables(
@@ -124,6 +126,24 @@ class OnnxParser(GraphBuilder):
 
         inputs  = [item.name for item in model_pb.input]
         outputs = [item.name for item in model_pb.output]
+
+        dyDict = {'inpMess': {},'outMess':{}}
+        for item in model_pb.input:
+            dyDict['inpMess'][item.name] = {}
+            shape = item.type.tensor_type.shape.dim
+            for i, j in enumerate(shape):
+                if j.dim_param:
+                    dyDict['inpMess'][item.name][i] = j.dim_param
+        for item in model_pb.output:
+            dyDict['outMess'][item.name] = {}
+            shape = item.type.tensor_type.shape.dim
+            for i, j in enumerate(shape):
+                if j.dim_param:
+                    dyDict['outMess'][item.name][i] = j.dim_param
+
+        with open('./dynamic.json','w') as f:
+            json.dump(dyDict,f,indent=4)
+
         graph = self.build_variables(
             graph, graph_inputs=inputs, graph_outputs=outputs,
             op_inputs=op_inputs_dict, op_outputs=op_outputs_dict)

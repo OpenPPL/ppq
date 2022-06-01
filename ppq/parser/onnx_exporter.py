@@ -4,6 +4,7 @@ from typing import Union
 import numpy as np
 import onnx
 import torch
+import json
 from onnx import helper, numpy_helper
 from ppq.core import (ONNX_EXPORT_OPSET, ONNX_VERSION, PPQ_CONFIG, DataType,
                       convert_any_to_numpy)
@@ -221,4 +222,17 @@ class OnnxExporter(GraphExporter):
             graph_def, producer_name=PPQ_CONFIG.NAME, opset_imports=opsets)
         onnx_model.ir_version = ONNX_VERSION
         # onnx.checker.check_model(onnx_model)
+
+        with open('./dynamic','r') as f:
+            dyDict = json.load(f)
+
+        inpMess = onnx_model.graph.input
+        outMess = onnx_model.graph.output
+
+        if dyDict:
+            for k,v in dyDict.items():
+                for i in eval(k):
+                    for index,val in v[i.name].items():
+                        i.type.tensor_type.shape.dim[int(index)].dim_param = val
+
         onnx.save(onnx_model, file_path)
