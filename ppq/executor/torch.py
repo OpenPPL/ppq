@@ -327,7 +327,6 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
                 result_collector[output_names.index(name)] = inputs[name]
 
         for operation in executing_order[: last_idx]:
-            print(str(operation))
             try:
                 assert isinstance(operation, Operation), 'Oops, seems you got something weird in your graph'
                 assert isinstance(operation.platform, TargetPlatform), (
