@@ -223,7 +223,7 @@ class OnnxExporter(GraphExporter):
         onnx_model.ir_version = ONNX_VERSION
         # onnx.checker.check_model(onnx_model)
 
-        with open('./dynamic','r') as f:
+        with open('./dynamic.json','r') as f:
             dyDict = json.load(f)
 
         inpMess = onnx_model.graph.input
