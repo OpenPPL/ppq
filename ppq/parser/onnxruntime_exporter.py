@@ -2,6 +2,7 @@ from typing import Dict, List
 
 import onnx
 import torch
+import json
 from onnx import helper
 from ppq.core import (PPQ_CONFIG, ChannelwiseTensorQuantizationConfig,
                       DataType, OperationMeta, QuantizationProperty,
