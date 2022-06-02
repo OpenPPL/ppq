@@ -20,12 +20,10 @@ class MetaxTensorwiseQuantizer(BaseQuantizer):
         self,
         graph: Union[BaseGraph, GraphCommandProcessor]
     ) -> Union[torch.Tensor, list, dict]:
-
+        super().__init__(graph=graph)
         self._num_of_bits = 8
         self._quant_min = 0
         self._quant_max = 255
-
-        super().__init__(graph=graph)
 
     def init_quantize_config(self, operation: Operation) -> OperationQuantizationConfig:
 
@@ -104,12 +102,10 @@ class MetaxChannelwiseQuantizer(BaseQuantizer):
     def __init__(
         self, graph: Union[BaseGraph, GraphCommandProcessor]
     ) -> Union[torch.Tensor, list, dict]:
-
+        super().__init__(graph=graph)
         self._num_of_bits = 8
         self._quant_min = -127
         self._quant_max = 127
-
-        super().__init__(graph=graph)
 
     def init_quantize_config(self, operation: Operation) -> OperationQuantizationConfig:
         base_quant_config = self.create_default_quant_config(

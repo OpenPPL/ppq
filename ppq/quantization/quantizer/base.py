@@ -113,12 +113,12 @@ class BaseQuantizer(metaclass = ABCMeta):
                 operation_platforms[op_name] = self.target_platform
             else: operation_platforms[op_name] = self.default_platform
 
-            # manual override.
+            # maunnl override.
             if op_name in operation_platforms:
                 operation.platform = operation_platforms[op_name]
 
         # build operation_quantization_configs
-        # every quantizable op MUST have a quantization config
+        # every quantable op MUST have a quantization config
         # if operation.type is listed in quantable_operation_types while a operation_quantization_configs is given
         # it will override the setting of quantable_operation_types
         for op_name, operation in self._graph.operations.items():

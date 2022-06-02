@@ -21,12 +21,10 @@ class NXP_Quantizer(BaseQuantizer):
         self,
         graph: Union[BaseGraph, GraphCommandProcessor],
     ) -> Union[torch.Tensor, list, dict]:
-
+        super().__init__(graph=graph)
         self._num_of_bits = 8
         self._quant_min = - int(pow(2, self._num_of_bits - 1))
         self._quant_max = int(pow(2, self._num_of_bits - 1) - 1)
-
-        super().__init__(graph=graph)
 
     def build_quant_pipeline(
         self, setting: QuantizationSetting, executor: BaseGraphExecutor) -> QuantizationOptimizationPipeline:

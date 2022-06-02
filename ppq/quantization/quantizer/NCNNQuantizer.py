@@ -8,7 +8,7 @@ from ppq.core import (ChannelwiseTensorQuantizationConfig, PASSIVE_OPERATIONS,
                       TargetPlatform)
 from ppq.executor.base import BaseGraphExecutor
 from ppq.IR import BaseGraph, GraphCommandProcessor, Operation
-from ppq.quantization.optim import QuantizationOptimizationPipeline, NCNNFormatGemmPass
+from ppq.quantization.optim import QuantizationOptimizationPipeline, NCNNFormatGemmPass, NCNNRequantizePass
 
 from .base import BaseQuantizer
 
@@ -17,17 +17,21 @@ class NCNNQuantizer(BaseQuantizer):
     def __init__(
         self, graph: Union[BaseGraph, GraphCommandProcessor]
     ) -> Union[torch.Tensor, list, dict]:
-
+        super().__init__(graph=graph)
         self._num_of_bits = 8
         self._quant_min = - 127
         self._quant_max = + 127
-
-        super().__init__(graph=graph)
 
     def build_prequant_pipeline(
         self, setting: QuantizationSetting, executor: BaseGraphExecutor) -> QuantizationOptimizationPipeline:
         pipeline = super().build_prequant_pipeline(setting, executor)
         pipeline.append_optimization_to_pipeline(NCNNFormatGemmPass(), at_front=True)
+        return pipeline
+
+    def build_quant_pipeline(
+        self, setting: QuantizationSetting, executor: BaseGraphExecutor) -> QuantizationOptimizationPipeline:
+        pipeline = super().build_quant_pipeline(setting, executor)
+        pipeline.append_optimization_to_pipeline(NCNNRequantizePass())
         return pipeline
 
     def init_quantize_config(
