@@ -134,7 +134,7 @@ class TensorRTExporter(ONNXRUNTIMExporter):
         # find all quantable operations:
         for operation in [op for op in graph.operations.values()]:
             if not isinstance(operation, QuantableOperation): continue
-            if operation.type in {'Conv', 'Gemm', 'ConvTranspose'}:
+            if operation.type in {'Conv', 'Gemm', 'ConvTranspose', 'MatMul'}:
                 # for Conv, Gemm, ConvTranspose, TensorRT wants their weight to be quantized,
                 # however bias remains fp32.
                 assert len(operation.config.input_quantization_config) >= 2, (

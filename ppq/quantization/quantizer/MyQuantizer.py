@@ -31,15 +31,14 @@ class ExtQuantizer(BaseQuantizer):
     def __init__(
         self, graph: Union[BaseGraph, GraphCommandProcessor]
     ) -> Union[torch.Tensor, list, dict]:
-
+        super().__init__(graph=graph) # do not forget to initialize super class.
+        
         # Quantization basic setting -------------------------
         # update following properties:
         self._num_of_bits = 8        # platform bit width.
         self._quant_min = -128       # int value min
         self._quant_max = +127       # int value max
         # ----------------------------------------------------
-
-        super().__init__(graph=graph) # do not forget to initialize super class.
 
     def init_quantize_config(self, operation: Operation) -> OperationQuantizationConfig:
         """使用这个函数来初始化算子的量化配置，该函数会被父类作为接口调用。

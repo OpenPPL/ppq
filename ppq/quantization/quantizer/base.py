@@ -14,7 +14,6 @@ from ppq.IR.base.graph import Operation
 from ppq.IR.morph import GraphReplacer
 from ppq.IR.quantize import QuantableVariable
 from ppq.IR.search import SearchableGraph
-from ppq.executor.torch import TorchExecutor
 from ppq.quantization.optim import *
 
 
@@ -31,6 +30,10 @@ class BaseQuantizer(metaclass = ABCMeta):
         self._verbose = verbose
         self._processor_chain = None
         self._graph = graph
+        
+        self._quant_min = -128
+        self._quant_max = +127
+        self._num_of_bits = 8
 
     @ empty_ppq_cache
     def quantize(
@@ -110,12 +113,12 @@ class BaseQuantizer(metaclass = ABCMeta):
                 operation_platforms[op_name] = self.target_platform
             else: operation_platforms[op_name] = self.default_platform
 
-            # manual override.
+            # maunnl override.
             if op_name in operation_platforms:
                 operation.platform = operation_platforms[op_name]
 
         # build operation_quantization_configs
-        # every quantizable op MUST have a quantization config
+        # every quantable op MUST have a quantization config
         # if operation.type is listed in quantable_operation_types while a operation_quantization_configs is given
         # it will override the setting of quantable_operation_types
         for op_name, operation in self._graph.operations.items():
@@ -153,6 +156,8 @@ class BaseQuantizer(metaclass = ABCMeta):
                                    'make sure all operations that you sent to quantized platform is '
                                    'quantable and recognizable for your quantizer.')
                 quantization_config = operation_quantization_configs[op_name]
+                assert isinstance(quantization_config, OperationQuantizationConfig), (
+                    f'Expect an Operation Quantization Config here, however {type(quantization_config)} was given.')
                 self._processor_chain(
                     QuantizeOperationCommand(
                         op_name=operation.name,
@@ -170,6 +175,10 @@ class BaseQuantizer(metaclass = ABCMeta):
         quant_min: int, quant_max: int, observer_algorithm: str,
         policy: QuantizationPolicy, rounding: RoundingPolicy,
     ) -> OperationQuantizationConfig:
+        assert isinstance(policy, QuantizationPolicy), (
+            f'Can not create quantization config - Quantization Policy Type Error.')
+        assert isinstance(rounding, RoundingPolicy), (
+            f'Can not create quantization config - Rounding Policy Type Error.')
         num_of_related_vars = operation_meta.num_of_input + operation_meta.num_of_output
         configs = [TensorQuantizationConfig(
             policy=policy, rounding=rounding,
@@ -184,7 +193,12 @@ class BaseQuantizer(metaclass = ABCMeta):
 
     @ abstractmethod
     def init_quantize_config(self, operation: Operation) -> OperationQuantizationConfig:
-        raise NotImplementedError('Quantizier does not have a default operation quantization config yet.')
+        base_quant_config = self.create_default_quant_config(
+            policy=self.quantize_policy, rounding=self.rounding_policy,
+            operation_meta=operation.meta_data, num_of_bits=self._num_of_bits,
+            quant_max=self._quant_max, quant_min=self._quant_min,
+            observer_algorithm='percentile')
+        return base_quant_config
 
     @ abstractproperty
     @ property
@@ -196,25 +210,22 @@ class BaseQuantizer(metaclass = ABCMeta):
     def target_platform(self) -> TargetPlatform:
         raise NotImplementedError('Quantizier does not have a default platform setting yet.')
 
-    @ abstractproperty
     @ property
     def default_platform(self) -> TargetPlatform:
-        raise NotImplementedError('Quantizier does not have a default platform setting yet.')
+        return TargetPlatform.FP32
 
     @ abstractproperty
     @ property
     def quantize_policy(self) -> QuantizationPolicy:
         raise NotImplementedError('Quantizier does not have a default quantization policy yet.')
 
-    @ abstractproperty
     @ property
-    def rounding_policy(self):
-        raise NotImplementedError('Implement this first.')
+    def rounding_policy(self) -> RoundingPolicy:
+        return RoundingPolicy.ROUND_HALF_EVEN
 
-    @ abstractproperty
     @ property
     def activation_fusion_types(self) -> set:
-        raise NotImplementedError('Implement this first.')
+        return {'Relu', 'Clip'}
 
     def report(self) -> str:
         debug_str = ''

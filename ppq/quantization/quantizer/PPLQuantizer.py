@@ -16,12 +16,10 @@ class PPLCUDAQuantizer(BaseQuantizer):
     def __init__(
         self, graph: Union[BaseGraph, GraphCommandProcessor]
     ) -> Union[torch.Tensor, list, dict]:
-
+        super().__init__(graph=graph)
         self._num_of_bits = 8
         self._quant_min = - int(pow(2, self._num_of_bits - 1))
         self._quant_max = int(pow(2, self._num_of_bits - 1) - 1)
-
-        super().__init__(graph=graph)
 
     def init_quantize_config(self, operation: Operation) -> OperationQuantizationConfig:
         base_quant_config = self.create_default_quant_config(
