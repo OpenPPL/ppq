@@ -1,15 +1,10 @@
 # PPL Quantization Tool 0.6.4(PPL 量化工具)
 PPL QuantTool (PPQ) is a highly efficient neural network quantization tool with custimized IR, cuda based executor, automatic dispacher and powerful optimization passes. Together with OpenPPL ecosystem, we offer you this industrial-grade network deploy tool that empowers AI developers to unleash the full potential of AI hardware. With quantization and other optimizations, nerual network model can run 5~10x faster than ever.
 
-PPL QuantTool 是一个工业级的神经网络量化工具：我们已经准备好了为你处理 maskrcnn 中复杂算子调度问题；esrgan 中的全网联合定点问题；或者是 transformer 中的大规模递归图融合，PPQ能够处理这些最复杂的网络量化任务，确保你的模型能够稳定部署在目标设备上。
+PPL QuantTool 是一个高效的工业级的神经网络量化工具.
+我们使用量化计算图(QIR)描述量化细节，即便在网络极度复杂的情况下，我们依然能够保证以正确的方法模拟硬件计算，从而降低模拟误差。PPQ 有着自定义的量化算子库、网络执行器、调度器与异构执行能力，在网络量化与量化训练方面，使用 PPQ 比原生 PyTorch 快3 ~ 50倍。 借助 PPQ, OpenPPL, TensorRT, Tengine，ncnn等框架，开发者可以将神经网络模型加速 10 ~ 100 倍，并部署到多种多样的目标终端，我们期待你将人工智慧带到千家万户之间。
 
-PPQ 使用量化计算图(QIR)描述量化细节，即便在网络极度复杂的情况下，我们依然能够保证以正确的方法模拟硬件计算，从而降低模拟误差。我们知晓硬件的运算细节——在所有已知平台上，PPQ 的模拟误差不超过1%，且保证模拟误差不会指数级扩散。PPQ 有着自定义的量化算子库、网络执行器、调度器与异构执行能力，在网络量化与量化训练方面，使用 PPQ 比原生 PyTorch 快3 ~ 50倍。 借助 PPQ, OpenPPL, TensorRT, Tengine等框架，开发者可以将神经网络模型加速5 ~ 10倍，并部署到多种多样的目标终端，我们期待你将人工智慧真正带到千家万户之间。
-
-### Acceptable Framework:
-PyTorch | TensorFlow | Caffe | ONNX | MMlab
-
-### Deploy Platform:
-TensorRT | OpenPPL-Cuda | OpenPPL-DSP | SNPE(Qualcomm) | NXP | Metax | Tengine(Developing) | ncnn | Openvino
+目前 PPQ 接受任何可能的 onnx(opset 11) 模型文件作为输入，如果你是Pytorch, tensorflow的用户，你可以使用这些框架提供的方法将模型转换到onnx。截止目前 PPQ 支持向TensorRT, OpenPPL, Openvino, ncnn, Onnxruntime, Tengine, Snpe等多个推理引擎生成目标文件并完成部署。借助算子自定义与平台自定义功能，你还可以将 PPQ 的量化能力扩展到其他可能的硬件平台。
 
 # Code Example
 | **使用例子(Examples)** | **网络部署平台(Platform)** | **输入模型格式(Format)** | **链接(Link)** | **相关视频(Video)** |
@@ -34,11 +29,12 @@ TensorRT | OpenPPL-Cuda | OpenPPL-DSP | SNPE(Qualcomm) | NXP | Metax | Tengine(D
 | onnx 后训练量化(PPQ) | onnxruntime | onnx | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/Onnxruntime/Example_PTQ.py) | [link](https://www.bilibili.com/video/BV1t34y1E7Fz "Network Deploy") |
 | onnxruntime 性能比较 | onnxruntime | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/Onnxruntime/Example_Benchmark.py) | [link](https://www.bilibili.com/video/BV1t34y1E7Fz "Network Deploy") |
 | `openvino` |  |  |  |  |
-| 使用 openvino 加速你的网络 | openvino | onnx |  ||
-| openvino 后训练量化(PPQ) | openvino | onnx |  ||
-| openvino 性能比较 | openvino | pytorch |  ||
+| 使用 openvino 加速你的网络 | openvino | onnx | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/Openvino/Example_Fp32.py) ||
+| openvino 量化训练 | openvino | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/Openvino/Example_QAT.py) ||
+| openvino 后训练量化(PPQ) | openvino | onnx | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/Openvino/Example_PTQ.py) ||
+| openvino 性能比较 | openvino | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/Openvino/Example_Benchmark.py) ||
 | `snpe` |  |  |  |  |
-| snpe 后训练量化(PPQ) | snpe | caffe |  ||
+| snpe 后训练量化(PPQ) | snpe | caffe | [link](https://github.com/openppl-public/ppq/blob/master/md_doc/inference_with_snpe_dsp.md) ||
 | `ncnn` |  |  |  |  |
 | ncnn 后训练量化(PPQ) | ncnn | onnx | [link](https://github.com/openppl-public/ppq/blob/master/md_doc/inference_with_ncnn.md) ||
 | `OpenPPL` |  |  |  |  |
@@ -46,6 +42,7 @@ TensorRT | OpenPPL-Cuda | OpenPPL-DSP | SNPE(Qualcomm) | NXP | Metax | Tengine(D
 | `自定义量化` |  |  |  |  |
 | 添加自定义量化平台 1 | - | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/md_doc/add_new_platform.md) ||
 | 添加自定义量化平台 2 | - | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/create_your_platform.py) ||
+| 添加自定义算子 3 | - | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/custimize_quant_func.py) ||
 
 
 # Video Tutorial(Bilibili 视频教程)
@@ -60,6 +57,8 @@ Watch video tutorial series on www.bilibili.com, following are links of PPQ tuto
 * 图优化与量化模拟：[https://www.bilibili.com/video/BV1Kr4y1n7cy](https://www.bilibili.com/video/BV1Kr4y1n7cy "Graph Optimization & quantization simulating.")
 * 图调度与模式匹配：[https://www.bilibili.com/video/BV1xY411A7ea](https://www.bilibili.com/video/BV1xY411A7ea "Graph Dispatching & Pattern Matching.")
 * 神经网络部署: [https://www.bilibili.com/video/BV1t34y1E7Fz](https://www.bilibili.com/video/BV1t34y1E7Fz "Network Deploy")
+* TensorRT 部署: [https://www.bilibili.com/video/BV1AU4y127Uo](https://www.bilibili.com/video/BV1AU4y127Uo "TensorRT Deploy")
+* 量化参数选择: [https://www.bilibili.com/video/BV1QF41157aM](https://www.bilibili.com/video/BV1QF41157aM "Quantization Param Searching")
 * 其他教程: 等待缓慢更新...
 
 # Installation
