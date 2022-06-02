@@ -2,13 +2,14 @@ from typing import Union
 
 import torch
 from ppq.api.setting import QuantizationSetting
-from ppq.core import (ChannelwiseTensorQuantizationConfig, PASSIVE_OPERATIONS,
+from ppq.core import (ChannelwiseTensorQuantizationConfig,
                       OperationQuantizationConfig, QuantizationPolicy,
                       QuantizationProperty, QuantizationStates, RoundingPolicy,
                       TargetPlatform)
 from ppq.executor.base import BaseGraphExecutor
 from ppq.IR import BaseGraph, GraphCommandProcessor, Operation
-from ppq.quantization.optim import QuantizationOptimizationPipeline, NCNNFormatGemmPass, NCNNRequantizePass
+from ppq.quantization.optim import (NCNNFormatGemmPass,
+                                    QuantizationOptimizationPipeline)
 
 from .base import BaseQuantizer
 
