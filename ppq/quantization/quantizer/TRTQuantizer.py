@@ -14,12 +14,10 @@ class TensorRTQuantizer(BaseQuantizer):
     def __init__(
         self, graph: Union[BaseGraph, GraphCommandProcessor]
     ) -> Union[torch.Tensor, list, dict]:
-
+        super().__init__(graph=graph)
         self._num_of_bits = 8
         self._quant_min = - 128
         self._quant_max = + 127
-
-        super().__init__(graph=graph)
 
     def init_quantize_config(
         self, operation: Operation) -> OperationQuantizationConfig:
@@ -31,40 +29,42 @@ class TensorRTQuantizer(BaseQuantizer):
         )
         base_quant_config.output_quantization_config[0].state = QuantizationStates.FP32
 
-        if operation.type in {'Conv', 'ConvTranspose', 'Gemm'}:
+        if operation.type in {'Conv', 'ConvTranspose', 'Gemm', 'MatMul'}:
             # set all parameters within Conv, ConvTranspose, Gemm to per-channel quant-config.
             assert operation.num_of_input > 0, 'Seems you got a Conv layer with no parameters.'
 
             # first parameter must exits, for conv layer it will be conv_weight
             # layout: [out_channel, in_channel, kernel_size, kernel_size]
             if operation.type in {'Conv', 'ConvTranspose'}:
-                conv_weight_config = base_quant_config.input_quantization_config[1]
-                conv_weight_config.policy = QuantizationPolicy(
-                    QuantizationProperty.SYMMETRICAL +
-                    QuantizationProperty.LINEAR +
-                    QuantizationProperty.PER_CHANNEL
-                )
-                base_quant_config.input_quantization_config[1] = \
-                    ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
-                        convert_from = conv_weight_config,
-                        offsets = None, scales  = None, channel_axis = 0
+                if operation.inputs[1].is_parameter:
+                    conv_weight_config = base_quant_config.input_quantization_config[1]
+                    conv_weight_config.policy = QuantizationPolicy(
+                        QuantizationProperty.SYMMETRICAL +
+                        QuantizationProperty.LINEAR +
+                        QuantizationProperty.PER_CHANNEL
                     )
-                base_quant_config.input_quantization_config[1].observer_algorithm = 'Minmax'
+                    base_quant_config.input_quantization_config[1] = \
+                        ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
+                            convert_from = conv_weight_config,
+                            offsets = None, scales  = None, channel_axis = 0
+                        )
+                    base_quant_config.input_quantization_config[1].observer_algorithm = 'Minmax'
             # first parameter must exits, for gemm layer it will be gemm_weight
             # layout: [in_dim, out_dim]
-            elif operation.type in {'Gemm'}:
-                gemm_weight_config = base_quant_config.input_quantization_config[1]
-                gemm_weight_config.policy = QuantizationPolicy(
-                    QuantizationProperty.SYMMETRICAL +
-                    QuantizationProperty.LINEAR +
-                    QuantizationProperty.PER_CHANNEL
-                )
-                base_quant_config.input_quantization_config[1] = \
-                    ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
-                        convert_from = gemm_weight_config,
-                        offsets = None, scales  = None, channel_axis = 0
+            elif operation.type in {'Gemm', 'MatMul'}:
+                if operation.inputs[1].is_parameter:
+                    gemm_weight_config = base_quant_config.input_quantization_config[1]
+                    gemm_weight_config.policy = QuantizationPolicy(
+                        QuantizationProperty.SYMMETRICAL +
+                        QuantizationProperty.LINEAR +
+                        QuantizationProperty.PER_CHANNEL
                     )
-                base_quant_config.input_quantization_config[1].observer_algorithm = 'Minmax'
+                    base_quant_config.input_quantization_config[1] = \
+                        ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
+                            convert_from = gemm_weight_config,
+                            offsets = None, scales  = None, channel_axis = 0
+                        )
+                    base_quant_config.input_quantization_config[1].observer_algorithm = 'Minmax'
             # if operation has bias
             if operation.num_of_input > 2:
                 bias_config = base_quant_config.input_quantization_config[-1]

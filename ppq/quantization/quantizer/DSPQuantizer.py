@@ -18,12 +18,10 @@ class PPL_DSP_Quantizer(BaseQuantizer):
         self,
         graph: Union[BaseGraph, GraphCommandProcessor]
     ) -> Union[torch.Tensor, list, dict]:
-
+        super().__init__(graph=graph)
         self._num_of_bits = 8
         self._quant_min = 0
         self._quant_max = int(pow(2, self._num_of_bits) - 1)
-
-        super().__init__(graph=graph)
 
     def init_quantize_config(self, operation: Operation) -> OperationQuantizationConfig:
 
@@ -75,7 +73,7 @@ class PPL_DSP_Quantizer(BaseQuantizer):
             'GlobalMaxPool', 'GlobalAveragePool', 'Softmax',
             'Mul', 'Add', 'Max', 'Sub', 'Div', 'Reshape',
             'LeakyRelu', 'Concat', 'Sigmoid', 'Slice', 'Interp',
-            'ReduceMean', 'Flatten',
+            'ReduceMean'
         }
 
     @ property

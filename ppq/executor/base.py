@@ -36,6 +36,23 @@ GLOBAL_DISPATCHING_TABLE[TargetPlatform.EXTENSION] = EXTENSION_BACKEND_TABLE
 GLOBAL_DISPATCHING_TABLE[TargetPlatform.OPENVINO_INT8] = DEFAULT_BACKEND_TABLE
 
 def register_operation_handler(handler: Callable, operation_type: str, platform: TargetPlatform):
+    """Regitser a custimized function as operation handler.
+    
+    Function should accept at least 3 input parameters, return one or more tensor as result:
+    func(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
+    
+    If there is already another operation handler for given operation_type,
+        new handler will replace the old one without warrning.
+
+    Args:
+        handler (Callable): _description_
+        operation_type (str): _description_
+        platform (TargetPlatform): _description_
+
+    Raises:
+        ValueError: _description_
+        ValueError: _description_
+    """
     if platform not in GLOBAL_DISPATCHING_TABLE:
         raise ValueError('Unknown Platform detected, Please check your platform setting.')
     if operation_type in GLOBAL_DISPATCHING_TABLE[platform]:

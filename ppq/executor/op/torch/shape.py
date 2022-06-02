@@ -416,7 +416,7 @@ def Unsqueeze_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
         torch.Tensor: [description]
     """
     ASSERT_ALL_TENSORS_AT_CPU(op=op, values=values)
-    ASSERT_NUM_OF_INPUT(op=op, values=values)
+    ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
     [unsqueezing_tensor] = values
     axes = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='axes', compulsive=True)
     output = torch.unsqueeze(unsqueezing_tensor, axes[0])
@@ -1540,6 +1540,25 @@ def Split_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCo
     output = torch.split(input, split, axis)
     return output
 
+def GreaterOrEqual_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
+    ASSERT_ALL_TENSORS_AT_CPU(op=op, values=values)
+    ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=2, max_num_of_input=2)
+    a, b = values
+    return a >= b
+
+def ReduceSum_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
+    [input_value] = values
+    dim = op.attributes.get('axes', None)
+    keepdim = bool(op.attributes.get('keepdims', 1))
+    if dim is None:
+        #  The default is to reduce over all the dimensions of the input tensor
+        output = torch.sum(input_value)
+        if keepdim:
+            output = output.reshape([1] * input_value.dim())
+    else:
+        output = torch.sum(input_value, dim=dim[0], keepdim=keepdim)
+    return output
+
 SOI_BACKEND_TABLE = {
     'Shape': Shape_forward,
     'Div': Div_forward,
@@ -1580,5 +1599,7 @@ SOI_BACKEND_TABLE = {
     'Greater': Greater_forward,
     'Not': Not_forward,
     'MMCVRoiAlign': MMCVRoiAlign_forward,
-    'Split': Split_forward
+    'Split': Split_forward,
+    'GreaterOrEqual': GreaterOrEqual_forward,
+    'ReduceSum': ReduceSum_forward,
 }

@@ -5,9 +5,9 @@ import torch
 from ppq.core import (NetworkFramework, TargetPlatform, empty_ppq_cache,
                       ppq_warning)
 from ppq.executor import TorchExecutor
-from ppq.executor.base import BaseGraphExecutor
-from ppq.IR import (BaseGraph, GraphCommand, GraphCommandType, GraphFormatter,
-                    GraphMerger)
+from ppq.executor.base import BaseGraphExecutor, register_operation_handler
+from ppq.IR import (BaseGraph, GraphBuilder, GraphCommand, GraphCommandType,
+                    GraphExporter, GraphFormatter, GraphMerger)
 from ppq.IR.morph import GraphDeviceSwitcher
 from ppq.parser import *
 from ppq.quantization.optim.base import QuantizationOptimizationPass
@@ -955,9 +955,80 @@ class DISABLE_CUDA_KERNEL:
         PPQ_CONFIG.USING_CUDA_KERNEL = self._state
 
 
+def register_network_quantizer(quantizer: type, platform: TargetPlatform):
+    """Register a quantizer to ppq quantizer collection, once the quantizer is registered, 
+    you can invoke it by calling ppq.api.quantize_onnx_model or function like this.
+    
+    This function will override the default quantizer collection:
+        register_network_quantizer(MyQuantizer, TargetPlatform.TRT_INT8) will replace the default TRT_INT8 quantizer.
+
+    Quantizer should be a subclass of BaseQuantizer, do not provide an instance here as ppq will initilize it later.
+    Your quantizer must require no initializing params.
+
+    Args:
+        quantizer (type): quantizer to be inserted.
+        platform (TargetPlatform): corresponding platfrom of your quantizer.
+    """
+    if not isinstance(quantizer, type):
+        raise TypeError(f'You can only register a class type as custimized ppq quantizer, '
+                        f'however {type(quantizer)} is given. '
+                        '(Requiring a class type here, do not provide an instance)')
+    if not issubclass(quantizer, BaseQuantizer):
+        raise TypeError('You can only register a subclass of BaseQuantizer as custimized quantizer.')
+    QUANTIZER_COLLECTION[platform] = quantizer
+
+
+def register_network_parser(parser: type, framework: NetworkFramework):
+    """Register a parser to ppq parser collection, once the parser is registered, 
+    you can invoke it by calling ppq.api.load_graph.
+    
+    This function will override the default parser collection:
+        register_network_parser(MyParser, NetworkFramework.ONNX) will replace the default ONNX parser.
+
+    Parser should be a subclass of GraphBuilder, do not provide an instance here as ppq will initilize it later.
+    Your quantizer must require no initializing params.
+
+    Args:
+        parser (type): parser to be inserted.
+        framework (NetworkFramework): corresponding NetworkFramework of your parser.
+    """
+    if not isinstance(parser, type):
+        raise TypeError(f'You can only register a class type as custimized ppq parser, '
+                        f'however {type(parser)} is given. '
+                        f'(Requiring a class type here, do not provide an instance)')
+    if not issubclass(parser, GraphBuilder):
+        raise TypeError('You can only register a subclass of GraphBuilder as custimized parser.')
+    PARSERS[framework] = parser
+
+
+def register_network_exporter(exporter: type, platform: TargetPlatform):
+    """Register an exporter to ppq exporter collection, once the exporter is registered, 
+    you can invoke it by calling ppq.api.export_ppq_graph.
+    
+    This function will override the default exporter collection:
+        register_network_quantizer(MyExporter, TargetPlatform.TRT_INT8) will replace the default TRT_INT8 exporter.
+
+    Exporter should be a subclass of GraphExporter, do not provide an instance here as ppq will initilize it later.
+    Your Exporter must require no initializing params.
+
+    Args:
+        exporter (type): exporter to be inserted.
+        platform (TargetPlatform): corresponding platfrom of your exporter.
+    """
+    if not isinstance(exporter, type):
+        raise TypeError(f'You can only register a class type as custimized ppq exporter, '
+                f'however {type(exporter)} is given. '
+                f'(Requiring a class type here, do not provide an instance)')
+    if not issubclass(exporter, GraphExporter):
+        raise TypeError('You can only register a subclass of GraphExporter as custimized exporter.')
+    EXPORTERS[platform] = exporter
+
+
 __all__ = ['load_graph', 'load_onnx_graph', 'load_caffe_graph',
            'dispatch_graph', 'dump_torch_to_onnx', 'quantize_onnx_model',
            'quantize_torch_model', 'quantize_caffe_model',
            'export_ppq_graph', 'format_graph', 'quantize', 'export',
            'UnbelievableUserFriendlyQuantizationSetting', 'manop',
-           'quantize_native_model', 'ENABLE_CUDA_KERNEL', 'DISABLE_CUDA_KERNEL']
+           'quantize_native_model', 'ENABLE_CUDA_KERNEL', 'DISABLE_CUDA_KERNEL',
+           'register_network_quantizer', 'register_network_parser', 
+           'register_network_exporter', 'register_operation_handler']

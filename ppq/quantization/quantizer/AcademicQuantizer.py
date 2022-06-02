@@ -17,11 +17,10 @@ class ACADEMICQuantizer(BaseQuantizer):
     designed only for purpose of paper reproducing and algorithm verification.
     """
     def __init__(self, graph: BaseGraph, verbose: bool = True) -> None:
+        super().__init__(graph, verbose)
         self._num_of_bits = 8
         self._quant_min = 0
         self._quant_max = 255
-        super().__init__(graph, verbose)
-
 
     def init_quantize_config(self, operation: Operation) -> OperationQuantizationConfig:
 
@@ -115,10 +114,10 @@ class ACADEMICQuantizer(BaseQuantizer):
 
 class ACADEMIC_INT4_Quantizer(ACADEMICQuantizer):
     def __init__(self, graph: BaseGraph, verbose: bool = True) -> None:
+        super().__init__(graph, verbose)
         self._num_of_bits = 4
         self._quant_min = 0
         self._quant_max = 15
-        super().__init__(graph, verbose)
 
     @ property
     def target_platform(self) -> TargetPlatform:
