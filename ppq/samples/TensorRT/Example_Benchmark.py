@@ -25,7 +25,7 @@ MODELS = {
     'mobilenet_v2': torchvision.models.mobilenet.mobilenet_v2,
     'mnas': torchvision.models.mnasnet0_5,
     'shufflenet': torchvision.models.shufflenet_v2_x1_0}
-SAMPLES = load_calibration_dataset(directory='.', input_shape=[1, 3, 224, 224], batchsize=BATCHSIZE)
+SAMPLES = [torch.rand(size=[BATCHSIZE, 3, 224, 224]) for _ in range(256)]
 DEVICE  = 'cuda'
 
 
