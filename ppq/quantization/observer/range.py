@@ -261,7 +261,10 @@ class TorchPercentileObserver(BaseTensorObserver):
                 else:
                     self._percentile_collector.append(CUDA.Quantile(value, self._percentile).view(1, -1))
             elif self._quant_cfg.policy.has_property(QuantizationProperty.PER_CHANNEL):
+                import pdb
+                pdb.set_trace()
                 raise PermissionError('Percentile observer can not deal with per channel quantization.')
+
                 assert isinstance(self._quant_cfg, ChannelwiseTensorQuantizationConfig), (
                     'Your quantization config has PER_CHANNEL while it is not a '
                     'ChannelwiseTensorQuantizationConfig instance.')
@@ -289,6 +292,8 @@ class TorchPercentileObserver(BaseTensorObserver):
             self._quant_cfg.offset = torch.tensor([offset], dtype=torch.float32, device=device).squeeze(0)
             self._quant_cfg.state = QuantizationStates.ACTIVATED
         elif self._quant_cfg.policy.has_property(QuantizationProperty.PER_CHANNEL):
+            import pdb
+            pdb.set_trace()
             raise PermissionError('Percentile observer can not deal with per channel quantization.')
             if len(self._percentile_maxs) == 0:
                 raise ValueError('Can not render quantization config yet, Observer data collator is empty. ' \

@@ -13,6 +13,8 @@ class NCNNExporter(GraphExporter):
     def export_quantization_config(self, config_path: str, graph: BaseGraph):
         fd = open(config_path, 'w+')
         topo_order =  graph.topological_sort()
+        import pdb
+        pdb.set_trace()
         for op in topo_order:
             if op.is_computing_op and isinstance(op, QuantableOperation):
                 fd.write(f'{op.name}_param_0 ')

@@ -658,7 +658,7 @@ class ChannelwiseTensorQuantizationConfig(TensorQuantizationConfig):
     """ChannelwiseTensorQuantizationConfig is a special case for tensor
     quantization configuration.
 
-    Comparing with per-tensor quantization configuration, pre-channel quantization has a property
+    Comparing with per-tensor quantization configuration, per-channel quantization has a property
         "channel_axis" to indicate a channel axis where quantization takes effects.
 
     Along this axis, all tensor values will be quantized with a sharing scale and offset,
