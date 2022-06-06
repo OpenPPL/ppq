@@ -3,9 +3,9 @@ from collections import deque
 from typing import Any, Dict, List
 
 import torch
-from ppq.core import (COMPUTING_OP, DEFAULT_OPSET_DOMAIN,
-                      DEFAULT_OPSET_VERSION, LINEAR_ACTIVATIONS, SOI_OP,
-                      NetworkFramework, OperationMeta, Serializable,
+from ppq.core import (CAFFE_DOMAIN, COMPUTING_OP, DEFAULT_OPSET_DOMAIN,
+                      DEFAULT_OPSET_VERSION, LINEAR_ACTIVATIONS, ONNX_DOMAIN,
+                      SOI_OP, NetworkFramework, OperationMeta, Serializable,
                       SingletonMeta, TargetPlatform, TensorMeta, ppq_warning)
 
 
@@ -28,14 +28,17 @@ class Opset():
         self.domain  = domain
         self.version = version
     
+    def is_onnx_v13(self):
+        return self.domain == ONNX_DOMAIN and self.version == 13
+    
     def is_onnx_v11(self):
-        return self.domain == 'ONNX' and self.version == 11
+        return self.domain == ONNX_DOMAIN and self.version == 11
     
     def is_onnx(self):
-        return self.domain == 'ONNX'
+        return self.domain == ONNX_DOMAIN
     
     def is_caffe(self):
-        return self.domain == 'Caffe'
+        return self.domain == CAFFE_DOMAIN
 
 
 class OperationBase(metaclass=ABCMeta):
@@ -185,8 +188,8 @@ class Operation(OperationBase, Serializable):
     def __init__(
         self, name: str, op_type: str,
         attributes: Dict[str, Any], platform: TargetPlatform = TargetPlatform.UNSPECIFIED,
-        inputs: List[Variable] = None, outputs: List[Variable] = None) -> None:
-        OperationBase.__init__(self, name, op_type, attributes, platform=platform)
+        inputs: List[Variable] = None, outputs: List[Variable] = None, opset: Opset = None) -> None:
+        OperationBase.__init__(self, name, op_type, attributes, platform=platform, opset=opset)
         Serializable.__init__(self)
         self._input_vars    = [] if inputs is None else inputs
         self._output_vars   = [] if outputs is None else outputs
