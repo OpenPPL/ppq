@@ -3,21 +3,55 @@ from collections import deque
 from typing import Any, Dict, List
 
 import torch
-from ppq.core import (COMPUTING_OP, LINEAR_ACTIVATIONS, SOI_OP,
+from ppq.core import (COMPUTING_OP, DEFAULT_OPSET_DOMAIN,
+                      DEFAULT_OPSET_VERSION, LINEAR_ACTIVATIONS, SOI_OP,
                       NetworkFramework, OperationMeta, Serializable,
                       SingletonMeta, TargetPlatform, TensorMeta, ppq_warning)
+
+
+class Opset():
+    def __init__(self, domain: str = DEFAULT_OPSET_DOMAIN, version: int = DEFAULT_OPSET_VERSION) -> None:
+        """Open Neural Network Exchange (ONNX) is an open ecosystem that empowers AI developers 
+            to choose the right tools as their project evolves. 
+        
+        ONNX provides an open source format for AI models, both deep learning and traditional ML. 
+        It defines an extensible computation graph model, as well as definitions of
+            built-in operators and standard data types. 
+        Currently we focus on the capabilities needed for inferencing (scoring).
+        
+        PPQ IR is built based on ONNX defination.
+
+        Args:
+            domain (str, optional): _description_. Defaults to DEFAULT_OPSET_DOMAIN.
+            version (int, optional): _description_. Defaults to DEFAULT_OPSET_VERSION.
+        """
+        self.domain  = domain
+        self.version = version
+    
+    def is_onnx_v11(self):
+        return self.domain == 'ONNX' and self.version == 11
+    
+    def is_onnx(self):
+        return self.domain == 'ONNX'
+    
+    def is_caffe(self):
+        return self.domain == 'Caffe'
 
 
 class OperationBase(metaclass=ABCMeta):
     def __init__(self,
                  name: str, op_type: str,
                  attributes: Dict[str, Any],
+                 opset = None,
                  platform: TargetPlatform=TargetPlatform.UNSPECIFIED) -> None:
         self._name = name
         self._type = op_type
         self._attributes = attributes
         self._platform = platform
         self._meta = None
+        if opset is None:
+            self._opset = Opset()
+        else: self._opset = opset
 
     @ abstractproperty
     def inputs(self) -> List[Any]: pass

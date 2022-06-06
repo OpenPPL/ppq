@@ -380,6 +380,20 @@ class QuantizeFusionPass(QuantizationOptimizationPass):
                         act_op.config.output_quantization_config[0])
                     act_op.config.input_quantization_config[0].dominated_by = (
                         act_op.config.output_quantization_config[0])
+            
+            # fuse relu and clip if possible
+            for op in graph.operations.values():
+                if op.type in {'Relu', 'Clip'}:
+                    upstream_op = op.inputs[0].source_op
+                    if not isinstance(op, QuantableOperation): continue
+                    if upstream_op is None: continue
+                    if upstream_op.platform != op.platform: continue
+                    if not isinstance(upstream_op, QuantableOperation): continue
+                    if len(graph.get_downstream_operations(upstream_op)) != 1: continue
+                    upstream_op.config.output_quantization_config[0].dominated_by = (
+                        op.config.output_quantization_config[0])
+                    op.config.input_quantization_config[0].dominated_by = (
+                        op.config.output_quantization_config[0])
 
         if self.fuse_passive_op:
             # all passive operations should never changes quantization configuration of its input
