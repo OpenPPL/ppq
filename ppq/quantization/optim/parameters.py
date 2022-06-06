@@ -1,8 +1,7 @@
 from typing import Iterable
 
 import torch
-from ppq.core import (ChannelwiseTensorQuantizationConfig,
-                      QuantizationProperty, QuantizationStates)
+from ppq.core import QuantizationProperty, QuantizationStates, ppq_warning
 from ppq.executor import BaseGraphExecutor, TorchExecutor
 from ppq.IR import GraphCommandProcessor, QuantableOperation
 from ppq.quantization.observer import OperationObserver
@@ -89,6 +88,15 @@ class PassiveParameterQuantizePass(QuantizationOptimizationPass):
                 pad_config.scale  = i_cfg.scale
                 pad_config.offset = i_cfg.offset
                 pad_config.state  = QuantizationStates.PASSIVE
+
+        # final check
+        for op in graph.operations.values():
+            if not isinstance(op, QuantableOperation): continue
+            for cfg, var in op.config_with_variable:
+                if cfg.state == QuantizationStates.PASSIVE_INIT:
+                    ppq_warning(f'Unexpected quantization state of variable {var.name} at op {op.name}, '
+                                'The configuration state has been initialized as PASSIVE_INIT, '
+                                'however PassiveParameterQuantizePass do not kown how to deal with it.')
 
 
 class ParameterQuantizePass(QuantizationOptimizationPass):

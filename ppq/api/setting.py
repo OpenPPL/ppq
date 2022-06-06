@@ -162,9 +162,10 @@ class AdvancedOptimizationSetting():
 
 class ActivationQuantizationSetting():
     def __init__(self) -> None:
-        # 激活值校准算法，不区分大小写，可以选择 minmax, kl, percentile, MSE
+        # 激活值校准算法，不区分大小写，可以选择 minmax, kl, percentile, MSE, None
+        # 选择 None 时，将由 quantizer 指定量化算法
         # activation calibration method
-        self.calib_algorithm = 'percentile'
+        self.calib_algorithm = None
 
         # 执行逐层激活值校准，延长执行时间，提升精度
         # whether to calibrate activation per - layer.
@@ -178,9 +179,9 @@ class ActivationQuantizationSetting():
 
 class ParameterQuantizationSetting():
     def __init__(self) -> None:
-        # 参数校准算法，不区分大小写，可以选择 minmax, percentile(per-layer), kl(per-layer sym), MSE
+        # 参数校准算法，不区分大小写，可以选择 minmax, percentile(per-layer), kl(per-layer sym), MSE, None
         # parameter calibration method
-        self.calib_algorithm = 'minmax'
+        self.calib_algorithm = None
 
         # 是否处理被动量化参数
         # whether to process passive parameters

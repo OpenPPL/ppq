@@ -42,7 +42,8 @@ PPL QuantTool 是一个高效的工业级的神经网络量化工具.
 | `自定义量化` |  |  |  |  |
 | 添加自定义量化平台 1 | - | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/md_doc/add_new_platform.md) ||
 | 添加自定义量化平台 2 | - | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/create_your_platform.py) ||
-| 添加自定义算子 3 | - | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/custimize_quant_func.py) ||
+| 注册量化代理函数 | - | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/custimize_quant_func.py) ||
+| 自定义量化算子 | - | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/custimized_quant.py) ||
 
 
 # Video Tutorial(Bilibili 视频教程)

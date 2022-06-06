@@ -53,6 +53,9 @@ OPTIM_ADVOPT_RLOSS_MULTIPLIER = 1
 # 是否使用 LR SCEHDULER
 OPTIM_ADVOPT_USING_SCEHDULER = True
 
+DEFAULT_OPSET_DOMAIN  = 'ONNX'
+DEFAULT_OPSET_VERSION = 11
+
 # ONNX 导出图的时候，opset的版本，这玩意改了可能就要起飞了
 ONNX_EXPORT_OPSET = 11
 # ONNX 导出图的时候，onnx version，这玩意改了可能就要起飞了
