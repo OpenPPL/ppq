@@ -29,7 +29,7 @@ PASSIVE_OPERATIONS = {
 LINEAR_ACTIVATIONS = {'Relu', 'Clip'}
 
 # COPUTING OP 是所有计算层，该属性被用于联合定点和子图切分
-COMPUTING_OP = {'Conv', 'Gemm', 'ConvTranspose', 'MatMul'}
+COMPUTING_OP = {'Conv', 'Gemm', 'ConvTranspose', 'MatMul', 'LayerNorm', 'MultiHeadAttention'}
 # SOI OP 是所有产生 SOI 输出的节点类型，该属性被用于子图切分
 SOI_OP = {'TopK', 'Shape', 'NonMaxSuppression'}
 # 强制联合定点的算子种类

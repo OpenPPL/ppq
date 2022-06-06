@@ -39,7 +39,7 @@ class NCNNQuantizer(BaseQuantizer):
             observer_algorithm='Minmax'
         )
 
-        if operation.type in {'Conv', 'Gemm', 'Add', 'LayerNorm', 'MultiHeadAttention', 'Gelu', 'Concat'}:
+        if operation.type in {'Add', 'Concat', 'Conv', 'LayerNorm', 'MultiHeadAttention', 'Gemm', 'Gelu'}:
             assert operation.num_of_input > 0, 'Seems you got a Computing layer with no parameters.'
 
             if operation.type == 'Conv':
@@ -119,7 +119,7 @@ class NCNNQuantizer(BaseQuantizer):
                 base_quant_config.input_quantization_config[0] = \
                     ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
                         convert_from = inp_config,
-                        offsets = None, scales  = None, channel_axis = 0
+                        offsets = None, scales  = None, channel_axis = 1
                     )
                 base_quant_config.input_quantization_config[0].observer_algorithm = 'Minmax'
                 
@@ -143,9 +143,8 @@ class NCNNQuantizer(BaseQuantizer):
 
     @ property
     def quant_operation_types(self) -> set:
-        # 'Conv', 'Gemm', 'Concat', 'Add', 'LayerNorm', 'MultiHeadAttention', 'Gelu'
         return {
-            'Conv', 'Gemm', 'Concat', 'Add', 'LayerNorm', 'Gelu',
+            'Add', 'Concat', 'Conv', 'LayerNorm', 'MultiHeadAttention', 'Gemm', 'Gelu'
         }
 
     @ property
