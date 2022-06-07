@@ -8,6 +8,7 @@ from ppq.core import DataType, convert_any_to_numpy
 def convert_value(
     value: Union[int, float, np.ndarray, torch.Tensor],
     export_as_float: bool, dtype: DataType = DataType.FP32) -> Union[float, list]:
+    
     """Converting value from any to python native data dtype, ready for export.
 
     Args:
@@ -18,10 +19,11 @@ def convert_value(
     Returns:
         Union[float, list]: Converted value
     """
+    
     if dtype not in {DataType.FP32, DataType.INT32}:
         raise ValueError(f'Can Only export dtype fp32 and int32, '
                          f'while you are requiring to dump a {dtype.name} value')
-    value = convert_any_to_numpy(value, accepet_none=False)
+    value = convert_any_to_numpy(value, accept_none=False)
     value = value.astype(dtype=DataType.to_numpy(dtype))
     if export_as_float:
         value = np.asscalar(value[0])
@@ -30,5 +32,5 @@ def convert_value(
             f'It is Expected to be a int or float value, while {type(value)} was given')
         return value
     else:
-        value = convert_any_to_numpy(value, accepet_none=False)
+        value = convert_any_to_numpy(value, accept_none=False)
         return value.tolist()

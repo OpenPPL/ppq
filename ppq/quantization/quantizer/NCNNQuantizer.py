@@ -81,24 +81,7 @@ class NCNNQuantizer(BaseQuantizer):
                         offsets = None, scales  = None, channel_axis = 0
                     )
                 base_quant_config.input_quantization_config[1].observer_algorithm = 'Minmax'
-        
-            elif operation.type == 'Concat':
-                base_quant_config.input_quantization_config[1].policy = QuantizationPolicy(
-                    QuantizationProperty.SYMMETRICAL +
-                    QuantizationProperty.LINEAR +
-                    QuantizationProperty.PER_TENSOR
-                )
-                base_quant_config.input_quantization_config[1].observer_algorithm = 'Minmax'
-            
-            elif operation.type == 'Add':
-                # Add 量化输入
-                base_quant_config.input_quantization_config[1].policy = QuantizationPolicy(
-                    QuantizationProperty.SYMMETRICAL +
-                    QuantizationProperty.LINEAR +
-                    QuantizationProperty.PER_TENSOR
-                )
-                base_quant_config.input_quantization_config[1].observer_algorithm = 'Minmax'
-
+    
             elif operation.type == 'LayerNorm':
                 # LayerNorm 输入按 power of 2 量化
 
@@ -128,7 +111,11 @@ class NCNNQuantizer(BaseQuantizer):
                 bconfig = base_quant_config.input_quantization_config[2]
                 wconfig.state = QuantizationStates.FP32
                 bconfig.state = QuantizationStates.FP32
-
+                
+            elif operation.type in {'Add', 'Concat'}:
+                # use default param
+                pass
+            
             # 显式说明输出不量化
             base_quant_config.output_quantization_config[0].state = QuantizationStates.FP32
         return base_quant_config

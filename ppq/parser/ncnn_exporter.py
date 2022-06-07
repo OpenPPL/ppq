@@ -7,6 +7,7 @@ from ppq.IR import BaseGraph, GraphExporter, QuantableOperation
 from .caffe_exporter import CaffeExporter
 from .onnx_exporter import OnnxExporter
 from .util import convert_value
+from collections import Iterable
 
 
 class NCNNExporter(GraphExporter):
@@ -37,43 +38,54 @@ class NCNNExporter(GraphExporter):
                     fd.write('\n')
                 elif op.type in {'Concat', 'Add', 'Gelu', 'LayerNorm'}:
                     # Concat and Add has no weight, skip
-                    pass
+                    continue
                 elif op.type == 'MultiHeadAttention':
                     # TODO
-                    pass
+                    continue
                 else:
                     print('unknown quant type {} name {} during write weight scale'.format(op.type, op.name))
         for op in topo_order:
             if hasattr(op, 'config'):
                 # write input scale
-                if op.type in {'Conv', 'Gemm'}:     
-                    fd.write(f'{op.name} ')
+                print('op type {} name {}'.format(op.type, op.name))
+                fd.write(f'{op.name} ')
+                if op.type in {'Conv', 'Gemm'}:
                     input_cfg = op.config.input_quantization_config[0]
-                    assert input_cfg.state == QuantizationStates.ACTIVATED and\
+                    assert input_cfg.state == QuantizationStates.ACTIVATED and \
                         input_cfg.policy.has_property(QuantizationProperty.PER_TENSOR)
                     scale = convert_value(1 / input_cfg.scale, True, DataType.FP32)
                     fd.write('%f '% scale)
-                    fd.write('\n')
-                elif op.type in {'Concat', 'Add', 'Gelu', 'LayerNorm'}:
-                    fd.write(f'{op.name} ')
+                elif op.type in {'Concat', 'Add', 'Gelu'}:
                     for cfg in op.config.input_quantization_config:
-                        assert cfg.state in {QuantizationStates.BAKED, QuantizationStates.ACTIVATED} \
+                        print('cfg state {} algo {}'.format(cfg.state, cfg.observer_algorithm))
+                        
+                        assert cfg.state in {QuantizationStates.BAKED, QuantizationStates.ACTIVATED,  QuantizationStates.SLAVE} \
                             and cfg.observer_algorithm in {'minmax', 'Minmax'}
                         scale = convert_value(1.0 / cfg.scale, True, DataType.FP32)
                         
-                        if type(scale) == list:
+                        if isinstance(scale, Iterable):
                             for s in scale:
                                 fd.write('%f '% s)
                         else:
                             fd.write('%f '% scale)
-                            
-                    fd.write('\n')
+                elif op.type == 'LayerNorm':
+                    cfg = op.config.input_quantization_config[0]
+                    print('cfg state {} algo {}'.format(cfg.state, cfg.observer_algorithm))
+                    
+                    assert cfg.state in {QuantizationStates.BAKED, QuantizationStates.ACTIVATED} \
+                        and cfg.observer_algorithm in {'minmax', 'Minmax'}
+                    scale = convert_value(1.0 / cfg.scale, False, DataType.FP32)
+                    if isinstance(scale, Iterable):
+                        for s in scale:
+                            fd.write('%f '% s)
+                    else:
+                        fd.write('%f '% scale)
                 elif op.type == 'MultiHeadAttention':
                     # TODO
                     pass
                 else:
                     print('unknown quant type {} name {} during write input scale'.format(op.type, op.name))
-                    
+                fd.write('\n')
         fd.close()
 
     def export(self, file_path: str, graph: BaseGraph, config_path: str = None, input_shapes: List[List[int]] = [[1, 3, 224, 224]]):
