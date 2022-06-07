@@ -294,7 +294,8 @@ class ONNXRUNTIMExporter(OnnxExporter):
                 if config.state == QuantizationStates.PASSIVE_BAKED:
                     config.state = QuantizationStates.PASSIVE
 
-                if QuantizationStates.can_export(config.state) and config.state != QuantizationStates.FP32:
+                if QuantizationStates.can_export(config.state) and config.state not in {
+                    QuantizationStates.FP32, QuantizationStates.SOI}:
                     # if not quant parameter to int, all parameter should export as fp32.
                     # needs insert both quant and dequant op for them
                     if not quant_param_to_int:
@@ -310,7 +311,8 @@ class ONNXRUNTIMExporter(OnnxExporter):
             else:
                 if not process_activation: continue
 
-                if QuantizationStates.can_export(config.state) and config.state != QuantizationStates.FP32:
+                if QuantizationStates.can_export(config.state) and config.state not in {
+                    QuantizationStates.FP32, QuantizationStates.SOI}:
                     created = self.insert_quant_on_variable(
                         graph=graph, var=var, config=config, related_op=op, meta=meta)
                     var = created.outputs[0]
