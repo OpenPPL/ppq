@@ -29,12 +29,6 @@ class NCNNQuantizer(BaseQuantizer):
         pipeline.append_optimization_to_pipeline(NCNNFormatGemmPass(), at_front=True)
         return pipeline
 
-    def build_quant_pipeline(
-        self, setting: QuantizationSetting, executor: BaseGraphExecutor) -> QuantizationOptimizationPipeline:
-        pipeline = super().build_quant_pipeline(setting, executor)
-        pipeline.append_optimization_to_pipeline(NCNNRequantizePass())
-        return pipeline
-
     def init_quantize_config(
         self, operation: Operation) -> OperationQuantizationConfig:
         base_quant_config = self.create_default_quant_config(

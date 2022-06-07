@@ -219,6 +219,6 @@ class OnnxExporter(GraphExporter):
 
         onnx_model = helper.make_model(
             graph_def, producer_name=PPQ_CONFIG.NAME, opset_imports=opsets)
-        onnx_model.ir_version = ONNX_VERSION
+        onnx_model.ir_version = graph._detail.get('ir_version', ONNX_VERSION)
         # onnx.checker.check_model(onnx_model)
         onnx.save(onnx_model, file_path)

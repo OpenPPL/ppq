@@ -2,10 +2,10 @@ from typing import Dict, List
 
 import numpy as np
 import torch
-from ppq.core import NetworkFramework, empty_ppq_cache
+from ppq.core import NetworkFramework, empty_ppq_cache, CAFFE_DOMAIN
 from ppq.executor import TorchExecutor
 from ppq.IR import (BaseGraph, GraphCommand, GraphCommandType, GraphFormatter,
-                    GraphMerger, Operation, Variable)
+                    GraphMerger, Operation, Variable, Opset)
 
 from . import ppl_caffe_pb2
 
@@ -29,7 +29,8 @@ def build_temp_graph(initializer: Dict[str, dict], nodes: List[dict], inputs: Li
     for node in nodes:
         if node['name'] in graph.operations:
             raise KeyError(f"Duplicated operation {node['name']} was found.")
-        graph.operations[node['name']] = Operation(name=node['name'], op_type=node['op_type'], attributes=node['attribute'].copy())
+        graph.operations[node['name']] = Operation(name=node['name'], op_type=node['op_type'], 
+                                    attributes=node['attribute'].copy(), opset=Opset(domain=CAFFE_DOMAIN, version=1))
         op_inputs_dict[node['name']] = [_ for _ in node['inputs']]
         op_outputs_dict[node['name']] = [_ for _ in node['outputs']]
 
@@ -542,6 +543,10 @@ class Add(CaffeOpBuilder):
 class InnerProduct(CaffeOpBuilder):
     def get_attr(self):
         self.settings = {'transB': 1}
+        if self.layer.inner_product_param.HasField('axis'):
+            self.settings['axis'] = self.layer.inner_product_param.axis
+        else:
+            self.settings['axis'] = 1
         return self.settings
 
     def trans(self):

@@ -2,8 +2,8 @@ from typing import Any, Dict, Iterable, List
 
 from torch import random
 
-from ppq.core import NetworkFramework, is_file_exist
-from ppq.IR import BaseGraph, GraphBuilder, Operation, Variable
+from ppq.core import NetworkFramework, is_file_exist, DEFAULT_OPSET_DOMAIN, DEFAULT_OPSET_VERSION
+from ppq.IR import BaseGraph, GraphBuilder, Operation, Variable, Opset
 
 import onnx
 from onnx import helper, mapping, numpy_helper
@@ -94,13 +94,20 @@ class OnnxParser(GraphBuilder):
 
         assert isinstance(model_pb, onnx.ModelProto), \
             f'onnx load failed, only ProtoBuffer object is expected here, while {type(model_pb)} is loaded.'
-        model_pb = model_pb.graph
-        graph = BaseGraph(name=model_pb.name, built_from=NetworkFramework.ONNX)
+        graph_pb = model_pb.graph
+        graph = BaseGraph(name=graph_pb.name, built_from=NetworkFramework.ONNX)
         graph._detail['opsets'] = self.convert_opsets_to_str(opsets)
+        graph._detail['ir_version'] = model_pb.ir_version
+
+        onnx_import_opset = DEFAULT_OPSET_VERSION
+        for opset in graph._detail['opsets']:
+            if opset['domain'] == DEFAULT_OPSET_DOMAIN or opset['domain'] == '':
+                onnx_import_opset = opset['version']
+                break
 
         # a temporary storage for operation's inputs and outputs
         op_inputs_dict, op_outputs_dict = {}, {}
-        for node in model_pb.node:
+        for node in graph_pb.node:
             op_name = node.name
             if len(op_name) == 0: # some operation do not have a name, we just generate one.
                 op_name = 'generated_name_' + str(_rand_seed)
@@ -112,18 +119,19 @@ class OnnxParser(GraphBuilder):
             graph.operations[op_name] = Operation(
                 name=op_name, op_type=node.op_type,
                 attributes={item.name: helper.get_attribute_value(item) for item in node.attribute},
+                opset=Opset(domain=DEFAULT_OPSET_DOMAIN, version=onnx_import_opset)
             )
             op_inputs_dict[op_name] = [var_name for var_name in node.input]
             op_outputs_dict[op_name] = [var_name for var_name in node.output]
 
         initializer = {}
-        for item in model_pb.initializer:
+        for item in graph_pb.initializer:
             init_name = item.name
             value = numpy_helper.to_array(item)
             initializer[init_name] = value
 
-        inputs  = [item.name for item in model_pb.input]
-        outputs = [item.name for item in model_pb.output]
+        inputs  = [item.name for item in graph_pb.input]
+        outputs = [item.name for item in graph_pb.output]
         graph = self.build_variables(
             graph, graph_inputs=inputs, graph_outputs=outputs,
             op_inputs=op_inputs_dict, op_outputs=op_outputs_dict)

@@ -96,7 +96,15 @@ class OperationBase(metaclass=ABCMeta):
     @ meta_data.setter
     def meta_data(self, meta: OperationMeta) -> OperationMeta:
         self._meta = meta
+    
+    @ property
+    def opset(self) -> Opset:
+        return self._opset
 
+    @ opset.setter
+    def opset(self, opSet: Opset):
+        self._opset = opSet
+    
     def __hash__(self) -> int:
         return self._name.__hash__()
 
