@@ -690,9 +690,23 @@ def Squeeze_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackend
     Returns:
         torch.Tensor: [description]
     """
-    ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
-    ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=2)
-    [squeezing_tensor], axes = values, GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='axes', compulsive=True)
+    # we acquire axes in different ways according to opset
+    # only opset=11 or opset=13 supported
+    if op.opset.is_onnx_v13():
+        ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=2)
+        squeezing_tensor = values[0]
+        axes = [axis for axis in range(squeezing_tensor.ndim) if squeezing_tensor.shape[axis] == 1]
+
+        if len(values) > 1:
+            axes = values[1]
+            ASSERT_ALL_TENSORS_AT_CPU(op=op, values=[axes])
+            axes = axes.tolist()
+    else:
+        ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
+        ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
+        [squeezing_tensor], axes = values, GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='axes', compulsive=True)
+    
+    # common part
     if isinstance(axes, list):
         for squeezing_dim in sorted(axes, reverse=True):
             squeezing_tensor = torch.squeeze(squeezing_tensor, squeezing_dim)
@@ -745,10 +759,17 @@ def Unsqueeze_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
     Returns:
         torch.Tensor: [description]
     """
-    ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
-    ASSERT_NUM_OF_INPUT(op=op, values=values)
-    [unsqueezing_tensor] = values
-    axes = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='axes', compulsive=True)
+    if op.opset.is_onnx_v13():
+        ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=2, max_num_of_input=2)
+        unsqueezing_tensor, axes = values
+        ASSERT_ALL_TENSORS_AT_CPU(op=op, values=[axes])
+        axes = axes.tolist()
+    else:
+        ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
+        ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
+        [unsqueezing_tensor] = values
+        axes = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='axes', compulsive=True)
+
     if isinstance(axes, list):
         for squeezing_dim in sorted(axes, reverse=True):
             unsqueezing_tensor = torch.unsqueeze(unsqueezing_tensor, squeezing_dim)
@@ -1219,6 +1240,29 @@ def ReduceMean_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBack
 
 
 def ReduceSum_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
+    if op.opset.is_onnx_v13():
+        ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=2)
+        input_value, dim = values[0], None
+        if len(values) > 1:
+            dim = values[1]
+            ASSERT_ALL_TENSORS_AT_CPU(op=op, values=[dim])
+        keepdim, noop_with_empty_axes = bool(op.attributes.get('keepdims', 1)), op.attributes.get('noop_with_empty_axes', 0)
+
+        if dim is None:
+            if noop_with_empty_axes:
+                return input_value
+            else:
+                output = torch.sum(input_value)
+                if keepdim:
+                    output = output.reshape([1] * input_value.dim())
+                return output
+        else:
+            dim = dim.tolist()
+            if isinstance(dim, int):
+                dim = [dim]
+            output = torch.sum(input_value, dim=dim, keepdim=keepdim)
+            return output
+
     [input_value] = values
     dim = op.attributes.get('axes', None)
     keepdim = bool(op.attributes.get('keepdims', 1))
@@ -1228,7 +1272,7 @@ def ReduceSum_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
         if keepdim:
             output = output.reshape([1] * input_value.dim())
     else:
-        output = torch.sum(input_value, dim=dim[0], keepdim=keepdim)
+        output = torch.sum(input_value, dim=dim, keepdim=keepdim)
     return output
 
 
@@ -1462,13 +1506,23 @@ def ScatterND_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
 
 
 def Split_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
-    ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
-    ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
-    axis = op.attributes.get('axis', 0)
-    split = op.attributes.get('split', 0)
-    [input_value] = values
-    if 'split' not in op.attributes:
+    if op.opset.is_onnx_v13():
+        ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=2)
+        input_value = values[0]
+        axis = op.attributes.get('axis', 0)
         split = input_value.shape[axis] // len(op.outputs)
+        if len(values) > 1:
+            split = values[1]
+            ASSERT_ALL_TENSORS_AT_CPU(op=op, values=[split])
+            split = split.tolist()
+    else:
+        ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
+        ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
+        axis = op.attributes.get('axis', 0)
+        split = op.attributes.get('split', 0)
+        [input_value] = values
+        if 'split' not in op.attributes:
+            split = input_value.shape[axis] // len(op.outputs)
     outputs = torch.split(input_value, split, axis)
     return outputs
 
@@ -1478,6 +1532,12 @@ def Gemm_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=2, max_num_of_input=3)
 
     A, B = values[:2]
+
+    # PATCH for ommited reshape before inner product in caffe
+    if op.opset.is_caffe() and A.ndim > 2:
+        axis = op.attributes.get('axis', 1)
+        A = A.flatten(start_dim=axis)
+
     C = values[2] if len(values) > 2 else 0
     alpha  = op.attributes.get('alpha', 1.0)
     beta   = op.attributes.get('beta', 1.0)

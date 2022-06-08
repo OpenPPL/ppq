@@ -226,6 +226,12 @@ def SOI_receivers(graph: BaseGraph) -> Set[Operation]:
 
         if operation.type == 'ScatterND':
             _ret_collection.add(operation.inputs[1].source_op)
+        
+        # FOR opset13
+        if operation.type == 'Squeeze' or operation.type == 'Unsqueeze' or operation.type == 'ReduceSum':
+            for var in operation.inputs[1:]:
+                _ret_collection.add(var.source_op)
+
 
     # end for
     if None in _ret_collection: _ret_collection.remove(None)

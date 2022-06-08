@@ -253,21 +253,6 @@ class QuantizeRefinePass(QuantizationOptimizationPass):
                         config.state = QuantizationStates.SOI
                     continue
 
-                if operation.type == 'Split':
-                    # Inputs (1 - 2)
-                    #   input (differentiable) : T
-                    #       The tensor to split
-                    #   split (optional, non-differentiable) : tensor(int64) (opset 13)
-                    #       Optional length of each output.
-                    #       Values should be >= 0.Sum of the values must be equal to the dim value at 'axis' specified.
-                    # see also: https://github.com/onnx/onnx/blob/master/docs/Changelog.md#Split-11
-                    # see also: https://github.com/onnx/onnx/blob/master/docs/Operators.md#Split
-                    assert len(operation.config.input_quantization_config) in {1, 2}, f'Split Operation {operation.name} should have 1 - 2 inputs, '\
-                        f'while {len(operation.config.input_quantization_config)} was given, is graph definition different from onnx opset 11?'
-                    for config in  operation.config.input_quantization_config[1: ]:
-                        config.state = QuantizationStates.SOI
-                    continue
-
 
 class NxpInputRoundingRefinePass(QuantizationOptimizationPass):
     def __init__(self) -> None:

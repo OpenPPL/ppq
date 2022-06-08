@@ -122,7 +122,8 @@ class RunnableGraph(GraphCommandProcessor):
                 dest_op = variable.dest_ops[0]
                 dest_idx = dest_op.inputs.index(variable)
 
-                if dest_op.type in {'Reshape', 'Slice', 'Gather', 'Pad', 'Resize', 'Split', 'TopK', 'Tile', 'Expand'}:
+                if dest_op.type in {'Squeeze', 'Unsqueeze', 'ReduceSum', 'Reshape', 'Slice', 'Gather', 'Pad', 'Resize', 
+                    'Split', 'TopK', 'Tile', 'Expand'}:
                     if dest_idx >= 1 and len(variable.dest_ops) == 1:
                         variable.value = convert_any_to_torch_tensor(
                             variable.value, accepet_none=True).to('cpu')
