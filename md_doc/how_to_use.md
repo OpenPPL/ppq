@@ -4,6 +4,19 @@ quantization workflow by customizing your own scripts. It's assumed that you hav
 in your working environment, for the installation part, please refer to [Installation](../../README.md).
 In some degree this tutorial shows how you can build your own workflow, thus providing more flexiablity.
 
+## CUDA Kernel for Acceleration
+PPQ has implemented some cuda kernels for the process of quantization-dequantization execution of tensors,
+these kernels can accelerate the process of graph execution in quantization mode, and any algorithm based
+on heavy graph execution may gain speedup when you turn on cuda kernel option ahead of all the following
+steps
+```python
+from ppq.core.config import PPQ_CONFIG
+
+PPQ_CONFIG.USING_CUDA_KERNEL = True
+```
+note that you don't have to turn on the above option if your environment fails to compile the shared libraries,
+it's just for accelration and PPQ will do fine without it turning on.
+
 ## Prepare Your DataLoader
 First thing first, you need to prepare your model and calibration data folder, note that only onnx and caffe
 models are supported in PPQ for now, and you may need to preprocess your calibration data in advance and store

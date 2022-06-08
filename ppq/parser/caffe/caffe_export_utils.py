@@ -400,7 +400,8 @@ class Gemm(CaffeOpExporter):
             BT_value = np.transpose(B, [1, 0])
             self.layer.blobs[0].shape.dim[:] = BT_value.shape
             self.layer.blobs[0].data[:] = BT_value.astype('float32').flat
-
+        
+        self.layer.inner_product_param.axis = self.op.attributes.get('axis', 1)
         self.layer.inner_product_param.num_output = self.layer.blobs[0].shape.dim[0]
         self.layer.inner_product_param.bias_term = True if len(self.op.parameters) == 2 else False
 
