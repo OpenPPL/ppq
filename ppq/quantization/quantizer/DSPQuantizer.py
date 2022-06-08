@@ -120,7 +120,7 @@ class PPL_DSP_TI_Quantizer(PPL_DSP_Quantizer):
 
             # first parameter must exits, for conv layer it will be conv_weight
             # layout: [out_channel, in_channel, kernel_size, kernel_size]
-            if operation.type in {'Conv', 'ConvTranspose'}:
+            if operation.type == 'Conv':
                 conv_weight_config = base_quant_config.input_quantization_config[1]
                 conv_weight_config.policy = QuantizationPolicy(
                     QuantizationProperty.SYMMETRICAL +
@@ -133,9 +133,23 @@ class PPL_DSP_TI_Quantizer(PPL_DSP_Quantizer):
                         offsets = None, scales  = None, channel_axis = 0
                     )
                 base_quant_config.input_quantization_config[1].observer_algorithm = 'Minmax'
+
+            elif operation.type == 'ConvTranspose':
+                conv_weight_config = base_quant_config.input_quantization_config[1]
+                conv_weight_config.policy = QuantizationPolicy(
+                    QuantizationProperty.SYMMETRICAL +
+                    QuantizationProperty.LINEAR +
+                    QuantizationProperty.PER_CHANNEL
+                )
+                base_quant_config.input_quantization_config[1] = \
+                    ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
+                        convert_from = conv_weight_config,
+                        offsets = None, scales  = None, channel_axis = 1
+                    )
+                base_quant_config.input_quantization_config[1].observer_algorithm = 'Minmax'
             # first parameter must exits, for gemm layer it will be gemm_weight
             # layout: [in_dim, out_dim]
-            elif operation.type in {'Gemm'}:
+            elif operation.type == 'Gemm':
                 gemm_weight_config = base_quant_config.input_quantization_config[1]
                 gemm_weight_config.policy = QuantizationPolicy(
                     QuantizationProperty.SYMMETRICAL +
@@ -149,6 +163,7 @@ class PPL_DSP_TI_Quantizer(PPL_DSP_Quantizer):
                     )
                 base_quant_config.input_quantization_config[1].observer_algorithm = 'Minmax'
             # if operation has bias
+            # let bias be fp32 because dsp ti don't need quantization parameter of bias
             if operation.num_of_input > 2:
                 bias_config = base_quant_config.input_quantization_config[-1]
                 bias_config.state = QuantizationStates.FP32
