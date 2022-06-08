@@ -140,7 +140,9 @@ class QuantizationProperty(Enum):
         PER_TENSOR: Also known as per-layer quantization, which mean all parameters of this layer share the same scale and offset.
             (For Convulution layer and Gemm layer which has bias, bias layer will be negative quantized, they do not have a valid scale)
 
-        PER_CHANNEL: parameters are quantized alone channel axis, each channel has a stand-alone scale and offset.
+        PER_CHANNEL: CNN model parameters are quantized along channel axis, each channel has a stand-alone scale and offset.
+
+        PER_CHANNEL_BNC: transformer model parameters are quantized per-chanel, each channel has a stand-alone scale and offset.
 
         LINEAR: Indicates a linear quantization, follow formula: quant(x) = clip(round(x / scale))
 
@@ -151,18 +153,22 @@ class QuantizationProperty(Enum):
         ASYMMETRICAL: Indicates an asymmetrical quantization, offset is activated in this mode.
 
         POWER_OF_2: Indicates a power-of-2 quantization, scale must be pow(2, k) in this mode.
+        
+        PTF_BNC: Indicates a power-of-2 for quantization for layernorm input, scale must be pow(2, k) in this mode.
 
     ATTENTION: Not all combinations of all 7 QuantizationProperty are valid, see QuantizationPolicy.__check_valid
     ATTENTION: QuantizationPolicy is read-only, user can only assign its value when created, the only interface of
         QuantizationPolicy is function QuantizationPolicy.has_property.
     """
-    PER_TENSOR   = 0x00000001
-    PER_CHANNEL  = 0x00000002
-    LINEAR       = 0x00000004
-    EXPONENTIAL  = 0x00000008
-    SYMMETRICAL  = 0x00000010
-    ASYMMETRICAL = 0x00000020
-    POWER_OF_2   = 0x00000040
+    PER_TENSOR      = 0x00000001
+    PER_CHANNEL     = 0x00000002
+    PER_CHANNEL_BNC = 0x00000080
+    LINEAR          = 0x00000004
+    EXPONENTIAL     = 0x00000008
+    SYMMETRICAL     = 0x00000010
+    ASYMMETRICAL    = 0x00000020
+    POWER_OF_2      = 0x00000040
+    PTF_BNC         = 0x00000100
 
     def __or__(self, other: int) -> int:
         return self.value + other
@@ -247,6 +253,7 @@ class QuantizationPolicy:
             QuantizationProperty.SYMMETRICAL | QuantizationProperty.LINEAR | QuantizationProperty.PER_TENSOR | QuantizationProperty.POWER_OF_2,
             QuantizationProperty.ASYMMETRICAL | QuantizationProperty.LINEAR | QuantizationProperty.PER_CHANNEL | QuantizationProperty.POWER_OF_2,
             QuantizationProperty.SYMMETRICAL | QuantizationProperty.LINEAR | QuantizationProperty.PER_CHANNEL | QuantizationProperty.POWER_OF_2,
+            QuantizationProperty.SYMMETRICAL | QuantizationProperty.LINEAR | QuantizationProperty.PER_CHANNEL_BNC | QuantizationProperty.PTF_BNC,
         }
 
     def to_dict(self) -> dict:

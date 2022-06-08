@@ -183,7 +183,8 @@
                <p>QuantizationPolicy 在 PPQ 中用来描述量化策略，它是一些 QuantizationProperty 枚举的组合位图。在 PPQ 中我们支持的 QuantizationProperty 包括：</p>
                <ul>
                 <li><strong>PER_TENSOR:</strong>逐层量化。</li>
-                <li><strong>PER_CHANNEL:</strong>逐通道量化。</li>
+                <li><strong>PER_CHANNEL:</strong>CNN 模型逐通道量化。</li>
+                <li><strong>PER_CHANNEL_BNC:</strong>Transformer 模型逐通道量化。</li>
                 <li><strong>LINEAR: </strong>线性量化。</li>
                 <li><strong>EXPONENTIAL: </strong> 指数量化。</li>
                 <li><strong>SYMMETRICAL: </strong>对称量化。</li>

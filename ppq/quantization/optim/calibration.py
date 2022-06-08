@@ -311,11 +311,12 @@ class PPLDSPTIReCalibrationPass(RuntimeCalibrationPass):
                 assert isinstance(cfg, TensorQuantizationConfig)
                 assert isinstance(observer, TorchMinMaxObserver)
 
-                if observer._quant_cfg.policy.has_property(QuantizationProperty.PER_CHANNEL):
+                if observer._quant_cfg.policy.has_property(QuantizationProperty.PER_CHANNEL) or\
+                    observer._quant_cfg.policy.has_property(QuantizationProperty.PER_CHANNEL_BNC):
                     min_vals = torch.min(torch.cat(observer._min_val_collector, dim=-1), dim=-1, keepdim=False)[0].cpu().numpy()
                     max_vals = torch.max(torch.cat(observer._max_val_collector, dim=-1), dim=-1, keepdim=False)[0].cpu().numpy()
                     cfg.detail.update({'range_min': min_vals, 'range_max': max_vals})
-
+                    
                 elif observer._quant_cfg.policy.has_property(QuantizationProperty.PER_TENSOR):
                     min_val = torch.min(torch.cat(observer._min_val_collector, dim=0)).cpu().item(),
                     max_val = torch.max(torch.cat(observer._max_val_collector, dim=0)).cpu().item(),

@@ -490,6 +490,8 @@ class AdaRoundPass(QuantizationOptimizationPass):
                     for axis in range(fp_weight.ndim)]
                 weight_scale = weight_scale.view(view_shape)
                 weight_offset = weight_offset.view(view_shape)
+            elif weight_quantization_config.policy.has_property(QuantizationProperty.PER_CHANNEL_BNC):
+                raise Exception('Not implement PER_CHANNEL_BNC in AdaRoundPass optimize')
 
             # init continuous_v, make sure h(v) = round_diff
             round_diff = (fp_weight / weight_scale) - (fp_weight / weight_scale).floor()

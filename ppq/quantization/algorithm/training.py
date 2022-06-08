@@ -221,9 +221,11 @@ def PPQTensorClip(
     limit: torch.Tensor, config: TensorQuantizationConfig) -> torch.Tensor:
     if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
         assert isinstance(config, ChannelwiseTensorQuantizationConfig)
-        return Clip_C.apply(tensor, reference, limit, config.channel_axis)
+        return Clip_C.apply(tensor, reference, limit, config.channel_axis)     
     elif config.policy.has_property(QuantizationProperty.PER_TENSOR):
         return Clip_T.apply(tensor, reference, limit)
+    elif config.policy.has_property(QuantizationProperty.PER_CHANNEL_BNC):
+        raise Exception('Not implement PER_CHANNEL_BNC in PPQTensorClip')
     else: raise Exception('Oops, seems we got some problems here.')
 
 
@@ -240,6 +242,8 @@ def PPQRoundingLoss(tensor: torch.Tensor,
         return RoundingLoss_T.apply(
             tensor, config.scale, config.offset, config.quant_min,
             config.quant_max, config.rounding)
+    elif config.policy.has_property(QuantizationProperty.PER_CHANNEL_BNC):
+        raise Exception('Not implement PER_CHANNEL_BNC in PPQRoundingLoss')
     else: raise Exception('Oops, seems we got some problems here.')
 
 
@@ -743,7 +747,10 @@ class StraightThroughEstimateDelegator(TorchQuantizeDelegate):
             shape = [1 if axis != config.channel_axis else -1 for axis in range(tensor.ndim)]
             scale = scale.view(shape)
             bias = bias.view(shape)
-
+            
+        if config.policy.has_property(QuantizationProperty.PER_CHANNEL_BNC):
+            raise Exception('Not implement PER_CHANNEL_BNC in StraightThroughEstimateDelegator')
+    
         # only bias doesn't need offset in asym quant
         if not self.passive and config.policy.has_property(QuantizationProperty.ASYMMETRICAL):
             tensor = tensor + bias.abs()
@@ -782,6 +789,9 @@ class BlockwiseReconstructionDelegator(StraightThroughEstimateDelegator):
             assert isinstance(self.config, ChannelwiseTensorQuantizationConfig)
             shape = [1 if axis != self.config.channel_axis else -1 for axis in range(weight.ndim)]
             scale = scale.view(shape)
+        elif self.config.policy.has_property(QuantizationProperty.PER_CHANNEL_BNC):
+            raise Exception('Not implement PER_CHANNEL_BNC in StraightThroughEstimateDelegator')
+
         round_diff = (weight / scale) - (weight / scale).floor()
         v_init = -torch.log((self.reg.zeta - self.reg.gamma) / (round_diff - self.reg.gamma) - 1)
         continuous_v = torch.nn.Parameter(v_init, True)
@@ -813,6 +823,9 @@ class BlockwiseReconstructionDelegator(StraightThroughEstimateDelegator):
                 shape = [1 if axis != self.config.channel_axis else -1 for axis in range(weight.ndim)]
                 scale = scale.view(shape)
                 offset = offset.view(shape)
+            elif self.policy.has_property(QuantizationProperty.PER_CHANNEL_BNC):
+                raise Exception('Not implement PER_CHANNEL_BNC in BlockwiseReconstructionDelegator finalize')
+ 
             weight = (weight / scale).floor() + (self.rounding >= 0).float()
             weight = torch.clamp(weight + offset, self.config.quant_min, self.config.quant_max)
             weight = (weight - offset) * scale
@@ -829,6 +842,9 @@ class BlockwiseReconstructionDelegator(StraightThroughEstimateDelegator):
                 shape = [1 if axis != config.channel_axis else -1 for axis in range(tensor.ndim)]
                 scale = scale.view(shape)
                 offset = offset.view(shape)
+            elif config.policy.has_property(QuantizationProperty.PER_CHANNEL_BNC):
+                raise Exception('Not implement PER_CHANNEL_BNC in BlockwiseReconstructionDelegator __call__')
+  
             tensor = (tensor / scale).floor() + self.reg.rectified_sigmoid(self.rounding)
             tensor = torch.clamp(tensor + offset, config.quant_min, config.quant_max)
             tensor = (tensor - offset) * scale

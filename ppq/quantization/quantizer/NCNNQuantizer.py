@@ -84,20 +84,12 @@ class NCNNQuantizer(BaseQuantizer):
     
             elif operation.type == 'LayerNorm':
                 # LayerNorm 输入按 power of 2 量化
-
-                # base_quant_config.input_quantization_config[0].policy = QuantizationPolicy(
-                #     QuantizationProperty.SYMMETRICAL +
-                #     QuantizationProperty.LINEAR +
-                #     QuantizationProperty.PER_TENSOR 
-                # )
-                # base_quant_config.input_quantization_config[0].observer_algorithm = 'Minmax'
-
                 inp_config = base_quant_config.input_quantization_config[0]
                 inp_config.policy = QuantizationPolicy(
                     QuantizationProperty.SYMMETRICAL +
                     QuantizationProperty.LINEAR +
-                    QuantizationProperty.PER_CHANNEL +
-                    QuantizationProperty.POWER_OF_2
+                    QuantizationProperty.PER_CHANNEL_BNC +
+                    QuantizationProperty.PTF_BNC
                 )
                 base_quant_config.input_quantization_config[0] = \
                     ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(

@@ -112,13 +112,16 @@
     ATTENTION: QuantizationPolicy is read-only, user can only assign its value when created, the only interface of
         QuantizationPolicy is function QuantizationPolicy.has_property.
     */
-    # define PPQ_QPROPERTY_PER_TENSOR   0x00000001
-    # define PPQ_QPROPERTY_PER_CHANNEL  0x00000002
+    # define PPQ_QPROPERTY_PER_TENSOR       0x00000001
+    # define PPQ_QPROPERTY_PER_CHANNEL      0x00000002
+    # define PPQ_QPROPERTY_PER_CHANNEL_BNC  0x00000080
+
     # define PPQ_QPROPERTY_LINEAR       0x00000004
     # define PPQ_QPROPERTY_EXPONENTIAL  0x00000008
     # define PPQ_QPROPERTY_SYMMETRICAL  0x00000010
     # define PPQ_QPROPERTY_ASYMMETRICAL 0x00000020
     # define PPQ_QPROPERTY_POWER_OF_2   0x00000040
+    # define PPQ_QPROPERTY_PTF_BNC      0x00000100
 
     # define PPQ_CPP_EXTENSION
 # endif

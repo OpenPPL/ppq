@@ -66,6 +66,14 @@ class TorchMinMaxObserver(BaseTensorObserver):
                 channelwise_view = torch.flatten(channelwise_view, start_dim=1)
                 self._min_val_collector.append(torch.min(channelwise_view, dim=1, keepdim=True)[0])
                 self._max_val_collector.append(torch.max(channelwise_view, dim=1, keepdim=True)[0])
+            elif self._quant_cfg.policy.has_property(QuantizationProperty.PER_CHANNEL_BNC):
+                import pdb
+                pdb.set_trace()
+                assert len(value.shape) == 3
+                channelwise_view = value.reshape(-1, value.shape[-1])
+                channelwise_view = channelwise_view.transpose(0,1)
+                self._min_val_collector.append(torch.min(channelwise_view, dim=1, keepdim=True)[0])
+                self._max_val_collector.append(torch.max(channelwise_view, dim=1, keepdim=True)[0])
             else:
                 raise TypeError('Min-max Observer only work with per-tensor or per-channel quantize policy.')
 
@@ -84,7 +92,9 @@ class TorchMinMaxObserver(BaseTensorObserver):
             self._quant_cfg.offset = torch.tensor([offset], dtype=torch.float32, device=device).squeeze(0)
             self._quant_cfg.state = QuantizationStates.ACTIVATED
 
-        elif self._quant_cfg.policy.has_property(QuantizationProperty.PER_CHANNEL):
+        elif self._quant_cfg.policy.has_property(QuantizationProperty.PER_CHANNEL) \
+            or self._quant_cfg.policy.has_property(QuantizationProperty.PER_CHANNEL_BNC):
+
             min_vals = torch.min(torch.cat(self._min_val_collector, dim=-1), dim=-1, keepdim=False)[0].cpu().numpy()
             max_vals = torch.max(torch.cat(self._max_val_collector, dim=-1), dim=-1, keepdim=False)[0].cpu().numpy()
             assert(len(min_vals) == len(max_vals)), 'Min values and max values should at same length.'
@@ -260,19 +270,20 @@ class TorchPercentileObserver(BaseTensorObserver):
                     self._percentile_collector.append(torch.cat([_max, _min], dim=-1))
                 else:
                     self._percentile_collector.append(CUDA.Quantile(value, self._percentile).view(1, -1))
-            elif self._quant_cfg.policy.has_property(QuantizationProperty.PER_CHANNEL):
+            elif self._quant_cfg.policy.has_property(QuantizationProperty.PER_CHANNEL) or \
+                self._quant_cfg.policy.has_property(QuantizationProperty.PER_CHANNEL_BNC):
                 import pdb
                 pdb.set_trace()
                 raise PermissionError('Percentile observer can not deal with per channel quantization.')
-
-                assert isinstance(self._quant_cfg, ChannelwiseTensorQuantizationConfig), (
-                    'Your quantization config has PER_CHANNEL while it is not a '
-                    'ChannelwiseTensorQuantizationConfig instance.')
-                channel_axis = self._quant_cfg.channel_axis
-                channelwise_view = value.transpose(dim0=0, dim1=channel_axis)
-                channelwise_view = torch.flatten(channelwise_view, start_dim=1)
-                self._percentile_mins.append(-torch.quantile(-channelwise_view, q=self._percentile, dim=1, keepdim=True)[0])
-                self._percentile_maxs.append(torch.quantile(channelwise_view, q=self._percentile, dim=1, keepdim=True)[0])
+            
+                # assert isinstance(self._quant_cfg, ChannelwiseTensorQuantizationConfig), (
+                #     'Your quantization config has PER_CHAN=NEL while it is not a '
+                #     'ChannelwiseTensorQuantizationConfig instance.')
+                # channel_axis = self._quant_cfg.channel_axis
+                # channelwise_view = value.transpose(dim0=0, dim1=channel_axis)
+                # channelwise_view = torch.flatten(channelwise_view, start_dim=1)
+                # self._percentile_mins.append(-torch.quantile(-channelwise_view, q=self._percentile, dim=1, keepdim=True)[0])
+                # self._percentile_maxs.append(torch.quantile(channelwise_view, q=self._percentile, dim=1, keepdimTrue)[0])
             else:
                 raise TypeError('Min-max Observer only work with per-tensor or per-channel quantize policy.')
 
@@ -291,7 +302,8 @@ class TorchPercentileObserver(BaseTensorObserver):
             self._quant_cfg.scale  = torch.tensor([scale], dtype=torch.float32, device=device).squeeze(0)
             self._quant_cfg.offset = torch.tensor([offset], dtype=torch.float32, device=device).squeeze(0)
             self._quant_cfg.state = QuantizationStates.ACTIVATED
-        elif self._quant_cfg.policy.has_property(QuantizationProperty.PER_CHANNEL):
+        elif self._quant_cfg.policy.has_property(QuantizationProperty.PER_CHANNEL) or \
+            self._quant_cfg.policy.has_property(QuantizationProperty.PER_CHANNEL_BNC):
             import pdb
             pdb.set_trace()
             raise PermissionError('Percentile observer can not deal with per channel quantization.')
@@ -352,6 +364,9 @@ class TorchMSEObserver(TorchHistObserver):
 
         if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
             raise PermissionError('Torch Mse observer do not support PER_CHANNEL policy now, please wait.')
+
+        if config.policy.has_property(QuantizationProperty.PER_CHANNEL_BNC):
+            raise PermissionError('Torch Mse observer do not support PER_CHANNEL_BNC policy now, please wait.')
 
         if (config.policy.has_property(QuantizationProperty.SYMMETRICAL) and
             config.policy.has_property(QuantizationProperty.PER_TENSOR)):

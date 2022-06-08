@@ -200,6 +200,12 @@ def PPQLinearQuant_toInt(tensor: torch.Tensor, config: TensorQuantizationConfig,
     elif config.policy.has_property(QuantizationProperty.PER_TENSOR):
         tensor = ppq_tensor_round((tensor / config.scale), config.rounding) + config.offset
         tensor = torch.clamp(tensor, config.quant_min, config.quant_max)
+    elif config.policy.has_property(QuantizationProperty.PER_CHANNEL_BNC):
+        assert len(tensor.shape()) == 3
+        scale = config.scale.reshape((1,1,-1))
+        offset = config.offset.reshape((1,1,-1))
+        tensor = ppq_tensor_round((tensor / scale), config.rounding) + offset
+        tensor = torch.clamp(tensor, config.quant_min, config.quant_max)
     return tensor.type(dtype=torch.int32)
 
 
