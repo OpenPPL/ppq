@@ -14,7 +14,52 @@ from ppq.quantization.measure import torch_KL_divergence
 from ppq.utils.round import ppq_numerical_round, ppq_round_to_power_of_2
 
 from .base import BaseTensorObserver
+from .utils import lp_loss
 
+
+@ ppq_quant_param_computing_function
+def PTF_BNC_to_scale_offset(
+    min_val: list, max_val: list,
+    inputs: torch.Tensor,
+    config: TensorQuantizationConfig
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    max_val = torch.Tensor(max_val)
+    min_val = torch.Tensor(min_val)
+    
+    import pdb
+    pdb.set_trace()
+
+    qmax = config.quant_max
+    qmin = config.quant_min
+
+    max_val_t = max_val.max()
+    min_val_t = min_val.min()
+    scale8 = (max_val_t - min_val_t) / float(qmax - qmin)
+    scale8.clamp_(1e-7)
+    scale4 = scale8 / 2
+    scale2 = scale4 / 2
+    scale1 = scale2 / 2
+    zero_point = qmin - torch.round(min_val_t / scale8)
+    zero_point.clamp_(qmin, qmax)
+    scale_mask = torch.ones_like(max_val)
+    for j in range(inputs.shape[2]):
+        data = inputs[..., j].unsqueeze(-1)
+        data_q1 = ((data / scale1 + zero_point).round().clamp(qmin, qmax) -
+                    zero_point) * scale1
+        data_q2 = ((data / scale2 + zero_point).round().clamp(qmin, qmax) -
+                    zero_point) * scale2
+        data_q4 = ((data / scale4 + zero_point).round().clamp(qmin, qmax) -
+                    zero_point) * scale4
+        data_q8 = ((data / scale8 + zero_point).round().clamp(qmin, qmax) -
+                    zero_point) * scale8
+        score1 = lp_loss(data, data_q1, p=2.0, reduction='all')
+        score2 = lp_loss(data, data_q2, p=2.0, reduction='all')
+        score4 = lp_loss(data, data_q4, p=2.0, reduction='all')
+        score8 = lp_loss(data, data_q8, p=2.0, reduction='all')
+        score = [score1, score2, score4, score8]
+        scale_mask[j] *= 2**score.index(min(score))
+    scale = scale1 * scale_mask
+    return scale, zero_point
 
 @ ppq_quant_param_computing_function
 def minmax_to_scale_offset(
@@ -48,6 +93,7 @@ class TorchMinMaxObserver(BaseTensorObserver):
         super().__init__(watch_on, quant_cfg)
         self._min_val_collector = []
         self._max_val_collector = []
+        self._last_input = None
 
     @ torch.no_grad()
     def observe(self, value: torch.Tensor):
@@ -74,6 +120,7 @@ class TorchMinMaxObserver(BaseTensorObserver):
                 channelwise_view = channelwise_view.transpose(0,1)
                 self._min_val_collector.append(torch.min(channelwise_view, dim=1, keepdim=True)[0])
                 self._max_val_collector.append(torch.max(channelwise_view, dim=1, keepdim=True)[0])
+                self._last_input = value.cpu().clone()
             else:
                 raise TypeError('Min-max Observer only work with per-tensor or per-channel quantize policy.')
 
@@ -92,9 +139,7 @@ class TorchMinMaxObserver(BaseTensorObserver):
             self._quant_cfg.offset = torch.tensor([offset], dtype=torch.float32, device=device).squeeze(0)
             self._quant_cfg.state = QuantizationStates.ACTIVATED
 
-        elif self._quant_cfg.policy.has_property(QuantizationProperty.PER_CHANNEL) \
-            or self._quant_cfg.policy.has_property(QuantizationProperty.PER_CHANNEL_BNC):
-
+        elif self._quant_cfg.policy.has_property(QuantizationProperty.PER_CHANNEL):
             min_vals = torch.min(torch.cat(self._min_val_collector, dim=-1), dim=-1, keepdim=False)[0].cpu().numpy()
             max_vals = torch.max(torch.cat(self._max_val_collector, dim=-1), dim=-1, keepdim=False)[0].cpu().numpy()
             assert(len(min_vals) == len(max_vals)), 'Min values and max values should at same length.'
@@ -104,6 +149,19 @@ class TorchMinMaxObserver(BaseTensorObserver):
                     min_val=min_val, max_val=max_val, config=self._quant_cfg)
                 scales.append(scale)
                 offsets.append(offset)
+
+            # scale, offset here only deployed on cpu
+            # we will move them towards target device through RunnableGraph
+            self._quant_cfg.scale  = torch.tensor(scales, dtype=torch.float32, device=device)
+            self._quant_cfg.offset = torch.tensor(offsets, dtype=torch.float32, device=device)
+            self._quant_cfg.state = QuantizationStates.ACTIVATED
+        elif self._quant_cfg.policy.has_property(QuantizationProperty.PER_CHANNEL_BNC):
+            
+            min_vals = torch.min(torch.cat(self._min_val_collector, dim=-1), dim=-1, keepdim=False)[0].cpu().numpy()
+            max_vals = torch.max(torch.cat(self._max_val_collector, dim=-1), dim=-1, keepdim=False)[0].cpu().numpy()
+            assert(len(min_vals) == len(max_vals)), 'Min values and max values should at same length.'
+            
+            scales, offsets = PTF_BNC_to_scale_offset(min_val=min_vals, max_val=max_vals, inputs=self._last_input, config=self._quant_cfg)
 
             # scale, offset here only deployed on cpu
             # we will move them towards target device through RunnableGraph
