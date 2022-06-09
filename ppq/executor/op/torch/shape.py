@@ -140,6 +140,12 @@ def Add_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
     a, b = values
     return a + b
 
+def And_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
+    ASSERT_ALL_TENSORS_AT_CPU(op=op, values=values)
+    ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=2, max_num_of_input=2)
+    a, b = values
+    return a & b
+
 def Sub_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
     """Performs element-wise binary subtraction (with Numpy-style broadcasting
     support).
@@ -1546,6 +1552,12 @@ def GreaterOrEqual_forward(op: Operation, values: List[torch.Tensor], ctx: Torch
     a, b = values
     return a >= b
 
+def LessOrEqual_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
+    ASSERT_ALL_TENSORS_AT_CPU(op=op, values=values)
+    ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=2, max_num_of_input=2)
+    a, b = values
+    return a <= b
+
 def ReduceSum_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
     [input_value] = values
     dim = op.attributes.get('axes', None)
@@ -1563,6 +1575,7 @@ SOI_BACKEND_TABLE = {
     'Shape': Shape_forward,
     'Div': Div_forward,
     'Add': Add_forward,
+    'And': And_forward,
     'Mul': Mul_forward,
     'Sub': Sub_forward,
     'Cast': Cast_forward,
@@ -1601,5 +1614,6 @@ SOI_BACKEND_TABLE = {
     'MMCVRoiAlign': MMCVRoiAlign_forward,
     'Split': Split_forward,
     'GreaterOrEqual': GreaterOrEqual_forward,
+    'LessOrEqual': LessOrEqual_forward,
     'ReduceSum': ReduceSum_forward,
 }
