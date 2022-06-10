@@ -39,7 +39,7 @@ class NCNNQuantizer(BaseQuantizer):
             observer_algorithm='Minmax'
         )
 
-        if operation.type in {'Add', 'Concat', 'Conv', 'LayerNorm', 'MultiHeadAttention', 'Gemm', 'Gelu'}:
+        if operation.type in {'Add', 'Conv', 'LayerNorm', 'MultiHeadAttention', 'Gemm', 'Gelu'}:
             assert operation.num_of_input > 0, 'Seems you got a Computing layer with no parameters.'
 
             if operation.type == 'Conv':
@@ -104,7 +104,7 @@ class NCNNQuantizer(BaseQuantizer):
                 wconfig.state = QuantizationStates.FP32
                 bconfig.state = QuantizationStates.FP32
                 
-            elif operation.type in {'Add', 'Concat'}:
+            elif operation.type in {'Add'}:
                 # use default param
                 pass
             
@@ -123,7 +123,7 @@ class NCNNQuantizer(BaseQuantizer):
     @ property
     def quant_operation_types(self) -> set:
         return {
-            'Add', 'Concat', 'Conv', 'LayerNorm', 'MultiHeadAttention', 'Gemm', 'Gelu'
+            'Add', 'Conv', 'LayerNorm', 'MultiHeadAttention', 'Gemm', 'Gelu'
         }
 
     @ property

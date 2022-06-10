@@ -125,8 +125,6 @@ class ParameterQuantizePass(QuantizationOptimizationPass):
                     state_records[config] = config.state
                     config.state = QuantizationStates.DEQUANTIZED
                 elif self._method is not None:
-                    # config.observer_algorithm = 'Minmax'
-                    # pass
                     # override quantizer's setting if necessary
                     config.observer_algorithm = self._method
 

@@ -16,7 +16,7 @@ from ppq.utils.round import ppq_numerical_round, ppq_round_to_power_of_2
 from .base import BaseTensorObserver
 from .utils import lp_loss
 
-
+# https://github.com/megvii-research/FQ-ViT/blob/main/models/ptq/observer/ptf.py#L31
 @ ppq_quant_param_computing_function
 def PTF_BNC_to_scale_offset(
     min_val: list, max_val: list,
@@ -26,9 +26,6 @@ def PTF_BNC_to_scale_offset(
     max_val = torch.Tensor(max_val)
     min_val = torch.Tensor(min_val)
     
-    import pdb
-    pdb.set_trace()
-
     qmax = config.quant_max
     qmin = config.quant_min
 
@@ -113,14 +110,12 @@ class TorchMinMaxObserver(BaseTensorObserver):
                 self._min_val_collector.append(torch.min(channelwise_view, dim=1, keepdim=True)[0])
                 self._max_val_collector.append(torch.max(channelwise_view, dim=1, keepdim=True)[0])
             elif self._quant_cfg.policy.has_property(QuantizationProperty.PER_CHANNEL_BNC):
-                import pdb
-                pdb.set_trace()
                 assert len(value.shape) == 3
                 channelwise_view = value.reshape(-1, value.shape[-1])
                 channelwise_view = channelwise_view.transpose(0,1)
                 self._min_val_collector.append(torch.min(channelwise_view, dim=1, keepdim=True)[0])
                 self._max_val_collector.append(torch.max(channelwise_view, dim=1, keepdim=True)[0])
-                self._last_input = value.cpu().clone()
+                self._last_input = value
             else:
                 raise TypeError('Min-max Observer only work with per-tensor or per-channel quantize policy.')
 
