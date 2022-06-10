@@ -393,6 +393,12 @@ def Add_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
     a, b = values
     return a + b
 
+def And_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
+    ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
+    ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=2, max_num_of_input=2)
+    a, b = values
+    return a & b
+
 
 def Eltwise_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
     if op.type == 'Add':
@@ -2324,6 +2330,7 @@ def LogSoftmax_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBack
 
 DEFAULT_BACKEND_TABLE = {
     'AdaptiveAvgPool2d': AdaptiveAvgPool2d_forward,
+    'And':And_forward,
     'Add': Add_forward,
     'ArgMax': ArgMax_forward,
     'AveragePool': AveragePool_forward,
