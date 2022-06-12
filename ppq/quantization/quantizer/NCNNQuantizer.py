@@ -108,6 +108,46 @@ class NCNNQuantizer(BaseQuantizer):
                 # use default param
                 pass
             
+            elif operation.type == 'MultiHeadAttention':
+                # setup weight quant param
+                fc_weight_config = base_quant_config.input_quantization_config[4]
+                fc_weight_config = QuantizationPolicy(
+                    QuantizationProperty.SYMMETRICAL +
+                    QuantizationProperty.LINEAR +
+                    QuantizationProperty.PER_CHANNEL
+                )
+                base_quant_config.input_quantization_config[3] = \
+                    ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
+                        convert_from = fc_weight_config,
+                        offsets = None, scales  = None, channel_axis = 0
+                    )
+                base_quant_config.input_quantization_config[5] = \
+                    ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
+                        convert_from = fc_weight_config,
+                        offsets = None, scales  = None, channel_axis = 0
+                    )
+                base_quant_config.input_quantization_config[7] = \
+                    ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
+                        convert_from = fc_weight_config,
+                        offsets = None, scales  = None, channel_axis = 0
+                    )
+                base_quant_config.input_quantization_config[9] = \
+                    ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
+                        convert_from = fc_weight_config,
+                        offsets = None, scales  = None, channel_axis = 0
+                    )
+
+                internal_config = QuantizationPolicy(
+                    QuantizationProperty.SYMMETRICAL +
+                    QuantizationProperty.LINEAR +
+                    QuantizationProperty.PER_TENSOR
+                )
+                base_quant_config.output_quantization_config[1] = internal_config
+                base_quant_config.output_quantization_config[2] = internal_config
+                base_quant_config.output_quantization_config[3] = internal_config
+                base_quant_config.output_quantization_config[4] = internal_config
+                base_quant_config.output_quantization_config[5] = internal_config
+            
             # 显式说明输出不量化
             base_quant_config.output_quantization_config[0].state = QuantizationStates.FP32
         return base_quant_config
