@@ -1,4 +1,3 @@
-from lib2to3.pytree import convert
 from typing import List
 
 from ppq.core import (DataType, NetworkFramework, QuantizationProperty,
@@ -8,7 +7,6 @@ from ppq.IR import BaseGraph, GraphExporter, QuantableOperation
 from .caffe_exporter import CaffeExporter
 from .onnx_exporter import OnnxExporter
 from .util import convert_value
-from collections import Iterable
 
 
 class NCNNExporter(GraphExporter):

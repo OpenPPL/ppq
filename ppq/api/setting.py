@@ -164,7 +164,7 @@ class ActivationQuantizationSetting():
     def __init__(self) -> None:
         # 激活值校准算法，不区分大小写，可以选择 minmax, kl, percentile, MSE
         # activation calibration method
-        self.calib_algorithm = 'minmax'
+        self.calib_algorithm = None
 
         # 执行逐层激活值校准，延长执行时间，提升精度
         # whether to calibrate activation per - layer.

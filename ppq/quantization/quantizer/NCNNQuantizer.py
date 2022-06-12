@@ -152,8 +152,6 @@ class NCNNQuantizer(BaseQuantizer):
                 )
                 
                 internal_output_indexes = [1, 2, 3, 4, 5]
-                import pdb
-                pdb.set_trace()
                 for index in internal_output_indexes:
                     base_quant_config.output_quantization_config[index].policy = internal_policy
                     base_quant_config.output_quantization_config[index].observer_algorithm = 'Minmax'

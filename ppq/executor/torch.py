@@ -341,10 +341,6 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
                 operation_forward_func = platform_dispatching_table[operation.type]
                 operation_runtime_hook = hooks[operation.name] if (hooks is not None) and (operation.name in hooks) else None
                 inputs = [var.value for var in operation.inputs]
-                
-                if operation.name == 'MultiHeadAttention_31':
-                    import pdb
-                    pdb.set_trace()
 
                 # if operation is an QuantableOperation, we have to quant its inputs and outputs at first.
                 if isinstance(operation, QuantableOperation):
