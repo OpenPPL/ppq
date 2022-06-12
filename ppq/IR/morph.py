@@ -90,7 +90,8 @@ class GraphFormatter(GraphCommandProcessor):
             GraphCommandType.FORMAT_PARAMETERS,
             GraphCommandType.FORMAT_CONSTANT_INPUT,
             GraphCommandType.FORMAT_SLICE,
-            GraphCommandType.TRUNCATE_ON_VAR
+            GraphCommandType.TRUNCATE_ON_VAR,
+            GraphCommandType.FORMAT_MHA,
         ]
 
     def process(self, command: GraphCommand) -> Any:
@@ -107,7 +108,7 @@ class GraphFormatter(GraphCommandProcessor):
         if command.command_type == GraphCommandType.FORMAT_INT64_CONSTANT:
             return self.format_int64_constant()
         if command.command_type == GraphCommandType.REPLACE_SUB:
-            return self.replace_substarction()
+            return self.replace_substraction()
         if command.command_type == GraphCommandType.FORMAT_PARAMETERS:
             return self.format_parameter_variables()
         if command.command_type == GraphCommandType.FORMAT_CONSTANT_INPUT:
@@ -117,6 +118,8 @@ class GraphFormatter(GraphCommandProcessor):
         if command.command_type == GraphCommandType.TRUNCATE_ON_VAR:
             assert isinstance(command, TruncateGraphCommand), f'Use TruncateGraphCommand here.'
             return self.truncate_on_var(command.var, command.mark_as_output)
+        if command.command_type == GraphCommandType.FORMAT_MHA:
+            return self.format_mha()
 
     def format_slice(self) -> None:
         """
@@ -398,8 +401,34 @@ class GraphFormatter(GraphCommandProcessor):
 
             # pop variable from graph
             self.graph.remove_variable(var)
-
-    def replace_substarction(self) -> None:
+            
+    def format_mha(self) -> None:
+        mha = []
+        for operation in self.graph.operations.values():
+            if operation.type == 'MultiHeadAttention':
+                mha.append(operation)
+                
+        for opr in mha:
+            assert isinstance(opr, Operation)
+            q_var = Variable(name=opr.name + '_fake_q_', source_op=opr)
+            k_var = Variable(name=opr.name + '_fake_k_', source_op=opr)
+            v_var = Variable(name=opr.name + '_fake_v_', source_op=opr)
+            energy_var = Variable(name=opr.name + '_fake_energy_', source_op=opr)
+            feat_var = Variable(name=opr.name + '_fake_feat_', source_op=opr)
+            
+            opr.outputs.append(q_var)
+            opr.outputs.append(k_var)
+            opr.outputs.append(v_var)
+            opr.outputs.append(energy_var)
+            opr.outputs.append(feat_var)
+            
+            self.graph.append_variable(q_var)
+            self.graph.append_variable(k_var)
+            self.graph.append_variable(v_var)
+            self.graph.append_variable(energy_var)
+            self.graph.append_variable(feat_var)
+            
+    def replace_substraction(self) -> None:
         substractions = []
         for operation in self.graph.operations.values():
             if operation.type == 'Sub':

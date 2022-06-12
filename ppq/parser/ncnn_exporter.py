@@ -123,10 +123,6 @@ class NCNNExporter(GraphExporter):
                     item['weight_o'] = convert_value(1 / cfg_o_w.scale, False, DataType.FP32)
                     
                     # write internal scale
-                    
-                    import pdb
-                    pdb.set_trace()
-                    
                     cfg_q = op.config.output_quantization_config[1]
                     cfg_k = op.config.output_quantization_config[2]
                     cfg_v = op.config.output_quantization_config[3]

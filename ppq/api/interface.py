@@ -617,6 +617,7 @@ def format_graph(graph: BaseGraph) -> BaseGraph:
     在 PPQ 中，我们不希望出现 Constant 算子，所有 Constant 输入将被当作 parameter variable 连接到下游算子上
     在 PPQ 中，我们不希望出现 Batchnorm 算子，所有 Batchnorm 将被合并
     在 PPQ 中，我们不希望出现权重共享的算子，所有被共享的权重将被复制分裂成多份
+    在 PPQ 中，我们希望 MultiHeadAttention 算子中间过程可被量化
     在 PPQ 中，我们不希望出现孤立算子，所有孤立算子将被移除
 
     This function takes pre-processing procedure with your graph.
@@ -639,6 +640,7 @@ def format_graph(graph: BaseGraph) -> BaseGraph:
     formatter(GraphCommand(GraphCommandType.FORMAT_CAST))
     formatter(GraphCommand(GraphCommandType.FORMAT_SLICE))
     formatter(GraphCommand(GraphCommandType.FORMAT_CLIP))
+    formatter(GraphCommand(GraphCommandType.FORMAT_MHA))
     formatter(GraphCommand(GraphCommandType.DELETE_ISOLATED))
 
     return graph

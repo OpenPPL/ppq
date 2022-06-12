@@ -372,7 +372,6 @@ def MultiHeadAttention_forward(op: Operation, values: List[torch.Tensor], ctx: T
 
     feat = (attn @ v).transpose(1, 2).reshape(batch_size, -1, embed_dim)
     out = F.linear(feat, o_w, o_b)
-
     return out, q, k, v, energy, feat
 
 

@@ -96,6 +96,8 @@ class GraphCommandType(Enum):
     FORMAT_SLICE = 29
     # 从一个指定位置将图截断
     TRUNCATE_ON_VAR = 30
+    # 输出 MultiHeadAttention 中间过程，从而让 Quantizer 配置是否量化
+    FORMAT_MHA = 31
 
 class GraphCommand():
     def __init__(self, command_type: GraphCommandType, **kwargs) -> None:
