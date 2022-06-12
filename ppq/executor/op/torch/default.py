@@ -333,7 +333,21 @@ def Mul_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
     return multiplicand * multiplier
 
 
-def MultiHeadAttention_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
+def MultiHeadAttention_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> list:
+    """Perform MultiHeadAttetion opr forward.
+
+    Args:
+        op (Operation): MultiHeadAttention
+        values (List[torch.Tensor]): opr inputs
+        ctx (TorchBackendContext, optional): Context. Defaults to None.
+
+    Raises:
+        NotImplementedError: In [Vit Paper](https://arxiv.org/abs/2010.11929), MultiHeadAttention inputs are actually the same tensor, we suppose that this would **not** be simplified.
+        ValueError: MultiHeadAttention contains `embed_dim` and `num_heads`.
+
+    Returns:
+        list: opr output and internal result for quantization.
+    """
     if len(values) != 11:
         raise NotImplementedError('Not implement simplified MultiHeadAttention')
 
@@ -345,7 +359,7 @@ def MultiHeadAttention_forward(op: Operation, values: List[torch.Tensor], ctx: T
         raise ValueError('Cannot fetch embed_dim or num_heads')
 
     # setup parameters
-    batch_size = q.shape[0]
+    batch_size = q_in.shape[0]
     head_dim = embed_dim // num_heads
     scale = head_dim ** -0.5
 
@@ -359,8 +373,7 @@ def MultiHeadAttention_forward(op: Operation, values: List[torch.Tensor], ctx: T
     feat = (attn @ v).transpose(1, 2).reshape(batch_size, -1, embed_dim)
     out = F.linear(feat, o_w, o_b)
 
-    # return out, q, k, v, energy, feat
-    return out
+    return out, q, k, v, energy, feat
 
 
 def Add_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:

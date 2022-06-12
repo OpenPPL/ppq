@@ -10,5 +10,5 @@ from .PPLQuantizer import (PPLCUDA_INT4_Quantizer,
                            PPLCUDAMixPrecisionQuantizer, PPLCUDAQuantizer)
 from .TRTQuantizer import TensorRTQuantizer
 from .FPGAQuantizer import FPGAQuantizer
-from . import NCNNQuantizer
+from .NCNNQuantizer import NCNNQuantizer
 from .OpenvinoQuantizer import OpenvinoQuantizer

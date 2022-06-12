@@ -95,7 +95,6 @@ class NCNNExporter(GraphExporter):
 
                 elif op.type in {'LayerNorm', 'Gelu'}:
                     cfg = op.config.input_quantization_config[0]
-                    print('cfg state {} algo {}'.format(cfg.state, cfg.observer_algorithm))
 
                     assert cfg.state in {QuantizationStates.BAKED, QuantizationStates.ACTIVATED} \
                         and cfg.observer_algorithm in {'minmax', 'Minmax'}
@@ -103,9 +102,43 @@ class NCNNExporter(GraphExporter):
                     item['zero_point'] = convert_value(cfg.offset, False, DataType.INT32)
 
                 elif op.type == 'MultiHeadAttention':
+                    # write input scale
+                    cfg_q_in = op.config.input_quantization_config[0]
+                    cfg_k_in = op.config.input_quantization_config[1]
+                    cfg_v_in = op.config.input_quantization_config[2]
                     
-                    # TODO
-                    continue
+                    item['input_scale_q'] =  convert_value(1.0 / cfg_q_in.scale, True, DataType.FP32)
+                    item['input_scale_k'] =  convert_value(1.0 / cfg_k_in.scale, True, DataType.FP32)
+                    item['input_scale_v'] =  convert_value(1.0 / cfg_v_in.scale, True, DataType.FP32)
+                    
+                    # write input/output weight scale, per-channel
+                    cfg_q_w = op.config.input_quantization_config[3]
+                    cfg_k_w = op.config.input_quantization_config[5]
+                    cfg_v_w = op.config.input_quantization_config[7]
+                    cfg_o_w = op.config.input_quantization_config[9]
+                    
+                    item['weight_q'] = convert_value(1 / cfg_q_w.scale, False, DataType.FP32)
+                    item['weight_k'] = convert_value(1 / cfg_k_w.scale, False, DataType.FP32)
+                    item['weight_v'] = convert_value(1 / cfg_v_w.scale, False, DataType.FP32)
+                    item['weight_o'] = convert_value(1 / cfg_o_w.scale, False, DataType.FP32)
+                    
+                    # write internal scale
+                    
+                    import pdb
+                    pdb.set_trace()
+                    
+                    cfg_q = op.config.output_quantization_config[1]
+                    cfg_k = op.config.output_quantization_config[2]
+                    cfg_v = op.config.output_quantization_config[3]
+                    cfg_energy = op.config.output_quantization_config[4]
+                    cfg_feat = op.config.output_quantization_config[5]
+
+                    item['internal_scale_q'] =  convert_value(1.0 / cfg_q.scale, True, DataType.FP32)
+                    item['internal_scale_k'] =  convert_value(1.0 / cfg_k.scale, True, DataType.FP32)
+                    item['internal_scale_v'] =  convert_value(1.0 / cfg_v.scale, True, DataType.FP32)
+                    item['internal_scale_energy'] =  convert_value(1.0 / cfg_energy.scale, True, DataType.FP32)
+                    item['internal_scale_feat'] =  convert_value(1.0 / cfg_feat.scale, True, DataType.FP32)
+                
                 else:
                     print('unknown quant type {} name {} during write weight scale'.format(op.type, op.name))
 

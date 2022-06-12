@@ -658,8 +658,6 @@ def dispatch_graph(graph: BaseGraph, platform: TargetPlatform, setting: Quantiza
     assert platform in QUANTIZER_COLLECTION, (
         f'Platform misunderstood, except one of following platform {QUANTIZER_COLLECTION.keys()}')
     
-    import pdb
-    pdb.set_trace()
     quantizer = QUANTIZER_COLLECTION[platform](graph) # 初始化一个 quantizer 没有很大代价...
 
     if str(setting.dispatcher).lower() not in DISPATCHER_TABLE:

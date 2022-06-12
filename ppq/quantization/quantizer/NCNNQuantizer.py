@@ -109,47 +109,59 @@ class NCNNQuantizer(BaseQuantizer):
                 pass
             
             elif operation.type == 'MultiHeadAttention':
-                # setup weight quant param
-                fc_weight_config = base_quant_config.input_quantization_config[4]
-                fc_weight_config = QuantizationPolicy(
-                    QuantizationProperty.SYMMETRICAL +
-                    QuantizationProperty.LINEAR +
-                    QuantizationProperty.PER_CHANNEL
-                )
-                base_quant_config.input_quantization_config[3] = \
-                    ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
-                        convert_from = fc_weight_config,
-                        offsets = None, scales  = None, channel_axis = 0
-                    )
-                base_quant_config.input_quantization_config[5] = \
-                    ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
-                        convert_from = fc_weight_config,
-                        offsets = None, scales  = None, channel_axis = 0
-                    )
-                base_quant_config.input_quantization_config[7] = \
-                    ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
-                        convert_from = fc_weight_config,
-                        offsets = None, scales  = None, channel_axis = 0
-                    )
-                base_quant_config.input_quantization_config[9] = \
-                    ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
-                        convert_from = fc_weight_config,
-                        offsets = None, scales  = None, channel_axis = 0
-                    )
-
-                internal_config = QuantizationPolicy(
+                # setup input quant param
+                input_policy = QuantizationPolicy(
                     QuantizationProperty.SYMMETRICAL +
                     QuantizationProperty.LINEAR +
                     QuantizationProperty.PER_TENSOR
                 )
-                base_quant_config.output_quantization_config[1] = internal_config
-                base_quant_config.output_quantization_config[2] = internal_config
-                base_quant_config.output_quantization_config[3] = internal_config
-                base_quant_config.output_quantization_config[4] = internal_config
-                base_quant_config.output_quantization_config[5] = internal_config
+                input_indexes = [0, 1, 2]
+                for index in input_indexes:
+                    base_quant_config.input_quantization_config[index].policy = input_policy
+                    base_quant_config.input_quantization_config[index].observer_algorithm = 'Minmax'
+
+                # setup weight quant param
+                fc_weight_config = base_quant_config.input_quantization_config[3]
+                fc_weight_config.policy = QuantizationPolicy(
+                    QuantizationProperty.SYMMETRICAL +
+                    QuantizationProperty.LINEAR +
+                    QuantizationProperty.PER_CHANNEL
+                )
+                
+                # setup qkv weight quant param
+                fc_weight_indexes = [3, 5, 7, 9]
+                for index in fc_weight_indexes:
+                    base_quant_config.input_quantization_config[index] = \
+                        ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
+                            convert_from = fc_weight_config,
+                            offsets = None, scales  = None, channel_axis = 0
+                        )
+                    base_quant_config.input_quantization_config[index].observer_algorithm = 'Minmax'
+                    
+                # bias not quant
+                bias_indexes = [4, 6, 8, 10]
+                for index in bias_indexes:
+                    base_quant_config.input_quantization_config[index].state = QuantizationStates.FP32
+                
+                # setup internal quant policy
+                # here be dragons: we treat internal result as opr output
+                internal_policy = QuantizationPolicy(
+                    QuantizationProperty.SYMMETRICAL +
+                    QuantizationProperty.LINEAR +
+                    QuantizationProperty.PER_TENSOR
+                )
+                
+                internal_output_indexes = [1, 2, 3, 4, 5]
+                import pdb
+                pdb.set_trace()
+                for index in internal_output_indexes:
+                    base_quant_config.output_quantization_config[index].policy = internal_policy
+                    base_quant_config.output_quantization_config[index].observer_algorithm = 'Minmax'
+                
             
             # 显式说明输出不量化
-            base_quant_config.output_quantization_config[0].state = QuantizationStates.FP32
+            if operation.type != 'MultiHeadAttention':
+                base_quant_config.output_quantization_config[0].state = QuantizationStates.FP32
         return base_quant_config
 
     @ property
