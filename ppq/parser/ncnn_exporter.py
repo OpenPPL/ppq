@@ -8,6 +8,38 @@ from .caffe_exporter import CaffeExporter
 from .onnx_exporter import OnnxExporter
 from .util import convert_value
 
+import toml
+
+# rewrite toml encoder
+class ArrayEncoder(toml.TomlEncoder):
+
+    def __init__(self, _dict=dict, preserve=False, separator=","):
+        super(ArrayEncoder, self).__init__(_dict, preserve)
+        if separator.strip() == "":
+            separator = "," + separator
+        elif separator.strip(' \t\n\r,'):
+            raise ValueError("Invalid separator for arrays")
+        self.separator = separator
+
+    def dump_list(self, v):
+        t = []
+        retval = "["
+        for u in v:
+            t.append(self.dump_value(u))
+        while t != []:
+            s = []
+            last = len(t) - 1
+            for idx, u in enumerate(t):
+                if isinstance(u, list):
+                    for r in u:
+                        s.append(r)
+                elif idx != last:
+                    retval += " " + str(u) + self.separator
+                else:
+                    retval += " " + str(u) + " "
+            t = s
+        retval += "]"
+        return retval
 
 class NCNNExporter(GraphExporter):
     
@@ -47,18 +79,19 @@ class NCNNExporter(GraphExporter):
 
     def export_toml_quant_config(self, config_path: str, graph: BaseGraph):
         ''' toml is human readable format '''
-        import toml
-        from ppq.core.config import PPQ_CONFIG
-        
-        table = {'source': '{} {}'.format(PPQ_CONFIG.NAME, PPQ_CONFIG.VERSION)}
         order =  graph.topological_sort()
-        
+        table = {}
         for op in order:
             if hasattr(op, 'config'):
                 item = dict()
                 # avoiding Gather to Crop, we cannot deduce opr_type from opr_name
                 item['type'] = op.type
                 if op.type in {'Conv', 'Gemm'}:
+                    input_cfg = op.config.input_quantization_config[0]
+                    assert input_cfg.state == QuantizationStates.ACTIVATED and \
+                        input_cfg.policy.has_property(QuantizationProperty.PER_TENSOR)
+                    item['input_scale'] = convert_value(1 / input_cfg.scale, True, DataType.FP32)
+                    
                     param_cfg = op.config.input_quantization_config[1]
                     assert param_cfg.state in {QuantizationStates.BAKED, QuantizationStates.ACTIVATED}\
                         and param_cfg.observer_algorithm in {'minmax', 'Minmax'} and \
@@ -71,11 +104,6 @@ class NCNNExporter(GraphExporter):
                     else:
                         scale  = param_cfg.scale
                     item['weight'] = convert_value(1 / scale, False, DataType.FP32)
-                    
-                    input_cfg = op.config.input_quantization_config[0]
-                    assert input_cfg.state == QuantizationStates.ACTIVATED and \
-                        input_cfg.policy.has_property(QuantizationProperty.PER_TENSOR)
-                    item['input_scale'] = convert_value(1 / input_cfg.scale, True, DataType.FP32)
 
                 elif op.type in {'Add'}:
                     # Add may have multiple input node
@@ -89,15 +117,22 @@ class NCNNExporter(GraphExporter):
                         zero_point.extend(convert_value(cfg.offset, False, DataType.INT32))
                     
                     item['input_scale'] = input_scale
-                    item['zero_point'] = zero_point
 
-                elif op.type in {'LayerNorm', 'Gelu'}:
+                elif op.type in {'Gelu'}:
+                    cfg = op.config.input_quantization_config[0]
+
+                    assert cfg.state in {QuantizationStates.BAKED, QuantizationStates.ACTIVATED} \
+                        and cfg.observer_algorithm in {'minmax', 'Minmax'}
+                    item['input_scale'] = convert_value(1.0 / cfg.scale, False, DataType.FP32)
+
+                elif op.type in {'LayerNorm'}:
                     cfg = op.config.input_quantization_config[0]
 
                     assert cfg.state in {QuantizationStates.BAKED, QuantizationStates.ACTIVATED} \
                         and cfg.observer_algorithm in {'minmax', 'Minmax'}
                     item['input_scale'] = convert_value(1.0 / cfg.scale, False, DataType.FP32)
                     item['zero_point'] = convert_value(cfg.offset, False, DataType.INT32)
+
 
                 elif op.type == 'MultiHeadAttention':
                     # write input scale
@@ -138,7 +173,7 @@ class NCNNExporter(GraphExporter):
 
                 table[op.name] = item
 
-        toml.dump(table, open(config_path, 'w+'))
+        toml.dump(table, open(config_path, 'w+'), encoder=ArrayEncoder())
 
 
     def export_quantization_config(self, config_path: str, graph: BaseGraph):
