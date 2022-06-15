@@ -6,7 +6,8 @@ import torch
 from ppq.core import (CAFFE_DOMAIN, COMPUTING_OP, DEFAULT_OPSET_DOMAIN,
                       DEFAULT_OPSET_VERSION, LINEAR_ACTIVATIONS, ONNX_DOMAIN,
                       SOI_OP, NetworkFramework, OperationMeta, Serializable,
-                      SingletonMeta, TargetPlatform, TensorMeta, ppq_warning)
+                      SingletonMeta, TargetPlatform, TensorMeta,
+                      convert_any_to_torch_tensor, ppq_warning)
 
 
 class Opset():
@@ -52,6 +53,7 @@ class OperationBase(metaclass=ABCMeta):
         self._attributes = attributes
         self._platform = platform
         self._meta = None
+        self._detail = {}
         if opset is None:
             self._opset = Opset()
         else: self._opset = opset
@@ -78,6 +80,14 @@ class OperationBase(metaclass=ABCMeta):
         self._type = type
 
     @ property
+    def opset(self) -> Opset:
+        return self._opset
+
+    @ opset.setter
+    def opset(self, opset: Opset):
+        self._opset = opset
+
+    @ property
     def attributes(self) -> Dict[str, Any]:
         return self._attributes
 
@@ -96,15 +106,7 @@ class OperationBase(metaclass=ABCMeta):
     @ meta_data.setter
     def meta_data(self, meta: OperationMeta) -> OperationMeta:
         self._meta = meta
-    
-    @ property
-    def opset(self) -> Opset:
-        return self._opset
 
-    @ opset.setter
-    def opset(self, opSet: Opset):
-        self._opset = opSet
-    
     def __hash__(self) -> int:
         return self._name.__hash__()
 
@@ -190,6 +192,17 @@ class Variable(Serializable):
         state['_dest_ops'] = [op.name for op in self.dest_ops]
         state['_source_op'] = self.source_op.name if self.source_op is not None else None
         return state
+    
+    def copy(self, copy_value: bool = False):
+        if not copy_value or self.value is None:
+            return Variable(name=self.name, value=self.value, is_parameter=self.is_parameter)
+        
+        if not isinstance(self.value, torch.Tensor):
+            ppq_warning(f'You are requiring to copy variable {self.name}, '
+                        'however its value is not an instance of torch.Tensor, '
+                        'ppq will automaticall convert it to torch.Tensor now.')
+            self.value = convert_any_to_torch_tensor(self.value)
+        return Variable(name=self.name, value=self.value.clone(), is_parameter=self.is_parameter)
 
 
 class Operation(OperationBase, Serializable):
@@ -263,6 +276,23 @@ class Operation(OperationBase, Serializable):
         state['_input_vars'] = [var.name for var in self.inputs]
         state['_output_vars'] = [var.name for var in self.outputs]
         return state
+
+    def set_extension_attrib(self, attrib: str, value: Any):
+        self._detail[attrib] = value
+
+    @ property
+    def extension_attrib(self):
+        return self._detail
+
+    def copy(self):
+        clone = Operation(
+            name=self.name, 
+            op_type=self.type, 
+            attributes=self.attributes.copy(), 
+            platform=self.platform, 
+            opset=self.opset)
+        clone.meta_data = self.meta_data.copy()
+        return clone
 
 
 class BaseGraph(Serializable):
@@ -612,7 +642,7 @@ class BaseGraph(Serializable):
             raise KeyError(f'Can not find your variable {variable.name} in current graph.')
         if upstream_op is not None and upstream_op.name not in self.operations:
             raise KeyError(f'Can not find your operation {upstream_op.name} in current graph.')
-        if downstream_op.name not in self.operations:
+        if downstream_op is not None and downstream_op.name not in self.operations:
             raise KeyError(f'Can not find your operation {downstream_op.name} in current graph.')
 
         if variable.source_op is None: variable.source_op = upstream_op
@@ -621,9 +651,10 @@ class BaseGraph(Serializable):
                                   f'cause its source operations != {upstream_op}')
 
         # For complex graph, following logic might have some error.
-        if  upstream_op is not None and variable not in upstream_op.outputs:
+        if upstream_op is not None and variable not in upstream_op.outputs:
             upstream_op.outputs.append(variable)
-        if variable not in downstream_op.inputs:
+        if downstream_op is None: return
+        if downstream_op is not None and variable not in downstream_op.inputs:
             variable.dest_ops.append(downstream_op)
             downstream_op.inputs.append(variable)
         else: ppq_warning(f'You are trying to link variable with operation, '
@@ -856,11 +887,19 @@ class BaseGraph(Serializable):
         state['_graph_outputs'] = [var for var in self.outputs]
         return state
 
-    def copy(self):
-        """Clone this graph. Here a shallow copy will be returned as result.
+    def copy(self, copy_value: bool = False):
+        """Clone current graph. 
+        Use parameter copy_value to control whether to do a Shallow Copy or Deep Copy.
+        
+        For copy_value = True, there will be a copy of each parameter in your network.
+            ATTENTION: it might cause gpu memory overflow.
+        For copy_value = False, cloned network will share the same parameter tensor of current one.
+        
+        ATTENTION: all quantization config will be cloned, 
+            all scales and offsets will be cloned even with copy_valye = False.
 
         Shallow Copy: Shallow repetition is quicker.
-        However, it’s “lazy” it handles pointers and references.
+        However, it's “lazy” it handles pointers and references.
         Rather than creating a contemporary copy of the particular knowledge the pointer points to,
             it simply copies over the pointer price.
         So, each the first and therefore the copy can have pointers that reference constant underlying knowledge.
@@ -868,12 +907,70 @@ class BaseGraph(Serializable):
         Deep Copy: Deep repetition truly clones the underlying data.
         It is not shared between the first and therefore the copy.
         """
+        from ppq.IR.quantize import QuantableOperation
         cloned = BaseGraph(name=self._name, built_from=self._built_from)
-        cloned._graph_inputs  = self.inputs.copy()
-        cloned._graph_outputs = self.outputs.copy()
-        cloned._export_value  = self._export_value
-        cloned._operations    = self.operations.copy()
-        cloned._variables     = self.variables.copy()
+        for op in self.operations.values(): cloned.append_operation(op.copy())
+        for var in self.variables.values(): cloned.append_variable(var.copy(copy_value=copy_value))
+        
+        # notice that all operations is copyed without link, so do all variables
+        # relink them with following code
+        config_dict = {}
+        for op in self.operations.values():
+            assert op.name in cloned.operations, (
+                f'Graph Copy Error, Operation {op.name} is not correctly cloned')
+            c_op = cloned.operations[op.name]
+            for i_var in op.inputs:
+                assert i_var.name in cloned.variables, (
+                    f'Graph Copy Error, Variable {i_var.name} is not correctly cloned')
+                ci_var = cloned.variables[i_var.name]
+                cloned.create_link_with_op(
+                    variable=ci_var, 
+                    upstream_op=ci_var.source_op, 
+                    downstream_op=c_op)
+            for o_var in op.outputs:
+                assert o_var.name in cloned.variables, (
+                    f'Graph Copy Error, Variable {o_var.name} is not correctly cloned')
+                co_var = cloned.variables[o_var.name]
+                c_op.outputs.append(co_var)
+                co_var.source_op = c_op
+            if isinstance(op, QuantableOperation):
+                for cfg, var in op.config_with_variable:
+                    config_dict[cfg._hash] = (op, var)
+
+        # relink config to there cloned master.
+        for c_op in cloned.operations.values():
+            if isinstance(c_op, QuantableOperation):
+                for cfg, var in c_op.config_with_variable:
+                    if cfg.dominated_by != cfg:
+                        assert cfg.dominated_by._hash in config_dict, (
+                            'Graph Copy Error, can not find a corresponding master config.')
+                        op, var = config_dict[cfg.dominated_by._hash]
+
+                        op = cloned.operations[op.name]
+                        assert isinstance(op, QuantableOperation), (
+                            'Graph Copy Error, Unexpected Master Operation Type.')
+                        for mcfg, mvar in op.config_with_variable:
+                            if mvar.name == var.name: cfg._father_config = mcfg
+
+        # recreate input, output
+        for name in self.inputs:
+            cloned.inputs[name] = cloned.variables[name]
+        for name in self.outputs:
+            cloned.outputs[name] = cloned.variables[name]
+
+        # check integrity
+        for op in self.operations.values():
+            if op.name not in cloned.operations:
+                raise KeyError(f'Graph Copy Error, Operation {op.name} is Missing')
+        for var in self.variables.values():
+            if var.name not in cloned.variables:
+                raise KeyError(f'Graph Copy Error, Variable {var.name} is Missing')
+        for name in self.inputs:
+            if name not in cloned.inputs:
+                raise KeyError(f'Graph Copy Error, Input {var.name} is Missing')
+        for name in self.outputs:
+            if name not in cloned.outputs:
+                raise KeyError(f'Graph Copy Error, Output {var.name} is Missing')
         return cloned
 
 

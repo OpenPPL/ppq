@@ -923,7 +923,9 @@ class ENABLE_CUDA_KERNEL:
     memory cost.
     """
     def __init__(self) -> None:
-        ppq_warning('Compling CUDA Kernels. Please wait...')
+        ppq_warning('PPQ is compling CUDA Kernels. Please wait...'
+                    'If there is any problem with kernel compilation, '
+                    'feel free to remove ENABLE_CUDA_KERNEL clause.')
         self._state = False
 
     def __enter__(self):

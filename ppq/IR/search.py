@@ -494,15 +494,22 @@ class SearchableGraph(GraphCommandProcessor):
         # find next operations with given direction
         if direction == 'up': following_ops = self.graph.get_upstream_operations(start_point)
         else: following_ops = self.graph.get_downstream_operations(start_point)
+        
+        # new feature with ppq 0.6.5, if ep_expr is None, means search until mismatch.
+        if len(following_ops) == 0 and ep_expr is None:
+            return ret_collection.add(start_point)
 
         for op in following_ops:
             # if operation is a valid end point, add it to path and stop further searching.
-            if ep_expr(op):
+            if ep_expr is not None and ep_expr(op):
                 ret_collection.update([start_point, op])
 
             else:
                 # if operation is not a valid relay point, end searching here.
-                if not rp_expr(start_point, op): continue
+                if not rp_expr(start_point, op): 
+                    # new feature with ppq 0.6.5, if ep_expr is None, means search until mismatch.
+                    if ep_expr is None: ret_collection.add(start_point)
+                    continue
 
                 # searching following operations.
                 further_result = self._opset_matching(
@@ -510,7 +517,8 @@ class SearchableGraph(GraphCommandProcessor):
                     ep_expr=ep_expr, direction=direction)
 
                 if len(further_result) > 0:
-                    ret_collection.update(further_result.add(start_point))
+                    ret_collection.update(further_result)
+                    ret_collection.add(start_point)
 
         self._cache[start_point] = ret_collection
         return ret_collection

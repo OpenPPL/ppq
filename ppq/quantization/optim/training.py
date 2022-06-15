@@ -810,12 +810,14 @@ class BlockwiseReconstructionPass(TrainingBasedPass):
                 if isinstance(op, QuantableOperation) and op.type == 'Clip':
                     input_config = op.config.input_quantization_config[0].dominated_by
                     for config in op.config.input_quantization_config[1: ]:
+                        if config.state != QuantizationStates.PASSIVE: continue
                         config.scale  = input_config.scale
                         config.offset = input_config.offset
                 elif isinstance(op, QuantableOperation) and op.type == 'Pad':
                     if op.num_of_input != 3: continue
                     input_config = op.config.input_quantization_config[0].dominated_by
                     pad_config = op.config.input_quantization_config[-1]
+                    if pad_config.state != QuantizationStates.PASSIVE: continue
                     pad_config.scale  = input_config.scale
                     pad_config.offset = input_config.offset
 
@@ -1114,9 +1116,9 @@ class AdvancedQuantOptimization(TrainingBasedPass):
 
                 # compute loss
                 optimizer.zero_grad()
-                round_loss = torch.sum(torch.cat([PPQRoundingLoss(d.binding.value, d.config) for d in delegators]))
+                # round_loss = torch.sum(torch.cat([PPQRoundingLoss(d.binding.value, d.config) for d in delegators]))
                 quant_loss = torch_mean_square_error(qt_output, fp_output)
-                total_loss = quant_loss + round_loss * OPTIM_ADVOPT_RLOSS_MULTIPLIER
+                total_loss = quant_loss # + round_loss * OPTIM_ADVOPT_RLOSS_MULTIPLIER
                 total_loss.backward()
 
                 loss_ema.push(total_loss.item())
