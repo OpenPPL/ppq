@@ -16,9 +16,7 @@ def torch_cosine_similarity(y_pred: torch.Tensor, y_real: torch.Tensor, reductio
     y_pred = y_pred.flatten(start_dim=1).float()
     y_real = y_real.flatten(start_dim=1).float()
 
-    y_pred_norm = torch.sqrt_(torch.sum(y_pred * y_pred, dim=-1))
-    y_real_norm = torch.sqrt_(torch.sum(y_real * y_real, dim=-1))
-    cosine_sim  = (torch.sum(y_pred * y_real, dim=-1) + 1e-7) / ((y_pred_norm * y_real_norm) + 1e-7) # eps
+    cosine_sim = torch.cosine_similarity(y_pred, y_real, dim=-1)
 
     if reduction == 'mean':
         return torch.mean(cosine_sim)
