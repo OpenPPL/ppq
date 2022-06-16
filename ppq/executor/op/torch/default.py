@@ -1085,8 +1085,20 @@ def Resize_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendC
         if scales.numel() == 1:
             scales = scales.item()
         else:
-            assert scales.numel() % 2 == 0
-            scales = scales[-2].cpu().numpy().tolist()
+            scales = scales.cpu().tolist()
+            if len(scales) == 2:
+                # 大家相安无事，和平共处
+                pass
+            elif len(scales) == 4:
+                if scales[:2] != [1, 1]:
+                    raise NotImplementedError(
+                        'Can not resize your image with current op, '
+                        'cause 4-dimension resize is not implemented with pytorch.')
+                scales = scales[2:]
+            else:
+                raise NotImplementedError(
+                    'Can not resize your image with current op, '
+                    f'cause {len(scales)}-dimension resize is not implemented with pytorch.')
     else:
         # the sizes in onnx is 4-D while in pytorch is 2-D
         # check the dim.0 & dim.1 is equal, then remain dim.2 and dim.3

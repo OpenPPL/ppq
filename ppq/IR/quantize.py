@@ -137,6 +137,11 @@ class QuantableOperation(Operation):
             ret.append((cfg, var))
         return ret
 
+    def copy(self):
+        return QuantableOperation(
+            convert_from=super().copy(), 
+            quantize_config=self.config.copy(), 
+            platform=self.platform)
 
 class QuantableVariable(Variable):
     def __init__(self, convert_from: Variable) -> None:
@@ -189,6 +194,12 @@ class QuantableVariable(Variable):
         if self.source_op is None:
             return TargetPlatform.FP32
         else: return self.source_op.platform
+
+    def copy(self, copy_value: bool = False):
+        clone = QuantableVariable(super().copy(copy_value))
+        if copy_value: clone._fp32_value = self._fp32_value.clone()
+        else: clone._fp32_value = self._fp32_value
+        return clone
 
 
 class DeviceSwitchOP(Operation):

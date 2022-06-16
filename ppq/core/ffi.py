@@ -4,7 +4,6 @@ You are not allowed to modify this 请勿修改此文件
 """
 
 import os
-import traceback
 
 import torch
 from torch.utils.cpp_extension import load
@@ -27,6 +26,8 @@ try:
 except Exception as e:
     ppq_warning('PPQ can not complie cuda extensions, please check your compiler and system environment, '
                 'PPQ will disable CUDA KERNEL for now.')
+    ppq_warning('Following are detailed error information: ')
+    print(e.with_traceback())
     pass
 
 # helper class for calling cuda methods.

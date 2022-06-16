@@ -29,13 +29,23 @@ def minmax_to_scale_offset(
     if config.policy.has_property(QuantizationProperty.ASYMMETRICAL):
         range = float(max_val - min_val)
         scale  = range / (config.quant_max - config.quant_min)
+        if scale < scale_threshold: 
+            ppq_warning('Numeric instability detected: '
+                        'ppq find there is a scale value < 1e-7, '
+                        'which probably cause numeric underflow in further computation.')
         scale = max(scale, scale_threshold)
         offset = ppq_numerical_round(-min_val / scale)
+
     elif config.policy.has_property(QuantizationProperty.SYMMETRICAL):
         range = 2 * float(max(abs(max_val), abs(min_val)))
         scale  = range / (config.quant_max - config.quant_min)
+        if scale < scale_threshold: 
+            ppq_warning('Numeric instability detected: '
+                        'ppq find there is a scale value < 1e-7, '
+                        'which probably cause numeric underflow in further computation.')
         scale = max(scale, scale_threshold)
         offset = 0
+
     else:
         raise TypeError('Tensor Min Max Observer Excepts either ASYMMETRICAL or SYMMETRICAL quantization config.')
     if config.policy.has_property(QuantizationProperty.POWER_OF_2):
@@ -204,6 +214,11 @@ class TorchHistObserver(TorchMinMaxObserver):
 
         best_bin_range = sorted(losses, key=lambda x: x['kl'])[0]['bin_range']
         scale, offset = (best_bin_range / self._hist_bins) * hist_scale * (self._hist_bins / quant_bins), 0
+        
+        if scale < scale_threshold: 
+            ppq_warning('Numeric instability detected: '
+                        'ppq find there is a scale value < 1e-7, '
+                        'which probably cause numeric underflow in further computation.')
         scale = max(scale, scale_threshold)
 
         if config.policy.has_property(QuantizationProperty.POWER_OF_2):

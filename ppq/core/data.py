@@ -165,6 +165,9 @@ class TensorMeta:
 
     def __str__(self) -> str:
         return f'Tensor({self.name}) meta: dtype({self.dtype}), shape({self.shape})'
+    
+    def copy(self):
+        return TensorMeta(dtype=self.dtype, shape=self.shape.copy(), tensor_name=self.name)
 
 
 class OperationMeta:
@@ -208,6 +211,13 @@ class OperationMeta:
     @ property
     def num_of_output(self):
         return len(self.output_metas)
+
+    def copy(self):
+        return OperationMeta(
+            input_metas = [meta.copy() for meta in self.input_metas],
+            output_metas = [meta.copy() for meta in self.output_metas],
+            operation_name=self.operation_name, operation_type=self.operation_type, 
+            executing_order=self.executing_order)
 
 
 def convert_any_to_python_primary_type(
