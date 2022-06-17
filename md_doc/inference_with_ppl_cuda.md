@@ -8,10 +8,8 @@ as we have specified in [how_to_use](./how_to_use.md), we should prepare our cal
 the target platform on which we want to deploy our model(*TargetPlatform.PPL_CUDA_INT8* in this case), load our
 ready-to-quantize model, initialize quantizer and executor, and then run the quantization process
 ```python
-import os
-import numpy as np
 import torch
-from ppq.api import load_onnx_graph
+from ppq.api import load_onnx_graph, export_ppq_graph
 from ppq.api.interface import dispatch_graph, QUANTIZER_COLLECTION
 from ppq.core import TargetPlatform
 from ppq.executor import TorchExecutor
@@ -51,7 +49,7 @@ quantizer.quantize(
 )
 
 # export quantization param file and model file
-export_ppq_graph(graph=ppq_ir_graph, platform=target_platform, graph_save_to='shufflenet-v2-ppq', config_save_to='shufflenet-v2-ppq.json')
+export_ppq_graph(graph=ppq_graph_ir, platform=target_platform, graph_save_to='shufflenet-v2-ppq', config_save_to='shufflenet-v2-ppq.json')
 ```
 
 ## Write Script and Inference
