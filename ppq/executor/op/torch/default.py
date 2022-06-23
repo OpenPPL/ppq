@@ -363,9 +363,15 @@ def MultiHeadAttention_forward(op: Operation, values: List[torch.Tensor], ctx: T
     head_dim = embed_dim // num_heads
     scale = head_dim ** -0.5
 
-    q = F.linear(q_in, q_w, q_b)
-    k = F.linear(k_in, k_w, k_b)
-    v = F.linear(v_in, v_w, v_b)
+    B, N, _ = q.shape
+
+    q_tmp = F.linear(q_in, q_w, q_b)
+    k_tmp = F.linear(k_in, k_w, k_b)
+    v_tmp = F.linear(v_in, v_w, v_b)
+    
+    q = q_tmp.reshape(B, N, num_heads, head_dim).permute(0, 2, 1, 3)
+    k = k_tmp.reshape(B, N, num_heads, head_dim).permute(0, 2, 1, 3)
+    v = v_tmp.reshape(B, N, num_heads, head_dim).permute(0, 2, 1, 3)
 
     energy = (q @ k.transpose(-2, -1)) * scale
     attn = energy.softmax(dim=-1)

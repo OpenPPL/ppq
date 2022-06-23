@@ -172,9 +172,13 @@ class NCNNQuantizer(BaseQuantizer):
 
     @ property
     def quant_operation_types(self) -> set:
+        # return {
+        #     'Add', 'Conv', 'LayerNorm', 'MultiHeadAttention', 'Gemm', 'Gelu'
+        # }
         return {
-            'Add', 'Conv', 'LayerNorm', 'MultiHeadAttention', 'Gemm', 'Gelu'
+            'MultiHeadAttention'
         }
+
 
     @ property
     def quantize_policy(self) -> QuantizationPolicy:

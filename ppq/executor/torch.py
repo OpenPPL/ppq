@@ -367,8 +367,8 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
                 outputs = outputs if isinstance(outputs, (list, tuple)) else [outputs]
                 fp_outputs = outputs
 
-                for out in fp_outputs:
-                    print("{} output shape {}".format(operation.name, out.shape))
+                # for out in fp_outputs:
+                #     print("{} output shape {}".format(operation.name, out.shape))
 
                 # quantize all result if is necessary
                 if isinstance(operation, QuantableOperation):

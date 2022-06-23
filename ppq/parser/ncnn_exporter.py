@@ -77,7 +77,7 @@ class NCNNExporter(GraphExporter):
         fd.close()
 
 
-    def export_toml_quant_config(self, config_path: str, graph: BaseGraph):
+    def export_ini_quant_config(self, config_path: str, graph: BaseGraph):
         ''' toml is human readable format '''
         order =  graph.topological_sort()
         table = {}
@@ -86,55 +86,56 @@ class NCNNExporter(GraphExporter):
                 item = dict()
                 # avoiding Gather to Crop, we cannot deduce opr_type from opr_name
                 item['type'] = op.type
-                if op.type in {'Conv', 'Gemm'}:
-                    input_cfg = op.config.input_quantization_config[0]
-                    assert input_cfg.state == QuantizationStates.ACTIVATED and \
-                        input_cfg.policy.has_property(QuantizationProperty.PER_TENSOR)
-                    item['input_scale'] = convert_value(1 / input_cfg.scale, True, DataType.FP32)
+                # if op.type in {'Conv', 'Gemm'}:
+                #     input_cfg = op.config.input_quantization_config[0]
+                #     assert input_cfg.state == QuantizationStates.ACTIVATED and \
+                #         input_cfg.policy.has_property(QuantizationProperty.PER_TENSOR)
+                #     item['input_scale'] = convert_value(1 / input_cfg.scale, True, DataType.FP32)
                     
-                    param_cfg = op.config.input_quantization_config[1]
-                    assert param_cfg.state in {QuantizationStates.BAKED, QuantizationStates.ACTIVATED}\
-                        and param_cfg.observer_algorithm in {'minmax', 'Minmax'} and \
-                            param_cfg.policy.has_property(QuantizationProperty.PER_CHANNEL)
-                    # a workaround for depthwise conv in ncnn
-                    # will cause mis-alignment between ppq and ncnn
-                    if op.type == 'Conv' and op.attributes.get('group', 1) > 1:
-                        group  = op.attributes.get('group', 1)
-                        scale  = param_cfg.scale.reshape(group, -1).max(dim=1)[0]
-                    else:
-                        scale  = param_cfg.scale
-                    item['weight'] = convert_value(1 / scale, False, DataType.FP32)
+                #     param_cfg = op.config.input_quantization_config[1]
+                #     assert param_cfg.state in {QuantizationStates.BAKED, QuantizationStates.ACTIVATED}\
+                #         and param_cfg.observer_algorithm in {'minmax', 'Minmax'} and \
+                #             param_cfg.policy.has_property(QuantizationProperty.PER_CHANNEL)
+                #     # a workaround for depthwise conv in ncnn
+                #     # will cause mis-alignment between ppq and ncnn
+                #     if op.type == 'Conv' and op.attributes.get('group', 1) > 1:
+                #         group  = op.attributes.get('group', 1)
+                #         scale  = param_cfg.scale.reshape(group, -1).max(dim=1)[0]
+                #     else:
+                #         scale  = param_cfg.scale
+                #     item['weight'] = convert_value(1 / scale, False, DataType.FP32)
 
-                elif op.type in {'Add'}:
-                    # Add may have multiple input node
-                    input_scale = []
-                    zero_point = []
+                # elif op.type in {'Add'}:
+                #     # Add may have multiple input node
+                #     input_scale = []
+                #     zero_point = []
                     
-                    for cfg in op.config.input_quantization_config:
-                        assert cfg.state in {QuantizationStates.BAKED, QuantizationStates.ACTIVATED,  QuantizationStates.SLAVE} \
-                            and cfg.observer_algorithm in {'minmax', 'Minmax'}
-                        input_scale.append(convert_value(1.0 / cfg.scale, True, DataType.FP32))
-                        zero_point.extend(convert_value(cfg.offset, False, DataType.INT32))
+                #     for cfg in op.config.input_quantization_config:
+                #         assert cfg.state in {QuantizationStates.BAKED, QuantizationStates.ACTIVATED,  QuantizationStates.SLAVE} \
+                #             and cfg.observer_algorithm in {'minmax', 'Minmax'}
+                #         input_scale.append(convert_value(1.0 / cfg.scale, True, DataType.FP32))
+                #         zero_point.extend(convert_value(cfg.offset, False, DataType.INT32))
                     
-                    item['input_scale'] = input_scale
+                #     item['input_scale'] = input_scale
 
-                elif op.type in {'Gelu'}:
-                    cfg = op.config.input_quantization_config[0]
+                # elif op.type in {'Gelu'}:
+                #     cfg = op.config.input_quantization_config[0]
 
-                    assert cfg.state in {QuantizationStates.BAKED, QuantizationStates.ACTIVATED} \
-                        and cfg.observer_algorithm in {'minmax', 'Minmax'}
-                    item['input_scale'] = convert_value(1.0 / cfg.scale, False, DataType.FP32)
+                #     assert cfg.state in {QuantizationStates.BAKED, QuantizationStates.ACTIVATED} \
+                #         and cfg.observer_algorithm in {'minmax', 'Minmax'}
+                #     item['input_scale'] = convert_value(1.0 / cfg.scale, True, DataType.FP32)
 
-                elif op.type in {'LayerNorm'}:
-                    cfg = op.config.input_quantization_config[0]
+                # elif op.type in {'LayerNorm'}:
+                #     cfg = op.config.input_quantization_config[0]
 
-                    assert cfg.state in {QuantizationStates.BAKED, QuantizationStates.ACTIVATED} \
-                        and cfg.observer_algorithm in {'minmax', 'Minmax'}
-                    item['input_scale'] = convert_value(1.0 / cfg.scale, False, DataType.FP32)
-                    item['zero_point'] = convert_value(cfg.offset, False, DataType.INT32)
+                #     assert cfg.state in {QuantizationStates.BAKED, QuantizationStates.ACTIVATED} \
+                #         and cfg.observer_algorithm in {'minmax', 'Minmax'}
+                #     item['input_scale'] = convert_value(1.0 / cfg.scale, False, DataType.FP32)
+                #     item['zero_point'] = convert_value(cfg.offset, True, DataType.INT32)
 
 
-                elif op.type == 'MultiHeadAttention':
+                # el
+                if op.type == 'MultiHeadAttention':
                     # write input scale
                     cfg_q_in = op.config.input_quantization_config[0]
                     cfg_k_in = op.config.input_quantization_config[1]
@@ -167,19 +168,21 @@ class NCNNExporter(GraphExporter):
                     item['internal_scale_v'] =  convert_value(1.0 / cfg_v.scale, True, DataType.FP32)
                     item['internal_scale_energy'] =  convert_value(1.0 / cfg_energy.scale, True, DataType.FP32)
                     item['internal_scale_feat'] =  convert_value(1.0 / cfg_feat.scale, True, DataType.FP32)
-                
+                    
+                    table[op.name] = item
+                    
                 else:
                     print('unknown quant type {} name {} during write weight scale'.format(op.type, op.name))
 
-                table[op.name] = item
 
+        print("dump path {}".format(config_path))
         toml.dump(table, open(config_path, 'w+'), encoder=ArrayEncoder())
 
 
     def export_quantization_config(self, config_path: str, graph: BaseGraph):
-        toml_style = True
-        if toml_style:
-            self.export_toml_quant_config(config_path=config_path, graph=graph)
+        ini_style = True
+        if ini_style:
+            self.export_ini_quant_config(config_path=config_path, graph=graph)
         else:
             self.export_raw_quant_config(config_path=config_path, graph=graph)
 
