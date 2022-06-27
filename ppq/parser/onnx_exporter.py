@@ -1,3 +1,4 @@
+from ast import operator
 import json
 from typing import Union
 
@@ -113,7 +114,7 @@ class OnnxExporter(GraphExporter):
             assert isinstance(exporter, OperationExporter), (
                 f'Expected an OpExporter here, however {type(exporter)} was given.')
             operation = exporter.export(operation=operation, graph=None)
-
+        
         attributes = operation.attributes
         for key in attributes:
             value = attributes[key]
@@ -165,7 +166,15 @@ class OnnxExporter(GraphExporter):
                 dims=shape, vals=value)
         return tensor_proto
 
+    def remove_fake_node_output(self, graph: BaseGraph):
+        for opr in graph.topological_sort():
+            if opr.type == 'MultiHeadAttention':
+                for var in opr.outputs[1:]:
+                    graph.remove_variable(var)
+
     def export(self, file_path: str, graph: BaseGraph, config_path: str = None):
+        self.remove_fake_node_output(graph)
+        
         # during export we will remove all boundary operations from graph.
         # we do not want to change the structure of original graph,
         # so there have to take a clone of it.

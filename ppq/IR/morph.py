@@ -401,7 +401,7 @@ class GraphFormatter(GraphCommandProcessor):
 
             # pop variable from graph
             self.graph.remove_variable(var)
-            
+    
     def format_mha(self) -> None:
         mha = []
         for operation in self.graph.operations.values():

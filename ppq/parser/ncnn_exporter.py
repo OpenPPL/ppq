@@ -187,7 +187,6 @@ class NCNNExporter(GraphExporter):
         else:
             self.export_raw_quant_config(config_path=config_path, graph=graph)
 
-
     def export(self, file_path: str, graph: BaseGraph, config_path: str = None, input_shapes: List[List[int]] = [[1, 3, 224, 224]]):
         if config_path is not None:
             self.export_quantization_config(config_path, graph)
