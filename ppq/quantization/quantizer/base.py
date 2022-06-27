@@ -232,19 +232,10 @@ class BaseQuantizer(metaclass = ABCMeta):
         debug_str += '--------- Network Snapshot ---------\n'
         debug_str += f'Num of Op:                    [{len(self._graph.operations)}]\n'
         debug_str += f'Num of Quantized Op:          [{len(quant_ops)}]\n'
-        # import pdb
-        # pdb.set_trace()
-        debug_str += " ".join([op.name for op in quant_ops])
-        debug_str += '\n'
         debug_str += f'Num of Variable:              [{len(self._graph.variables)}]\n'
         debug_str += f'Num of Quantized Var:         [{len(quant_vars)}]\n'
-        debug_str += " ".join([var.name for var in quant_vars])
         debug_str += '------- Quantization Snapshot ------\n'
         debug_str += f'Num of Quant Config:          [{len(quant_cfgs)}]\n'
-        for state, cnt in config_states_cnt.items():
-            if cnt <= 0: continue
-            padding_str = ' ' * max(28 - len(state.name), 0)
-            debug_str += f'{state.name}:{padding_str} [{cnt}]\n'
         return debug_str
 
     def build_quant_pipeline(
