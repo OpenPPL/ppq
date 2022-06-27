@@ -334,10 +334,24 @@ def Mul_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
 
 
 def MultiHeadAttention_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
+    """Perform MultiHeadAttetion opr forward.
+
+    Args:
+        op (Operation): MultiHeadAttention
+        values (List[torch.Tensor]): opr inputs
+        ctx (TorchBackendContext, optional): Context. Defaults to None.
+
+    Raises:
+        NotImplementedError: In [Vit Paper](https://arxiv.org/abs/2010.11929), MultiHeadAttention inputs are actually the same tensor, we suppose that this would **not** be simplified.
+        ValueError: MultiHeadAttention contains `embed_dim` and `num_heads`.
+
+    Returns:
+        list: opr output and internal result for quantization.
+    """
     if len(values) != 11:
         raise NotImplementedError('Not implement simplified MultiHeadAttention')
 
-    q,k,v,q_w,q_b,k_w,k_b,v_w,v_b,o_w,o_b = values
+    q_in,k_in,v_in,q_w,q_b,k_w,k_b,v_w,v_b,o_w,o_b = values
     embed_dim = op.attributes.get('embed_dim')
     num_heads = op.attributes.get('num_heads')
 
@@ -345,21 +359,27 @@ def MultiHeadAttention_forward(op: Operation, values: List[torch.Tensor], ctx: T
         raise ValueError('Cannot fetch embed_dim or num_heads')
 
     # setup parameters
-    batch_size = q.shape[0]
+    batch_size = q_in.shape[0]
     head_dim = embed_dim // num_heads
     scale = head_dim ** -0.5
 
-    q = F.linear(q, q_w, q_b)
-    k = F.linear(k, k_w, k_b)
-    v = F.linear(v, v_w, v_b)
+    xq = F.linear(q_in, q_w, q_b)
+    xk = F.linear(k_in, k_w, k_b)
+    xv = F.linear(v_in, v_w, v_b)
+    
+    B, N, _ = xq.shape
+    
+    q = xq.reshape(B, N, num_heads, head_dim).permute(0, 2, 1, 3)
+    k = xk.reshape(B, N, num_heads, head_dim).permute(0, 2, 1, 3)
+    v = xv.reshape(B, N, num_heads, head_dim).permute(0, 2, 1, 3)
 
     energy = (q @ k.transpose(-2, -1)) * scale
     attn = energy.softmax(dim=-1)
 
-    x = (attn @ v).transpose(1, 2).reshape(batch_size, -1, embed_dim)
-    x = F.linear(x, o_w, o_b)
-
-    return x
+    feat = (attn @ v).transpose(1, 2).reshape(batch_size, -1, embed_dim)
+    out = F.linear(feat, o_w, o_b)
+    
+    return out
 
 
 def Add_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
