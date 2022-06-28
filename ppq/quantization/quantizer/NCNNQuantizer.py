@@ -94,7 +94,7 @@ class NCNNQuantizer(BaseQuantizer):
                 base_quant_config.input_quantization_config[0] = \
                     ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
                         convert_from = inp_config,
-                        offsets = None, scales  = None, channel_axis = 1
+                        offsets = None, scales  = None, channel_axis = 2
                     )
                 base_quant_config.input_quantization_config[0].observer_algorithm = 'Minmax'
                 
@@ -172,10 +172,12 @@ class NCNNQuantizer(BaseQuantizer):
 
     @ property
     def quant_operation_types(self) -> set:
+        # return {
+        #     'Add', 'Conv', 'LayerNorm', 'MultiHeadAttention', 'Gemm', 'Gelu'
+        # }
         return {
-            'Add', 'Conv', 'LayerNorm', 'MultiHeadAttention', 'Gemm', 'Gelu'
+            'Add', 'Conv', 'MultiHeadAttention', 'Gemm'
         }
-
 
     @ property
     def quantize_policy(self) -> QuantizationPolicy:

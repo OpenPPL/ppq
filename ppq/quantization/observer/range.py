@@ -160,8 +160,8 @@ class TorchMinMaxObserver(BaseTensorObserver):
 
             # scale, offset here only deployed on cpu
             # we will move them towards target device through RunnableGraph
-            self._quant_cfg.scale  = torch.tensor(scales, dtype=torch.float32, device=device)
-            self._quant_cfg.offset = torch.tensor(offsets, dtype=torch.float32, device=device)
+            self._quant_cfg.scale  = torch.tensor(scales.clone().detach(), dtype=torch.float32, device=device)
+            self._quant_cfg.offset = torch.tensor(offsets.clone().detach(), dtype=torch.float32, device=device)
             self._quant_cfg.state = QuantizationStates.ACTIVATED
         else:
             raise TypeError('Min-max Observer only work with per-tensor or per-channel quantize policy.')

@@ -18,7 +18,6 @@ class LinearQuantFunction(BaseQuantFunction):
     def __call__(self, input_tensor: Any, quantization_config: TensorQuantizationConfig, **kwargs) -> Any:
         return super().__call__(input_tensor, quantization_config, **kwargs)
 
-
 if not PPQ_CONFIG.USING_CUDA_KERNEL:
     class TensorwiseLinearQuantImpl(Function):
         """Torch Tensorwise quantize is designed to quantize a torch Tensor
@@ -176,6 +175,13 @@ def PPQLinearQuantFunction(
     if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
         assert isinstance(config, ChannelwiseTensorQuantizationConfig), (
             'Critical Quantization Error! Except a ChannelwiseTensorQuantizationConfig.')
+        return ChannelwiseLinearQuantImpl.apply(
+            tensor, config.scale, config.offset, config.channel_axis,
+            config.quant_min, config.quant_max, config.rounding,
+            dropout)
+    elif config.policy.has_property(QuantizationProperty.PER_CHANNEL_BNC):
+        if config.channel_axis != 2:
+            raise ValueError('opr using BNC format while channel_axis != 2')
         return ChannelwiseLinearQuantImpl.apply(
             tensor, config.scale, config.offset, config.channel_axis,
             config.quant_min, config.quant_max, config.rounding,

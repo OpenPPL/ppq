@@ -347,7 +347,7 @@ class BiasCorrectionPass(TrainingBasedPass):
     def __init__(self, auto_check: bool=False, interested_output: List[str] = None,
                  verbose: bool = True, max_steps:int = 8) -> None:
         """Quantization can introduce a biased error in the activations. Bias
-        correction serves as a useful prosedure to eliminate those introduced
+        correction serves as a useful procedure to eliminate those introduced
         bias error.
 
         let: Y = WX + b
@@ -379,7 +379,12 @@ class BiasCorrectionPass(TrainingBasedPass):
             if op_type in {'Conv', 'ConvTranspose'}:
                 collector.append(torch.mean(output, dim=(0, 2, 3)).unsqueeze(0))
             elif op_type in {'Gemm'}:
-                collector.append(torch.mean(output, dim=(0, )).unsqueeze(0))
+                if len(output.shape) == 2:
+                    collector.append(torch.mean(output, dim=(0, )).unsqueeze(0))
+                elif len(output.shape) == 3:
+                    collector.append(torch.mean(output, dim=(0,1)).unsqueeze(0))
+                else:
+                    raise ValueError(f'Unsupported Gemm shape: {output.shape}')
             else: raise TypeError(f'Unsupported Operation type: {op_type}')
 
         assert isinstance(executor, TorchExecutor), (

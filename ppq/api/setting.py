@@ -403,7 +403,7 @@ class QuantizationSetting():
         self.advanced_optimization_setting   = AdvancedOptimizationSetting()
 
         # 是否启动 bias correction pass
-        self.bias_correct                    = False
+        self.bias_correct                    = True
         self.bias_correct_setting            = BiasCorrectionSetting()
 
         # 量化融合相关配置
@@ -443,6 +443,7 @@ class QuantizationSettingFactory:
     @staticmethod
     def ncnn_setting() -> QuantizationSetting:
         default_setting = QuantizationSetting()
+        default_setting.bias_correct = True
         default_setting.fusion = False
         default_setting.dispatcher = 'pointwise'
         return default_setting
