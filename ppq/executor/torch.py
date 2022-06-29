@@ -367,9 +367,6 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
                 outputs = outputs if isinstance(outputs, (list, tuple)) else [outputs]
                 fp_outputs = outputs
 
-                # for out in fp_outputs:
-                #     print("{} output shape {}".format(operation.name, out.shape))
-
                 # quantize all result if is necessary
                 if isinstance(operation, QuantableOperation):
                     output_configs = [_ for _ in operation.config.output_quantization_config]
@@ -394,8 +391,6 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
                         result_collector[output_names.index(output_var.name)] = outputs[output_idx]
 
             except Exception as e:
-                import pdb
-                pdb.set_trace()
                 raise RuntimeError(f'Error happens when dealing with operation {str(operation)}, {str(e)}')
 
             # remove useless value(runtime clear).

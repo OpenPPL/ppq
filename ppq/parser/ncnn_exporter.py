@@ -44,7 +44,7 @@ class ArrayEncoder(toml.TomlEncoder):
 class NCNNExporter(GraphExporter):
     ''' raw format only support Conv and Gemm quantization '''
     def export_raw_quant_config(self, config_path: str, graph: BaseGraph):
-        ''' ncnn table format when version <= 20220420 '''
+        ''' ncnn table format when version <= 20220629 '''
         fd = open(config_path, 'w+')
         topo_order =  graph.topological_sort()
         for op in topo_order:

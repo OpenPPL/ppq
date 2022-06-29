@@ -164,7 +164,7 @@ class ActivationQuantizationSetting():
     def __init__(self) -> None:
         # 激活值校准算法，不区分大小写，可以选择 minmax, kl, percentile, MSE
         # activation calibration method
-        self.calib_algorithm = None
+        self.calib_algorithm = 'percentile'
 
         # 执行逐层激活值校准，延长执行时间，提升精度
         # whether to calibrate activation per - layer.
@@ -403,7 +403,7 @@ class QuantizationSetting():
         self.advanced_optimization_setting   = AdvancedOptimizationSetting()
 
         # 是否启动 bias correction pass
-        self.bias_correct                    = True
+        self.bias_correct                    = False
         self.bias_correct_setting            = BiasCorrectionSetting()
 
         # 量化融合相关配置
@@ -446,6 +446,9 @@ class QuantizationSettingFactory:
         default_setting.bias_correct = True
         default_setting.fusion = False
         default_setting.dispatcher = 'pointwise'
+        
+        default_setting.quantize_activation_setting.calib_algorithm = None
+
         return default_setting
 
     @ staticmethod
