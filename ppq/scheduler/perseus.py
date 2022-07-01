@@ -1,6 +1,6 @@
 from typing import Dict, List, Set
 
-from ppq.core import ppq_warning
+from ppq.core import TargetPlatform, ppq_warning
 from ppq.IR import BaseGraph, Operation
 from ppq.IR.search import SearchableGraph
 from ppq.scheduler.core.opsocket import OType
@@ -222,7 +222,7 @@ class Perseus(GraphDispatcher):
         return fanin
 
     def dispatch(self, graph_input_cls: List[VProperty] = None, 
-                 graph_output_cls: List[VProperty] = None) -> Dict[str, OType]:
+                 graph_output_cls: List[VProperty] = None) -> Dict[str, TargetPlatform]:
         """对当前图执行默认算子调度逻辑
 
         在 Onnx 定义的神经网络中存在两类数据：
@@ -251,24 +251,28 @@ class Perseus(GraphDispatcher):
         non_quantable_ops = self.mark_non_quantable_op()
         dispatching_table = {}
         for op in self.graph.operations.values():
-            dispatching_table[op.name] = OType.UNSPECIFIED
+            dispatching_table[op.name] = TargetPlatform.FP32
         
         for op in self.graph.operations.values():
             if op in computing_ops:
-                dispatching_table[op.name] = OType.QUANTABLE
+                dispatching_table[op.name] = TargetPlatform.UNSPECIFIED
 
         for op in self.graph.operations.values():
             if op in non_quantable_ops:
-                if op.name in dispatching_table and dispatching_table[op.name] == OType.QUANTABLE:
-                    dispatching_table[op.name] = OType.CONTROVERSIAL
-                else: dispatching_table[op.name] = OType.NONQUANTABLE
+                if op.name in dispatching_table and dispatching_table[op.name] == TargetPlatform.UNSPECIFIED:
+                    dispatching_table[op.name] = TargetPlatform.FP32
+                else: dispatching_table[op.name] = TargetPlatform.SHAPE_OR_INDEX
 
         # if op has an non-quantable output, force it to be non-quantable op
         for op in self.graph.operations.values():
             socket = self.opsocket(op)
             for ocls in socket.cls_output:
-                if ocls in {VProperty.ATTRIB, VProperty.LOGICAL, VProperty.SOI}:
-                    dispatching_table[op.name] = OType.NONQUANTABLE
+                if ocls in {VProperty.ATTRIB, VProperty.SOI}:
+                    dispatching_table[op.name] = TargetPlatform.SHAPE_OR_INDEX
+                    break
+                if ocls in {VProperty.LOGICAL}:
+                    dispatching_table[op.name] = TargetPlatform.FP32
+                    break
 
         return dispatching_table
 

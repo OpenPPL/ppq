@@ -1,12 +1,11 @@
 from typing import Any, Dict, Iterable, List
 
-from torch import random
-
-from ppq.core import NetworkFramework, is_file_exist, DEFAULT_OPSET_DOMAIN, DEFAULT_OPSET_VERSION
-from ppq.IR import BaseGraph, GraphBuilder, Operation, Variable, Opset
-
 import onnx
 from onnx import helper, mapping, numpy_helper
+from ppq.core import (DEFAULT_OPSET_DOMAIN, DEFAULT_OPSET_VERSION,
+                      GRAPH_OPSET_ATTRIB, NetworkFramework, is_file_exist)
+from ppq.IR import BaseGraph, GraphBuilder, Operation, Opset, Variable
+from torch import random
 
 
 class OnnxParser(GraphBuilder):
@@ -96,11 +95,11 @@ class OnnxParser(GraphBuilder):
             f'onnx load failed, only ProtoBuffer object is expected here, while {type(model_pb)} is loaded.'
         graph_pb = model_pb.graph
         graph = BaseGraph(name=graph_pb.name, built_from=NetworkFramework.ONNX)
-        graph._detail['opsets'] = self.convert_opsets_to_str(opsets)
+        graph._detail[GRAPH_OPSET_ATTRIB] = self.convert_opsets_to_str(opsets)
         graph._detail['ir_version'] = model_pb.ir_version
 
         onnx_import_opset = DEFAULT_OPSET_VERSION
-        for opset in graph._detail['opsets']:
+        for opset in graph._detail[GRAPH_OPSET_ATTRIB]:
             if opset['domain'] == DEFAULT_OPSET_DOMAIN or opset['domain'] == '':
                 onnx_import_opset = opset['version']
                 break

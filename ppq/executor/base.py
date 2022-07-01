@@ -55,9 +55,6 @@ def register_operation_handler(handler: Callable, operation_type: str, platform:
     """
     if platform not in GLOBAL_DISPATCHING_TABLE:
         raise ValueError('Unknown Platform detected, Please check your platform setting.')
-    if operation_type in GLOBAL_DISPATCHING_TABLE[platform]:
-        raise ValueError(f'Platform: {platform.name}, operation type: {operation_type} \
-            already been registered in dispatching table')
     GLOBAL_DISPATCHING_TABLE[platform][operation_type] = handler
 
 

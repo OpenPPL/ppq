@@ -3,9 +3,10 @@ from typing import Dict, List
 import onnx
 import torch
 from onnx import helper
-from ppq.core import (PPQ_CONFIG, ChannelwiseTensorQuantizationConfig,
-                      DataType, OperationMeta, QuantizationProperty,
-                      QuantizationStates, TensorMeta, TensorQuantizationConfig,
+from ppq.core import (EXPORT_OVERLAPPED_CONFIG, GRAPH_OPSET_ATTRIB, PPQ_CONFIG,
+                      ChannelwiseTensorQuantizationConfig, DataType,
+                      OperationMeta, QuantizationProperty, QuantizationStates,
+                      TensorMeta, TensorQuantizationConfig,
                       convert_any_to_torch_tensor)
 from ppq.IR import BaseGraph, Operation, QuantableOperation, QuantableVariable
 from ppq.IR.base.command import GraphCommand, GraphCommandType
@@ -145,8 +146,12 @@ class ONNXRUNTIMExporter(OnnxExporter):
         for op in graph.operations.values():
             if not isinstance(op, QuantableOperation): continue
             if op.type in {'Relu', 'Clip'}:
+                config = op.config.output_quantization_config[0]
                 # Only ASYMMETRICAL quantized activations can be safely removed.
-                if op.config.input_quantization_config[0].policy.has_property(QuantizationProperty.ASYMMETRICAL):
+                if config.policy.has_property(QuantizationProperty.ASYMMETRICAL):
+                    # Patch 2022 06 29, 有些时候当我们启动了 alignment pass, relu 后面的定点信息将不再是 0，
+                    # 此时我们拒绝移除激活函数
+                    if config._father_config != config: continue
                     removed_activations.append(op)
 
         # Activation op can only be relu and clip,
@@ -296,6 +301,10 @@ class ONNXRUNTIMExporter(OnnxExporter):
 
                 if QuantizationStates.can_export(config.state) and config.state not in {
                     QuantizationStates.FP32, QuantizationStates.SOI}:
+                    if (config.state == QuantizationStates.OVERLAPPED and 
+                        not EXPORT_OVERLAPPED_CONFIG):
+                        continue
+
                     # if not quant parameter to int, all parameter should export as fp32.
                     # needs insert both quant and dequant op for them
                     if not quant_param_to_int:
@@ -313,6 +322,10 @@ class ONNXRUNTIMExporter(OnnxExporter):
 
                 if QuantizationStates.can_export(config.state) and config.state not in {
                     QuantizationStates.FP32, QuantizationStates.SOI}:
+                    if (config.state == QuantizationStates.OVERLAPPED and 
+                        not EXPORT_OVERLAPPED_CONFIG):
+                        continue
+
                     created = self.insert_quant_on_variable(
                         graph=graph, var=var, config=config, related_op=op, meta=meta)
                     var = created.outputs[0]
@@ -397,8 +410,8 @@ class ONNXRUNTIMExporter(OnnxExporter):
         extra_opsets = self.required_opsets
 
         opsets = []
-        if 'opsets' in graph._detail:
-            for opset in graph._detail['opsets']:
+        if GRAPH_OPSET_ATTRIB in graph._detail:
+            for opset in graph._detail[GRAPH_OPSET_ATTRIB]:
                 if opset['domain'] in extra_opsets or opset['domain'] == '':
                     continue
                 op = onnx.OperatorSetIdProto()

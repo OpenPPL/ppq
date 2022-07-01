@@ -87,16 +87,18 @@ class ValueState(Serializable):
             return None
         elif self._value_type == str('ndarray'):
             value = pickle.loads(self._value)
-            # value = np.frombuffer(self._value, dtype=self._dtype)
+            assert isinstance(value, np.ndarray)
+            value = value.astype(self._dtype)
             value = value.reshape(self._shape)
             return value
         elif self._value_type == str('Tensor'):
             if self._value is not None:
                 value = pickle.loads(self._value)
-                # value = np.frombuffer(self._value, dtype=self._dtype)
+                assert isinstance(value, np.ndarray)
+                value = value.astype(self._dtype)
                 if value is not None:
                     value = value.reshape(self._shape)
-                return convert_any_to_torch_tensor(value, device='cpu')
+                value = convert_any_to_torch_tensor(value, device='cpu')
             else:
                 return torch.tensor([], device='cpu')
         elif self._value_type in {'list', 'tuple', 'dict'}:

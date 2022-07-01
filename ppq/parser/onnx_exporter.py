@@ -5,9 +5,8 @@ import numpy as np
 import onnx
 import torch
 from onnx import helper, numpy_helper
-from ppq.core import (ONNX_EXPORT_OPSET, ONNX_VERSION, PPQ_CONFIG, DataType,
-                      convert_any_to_numpy)
-from ppq.core.defs import ppq_warning
+from ppq.core import (GRAPH_OPSET_ATTRIB, ONNX_EXPORT_OPSET, ONNX_VERSION,
+                      PPQ_CONFIG, DataType, convert_any_to_numpy, ppq_warning)
 from ppq.IR import (BaseGraph, GraphExporter, Operation, OperationExporter,
                     Variable)
 from ppq.IR.morph import GraphDeviceSwitcher
@@ -205,13 +204,13 @@ class OnnxExporter(GraphExporter):
         )
 
         # force opset to 11
-        if 'opsets' not in graph._detail:
+        if GRAPH_OPSET_ATTRIB not in graph._detail:
             op = onnx.OperatorSetIdProto()
             op.version = ONNX_EXPORT_OPSET
             opsets = [op]
         else:
             opsets = []
-            for opset in graph._detail['opsets']:
+            for opset in graph._detail[GRAPH_OPSET_ATTRIB]:
                 op = onnx.OperatorSetIdProto()
                 op.domain = opset['domain']
                 op.version = opset['version']

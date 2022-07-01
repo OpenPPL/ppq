@@ -1,5 +1,5 @@
 import random
-from math import sqrt, pow
+from math import pow, sqrt
 from random import randint
 from typing import Iterable, List, Tuple, Union
 
@@ -13,6 +13,7 @@ from ppq.executor import TorchQuantizeDelegate
 from ppq.IR import BaseGraph, Operation, QuantableVariable, Variable
 from ppq.IR.search import SearchableGraph
 from ppq.quantization.qfunction.linear import PPQLinearQuantFunction
+from ppq.utils.ema import EMARecorder
 from ppq.utils.fetch import batch_random_fetch
 from ppq.utils.round import ppq_tensor_round
 from torch.autograd import Function
@@ -352,40 +353,62 @@ class LSQDelegator(TorchQuantizeDelegate):
     ATTENTION: THIS FUNCTION IS AVAILABLE ONLY WITH PPQ_CONFIG.USING_CUDA_KERNEL = True
     """
     def __init__(self, binding: Variable,
-                 config: TensorQuantizationConfig, dropout: float) -> None:
+                 config: TensorQuantizationConfig, dropout: float = 0) -> None:
         if config.state in {QuantizationStates.BAKED, QuantizationStates.PASSIVE_BAKED}:
             raise PermissionError(f'Can not create TrainableDelegate with variable {binding.name},'
                                   ' cause its value has been baked.')
-
+        
         self.config  = config
         self.binding = binding
         self.dropout = dropout
-        self.trainable_values = []
+        self.trainable_qparams = []
+        self.trainable_params = []
 
-        self.scale_backup  = self.config.scale.clone()
-        self.config.scale.requires_grad  = True
-        self.trainable_values.append(self.config.scale)
+        if binding.is_parameter:
+            self.binding.value.requires_grad = True
+            self.reference = binding.value.clone()
+            self.trainable_params.append(self.binding.value)
 
+        if (not self.config.policy.has_property(QuantizationProperty.POWER_OF_2) and 
+            self.config.state == QuantizationStates.ACTIVATED):
+            self.scale_backup = self.config.scale.clone()
+            self.config.scale.requires_grad  = True
+            self.trainable_qparams.append(self.config.scale)
+
+        '''
         if self.config.policy.has_property(QuantizationProperty.ASYMMETRICAL):
             self.offset_backup = self.config.offset.clone()
             self.config.offset.requires_grad = True
-            self.trainable_values.append(self.config.offset)
+            self.trainable_qparams.append(self.config.offset)
+        '''
 
     def withdraw(self):
-        self.config.scale  = self.scale_backup
+        if (not self.config.policy.has_property(QuantizationProperty.POWER_OF_2) and 
+            self.config.state == QuantizationStates.ACTIVATED):
+            self.config.scale  = self.scale_backup
+        if self.binding.is_parameter:
+            self.binding.value = self.reference
+        '''
         if self.config.policy.has_property(QuantizationProperty.ASYMMETRICAL):
             self.config.offset = self.offset_backup
+        '''
 
     def finalize(self):
-        self.config.scale.requires_grad  = False
-        self.config.scale._grad          = None
+        if (not self.config.policy.has_property(QuantizationProperty.POWER_OF_2) and 
+            self.config.state == QuantizationStates.ACTIVATED):
+            self.config.scale.requires_grad  = False
+            self.config.scale._grad          = None
+        if self.binding.is_parameter:
+            self.binding.value.requires_grad = False
+            self.binding.value._grad         = None
 
+        '''
         if self.config.policy.has_property(QuantizationProperty.ASYMMETRICAL):
             self.config.offset.requires_grad = False
             self.config.offset._grad         = None
-
-        with torch.no_grad():
-            self.config.offset = torch.clamp(self.config.offset, 0, self.config.quant_max)
+            with torch.no_grad():
+                self.config.offset = torch.clamp(self.config.offset, 0, self.config.quant_max)
+        '''
 
     def __call__(self, tensor: torch.Tensor,
                  config: TensorQuantizationConfig) -> torch.Tensor:
@@ -833,19 +856,3 @@ class BlockwiseReconstructionDelegator(StraightThroughEstimateDelegator):
             tensor = torch.clamp(tensor + offset, config.quant_min, config.quant_max)
             tensor = (tensor - offset) * scale
             return tensor
-
-
-class EMARecorder():
-    """Exponential Moving Average(EMA) with bias correction."""
-    def __init__(self, beta: float = 0.98):
-        self.beta  = beta
-        self.t     = 0
-        self.value = 0
-
-    def push(self, value: float):
-        self.value = (1.0 - self.beta) * value + self.beta * self.value
-        self.t += 1
-
-    def pop(self) -> float:
-        if self.t == 0: return 0
-        return self.value / (1 - pow(self.beta, self.t))

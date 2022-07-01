@@ -4,8 +4,8 @@ from typing import Iterable, List, Set
 import torch
 from ppq.core import (COMPELING_OP_TYPES, PPLCUDA_ACTIVATIONS,
                       QuantizationProperty, QuantizationStates, RoundingPolicy,
-                      TensorQuantizationConfig, empty_ppq_cache)
-from ppq.core.defs import ppq_warning
+                      TargetPlatform, TensorQuantizationConfig,
+                      empty_ppq_cache, ppq_warning)
 from ppq.executor import BaseGraphExecutor
 from ppq.IR import GraphCommandProcessor, QuantableOperation, Variable
 from ppq.IR.base.graph import Operation
@@ -344,7 +344,11 @@ class QuantizeFusionPass(QuantizationOptimizationPass):
 
             for pattern in patterns:
                 computing_op, act_op = pattern
-                if not isinstance(computing_op, QuantableOperation): 
+                
+                if (not isinstance(computing_op, QuantableOperation) or 
+                    computing_op.platform in {
+                        TargetPlatform.TRT_INT8, TargetPlatform.OPENVINO_INT8, 
+                        TargetPlatform.NCNN_INT8}): 
                     continue
 
                 if (computing_op.platform != act_op.platform and 

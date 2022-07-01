@@ -13,6 +13,36 @@ from .processer import GraphCommandProcessor
 
 
 class QuantableOperation(Operation):
+    """ Quantable Operation (量化算子) 用来表示一个已经被量化了的算子
+    相比于普通算子，一个量化算子具有以下额外的功能
+    
+    1. 每一个量化算子都将具有一个 config(OperationQuantizationConfig) 属性
+       PPQ 使用这个东西描述量化细节，在整个网络中，有且只有这一个量化表示
+       executor, dispatcher, optimization pass, exporter都是围绕这一属性工作的
+    
+    2. 每一个量化算子都将有一个 dequantize 方法和 restore_quantize_state 方法，
+       一旦一个量化算子被 dequantize() 方法解除量化，该算子的 OperationQuantizationConfig 将被修改状态
+       从而使得该算子的输入输出量化被暂时停用
+       被解除量化的算子可以随时通过 restore_quantize_state 方法恢复量化状态
+       对一个算子多次重复执行 dequantize 是可以的
+    
+    3. 每一个量化算子都将有一个 baking parameter 方法
+       当算子具有有效的量化参数时，baking_parameters() 方法将对该算子的参数执行静态量化
+       一旦静态量化完成，算子参数将被量化后的值替换；同时 config 的状态将被设置为: baked
+    
+    4. 每一个量化算子都将有一个 store_parameter_value 方法
+       该方法将算子目前的参数保存入缓存；PPQ 将在创建 QuantableOperation 时执行此函数
+       从而保存算子的原始参数，以备后续取用。
+       一个显而易见的例子是，一旦算子执行了 baking_parameters 方法，它的参数值将被修改，
+       此时若要完全还原算子状态，需要从缓存中取出算子的原始参数，并替换当前的值
+       当你调用 restore_quantize_state 时，该方法会从缓存中取回保存的参数值并执行替换
+       你不应当手动调用该方法，该方法将影响到 PPQ 的核心逻辑正确性
+
+    5. 一个量化算子是可拷贝的，该拷贝只会拷贝算子的基本信息以及绑定的 OperationQuantizationConfig
+
+    Args:
+        Operation (_type_): _description_
+    """
     def __init__(
         self,
         convert_from: Operation,
@@ -28,7 +58,8 @@ class QuantableOperation(Operation):
             outputs      = convert_from.outputs.copy(),
             attributes   = convert_from.attributes,
             name         = convert_from.name,
-            platform     = platform
+            platform     = platform,
+            opset        = convert_from.opset
         )
 
         self._config            = quantize_config

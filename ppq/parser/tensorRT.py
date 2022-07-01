@@ -35,7 +35,21 @@ from .onnxruntime_exporter import ONNXRUNTIMExporter
 
 
 class TensorRTExporter(ONNXRUNTIMExporter):
-
+    """
+    TensorRT PPQ 0.6.4 以来新加入的功能
+    
+    你需要注意，只有 TensorRT 8.0 以上的版本支持读取 PPQ 导出的量化模型
+    并且 TensorRT 对于量化模型的解析存在一些 Bug，
+    
+    如果你遇到模型解析不对的问题，欢迎随时联系我们进行解决。
+    
+        已知的问题包括：
+        1. 模型导出时最好不要包含其他 opset，如果模型上面带了别的opset，比如 mmdeploy，trt有可能会解析失败
+        2. 模型导出时可能出现 Internal Error 10, Invalid Node xxx()，我们还不知道如何解决该问题
+    
+    Args:
+        ONNXRUNTIMExporter (_type_): _description_
+    """
     def insert_quant_dequant_on_variable(
         self, graph: BaseGraph, var: QuantableVariable, op: QuantableOperation,
         config: TensorQuantizationConfig) -> None:
@@ -191,7 +205,7 @@ class TensorRTExporter(ONNXRUNTIMExporter):
                     return None
 
             config = builder.create_builder_config()
-            config.max_workspace_size = 2 << 30
+            config.max_workspace_size = 8 << 30
             config.flags = config.flags | 1 << int(trt.BuilderFlag.INT8)
 
             profile = builder.create_optimization_profile()

@@ -452,7 +452,7 @@ class QuantizationSettingFactory:
     def pplcuda_setting() -> QuantizationSetting:
         default_setting = QuantizationSetting()
         default_setting.equalization = False
-        default_setting.fusion_setting.fuse_conv_add = False
+        default_setting.fusion_setting.fuse_conv_add = True
         return default_setting
 
     @ staticmethod
@@ -492,6 +492,7 @@ class QuantizationSettingFactory:
     def trt_setting() -> QuantizationSetting:
         default_setting = QuantizationSetting()
         default_setting.fusion = False # 我也不知道对不对
+        default_setting.dispatcher = 'pointwise'
         return default_setting
 
     @ staticmethod

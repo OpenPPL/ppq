@@ -10,6 +10,7 @@ from ppq.IR import (BaseGraph, GraphCommandProcessor, Operation,
 from ppq.log import NaiveLogger
 from ppq.quantization.algorithm.training import *
 from ppq.quantization.measure import torch_mean_square_error, torch_snr_error
+from ppq.utils.ema import EMARecorder
 from torch.cuda import empty_cache
 from tqdm import tqdm
 
@@ -1093,16 +1094,24 @@ class AdvancedQuantOptimization(TrainingBasedPass):
         dataset = RandomMemDataset(data=[[qt, fp] for qt, fp in zip(quant_inputs, fp32_outputs)])
 
         # create trainable delegators for each parameter.
-        trainable_params = []
+        trainable_params, trainable_activations = [], []
         for operation in block.rps:
             if operation.is_computing_op and isinstance(operation, QuantableOperation):
                 for cfg, var in operation.config_with_variable:
-                    if not var.is_parameter: continue
-                    trainable_params.append((var, cfg))
+                    if var.is_parameter: trainable_params.append((var, cfg))
+                    if not var.is_parameter:
+                        if cfg.state == QuantizationStates.ACTIVATED:
+                            trainable_activations.append((var, cfg))
+        delegators = [LSQDelegator(config=cfg, binding=var) for var, cfg in trainable_params + trainable_activations]
 
-        delegators = [RQTDelegator(config=cfg, limit=self.limit, binding=var) for var, cfg in trainable_params]
-        optimizer = torch.optim.Adam(params=[d.binding.value for d in delegators], lr=self.lr)
-        shcduler  = torch.optim.lr_scheduler.LambdaLR(optimizer=optimizer, lr_lambda=lambda t: 1 / (1 << (t // 5000)))
+        params, qparams = [], []
+        for delegator in delegators:
+            params.extend(delegator.trainable_params)
+            qparams.extend(delegator.trainable_qparams)
+        qparam_optimizer = torch.optim.Adam(params=qparams, lr=self.lr / 100)
+        param_optimizer  = torch.optim.Adam(params=params, lr=self.lr)
+        shcduler  = torch.optim.lr_scheduler.LambdaLR(optimizer=param_optimizer, lr_lambda=lambda t: 1 / (1 << (t // 5000)))
+        qshcduler  = torch.optim.lr_scheduler.LambdaLR(optimizer=qparam_optimizer, lr_lambda=lambda t: 1 / (1 << (t // 5000)))
         # register all quantization delegators
         for d in delegators: executor.register_quantize_delegate(d.config, d)
 
@@ -1115,15 +1124,18 @@ class AdvancedQuantOptimization(TrainingBasedPass):
                     output_names=[output_var.name])[0]
 
                 # compute loss
-                optimizer.zero_grad()
-                # round_loss = torch.sum(torch.cat([PPQRoundingLoss(d.binding.value, d.config) for d in delegators]))
+                qparam_optimizer.zero_grad()
+                param_optimizer.zero_grad()
                 quant_loss = torch_mean_square_error(qt_output, fp_output)
-                total_loss = quant_loss # + round_loss * OPTIM_ADVOPT_RLOSS_MULTIPLIER
+                total_loss = quant_loss
                 total_loss.backward()
 
                 loss_ema.push(total_loss.item())
-                optimizer.step()
-                if OPTIM_ADVOPT_USING_SCEHDULER: shcduler.step()
+                qparam_optimizer.step()
+                param_optimizer.step()
+                if OPTIM_ADVOPT_USING_SCEHDULER: 
+                    shcduler.step()
+                    qshcduler.step()
 
                 cur_iter += 1
                 if cur_iter % 50 == 0:
@@ -1133,7 +1145,7 @@ class AdvancedQuantOptimization(TrainingBasedPass):
 
         # finalize all delegates
         for delegator in delegators:
-            assert isinstance(delegator, RQTDelegator)
+            assert isinstance(delegator, LSQDelegator)
             delegator.finalize()
             executor.remove_quantize_delegate(delegator.config)
 
@@ -1141,13 +1153,14 @@ class AdvancedQuantOptimization(TrainingBasedPass):
         if self.check_flag:
             if not self.check(executor=executor, dataloader=dataloader, collate_fn=collate_fn):
                 for delegator in delegators:
-                    assert isinstance(delegator, RQTDelegator)
+                    assert isinstance(delegator, LSQDelegator)
                     delegator.withdraw()
 
         # detach weight
         for delegator in delegators:
-            assert isinstance(delegator, RQTDelegator)
-            delegator.binding.value = delegator.binding.value.detach()
+            assert isinstance(delegator, LSQDelegator)
+            if delegator.binding.value is not None:
+                delegator.binding.value = delegator.binding.value.detach()
 
     def optimize(
         self, processor: GraphCommandProcessor, dataloader: Iterable,

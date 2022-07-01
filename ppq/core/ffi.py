@@ -228,6 +228,14 @@ class CUDA:
             tensor, dy, scales, offsets, minimum, maximum, channel_axis, rounding)
 
     @ staticmethod
+    def OrderPreservingObserve(
+        tensor: torch.Tensor,
+    ) -> torch.Tensor:
+        if not tensor.is_contiguous(): tensor = tensor.contiguous()
+        return __CUDA_EXTENTION__.RoundingLoss_LC_B(tensor)
+
+
+    @ staticmethod
     def Sync():
         """Synchronize device."""
         synchronize()

@@ -1,5 +1,5 @@
 import os
-from typing import Any, Callable, List
+from typing import Any, Callable, List, Iterable
 
 import torch
 from ppq.core import (NetworkFramework, TargetPlatform, empty_ppq_cache,
@@ -28,6 +28,8 @@ from ppq.quantization.quantizer import (ACADEMIC_INT4_Quantizer,
                                         PPLCUDAQuantizer, TensorRTQuantizer)
 from ppq.scheduler import DISPATCHER_TABLE, GraphDispatcher
 from torch.utils.data import DataLoader
+
+from ppq.scheduler.perseus import Perseus
 
 from .setting import *
 
@@ -139,6 +141,18 @@ def load_caffe_graph(prototxt_path: str, caffemodel_path: str) -> BaseGraph:
     """
     ppq_ir = load_graph(file_path=prototxt_path, caffemodel_path=caffemodel_path, from_framework=NetworkFramework.CAFFE)
     return format_graph(graph=ppq_ir)
+
+def load_native_graph(import_file: str) -> BaseGraph:
+    """
+        从一个指定位置加载 原生计算图，原生计算图中包含了所有量化与调度信息
+        load native graph from the specified location
+    Args:
+        import_file (str): 计算图的保存位置 the specified location
+
+    Returns:
+        BaseGraph: 解析获得的 ppq 计算图对象 the parsed ppq IR graph
+    """
+    return load_graph(import_file, from_framework=NetworkFramework.NATIVE)
 
 def dump_torch_to_onnx(
     model: torch.nn.Module,
@@ -645,32 +659,18 @@ def format_graph(graph: BaseGraph) -> BaseGraph:
 
 
 def dispatch_graph(graph: BaseGraph, platform: TargetPlatform, setting: QuantizationSetting) -> BaseGraph:
-    """这个函数执行图切分与调度，你的计算图将被切分成一系列子图，并被调度到不同设备上。 调度的逻辑分为自动控制的部分以及手动覆盖的部分，你可以使用
-    QuantizationSetting 来向这个函数传递手动调度表 从而覆盖 PPQ 的调度逻辑。
+    """这个函数执行图切分与调度，你的计算图将被切分成一系列子图，并被调度到不同设备上。 
+    调度的逻辑分为自动控制的部分以及手动覆盖的部分，你可以使用 QuantizationSetting 来向这个函数传递手动调度表 从而覆盖 PPQ 的调度逻辑。
 
-    注意：这个函数依据调度器和TargetPlatform 平台的不同而产生行为差异，生成不同的调度计划。
+    注意：这个函数依据调度器和 TargetPlatform 平台的不同而产生行为差异，生成不同的调度计划。
 
     This function will cut your graph into a series of subgraph and send them to different device.
     PPQ provides an automatic dispatcher which, will generate different dispatching scheme on your TargetPlatform.
     A dispatching table can be passed via QuantizationSetting to override
         the default dispatching logic of ppq dispatcher manually.
     """
-    assert platform in QUANTIZER_COLLECTION, (
-        f'Platform misunderstood, except one of following platform {QUANTIZER_COLLECTION.keys()}')
-    quantizer = QUANTIZER_COLLECTION[platform](graph) # 初始化一个 quantizer 没有很大代价...
-
-    if str(setting.dispatcher).lower() not in DISPATCHER_TABLE:
-        raise ValueError(f'Can not found dispatcher type "{setting.dispatcher}", check your input again.')
-    dispatcher = DISPATCHER_TABLE[str(setting.dispatcher).lower()]()
-    assert isinstance(dispatcher, GraphDispatcher)
-    assert isinstance(quantizer, BaseQuantizer)
-    quant_types = quantizer.quant_operation_types
-
-    dispatching_table = dispatcher.dispatch(
-        graph=graph, quant_types=quant_types,
-        quant_platform=TargetPlatform.UNSPECIFIED, # MUST BE UNSPECIFIED, 这里的意思是交由 Quantizer 决定是否量化这个算子
-        fp32_platform=TargetPlatform.FP32,
-        SOI_platform=TargetPlatform.SHAPE_OR_INDEX)
+    dispatcher = Perseus(graph=graph)
+    dispatching_table = dispatcher.dispatch()
 
     # override dispatching result with setting
     dispatching_override = setting.dispatching_table
@@ -690,6 +690,7 @@ def dispatch_graph(graph: BaseGraph, platform: TargetPlatform, setting: Quantiza
     # insert necessary device switchers.
     formatter = GraphDeviceSwitcher(graph)
     formatter(GraphCommand(GraphCommandType.INSERT_SWITCHER))
+    graph.set_extension_attrib(IS_DISPATCHED_GRAPH, True)
     return graph
 
 
@@ -923,7 +924,7 @@ class ENABLE_CUDA_KERNEL:
     memory cost.
     """
     def __init__(self) -> None:
-        ppq_warning('PPQ is compling CUDA Kernels. Please wait...'
+        ppq_warning('PPQ is compling CUDA Kernels. Please wait...\n'
                     'If there is any problem with kernel compilation, '
                     'feel free to remove ENABLE_CUDA_KERNEL clause.')
         self._state = False
@@ -1028,7 +1029,7 @@ def register_network_exporter(exporter: type, platform: TargetPlatform):
 
 __all__ = ['load_graph', 'load_onnx_graph', 'load_caffe_graph',
            'dispatch_graph', 'dump_torch_to_onnx', 'quantize_onnx_model',
-           'quantize_torch_model', 'quantize_caffe_model',
+           'quantize_torch_model', 'quantize_caffe_model', 'load_native_graph',
            'export_ppq_graph', 'format_graph', 'quantize', 'export',
            'UnbelievableUserFriendlyQuantizationSetting', 'manop',
            'quantize_native_model', 'ENABLE_CUDA_KERNEL', 'DISABLE_CUDA_KERNEL',
