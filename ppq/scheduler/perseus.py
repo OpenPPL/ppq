@@ -1,9 +1,7 @@
 from typing import Dict, List, Set
 
 from ppq.core import TargetPlatform, ppq_warning
-from ppq.IR import BaseGraph, Operation
-from ppq.IR.search import SearchableGraph
-from ppq.scheduler.core.opsocket import OType
+from ppq.IR import BaseGraph, Operation, SearchableGraph
 
 from .base import GraphDispatcher
 from .core import (DEFAULT_SOCKET_CREATOR, DEFAULT_SOCKET_TABLE, OpSocket,
@@ -57,7 +55,7 @@ class Perseus(GraphDispatcher):
         """ 
         self.sockets   = {}
         self.verbose   = verbose
-        self.graph  = graph
+        self.graph     = graph
         self._search_engine = SearchableGraph(graph)
         self._precomputed_op_fanout = {}
         self._precomputed_op_fanin  = {}
@@ -109,7 +107,7 @@ class Perseus(GraphDispatcher):
         而后从 Shape, TopK 等节点出发，求解非计算节点的传递闭包 B
         
         集合 A - B 中的节点将被量化，也被称为量化区节点
-        集合 A * B 中的节点将被称为冲突去节点，默认不量化
+        集合 A * B 中的节点将被称为冲突区节点，默认不量化
         集合 B 中的节点将被称为 SOI 节点，不量化且调度到 Cpu 执行
         集合 A, B 之外的节点为未知区域节点，默认不量化
         

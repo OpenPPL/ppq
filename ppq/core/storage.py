@@ -98,7 +98,10 @@ class ValueState(Serializable):
                 value = value.astype(self._dtype)
                 if value is not None:
                     value = value.reshape(self._shape)
-                value = convert_any_to_torch_tensor(value, device='cpu')
+                value = convert_any_to_torch_tensor(
+                    value, device='cpu', 
+                    dtype=DataType.to_torch(DataType.convert_from_numpy(self._dtype)))
+                return value
             else:
                 return torch.tensor([], device='cpu')
         elif self._value_type in {'list', 'tuple', 'dict'}:

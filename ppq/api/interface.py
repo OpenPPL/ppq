@@ -577,6 +577,7 @@ def export_ppq_graph(
     platform: TargetPlatform,
     graph_save_to: str,
     config_save_to: str = None,
+    copy_graph: bool = False,
     **kwargs) -> None:
     """使用这个函数将 PPQ ir 保存到文件，同时导出 PPQ 的量化配置信息。 该函数可以将 PPQ ir 保存为不同格式的模型文件。 this
     func dumps ppq IR to file, and exports quantization setting information
@@ -600,6 +601,9 @@ def export_ppq_graph(
             note that some of platforms requires to write quantization setting
             directly into the model file, this parameter won't have effect at
             this situation
+            
+        copy_graph (bool): 导出图的时候是否需要把图复制一份
+            Whether to copy graph when export.
     """
     # 如果没有后缀名，就添加一个后缀名上来
     postfix = ''
@@ -621,6 +625,7 @@ def export_ppq_graph(
         raise KeyError(f'Requiring framework {platform} does not support export now.')
     exporter = EXPORTERS[platform]()
     assert isinstance(exporter, GraphExporter), 'Unexpected Exporter found.'
+    if copy_graph: graph = graph.copy()
     exporter.export(file_path=graph_save_to, config_path=config_save_to, graph=graph, **kwargs)
 
 

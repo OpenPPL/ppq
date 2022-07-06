@@ -7,6 +7,7 @@ from ppq.IR import (BaseGraph, GraphCommand, GraphCommandProcessor,
                     Variable)
 from ppq.IR.quantize import QuantableOperation, QuantableVariable
 from ppq.IR.search import SearchableGraph
+from ppq.IR.deploy import RunnableGraph
 from ppq.log import *
 from ppq.quantization.analyse import (graphwise_error_analyse,
                                       layerwise_error_analyse,

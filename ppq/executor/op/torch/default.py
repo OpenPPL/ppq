@@ -196,7 +196,7 @@ def Conv_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
             dilation=dilation, stride=stride)
     
     else:
-        raise ValueError(f'Operation {op.name} is invalid, input dimension is not supported.')
+        raise ValueError(f'Operation {op.name} is invalid, {ndim}-d input is not supported.')
     return output
 
 
@@ -341,7 +341,7 @@ def ConvTranspose_forward(op: Operation, values: List[torch.Tensor], ctx: TorchB
             dilation=dilation, stride=stride, output_padding=output_padding)
     
     else:
-        raise ValueError(f'Operation {op.name} is invalid, input dimension is not supported.')
+        raise ValueError(f'Operation {op.name} is invalid, {ndim}-d input is not supported.')
     return output
 
 
@@ -382,13 +382,13 @@ def MaxPool2d_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
             padding=padding, dilation=dilation,
             stride=stride, ceil_mode=ceil_mode)
 
-    if ndim in {2, 3}:
+    elif ndim in {2, 3}:
         x = F.pad(x, _onnx_padding_to_torch(padding), value=float("-inf"))
         output = F.max_pool1d(
             x, kernel_size=kernel_size,
             dilation=dilation, stride=stride, ceil_mode=ceil_mode)
     else:
-        raise ValueError(f'Operation {op.name} is invalid, input dimension is not supported.')
+        raise ValueError(f'Operation {op.name} is invalid, {ndim}-d input is not supported.')
     return output
 
 
@@ -614,7 +614,7 @@ def AveragePool_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBac
             x, kernel_size=kernel_size,
             stride=stride, ceil_mode=ceil_mode)
     else:
-        raise ValueError(f'Operation {op.name} is invalid, input dimension is not supported.')
+        raise ValueError(f'Operation {op.name} is invalid, {ndim}-d input is not supported.')
     
     return output
 
@@ -1908,8 +1908,8 @@ def DepthToSpace_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBa
     if mode == 'DCR':
         output = F.pixel_shuffle(input_data, upsample)
     else:  # mode == 'CRD'
-        output = None
-        raise ValueError
+        # ??? i do kown why following is correct.
+        output = F.pixel_shuffle(input_data, upsample)
     return output
 
 
@@ -2817,6 +2817,72 @@ def Cos_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
     return torch.cos(x)
 
 
+def Cos_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
+    """Calculates the cosine of the given input tensor, element-wise.
+
+    Inputs
+        input (differentiable) : T
+            Input tensor
+    
+    Outputs
+        output (differentiable) : T
+            The cosine of the input tensor computed element-wise
+    
+    Type Constraints
+    T : tensor(float16), tensor(float), tensor(double)
+    Constrain input and output types to float tensors.
+
+    Args:
+        op (Operation): _description_
+        values (List[torch.Tensor]): _description_
+        ctx (TorchBackendContext, optional): _description_. Defaults to None.
+
+    Returns:
+        torch.Tensor: _description_
+    """
+    ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
+    [x] = values
+    return torch.cos(x)
+
+
+def Sum_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
+    """
+    Element-wise sum of each of the input tensors (with Numpy-style broadcasting support). 
+    All inputs and outputs must have the same data type. 
+    This operator supports multidirectional (i.e., Numpy-style) broadcasting; 
+    for more details please check the doc.
+
+    Version
+    This version of the operator has been available since version 13 of the default ONNX operator set.
+
+    Other versions of this operator: 1, 6, 8
+
+    Inputs (1 - ∞)
+        data_0 (variadic, differentiable) : T
+            List of tensors for sum.
+    Outputs
+        sum (differentiable) : Tq
+            Output tensor.
+    
+    Type Constraints
+        T : tensor(float16), tensor(float), tensor(double), tensor(bfloat16)
+    Constrain input and output types to float tensors.
+
+    Args:
+        op (Operation): _description_
+        values (List[torch.Tensor]): _description_
+        ctx (TorchBackendContext, optional): _description_. Defaults to None.
+
+    Returns:
+        torch.Tensor: _description_
+    """
+    ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
+    output = torch.zeros_like(values[0])
+    for value in values:
+        output += value
+    return output
+
+
 DEFAULT_BACKEND_TABLE = {
     'Abs': Abs_forward,
     'AdaptiveAvgPool2d': AdaptiveAvgPool2d_forward,
@@ -2911,4 +2977,5 @@ DEFAULT_BACKEND_TABLE = {
     'OneHot': Onehot_forward,
     'Reciprocal': Reciprocal_forward,
     'LSTM': LSTM_forward,
+    'Sum': Sum_forward,
 }
