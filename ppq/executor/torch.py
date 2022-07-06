@@ -118,8 +118,8 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
         super().__init__(graph)
         
         if not graph.extension_attrib.get(IS_DISPATCHED_GRAPH, False):
-            raise RuntimeError('Can initilize executor with your graph, cause it has not been correctly dispatched, '
-                               'use dispatch_graph(graph=ir, platform=platfrom, setting=setting) first.')
+            ppq_warning('Can initilize executor with your graph, cause it has not been correctly dispatched, '
+                        'use dispatch_graph(graph=ir, platform=platfrom, setting=setting) first.')
         
         self._runnable_graph = RunnableGraph(self._graph)
         self._delegates = {}
