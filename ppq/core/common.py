@@ -4,16 +4,23 @@
 
 
 # Observer 中，最小 scale 限制，所有小于该值的 scale 将被该值覆盖
-OBSERVER_MIN_SCALE = 1e-7
+OBSERVER_MIN_SCALE = 1e-8
+
+OBSERVER_MIN_SCALE_MANUL_OVERRIDE = 'OBSERVER_MIN_SCALE_MANUL_OVERRIDE'
+# 当出现 scale < min_scale 的情况时，是否给出警报 
+OBSERVER_WARNING = False
 # Observer 中 kl 散度的计算设备
 OBSERVER_KL_COMPUTING_DEVICE = 'cpu'
 # Observer 中 hist 箱子的个数
 OBSERVER_KL_HIST_BINS = 8192
+# Observer 中 hist 箱子的属性
+OBSERVER_KL_HIST_BINS_MANUL_OVERRIDE = 'OBSERVER_KL_HIST_BINS_MANUL_OVERRIDE'
 # Observer 中 percentile 的参数
 OBSERVER_PERCENTILE = 0.9999
+# Observer 中 percentile 参数的属性
+OBSERVER_PERCENTILE_MANUL_OVERRIDE = 'OBSERVER_PERCENTILE_MANUL_OVERRIDE'
 # Observer 中 mse 校准方法 hist 箱子的个数
 OBSERVER_MSE_HIST_BINS = 8192
-
 
 # PPLCUDA 中所有需要与 Conv 融合的激活函数
 PPLCUDA_ACTIVATIONS = {'Clip', 'LeakyRelu', 'Relu', 'Sigmoid'}
@@ -63,3 +70,16 @@ CAFFE_DOMAIN = 'ppq.caffe'
 DEFAULT_OPSET_DOMAIN  = 'ai.onnx'
 DEFAULT_OPSET_VERSION = 11
 STRICT_OPSET_CHECKING = False
+
+# 导出 qdq 节点时是否需要导出状态已经是 overlap 的节点
+EXPORT_OVERLAPPED_CONFIG = True
+
+# LSTM 算子的权重缓存属性
+LSTM_FLATTEN_WEIGHT_ATTRIB = 'LSTM_FLATTEN_WEIGHT_ATTRIB'
+# GRU 算子的权重缓存属性
+GRU_FLATTEN_WEIGHT_ATTRIB  = 'GRU_FLATTEN_WEIGHT_ATTRIB'
+
+# 一个属性标记计算图是否已经被调度
+IS_DISPATCHED_GRAPH = 'IS_DISPATCHED_GRAPH'
+# 图上用于表示 Opset 的属性
+GRAPH_OPSET_ATTRIB = 'GRAPH_OPSET'

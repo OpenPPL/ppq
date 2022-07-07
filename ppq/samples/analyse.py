@@ -8,9 +8,10 @@ import torchvision
 from ppq import (QuantizationSettingFactory, TargetPlatform,
                  graphwise_error_analyse)
 from ppq.api import quantize_torch_model
+from ppq.quantization.analyse.graphwise import statistical_analyse
+from ppq.quantization.analyse.layerwise import (layerwise_error_analyse,
+                                                parameter_analyse)
 from torch.utils.data import DataLoader
-
-from ppq.quantization.analyse.layerwise import layerwise_error_analyse, parameter_analyse
 
 BATCHSIZE = 32
 INPUT_SHAPE = [3, 224, 224]
@@ -59,3 +60,13 @@ reports = layerwise_error_analyse(
 
 # WITH PPQ 0.6 or newer, you can invoke parameter_analyse to get a more detailed report.
 parameter_analyse(graph=quantized)
+
+# WITH PPQ 0.6.5 or higher version
+report = statistical_analyse(
+    graph=quantized, running_device=DEVICE, 
+    collate_fn=collate_fn, dataloader=calibration_dataloader)
+
+from pandas import DataFrame
+
+report = DataFrame(report)
+report.to_csv('1.csv')

@@ -5,6 +5,7 @@ from typing import List
 import numpy as np
 from ppq.core import DataType, convert_any_to_python_primary_type
 from ppq.IR import Operation
+from ppq.core.common import GRU_FLATTEN_WEIGHT_ATTRIB, LSTM_FLATTEN_WEIGHT_ATTRIB
 from ppq.log import NaiveLogger
 from ppq.utils import process_attribute
 
@@ -19,6 +20,47 @@ from .base import *
 # torch func: https://pytorch.org/docs/stable/nn.functional.html
 
 logger = NaiveLogger.get_logger('PPQ')
+
+
+def _onnx_padding_to_torch(pads: List[int]) -> List[int]:
+    # Convert padding from onnx format to torch format
+    # onnx format: [x1_begin, x2_begin, ... , x1_end, x2_end, ...]
+    # torch format [xn_begin, xn_end, ... , x2_begin, x2_end, x1_begin, x1_end]
+    middle = len(pads) // 2
+    onnx_pad_begin, onnx_pad_end = pads[:middle], pads[middle:]
+    onnx_pad_begin, onnx_pad_end = onnx_pad_begin[::-1], onnx_pad_end[::-1]
+    torch_pads = []
+    for begin, end in zip(onnx_pad_begin, onnx_pad_end):
+        torch_pads.extend([begin, end])
+
+    return torch_pads
+
+
+def Abs_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
+    """Absolute takes one input data (Tensor) and produces one output data (Tensor) 
+    where the absolute is, y = abs(x), is applied to the tensor elementwise.
+
+    Inputs
+        X (differentiable) : T
+            Input tensor
+    
+    Outputs
+        Y (differentiable) : T
+            Output tensor
+
+    Args:
+        op (Operation): _description_
+        values (List[torch.Tensor]): _description_
+        ctx (TorchBackendContext, optional): _description_. Defaults to None.
+
+    Returns:
+        torch.Tensor: _description_
+    """
+    ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
+    ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
+    [x] = values
+    return x.abs()
+
 
 def Conv_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
     """The convolution operator consumes an input tensor and a filter, and
@@ -107,28 +149,54 @@ def Conv_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
     """
     ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=2, max_num_of_input=3)
-    process_attribute(op.attributes, values[0].shape[2:], values[1].shape[2:])
 
     groups    = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='group', default=1)
     padding   = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='pads', default=0)
     dilation  = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='dilations', default=1)
     stride    = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='strides', default=1)
+    auto_pad  = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='auto_pad', default='NOTSET')
 
     x, w = values[: 2]
     b = values[2] if len(values) > 2 else None
 
-    # onnx pads format[top, left, bottom, right] to torch pads format[left, right, top, bottom]
-    if isinstance(padding, list) and len(padding) == 4:
-        p_left, p_right, p_top, p_bottom = padding[1], padding[3], padding[0], padding[2]
-        # torch does not support padding contains 4 value, there is a fix of it.
-        if p_left == p_right and p_top == p_bottom:
-            padding = [p_top, p_left]
-        else:
-            x = F.pad(x, pad=[p_left, p_right, p_top, p_bottom])
-            padding = 0
+    ndim = w.ndim
+    # conv - 1d
+    if ndim in {2, 3}:
+        if auto_pad != 'NOTSET':
+            raise NotImplementedError(f'auto_pad must be "NOTSET" with 1-d conv {op.name}')
+        x = F.pad(x, padding)
+        output = F.conv1d(
+            input=x, weight=w, bias=b, groups=groups,
+            dilation=dilation, stride=stride)
 
-    output = F.conv2d(input=x, weight=w, bias=b, groups=groups, padding=padding,
-                      dilation=dilation, stride=stride)
+    # conv - 2d
+    elif ndim == 4:
+        process_attribute(op.attributes, values[0].shape[2:], values[1].shape[2:])
+        # onnx pads format[top, left, bottom, right] to torch pads format[left, right, top, bottom]
+        if isinstance(padding, list) and len(padding) == 4:
+            p_left, p_right, p_top, p_bottom = padding[1], padding[3], padding[0], padding[2]
+            # torch does not support padding contains 4 value, there is a fix of it.
+            if p_left == p_right and p_top == p_bottom:
+                padding = [p_top, p_left]
+            else:
+                x = F.pad(x, pad=[p_left, p_right, p_top, p_bottom])
+                padding = 0
+
+        output = F.conv2d(
+            input=x, weight=w, bias=b, groups=groups, padding=padding,
+            dilation=dilation, stride=stride)
+
+    # conv - 3d
+    elif ndim == 5:
+        if auto_pad != 'NOTSET':
+            raise NotImplementedError(f'auto_pad must be "NOTSET" with 3-d conv {op.name}')
+        x = F.pad(x, padding)
+        output = F.conv3d(
+            input=x, weight=w, bias=b, groups=groups,
+            dilation=dilation, stride=stride)
+    
+    else:
+        raise ValueError(f'Operation {op.name} is invalid, {ndim}-d input is not supported.')
     return output
 
 
@@ -241,20 +309,39 @@ def ConvTranspose_forward(op: Operation, values: List[torch.Tensor], ctx: TorchB
 
     x, w = values[:2]
     b = values[2] if len(values) > 2 else None
+    ndim = x.ndim
 
-    # onnx pads format[top, left, bottom, right] to torch pads format[left, right, top, bottom]
-    if isinstance(padding, list) and len(padding) == 4:
-        p_left, p_right, p_top, p_bottom = padding[1], padding[3], padding[0], padding[2]
-        # torch does not support padding contains 4 value, there is a fix of it.
-        if p_left == p_right and p_top == p_bottom:
-            padding = [p_top, p_left]
-        else:
-            x = F.pad(x, pad=[p_left, p_right, p_top, p_bottom])
-            padding = 0
+    # 2d conv transpose
+    if ndim == 4:
+        # onnx pads format[top, left, bottom, right] to torch pads format[left, right, top, bottom]
+        if isinstance(padding, list) and len(padding) == 4:
+            p_left, p_right, p_top, p_bottom = padding[1], padding[3], padding[0], padding[2]
+            # torch does not support padding contains 4 value, there is a fix of it.
+            if p_left == p_right and p_top == p_bottom:
+                padding = [p_top, p_left]
+            else:
+                x = F.pad(x, pad=[p_left, p_right, p_top, p_bottom])
+                padding = 0
 
-    output = F.conv_transpose2d(
-        input=x, weight=w, bias=b, groups=groups, padding=padding,
-        dilation=dilation, stride=stride, output_padding=output_padding)
+        output = F.conv_transpose2d(
+            input=x, weight=w, bias=b, groups=groups, padding=padding,
+            dilation=dilation, stride=stride, output_padding=output_padding)
+
+    # 1d conv transpose
+    elif ndim in {2, 3}:
+        x = F.pad(x, _onnx_padding_to_torch(padding))
+        output = F.conv_transpose1d(
+            input=x, weight=w, bias=b, groups=groups,
+            dilation=dilation, stride=stride, output_padding=output_padding)
+
+    elif ndim == 5:
+        x = F.pad(x, _onnx_padding_to_torch(padding))
+        output = F.conv_transpose3d(
+            input=x, weight=w, bias=b, groups=groups,
+            dilation=dilation, stride=stride, output_padding=output_padding)
+    
+    else:
+        raise ValueError(f'Operation {op.name} is invalid, {ndim}-d input is not supported.')
     return output
 
 
@@ -263,32 +350,48 @@ def MaxPool2d_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
     process_attribute(op.attributes, values[0].shape[2:])
 
-    [input_value] = values
+    [x] = values
     padding   = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='pads', default=0)
     dilation  = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='dilations', default=1)
     stride    = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='strides', default=None)
     ceil_mode = bool(GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='ceil_mode', default=False))
-
-    # onnx pads format[top, left, bottom, right] to torch pads format[left, right, top, bottom]
-    if isinstance(padding, list) and len(padding) == 4:
-        p_left, p_right, p_top, p_bottom = padding[1], padding[3], padding[0], padding[2]
-        # torch does not support padding contains 4 value, there is a fix of it.
-        if p_left == p_right and p_top == p_bottom:
-            padding = [p_top, p_left]
-        else:
-            input_value = F.pad(input_value, pad=[p_left, p_right, p_top, p_bottom])
-            padding = 0
-
-    if op.type == 'GlobalMaxPool': kernel_size = input_value.size()[-2:]
+    if op.type == 'GlobalMaxPool': kernel_size = x.size()[-2:]
     else: kernel_size = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='kernel_shape', compulsive=True)
 
-    output = F.max_pool2d(input_value, kernel_size=kernel_size,
-                          padding=padding, dilation=dilation,
-                          stride=stride, ceil_mode=ceil_mode)
+    ndim = x.ndim
+    # pool - 3d
+    if ndim == 5:
+        x = F.pad(x, _onnx_padding_to_torch(padding), value=float("-inf"))
+        output = F.max_pool3d(
+            x, kernel_size=kernel_size,
+            dilation=dilation, stride=stride, ceil_mode=ceil_mode)
+
+    elif ndim == 4:
+        # onnx pads format[top, left, bottom, right] to torch pads format[left, right, top, bottom]
+        if isinstance(padding, list) and len(padding) == 4:
+            p_left, p_right, p_top, p_bottom = padding[1], padding[3], padding[0], padding[2]
+            # torch does not support padding contains 4 value, there is a fix of it.
+            if p_left == p_right and p_top == p_bottom:
+                padding = [p_top, p_left]
+            else:
+                x = F.pad(x, pad=_onnx_padding_to_torch(padding), value=float("-inf"))
+                padding = 0
+
+        output = F.max_pool2d(
+            x, kernel_size=kernel_size,
+            padding=padding, dilation=dilation,
+            stride=stride, ceil_mode=ceil_mode)
+
+    elif ndim in {2, 3}:
+        x = F.pad(x, _onnx_padding_to_torch(padding), value=float("-inf"))
+        output = F.max_pool1d(
+            x, kernel_size=kernel_size,
+            dilation=dilation, stride=stride, ceil_mode=ceil_mode)
+    else:
+        raise ValueError(f'Operation {op.name} is invalid, {ndim}-d input is not supported.')
     return output
 
 
-# noinspection PyCallingNonCallable
 def BatchNormalization_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=5, max_num_of_input=5)
     input_data, weight, bias, running_mean, running_var = values
@@ -334,24 +437,10 @@ def Mul_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
 
 
 def MultiHeadAttention_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    """Perform MultiHeadAttetion opr forward.
-
-    Args:
-        op (Operation): MultiHeadAttention
-        values (List[torch.Tensor]): opr inputs
-        ctx (TorchBackendContext, optional): Context. Defaults to None.
-
-    Raises:
-        NotImplementedError: In [Vit Paper](https://arxiv.org/abs/2010.11929), MultiHeadAttention inputs are actually the same tensor, we suppose that this would **not** be simplified.
-        ValueError: MultiHeadAttention contains `embed_dim` and `num_heads`.
-
-    Returns:
-        list: opr output and internal result for quantization.
-    """
     if len(values) != 11:
         raise NotImplementedError('Not implement simplified MultiHeadAttention')
 
-    q_in,k_in,v_in,q_w,q_b,k_w,k_b,v_w,v_b,o_w,o_b = values
+    q,k,v,q_w,q_b,k_w,k_b,v_w,v_b,o_w,o_b = values
     embed_dim = op.attributes.get('embed_dim')
     num_heads = op.attributes.get('num_heads')
 
@@ -359,27 +448,21 @@ def MultiHeadAttention_forward(op: Operation, values: List[torch.Tensor], ctx: T
         raise ValueError('Cannot fetch embed_dim or num_heads')
 
     # setup parameters
-    batch_size = q_in.shape[0]
+    batch_size = q.shape[0]
     head_dim = embed_dim // num_heads
     scale = head_dim ** -0.5
 
-    xq = F.linear(q_in, q_w, q_b)
-    xk = F.linear(k_in, k_w, k_b)
-    xv = F.linear(v_in, v_w, v_b)
-    
-    B, N, _ = xq.shape
-    
-    q = xq.reshape(B, N, num_heads, head_dim).permute(0, 2, 1, 3)
-    k = xk.reshape(B, N, num_heads, head_dim).permute(0, 2, 1, 3)
-    v = xv.reshape(B, N, num_heads, head_dim).permute(0, 2, 1, 3)
+    q = F.linear(q, q_w, q_b)
+    k = F.linear(k, k_w, k_b)
+    v = F.linear(v, v_w, v_b)
 
     energy = (q @ k.transpose(-2, -1)) * scale
     attn = energy.softmax(dim=-1)
 
-    feat = (attn @ v).transpose(1, 2).reshape(batch_size, -1, embed_dim)
-    out = F.linear(feat, o_w, o_b)
-    
-    return out
+    x = (attn @ v).transpose(1, 2).reshape(batch_size, -1, embed_dim)
+    x = F.linear(x, o_w, o_b)
+
+    return x
 
 
 def Add_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
@@ -412,6 +495,7 @@ def Add_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=2, max_num_of_input=2)
     a, b = values
     return a + b
+
 
 def And_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
     ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
@@ -500,26 +584,38 @@ def AveragePool_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBac
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
     process_attribute(op.attributes, values[0].shape[2:])
 
-    [input_value] = values
+    [x] = values
     padding   = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='pads', default=0)
     stride    = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='strides', default=None)
     ceil_mode = bool(GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='ceil_mode', default=False))
-
-    # onnx pads format[top, left, bottom, right] to torch pads format[left, right, top, bottom]
-    if isinstance(padding, list) and len(padding) == 4:
-        p_left, p_right, p_top, p_bottom = padding[1], padding[3], padding[0], padding[2]
-        # torch does not support padding contains 4 value, there is a fix of it.
-        if p_left == p_right and p_top == p_bottom:
-            padding = [p_top, p_left]
-        else:
-            input_value = F.pad(input_value, pad=[p_left, p_right, p_top, p_bottom])
-            padding = 0
-
-    if op.type == 'GlobalAveragePool': kernel_size = input_value.size()[-2:]
+    if op.type == 'GlobalAveragePool': kernel_size = x.size()[-2:]
     else: kernel_size = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='kernel_shape', compulsive=True)
+    
+    ndim = x.ndim
+    # pool 2d
+    if ndim == 4:
+        # onnx pads format[top, left, bottom, right] to torch pads format[left, right, top, bottom]
+        if isinstance(padding, list) and len(padding) == 4:
+            p_left, p_right, p_top, p_bottom = padding[1], padding[3], padding[0], padding[2]
+            # torch does not support padding contains 4 value, there is a fix of it.
+            if p_left == p_right and p_top == p_bottom:
+                padding = [p_top, p_left]
+            else:
+                x = F.pad(x, pad=[p_left, p_right, p_top, p_bottom])
+                padding = 0
 
-    output = F.avg_pool2d(input_value, kernel_size=kernel_size,
-                          padding=padding, stride=stride, ceil_mode=ceil_mode)
+        output = F.avg_pool2d(
+            x, kernel_size=kernel_size,
+            padding=padding, stride=stride, ceil_mode=ceil_mode)
+    # pool 3d
+    elif ndim == 5:
+        x = F.pad(x, padding)
+        output = F.avg_pool3d(
+            x, kernel_size=kernel_size,
+            stride=stride, ceil_mode=ceil_mode)
+    else:
+        raise ValueError(f'Operation {op.name} is invalid, {ndim}-d input is not supported.')
+    
     return output
 
 
@@ -730,9 +826,14 @@ def Squeeze_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackend
     else:
         ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
         ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
-        [squeezing_tensor], axes = values, GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='axes', compulsive=True)
+        [squeezing_tensor], axes = values, GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='axes', compulsive=False, default=None)
     
     # common part
+    if axes is None:
+        axes = []
+        shape = squeezing_tensor.shape
+        for dim, s in enumerate(shape):
+            if s == 1: axes.append(dim)
     if isinstance(axes, list):
         for squeezing_dim in sorted(axes, reverse=True):
             squeezing_tensor = torch.squeeze(squeezing_tensor, squeezing_dim)
@@ -1674,18 +1775,16 @@ def Pad_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
     if isinstance(pads, torch.Tensor):
         assert pads.device.type == 'cpu', 'Oops'
         pads = pads.tolist()
-
-    if len(pads) == 2:
-        pads = [0, 0, pads[0], pads[1]]
-    elif len(pads) == 4:
-        pads = [pads[1], pads[3], pads[0], pads[2]]
-    elif len(pads) == 8:  # inception v3, i don't known if the order is correct.
-        pads = [pads[3], pads[7], pads[2], pads[6]]
+    pads = _onnx_padding_to_torch(pads)
 
     if mode == 'constant':
         constant_value = values[-1] if len(values) == 3 else 0
         output = F.pad(input_data, pads, mode, constant_value)
     elif mode == 'reflect':
+        output = input_data
+        while len(pads) > 4:
+            output = F.pad(input_data, pads[-4:], mode)
+            pads   = pads[: -4]
         output = F.pad(input_data, pads, mode)
     elif mode == 'edge':
         output = F.pad(input_data, pads, 'replicate')
@@ -1809,8 +1908,8 @@ def DepthToSpace_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBa
     if mode == 'DCR':
         output = F.pixel_shuffle(input_data, upsample)
     else:  # mode == 'CRD'
-        output = None
-        raise ValueError
+        # ??? i do kown why following is correct.
+        output = F.pixel_shuffle(input_data, upsample)
     return output
 
 
@@ -1989,215 +2088,515 @@ def HardSwish_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
 def GRU_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
     """Computes an one-layer GRU. This operator is usually supported via some
     custom implementation such as CuDNN.
-
     只支持 pytorch 导出来的 GRU 啊亲; 必须要 6 个输入 Variable
-
     Notations:
-
         X - input tensor
-
         z - update gate
-
         r - reset gate
-
         h - hidden gate
-
         t - time step (t-1 means previous time step)
-
         W[zrh] - W parameter weight matrix for update, reset, and hidden gates
-
         R[zrh] - R recurrence weight matrix for update, reset, and hidden gates
-
         Wb[zrh] - W bias vectors for update, reset, and hidden gates
-
         Rb[zrh] - R bias vectors for update, reset, and hidden gates
-
         WB[zrh] - W parameter weight matrix for backward update, reset, and hidden gates
-
         RB[zrh] - R recurrence weight matrix for backward update, reset, and hidden gates
-
         WBb[zrh] - W bias vectors for backward update, reset, and hidden gates
-
         RBb[zrh] - R bias vectors for backward update, reset, and hidden gates
-
         H - Hidden state
-
         num_directions - 2 if direction == bidirectional else 1
-
     Activation functions:
-
         Relu(x)                - max(0, x)
-
         Tanh(x)                - (1 - e^{-2x})/(1 + e^{-2x})
-
         Sigmoid(x)             - 1/(1 + e^{-x})
-
     (NOTE: Below are optional)
-
         Affine(x)              - alpha*x + beta
-
         LeakyRelu(x)           - x if x >= 0 else alpha * x
-
         ThresholdedRelu(x)     - x if x >= alpha else 0
-
         ScaledTanh(x)          - alpha*Tanh(beta*x)
-
         HardSigmoid(x)         - min(max(alpha*x + beta, 0), 1)
-
         Elu(x)                 - x if x >= 0 else alpha*(e^x - 1)
-
         Softsign(x)            - x/(1 + |x|)
-
         Softplus(x)            - log(1 + e^x)
-
     Equations (Default: f=Sigmoid, g=Tanh):
-
         - zt = f(Xt*(Wz^T) + Ht-1*(Rz^T) + Wbz + Rbz)
-
         - rt = f(Xt*(Wr^T) + Ht-1*(Rr^T) + Wbr + Rbr)
-
         - ht = g(Xt*(Wh^T) + (rt (.) Ht-1)*(Rh^T) + Rbh + Wbh) # default, when linear_before_reset = 0
-
         - ht = g(Xt*(Wh^T) + (rt (.) (Ht-1*(Rh^T) + Rbh)) + Wbh) # when linear_before_reset != 0
-
         - Ht = (1 - zt) (.) ht + zt (.) Ht-1
-
     This operator has optional inputs/outputs. See the doc for more details about the representation of optional arguments.
     An empty string may be used in the place of an actual argument's name to indicate a missing argument.
     Trailing optional arguments (those not followed by an argument that is present) may also be simply omitted.
-
     Version
     This version of the operator has been available since version 14 of the default ONNX operator set.
-
     Other versions of this operator: 1, 3, 7
-
     Attributes
         activation_alpha : list of floats
             Optional scaling values used by some activation functions.
             The values are consumed in the order of activation functions,
             for example (f, g, h) in LSTM.
-
             Default values are the same as of corresponding ONNX operators.For example with LeakyRelu,
             the default alpha is 0.01.
-
         activation_beta : list of floats
             Optional scaling values used by some activation functions.
             The values are consumed in the order of activation functions,
             for example (f, g, h) in LSTM.
-
             Default values are the same as of corresponding ONNX operators.
-
         activations : list of strings
             A list of 2 (or 4 if bidirectional) activation functions for update, reset, and hidden gates.
             The activation functions must be one of the activation functions specified above.
             Optional: See the equations for default if not specified.
-
         clip : float
             Cell clip threshold.
             Clipping bounds the elements of a tensor in the range of [-threshold, +threshold]
             and is applied to the input of activations. No clip if not specified.
-
         direction : string (default is forward)
             Specify if the RNN is forward, reverse, or bidirectional.
             Must be one of forward (default), reverse, or bidirectional.
-
         hidden_size : int
             Number of neurons in the hidden layer
-
         layout : int (default is 0)
             The shape format of inputs X, initial_h and outputs Y, Y_h.
-
             If 0, the following shapes are expected:
                 X.shape = [seq_length, batch_size, input_size],
                 Y.shape = [seq_length, num_directions, batch_size, hidden_size],
                 initial_h.shape = Y_h.shape = [num_directions, batch_size, hidden_size].
-
             If 1, the following shapes are expected:
                 X.shape = [batch_size, seq_length, input_size],
                 Y.shape = [batch_size, seq_length, num_directions, hidden_size],
                 initial_h.shape = Y_h.shape = [batch_size, num_directions, hidden_size].
-
         linear_before_reset : int (default is 0)
             When computing the output of the hidden gate,
             apply the linear transformation before multiplying by the output of the reset gate.
-
     Inputs (3 - 6)
         X (differentiable) : T
             The input sequences packed (and potentially padded) into one 3-D tensor with the shape of
             `[seq_length, batch_size, input_size]`.
-
         W (differentiable) : T
             The weight tensor for the gates.
             Concatenation of `W[zrh]` and `WB[zrh]` (if bidirectional) along dimension 0.
             This tensor has shape `[num_directions, 3*hidden_size, input_size]`.
-
         R (differentiable) : T
             The recurrence weight tensor.
             Concatenation of `R[zrh]` and `RB[zrh]` (if bidirectional) along dimension 0.
             This tensor has shape `[num_directions, 3*hidden_size, hidden_size]`.
-
         B (optional, differentiable) : T
             The bias tensor for the gates.
             Concatenation of `[Wb[zrh], Rb[zrh]]` and `[WBb[zrh], RBb[zrh]]` (if bidirectional) along dimension 0.
             This tensor has shape `[num_directions, 6*hidden_size]`. Optional: If not specified - assumed to be 0
-
         sequence_lens (optional, non-differentiable) : T1
             Optional tensor specifying lengths of the sequences in a batch.
             If not specified - assumed all sequences in the batch to have length `seq_length`.
             It has shape `[batch_size]`.
-
         initial_h (optional, non-differentiable) : T
             Optional initial value of the hidden.
             If not specified - assumed to be 0.
             It has shape `[num_directions, batch_size, hidden_size]`.
-
     Outputs (0 - 2)
         Y (optional, differentiable) : T
             A tensor that concats all the intermediate output values of the hidden.
             It has shape `[seq_length, num_directions, batch_size, hidden_size]`.
-
         Y_h (optional, differentiable) : T
             The last output value of the hidden.
             It has shape `[num_directions, batch_size, hidden_size]`.
-
     Type Constraints
         T : tensor(float16), tensor(float), tensor(double)
-
     Constrain input and output types to float tensors.
         T1 : tensor(int32)
-
     Constrain seq_lens to integer tensor.
     """
-    ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=6, max_num_of_input=6)
-    direction = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='direction', default='forward')
-    if direction == 'reverse': raise NotImplementedError('GRU do not support reverse mode now.')
-    if direction == 'bidirectional': raise NotImplementedError('PPQ do not support bidirectional gru now.')
-    linear_before_reset = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='linear_before_reset', default=0)
-    if linear_before_reset == 0: raise NotImplementedError('PPQ do not support linear_before_reset = 0')
-    x, w, r, b, _, h = values
-    num_of_elements = b.numel() // 6
-    # _VF.gru needs following arguments:
-    # input_x, batchsize, hidden_state, flatten_weights, need_bias(bool),
-    # num_of_layer, dropout, is_training(bool), is_bidirectional(bool)
-    w = torch.cat([
-        w[0][num_of_elements * 1: num_of_elements * 2],
-        w[0][num_of_elements * 0: num_of_elements * 1],
-        w[0][num_of_elements * 2: num_of_elements * 3]], dim=0).contiguous()
-    r = torch.cat([
-        r[0][num_of_elements * 1: num_of_elements * 2],
-        r[0][num_of_elements * 0: num_of_elements * 1],
-        r[0][num_of_elements * 2: num_of_elements * 3]], dim=0).contiguous()
-    b1 = torch.cat([
-        b[0, num_of_elements * 1: num_of_elements * 2],
-        b[0, num_of_elements * 0: num_of_elements * 1],
-        b[0, num_of_elements * 2: num_of_elements * 3]]).contiguous()
-    b2 = torch.cat([
-        b[0, num_of_elements * 4: num_of_elements * 5],
-        b[0, num_of_elements * 3: num_of_elements * 4],
-        b[0, num_of_elements * 5: num_of_elements * 6]]).contiguous()
-    hidden_vector, last_state = _VF.gru(
-        x, h, (w, r, b1, b2), True, 1, 0.0, False, False, False)
+    ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=3, max_num_of_input=6)
+    # first 3 are mandatory input
+    x, w, r   = values[: 3]
+    b         = GET_VALUE_FROM_INPUTS(values, 3)
+    seq_len   = GET_VALUE_FROM_INPUTS(values, 4)
+    initial_h = GET_VALUE_FROM_INPUTS(values, 5)
+    
+    # sequence length will be dropped without warrning.
+    # if seq_len is not None: raise NotImplementedError('PPQ do not support LSTM with explicite length.')
+    
+    # check attributes
+    activation_alpha = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='activation_alpha', default=None)
+    activation_beta  = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='activation_beta', default=None)
+    activations      = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='activations', default=None)
+    clip             = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='clip', default=None)
+    direction        = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='direction', default='forward')
+    hidden_size      = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='hidden_size', compulsive=True)
+    linear_before_reset = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='layout', default=0)
+    if linear_before_reset != 0: raise NotImplementedError('PPQ do not support LSTM with linear_before_reset != 1.')
+    if activation_alpha is not None: raise NotImplementedError('PPQ do not support LSTM with cutimized activation.')
+    if activation_beta is not None: raise NotImplementedError('PPQ do not support LSTM with cutimized activation.')
+    if activations is not None: raise NotImplementedError('PPQ do not support LSTM with cutimized activation.')
+
+    # flag
+    bidirectional = (direction == 'bidirectional')
+    has_bias      = (b is not None)
+
+    # create flatten weights:
+    if GRU_FLATTEN_WEIGHT_ATTRIB not in op.attributes:
+        forward_w = torch.cat([
+            w[0][hidden_size * 1: hidden_size * 2],
+            w[0][hidden_size * 0: hidden_size * 1],
+            w[0][hidden_size * 2: hidden_size * 3]], dim=0).contiguous()
+        forward_r = torch.cat([
+            r[0][hidden_size * 1: hidden_size * 2],
+            r[0][hidden_size * 0: hidden_size * 1],
+            r[0][hidden_size * 2: hidden_size * 3]], dim=0).contiguous()
+        if has_bias:
+            forward_bias_1 = torch.cat([
+                b[0, hidden_size * 1: hidden_size * 2],
+                b[0, hidden_size * 0: hidden_size * 1],
+                b[0, hidden_size * 2: hidden_size * 3]]).contiguous()
+            forward_bias_2 = torch.cat([
+                b[0, hidden_size * 4: hidden_size * 5],
+                b[0, hidden_size * 3: hidden_size * 4],
+                b[0, hidden_size * 5: hidden_size * 6]]).contiguous()
+        if bidirectional == True:
+            reverse_w = torch.cat([
+                w[1][hidden_size * 1: hidden_size * 2],
+                w[1][hidden_size * 0: hidden_size * 1],
+                w[1][hidden_size * 2: hidden_size * 3]], dim=0).contiguous()
+            reverse_r = torch.cat([
+                r[1][hidden_size * 1: hidden_size * 2],
+                r[1][hidden_size * 0: hidden_size * 1],
+                r[1][hidden_size * 2: hidden_size * 3]], dim=0).contiguous()
+            if has_bias:
+                reverse_bias_1 = torch.cat([
+                    b[1, hidden_size * 1: hidden_size * 2],
+                    b[1, hidden_size * 0: hidden_size * 1],
+                    b[1, hidden_size * 2: hidden_size * 3]]).contiguous()
+                reverse_bias_2 = torch.cat([
+                    b[1, hidden_size * 4: hidden_size * 5],
+                    b[1, hidden_size * 3: hidden_size * 4],
+                    b[1, hidden_size * 5: hidden_size * 6]]).contiguous()
+
+        flatten_weight = [forward_w, forward_r]
+        if has_bias:                   flatten_weight = [forward_w, forward_r, forward_bias_1, forward_bias_2]
+        if bidirectional:              flatten_weight = [forward_w, forward_r, reverse_w, reverse_r]
+        if bidirectional and has_bias: flatten_weight = [
+            forward_w, forward_r, forward_bias_1, forward_bias_2, reverse_w, reverse_r, reverse_bias_1, reverse_bias_2]
+        op.set_extension_attrib(GRU_FLATTEN_WEIGHT_ATTRIB, flatten_weight)
+    
+    s = 2 if bidirectional else 1
+    if initial_h is None:
+        initial_h = torch.zeros(
+            size=[s, x.shape[1], x.shape[2]], 
+            device=x.device, dtype=torch.float32)
+
+    result = _VF.gru(
+        x,                                       # x
+        initial_h,                               # initial hidden state
+        op._detail[GRU_FLATTEN_WEIGHT_ATTRIB],   # flatten weights
+        has_bias,                                # has bias
+        1,                                       # num of layer
+        0.0,                                     # dropout
+        False,                                   # training flag
+        bidirectional,                           # bidirectional
+        False)                                   # batch first
+
+    hidden_vector, last_state = result
     return hidden_vector.unsqueeze(1), last_state
+
+
+def LSTM_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
+    """Computes an one-layer LSTM. This operator is usually supported via some
+    custom implementation such as CuDNN.
+
+    只支持 pytorch 导出来的 LSTM 啊亲; 必须要 7 个输入 Variable
+
+    Computes an one-layer LSTM. This operator is usually supported via some custom implementation such as CuDNN.
+
+    Notations:
+
+    X - input tensor
+
+    i - input gate
+
+    o - output gate
+
+    f - forget gate
+
+    c - cell gate
+
+    t - time step (t-1 means previous time step)
+
+    W[iofc] - W parameter weight matrix for input, output, forget, and cell gates
+
+    R[iofc] - R recurrence weight matrix for input, output, forget, and cell gates
+
+    Wb[iofc] - W bias vectors for input, output, forget, and cell gates
+
+    Rb[iofc] - R bias vectors for input, output, forget, and cell gates
+
+    P[iof] - P peephole weight vector for input, output, and forget gates
+
+    WB[iofc] - W parameter weight matrix for backward input, output, forget, and cell gates
+
+    RB[iofc] - R recurrence weight matrix for backward input, output, forget, and cell gates
+
+    WBb[iofc] - W bias vectors for backward input, output, forget, and cell gates
+
+    RBb[iofc] - R bias vectors for backward input, output, forget, and cell gates
+
+    PB[iof] - P peephole weight vector for backward input, output, and forget gates
+
+    H - Hidden state
+
+    num_directions - 2 if direction == bidirectional else 1
+
+    Activation functions:
+
+    Relu(x)                - max(0, x)
+
+    Tanh(x)                - (1 - e^{-2x})/(1 + e^{-2x})
+
+    Sigmoid(x)             - 1/(1 + e^{-x})
+
+    (NOTE: Below are optional)
+
+    Affine(x)              - alpha*x + beta
+
+    LeakyRelu(x)           - x if x >= 0 else alpha * x
+
+    ThresholdedRelu(x)     - x if x >= alpha else 0
+
+    ScaledTanh(x)          - alpha*Tanh(beta*x)
+
+    HardSigmoid(x)         - min(max(alpha*x + beta, 0), 1)
+
+    Elu(x)                 - x if x >= 0 else alpha*(e^x - 1)
+
+    Softsign(x)            - x/(1 + |x|)
+
+    Softplus(x)            - log(1 + e^x)
+    Equations (Default: f=Sigmoid, g=Tanh, h=Tanh):
+
+    - it = f(Xt*(Wi^T) + Ht-1*(Ri^T) + Pi (.) Ct-1 + Wbi + Rbi)
+
+    - ft = f(Xt*(Wf^T) + Ht-1*(Rf^T) + Pf (.) Ct-1 + Wbf + Rbf)
+
+    - ct = g(Xt*(Wc^T) + Ht-1*(Rc^T) + Wbc + Rbc)
+
+    - Ct = ft (.) Ct-1 + it (.) ct
+
+    - ot = f(Xt*(Wo^T) + Ht-1*(Ro^T) + Po (.) Ct + Wbo + Rbo)
+
+    - Ht = ot (.) h(Ct)
+    This operator has optional inputs/outputs. 
+    See the doc for more details about the representation of optional arguments. 
+    An empty string may be used in the place of an actual argument's name to indicate a missing argument. 
+    Trailing optional arguments (those not followed by an argument that is present) may also be simply omitted.
+
+    Version
+    This version of the operator has been available since version 7 of the default ONNX operator set.
+
+    Attributes
+        activation_alpha : list of floats
+            Optional scaling values used by some activation functions. 
+            The values are consumed in the order of activation functions, 
+                for example (f, g, h) in LSTM. 
+    
+            Default values are the same as of corresponding ONNX operators.For example with LeakyRelu, the default alpha is 0.01.
+    
+        activation_beta : list of floats
+            Optional scaling values used by some activation functions. 
+            The values are consumed in the order of activation functions, 
+            for example (f, g, h) in LSTM. 
+            
+            Default values are the same as of corresponding ONNX operators.
+    
+        activations : list of strings
+            A list of 3 (or 6 if bidirectional) activation functions for input, 
+            output, forget, cell, and hidden. 
+            
+            The activation functions must be one of the activation functions specified above. 
+            Optional: See the equations for default if not specified.
+    
+        clip : float
+            Cell clip threshold. Clipping bounds the elements of a tensor in the range of 
+            [-threshold, +threshold] and is applied to the input of activations.
+            No clip if not specified.
+        
+        direction : string (default is forward)
+            Specify if the RNN is forward, reverse, or bidirectional. 
+            Must be one of forward (default), reverse, or bidirectional.
+
+        hidden_size : int
+            Number of neurons in the hidden layer
+    
+        input_forget : int (default is 0)
+            Couple the input and forget gates if 1.
+    
+    Inputs (3 - 8)
+        X : T
+            The input sequences packed (and potentially padded) into one 3-D tensor 
+                with the shape of `[seq_length, batch_size, input_size]`.
+   
+        W : T
+            The weight tensor for the gates. Concatenation of `W[iofc]` and `WB[iofc]` 
+            (if bidirectional) along dimension 0. The tensor has shape `[num_directions, 4*hidden_size, input_size]`.
+    
+        R : T
+            The recurrence weight tensor. Concatenation of `R[iofc]` and `RB[iofc]` (if bidirectional) along dimension 0. 
+            This tensor has shape `[num_directions, 4*hidden_size, hidden_size]`.
+    
+        B (optional) : T
+            The bias tensor for input gate. Concatenation of `[Wb[iofc], Rb[iofc]]`, 
+            and `[WBb[iofc], RBb[iofc]]` (if bidirectional) along dimension 0. 
+            
+            This tensor has shape `[num_directions, 8*hidden_size]`. 
+            Optional: If not specified - assumed to be 0.
+    
+        sequence_lens (optional) : T1
+            Optional tensor specifying lengths of the sequences in a batch. 
+            If not specified - assumed all sequences in the batch to have length `seq_length`. 
+            It has shape `[batch_size]`.
+        
+        initial_h (optional) : T
+            Optional initial value of the hidden. 
+            If not specified - assumed to be 0. 
+            It has shape `[num_directions, batch_size, hidden_size]`.
+    
+        initial_c (optional) : T
+            Optional initial value of the cell. 
+            If not specified - assumed to be 0. 
+            It has shape `[num_directions, batch_size, hidden_size]`.
+    
+        P (optional) : T
+            The weight tensor for peepholes.
+            Concatenation of `P[iof]` and `PB[iof]` (if bidirectional) along dimension 0. 
+            It has shape `[num_directions, 3*hidde_size]`. Optional: If not specified - assumed to be 0.
+    
+    Outputs (0 - 3)
+        Y (optional) : T
+            A tensor that concats all the intermediate output values of the hidden. 
+            It has shape `[seq_length, num_directions, batch_size, hidden_size]`.
+    
+        Y_h (optional) : T
+            The last output value of the hidden. 
+            It has shape `[num_directions, batch_size, hidden_size]`.
+    
+        Y_c (optional) : T
+            The last output value of the cell. 
+            It has shape `[num_directions, batch_size, hidden_size]`.
+    """
+    ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=3, max_num_of_input=8)
+    # first 3 are mandatory input
+    x, w, r   = values[: 3]
+    b         = GET_VALUE_FROM_INPUTS(values, 3)
+    seq_len   = GET_VALUE_FROM_INPUTS(values, 4)
+    initial_h = GET_VALUE_FROM_INPUTS(values, 5)
+    initial_c = GET_VALUE_FROM_INPUTS(values, 6)
+    p         = GET_VALUE_FROM_INPUTS(values, 7)
+    if p is not None: raise NotImplementedError('PPQ do not support LSTM with peepholes.')
+    
+    # sequence length will be dropped without warrning.
+    # if seq_len is not None: raise NotImplementedError('PPQ do not support LSTM with explicite length.')
+
+    # check attributes
+    activation_alpha = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='activation_alpha', default=None)
+    activation_beta  = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='activation_beta', default=None)
+    activations      = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='activations', default=None)
+    clip             = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='clip', default=None)
+    direction        = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='direction', default='forward')
+    hidden_size      = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='hidden_size', compulsive=True)
+    input_forget     = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='input_forget', default=0)
+    layout           = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='layout', default=0)
+    if layout != 0: raise NotImplementedError('PPQ do not support LSTM with layout != 1.')
+    if activation_alpha is not None: raise NotImplementedError('PPQ do not support LSTM with cutimized activation.')
+    if activation_beta is not None: raise NotImplementedError('PPQ do not support LSTM with cutimized activation.')
+    if activations is not None: raise NotImplementedError('PPQ do not support LSTM with cutimized activation.')
+
+    # flag
+    bidirectional = (direction == 'bidirectional')
+    has_bias      = (b is not None)
+
+    if direction == 'reverse': raise NotImplementedError('GRU do not support reverse mode now.')
+
+    # create flatten weights:
+    if LSTM_FLATTEN_WEIGHT_ATTRIB not in op.attributes:
+        forward_w = torch.cat([
+            w[0][hidden_size * 0: hidden_size * 1],
+            w[0][hidden_size * 2: hidden_size * 3],
+            w[0][hidden_size * 3: hidden_size * 4],
+            w[0][hidden_size * 1: hidden_size * 2]], dim=0).contiguous()
+        forward_r = torch.cat([
+            r[0][hidden_size * 0: hidden_size * 1],
+            r[0][hidden_size * 2: hidden_size * 3],
+            r[0][hidden_size * 3: hidden_size * 4],
+            r[0][hidden_size * 1: hidden_size * 2]], dim=0).contiguous()
+        if has_bias:
+            forward_bias_1 = torch.cat([
+                b[0, hidden_size * 0: hidden_size * 1],
+                b[0, hidden_size * 2: hidden_size * 3],
+                b[0, hidden_size * 3: hidden_size * 4],
+                b[0, hidden_size * 1: hidden_size * 2]]).contiguous()
+            forward_bias_2 = torch.cat([
+                b[0, hidden_size * 4: hidden_size * 5],
+                b[0, hidden_size * 6: hidden_size * 7],
+                b[0, hidden_size * 7: hidden_size * 8],
+                b[0, hidden_size * 5: hidden_size * 6]]).contiguous()
+        if bidirectional == True:
+            reverse_w = torch.cat([
+                w[1][hidden_size * 0: hidden_size * 1],
+                w[1][hidden_size * 2: hidden_size * 3],
+                w[1][hidden_size * 3: hidden_size * 4],
+                w[1][hidden_size * 1: hidden_size * 2]], dim=0).contiguous()
+            reverse_r = torch.cat([
+                r[1][hidden_size * 0: hidden_size * 1],
+                r[1][hidden_size * 2: hidden_size * 3],
+                r[1][hidden_size * 3: hidden_size * 4],
+                r[1][hidden_size * 1: hidden_size * 2]], dim=0).contiguous()
+            if has_bias:
+                reverse_bias_1 = torch.cat([
+                    b[1, hidden_size * 0: hidden_size * 1],
+                    b[1, hidden_size * 2: hidden_size * 3],
+                    b[1, hidden_size * 3: hidden_size * 4],
+                    b[1, hidden_size * 1: hidden_size * 2]]).contiguous()
+                reverse_bias_2 = torch.cat([
+                    b[1, hidden_size * 4: hidden_size * 5],
+                    b[1, hidden_size * 6: hidden_size * 7],
+                    b[1, hidden_size * 7: hidden_size * 8],
+                    b[1, hidden_size * 5: hidden_size * 6]]).contiguous()
+        
+        flatten_weight = [forward_w, forward_r]
+        if has_bias:                   flatten_weight = [forward_w, forward_r, forward_bias_1, forward_bias_2]
+        if bidirectional:              flatten_weight = [forward_w, forward_r, reverse_w, reverse_r]
+        if bidirectional and has_bias: flatten_weight = [
+            forward_w, forward_r, forward_bias_1, forward_bias_2, reverse_w, reverse_r, reverse_bias_1, reverse_bias_2]
+        op.set_extension_attrib(LSTM_FLATTEN_WEIGHT_ATTRIB, flatten_weight)
+    # end if
+    
+    s = 2 if bidirectional else 1
+    if initial_h is None:
+        initial_h = torch.zeros(
+            size=[s, x.shape[1], x.shape[2]], 
+            device=x.device, dtype=torch.float32)
+
+    if initial_c is None:
+        initial_c = torch.zeros(
+            size=[s, x.shape[1], x.shape[2]], 
+            device=x.device, dtype=torch.float32)
+
+    result = _VF.lstm(
+        x,                                       # x
+        (initial_h, initial_c),                  # initial hidden state
+        op._detail[LSTM_FLATTEN_WEIGHT_ATTRIB],  # flatten weights
+        has_bias,                                # has bias
+        1,                                       # num of layer
+        0.0,                                     # dropout
+        False,                                   # training flag
+        bidirectional,                           # bidirectional
+        False)                                   # batch first
+
+    hs, h, c = result
+    if bidirectional:
+        hs = hs.reshape((hs.shape[0], hs.shape[1], 2, hs.shape[-1] // 2))
+        hs = hs.permute((0, 2, 1, 3))
+    else:
+        hs = hs.reshape((hs.shape[0], hs.shape[1], 1, hs.shape[-1]))
+        hs = hs.permute((0, 2, 1, 3))
+    return hs, h, c
 
 
 def Neg_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
@@ -2258,6 +2657,7 @@ def Identity_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacken
     ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
     return values[0]
+
 
 def Onehot_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
     """Produces a one-hot tensor based on inputs. The locations represented by
@@ -2330,6 +2730,7 @@ def Onehot_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendC
         out = out.permute(order)
     return out
 
+
 def Reciprocal_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
     """
     Reciprocal takes one input data (Tensor) and produces one output data (Tensor) where the reciprocal is,
@@ -2360,7 +2761,130 @@ def LogSoftmax_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBack
     return x
 
 
+def Sin_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
+    """Calculates the sine of the given input tensor, element-wise.
+
+    Inputs
+        input (differentiable) : T
+            Input tensor
+    
+    Outputs
+        output (differentiable) : T
+            The sine of the input tensor computed element-wise
+    
+    Type Constraints
+    T : tensor(float16), tensor(float), tensor(double)
+    Constrain input and output types to float tensors.
+
+    Args:
+        op (Operation): _description_
+        values (List[torch.Tensor]): _description_
+        ctx (TorchBackendContext, optional): _description_. Defaults to None.
+
+    Returns:
+        torch.Tensor: _description_
+    """
+    ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
+    [x] = values
+    return torch.sin(x)
+
+
+def Cos_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
+    """Calculates the cosine of the given input tensor, element-wise.
+
+    Inputs
+        input (differentiable) : T
+            Input tensor
+    
+    Outputs
+        output (differentiable) : T
+            The cosine of the input tensor computed element-wise
+    
+    Type Constraints
+    T : tensor(float16), tensor(float), tensor(double)
+    Constrain input and output types to float tensors.
+
+    Args:
+        op (Operation): _description_
+        values (List[torch.Tensor]): _description_
+        ctx (TorchBackendContext, optional): _description_. Defaults to None.
+
+    Returns:
+        torch.Tensor: _description_
+    """
+    ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
+    [x] = values
+    return torch.cos(x)
+
+
+def Cos_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
+    """Calculates the cosine of the given input tensor, element-wise.
+
+    Inputs
+        input (differentiable) : T
+            Input tensor
+    
+    Outputs
+        output (differentiable) : T
+            The cosine of the input tensor computed element-wise
+    
+    Type Constraints
+    T : tensor(float16), tensor(float), tensor(double)
+    Constrain input and output types to float tensors.
+
+    Args:
+        op (Operation): _description_
+        values (List[torch.Tensor]): _description_
+        ctx (TorchBackendContext, optional): _description_. Defaults to None.
+
+    Returns:
+        torch.Tensor: _description_
+    """
+    ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
+    [x] = values
+    return torch.cos(x)
+
+
+def Sum_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
+    """
+    Element-wise sum of each of the input tensors (with Numpy-style broadcasting support). 
+    All inputs and outputs must have the same data type. 
+    This operator supports multidirectional (i.e., Numpy-style) broadcasting; 
+    for more details please check the doc.
+
+    Version
+    This version of the operator has been available since version 13 of the default ONNX operator set.
+
+    Other versions of this operator: 1, 6, 8
+
+    Inputs (1 - ∞)
+        data_0 (variadic, differentiable) : T
+            List of tensors for sum.
+    Outputs
+        sum (differentiable) : Tq
+            Output tensor.
+    
+    Type Constraints
+        T : tensor(float16), tensor(float), tensor(double), tensor(bfloat16)
+    Constrain input and output types to float tensors.
+
+    Args:
+        op (Operation): _description_
+        values (List[torch.Tensor]): _description_
+        ctx (TorchBackendContext, optional): _description_. Defaults to None.
+
+    Returns:
+        torch.Tensor: _description_
+    """
+    ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
+    output = torch.zeros_like(values[0])
+    for value in values:
+        output += value
+    return output
+
+
 DEFAULT_BACKEND_TABLE = {
+    'Abs': Abs_forward,
     'AdaptiveAvgPool2d': AdaptiveAvgPool2d_forward,
     'And':And_forward,
     'Add': Add_forward,
@@ -2374,6 +2898,7 @@ DEFAULT_BACKEND_TABLE = {
     'ConstantOfShape': ConstantOfShape_forward,
     'Conv': Conv_forward,
     'ConvTranspose': ConvTranspose_forward,
+    'Cos': Cos_forward,
     'Div': Eltwise_forward,
     'Equal': Equal_forward,
     'Exp': UnaryEltwise_forward,
@@ -2415,6 +2940,7 @@ DEFAULT_BACKEND_TABLE = {
     'ScatterND': ScatterND_forward,
     'Shape': Shape_forward,
     'Sigmoid': UnaryEltwise_forward,
+    'Sin': Sin_forward,
     'Slice': Slice_forward,
     'Softmax': Softmax_forward,
     'Softplus': Softplus_forward,
@@ -2450,5 +2976,6 @@ DEFAULT_BACKEND_TABLE = {
     'Identity': Identity_forward,
     'OneHot': Onehot_forward,
     'Reciprocal': Reciprocal_forward,
-
+    'LSTM': LSTM_forward,
+    'Sum': Sum_forward,
 }

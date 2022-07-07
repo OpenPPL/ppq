@@ -21,7 +21,7 @@ static void _Quantile_T(
 
 
 __global__
-static void _cuda_order_preserving_observe(
+static void _Isotone_T(
     const float *source,
     float *dest,
     const int64_t num_of_elements
@@ -58,8 +58,7 @@ __host__ Tensor Quantile_T(const Tensor &source, const float q){
     return dest;
 }
 
-
-Tensor cuda_order_preserving_observe(Tensor &source){
+Tensor Isotone_T(const Tensor &source){
     const int num_of_elements = source.numel();
 
     Tensor dest = at::empty({4}, source.options());
@@ -69,7 +68,7 @@ Tensor cuda_order_preserving_observe(Tensor &source){
     float *dest_ptr   = dest.data_ptr<float>();
 
     thrust::sort(thrust::device, source_ptr, source_ptr + num_of_elements);
-    _cuda_order_preserving_observe<<<1, 1>>>(source_ptr, dest_ptr, num_of_elements);
+    _Isotone_T<<<1, 1>>>(source_ptr, dest_ptr, num_of_elements);
     return dest;
 }
 

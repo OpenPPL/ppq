@@ -1,17 +1,17 @@
+import random
 from typing import Iterable
 
-import random
 import torch
 import torchvision
+from ppq import BaseGraph, QuantizationSettingFactory, TargetPlatform
+from ppq.api import (QuantizationSettingFactory, dump_torch_to_onnx,
+                     export_ppq_graph, load_graph, quantize_torch_model)
 from torch.utils.data import DataLoader
 
-from ppq import BaseGraph, QuantizationSettingFactory, TargetPlatform
-from ppq.api import export_ppq_graph, quantize_torch_model, QuantizationSettingFactory, load_graph, dump_torch_to_onnx
-
-BATCHSIZE = 32
+BATCHSIZE   = 32
 INPUT_SHAPE = [3, 224, 224]
-DEVICE = 'cuda' # only cuda is fully tested :(  For other executing device there might be bugs.
-PLATFORM = TargetPlatform.PPL_CUDA_INT8  # identify a target platform for your network.
+DEVICE      = 'cuda'
+PLATFORM    = TargetPlatform.PPL_CUDA_INT8  # identify a target platform for your network.
 
 def load_calibration_dataset() -> Iterable:
     return [torch.rand(size=INPUT_SHAPE) for _ in range(32)]
@@ -32,8 +32,6 @@ dump_torch_to_onnx(
 quant_setting = QuantizationSettingFactory.pplcuda_setting()
 quant_setting.equalization = True # use layerwise equalization algorithm.
 quant_setting.dispatcher   = 'conservative' # dispatch this network in conservertive way.
-
-quant_setting.advanced_optimization = True # use advanced optimization procedure
 
 # load graph from disk
 # For pytorch user, just dump your network to disk with onnx first

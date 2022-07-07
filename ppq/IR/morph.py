@@ -366,6 +366,8 @@ class GraphFormatter(GraphCommandProcessor):
 
                 # 删除孤立变量
                 if var.source_op is None and var.name not in self.graph.inputs:
+                    # PATCH 20220630, onnx 使用名字为 '' 的变量占位，这些占位变量不能删除
+                    if var.name == '': continue
                     if not var.is_parameter:
                         var_blacklist.add(var)
 
@@ -517,7 +519,7 @@ class GraphMerger(GraphCommandProcessor):
 
                 # calculate new weight and bias
                 scale = alpha / np.sqrt(var + epsilon)
-                w = w * scale.reshape([-1, 1, 1, 1])
+                w = w * scale.reshape([-1] + [1] * (w.ndim - 1))
                 b = alpha * (b - mean) / np.sqrt(var + epsilon) + beta
 
             elif computing_op.type == 'Gemm':
@@ -561,7 +563,7 @@ class GraphMerger(GraphCommandProcessor):
             # delete old operations
             computing_op.inputs.pop(0)
             bn_op.outputs.clear()
-            self.graph.delete_operation(computing_op.name, cascade=True)
+            self.graph.remove_operation(computing_op)
 
             # insert new
             self.graph.append_operation(merged_op)

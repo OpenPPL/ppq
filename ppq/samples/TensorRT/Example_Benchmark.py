@@ -31,6 +31,8 @@ DEVICE  = 'cuda'
 
 def infer_trt(model_path: str, samples: List[np.ndarray]) -> List[np.ndarray]:
     """ Run a tensorrt model with given samples
+    你需要注意我这里留了数据 IO，数据总是从 host 送往 device 的
+    如果你只关心 GPU 上的运行时间，你应该修改这个方法使得数据不发生迁移
     """
     logger = trt.Logger(trt.Logger.INFO)
     with open(model_path, 'rb') as f, trt.Runtime(logger) as runtime:
@@ -46,6 +48,7 @@ def infer_trt(model_path: str, samples: List[np.ndarray]) -> List[np.ndarray]:
                 outputs=outputs, stream=stream, batch_size=1)
             results.append(convert_any_to_torch_tensor(output).reshape([-1, 1000]))
     return results
+
 
 for mname, model_builder in MODELS.items():
     print(f'Ready for run quantization with {mname}')

@@ -1571,6 +1571,16 @@ def ReduceSum_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
         output = torch.sum(input_value, dim=dim[0], keepdim=keepdim)
     return output
 
+
+def ScatterElements_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
+    input_data, indices, updates = values
+    dim = op.attributes.get('axis', 0)
+    # Negative indices
+    indices[indices < 0] += input_data.shape[dim]
+    output = input_data.scatter(dim, indices, updates)
+    return output
+
+
 SOI_BACKEND_TABLE = {
     'Shape': Shape_forward,
     'Div': Div_forward,
@@ -1616,4 +1626,5 @@ SOI_BACKEND_TABLE = {
     'GreaterOrEqual': GreaterOrEqual_forward,
     'LessOrEqual': LessOrEqual_forward,
     'ReduceSum': ReduceSum_forward,
+    'ScatterElements': ScatterElements_forward,
 }

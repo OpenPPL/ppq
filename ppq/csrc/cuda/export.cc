@@ -19,4 +19,6 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("RoundingLoss_LC", RoundingLoss_LC, "RoundingLoss_LC");
     m.def("RoundingLoss_LT_B", RoundingLoss_LT_B, "RoundingLoss_LT_B");
     m.def("RoundingLoss_LC_B", RoundingLoss_LC_B, "RoundingLoss_LC_B");
+
+    m.def("Isotone_T", Isotone_T, "Isotone_T");
 }
