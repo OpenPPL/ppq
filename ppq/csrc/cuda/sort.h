@@ -14,3 +14,5 @@ void Histogram_C(
     const float hist_scale,
     const bool clip_outliers,
     Tensor &hist);
+
+Tensor Isotone_T(const Tensor &source);

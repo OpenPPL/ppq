@@ -24,7 +24,7 @@ def convert_value(
     value = convert_any_to_numpy(value, accepet_none=False)
     value = value.astype(dtype=DataType.to_numpy(dtype))
     if export_as_float:
-        value = np.asscalar(value[0])
+        value = value[0].item()
         assert type(value) in {int, float}, (
             f'Trying to dump a tensorwise quantization value {value}. '
             f'It is Expected to be a int or float value, while {type(value)} was given')

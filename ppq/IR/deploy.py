@@ -1,11 +1,13 @@
 from typing import Any, List
 
+import torch
 from ppq.core import (TargetPlatform, convert_any_to_numpy,
                       convert_any_to_torch_tensor)
 
 from .base.command import GraphCommand, GraphCommandType, GraphDeployCommand
 from .base.graph import BaseGraph, Operation, Variable
 from .processer import GraphCommandProcessor
+from .quantize import QuantableOperation
 
 
 class RunnableGraph(GraphCommandProcessor):
@@ -90,6 +92,12 @@ class RunnableGraph(GraphCommandProcessor):
                 value = operator.attributes['value']
                 operator.attributes['value'] = convert_any_to_torch_tensor(
                     value, accepet_none=False, device='cpu')
+
+            # PATCH 20220706, send quantization config to device.
+            if isinstance(operator, QuantableOperation):
+                for cfg, var in operator.config_with_variable:
+                    if isinstance(cfg._scale, torch.Tensor): cfg._scale = cfg._scale.to(device)
+                    if isinstance(cfg._offset, torch.Tensor): cfg._offset = cfg._offset.to(device)
 
         for _, variable in self._graph.variables.items():
             assert isinstance(variable, Variable), \

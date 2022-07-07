@@ -127,11 +127,12 @@ class CaffeExporter(GraphExporter):
         for name, var in graph.inputs.items():
             caffe_model.input.append(name)
             input_shape = ppl_caffe_pb2.BlobShape()
+            var.meta.shape[0] = 1
             input_shape.dim.extend(var.meta.shape)
             caffe_model.input_shape.extend([input_shape])
 
         # export op
-        for op in graph.operations.values():
+        for op in graph.topological_sort():
             if op.type not in caffe_export_map:
                 raise NotImplementedError(
                     f'{op.type} converted to Caffe OP is not supported in PPQ export parser yet')

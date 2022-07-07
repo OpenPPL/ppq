@@ -11,7 +11,8 @@ def CEHCK_TYPE(op: Operation, t: str):
 
 def CHECK_OPSET(min_version_supported: int, 
                 max_version_supported: int, 
-                op: Operation, strict_check: bool = STRICT_OPSET_CHECKING):
+                op: Operation, 
+                strict_check: bool = STRICT_OPSET_CHECKING):
     opset = op.opset
     if opset.domain != ONNX_DOMAIN:
         if not strict_check:

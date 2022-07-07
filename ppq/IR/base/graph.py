@@ -1,6 +1,6 @@
 from abc import ABCMeta, abstractmethod, abstractproperty
 from collections import deque
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Text, Union
 
 import torch
 from ppq.core import (CAFFE_DOMAIN, COMPUTING_OP, DEFAULT_OPSET_DOMAIN,
@@ -192,7 +192,35 @@ class Variable(Serializable):
         state['_dest_ops'] = [op.name for op in self.dest_ops]
         state['_source_op'] = self.source_op.name if self.source_op is not None else None
         return state
+
+    @ property
+    def shape(self) -> List[int]:
+        """ Return tensor shape of this variable
+        It is modifiable when current variable is not a paramter.
+        """
+        if self.value is not None: 
+            return self.value.shape
+        if self.meta is not None:
+            return self.meta.shape
+        else: return None
     
+    @ shape.setter
+    def shape(self, new_shape: List[Union[Text, int, None]]):
+        if self.meta is None:
+            raise PermissionError(f'Can not assign shape with variable {self.name}, '
+                                  'cause it is not linked within a graph.')
+        if self.is_parameter == True:
+            raise PermissionError(f'Can not assign shape with variable {self.name}, '
+                                  'cause it is a parameter varaible.')
+        # override all meta data.
+        if self.source_op is not None:
+            if self.source_op.meta_data is not None:
+                self.source_op.meta_data.output_metas[self.src_idx].shape = new_shape
+        
+        for dest_op, dest_idx in zip(self.dest_ops, self.dest_idx):
+            if dest_op.meta_data is not None:
+                dest_op.meta_data.input_metas[dest_idx].shape = new_shape
+
     def copy(self, copy_value: bool = False):
         if not copy_value or self.value is None:
             return Variable(name=self.name, value=self.value, is_parameter=self.is_parameter)
@@ -343,6 +371,13 @@ class BaseGraph(Serializable):
     @ property
     def outputs(self) -> Dict[str, Variable]:
         return self._graph_outputs
+
+    def set_extension_attrib(self, attrib: str, value: Any):
+        self._detail[attrib] = value
+
+    @ property
+    def extension_attrib(self):
+        return self._detail
 
     def delete_operation(self, op_name: str, cascade: bool = False, force_delete: bool = False):
         # legacy function since ppq 0.6.4

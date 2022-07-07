@@ -3,9 +3,12 @@ from typing import Tuple
 
 import torch
 from ppq.core import (CUDA, OBSERVER_KL_COMPUTING_DEVICE,
-                      OBSERVER_KL_HIST_BINS, OBSERVER_MIN_SCALE,
-                      OBSERVER_MSE_HIST_BINS, OBSERVER_PERCENTILE, PPQ_CONFIG,
-                      ChannelwiseTensorQuantizationConfig,
+                      OBSERVER_KL_HIST_BINS,
+                      OBSERVER_KL_HIST_BINS_MANUL_OVERRIDE, OBSERVER_MIN_SCALE,
+                      OBSERVER_MIN_SCALE_MANUL_OVERRIDE,
+                      OBSERVER_MSE_HIST_BINS, OBSERVER_PERCENTILE,
+                      OBSERVER_PERCENTILE_MANUL_OVERRIDE, OBSERVER_WARNING,
+                      PPQ_CONFIG, ChannelwiseTensorQuantizationConfig,
                       QuantizationProperty, QuantizationStates, RoundingPolicy,
                       TensorQuantizationConfig, convert_any_to_numpy,
                       ppq_quant_param_computing_function, ppq_warning)
@@ -22,6 +25,9 @@ def minmax_to_scale_offset(
     config: TensorQuantizationConfig,
     scale_threshold: float=OBSERVER_MIN_SCALE
 ) -> Tuple[float, float]:
+    if OBSERVER_MIN_SCALE_MANUL_OVERRIDE in config.detail:
+        scale_threshold = config.detail[OBSERVER_MIN_SCALE_MANUL_OVERRIDE]
+    
     scale, offset = 1, 0
     if min_val > 0: min_val = 0
     if max_val < 0: max_val = 0
@@ -29,7 +35,7 @@ def minmax_to_scale_offset(
     if config.policy.has_property(QuantizationProperty.ASYMMETRICAL):
         range = float(max_val - min_val)
         scale  = range / (config.quant_max - config.quant_min)
-        if scale < scale_threshold: 
+        if scale < scale_threshold and OBSERVER_WARNING: 
             ppq_warning('Numeric instability detected: '
                         'ppq find there is a scale value < 1e-7, '
                         'which probably cause numeric underflow in further computation.')
@@ -39,7 +45,7 @@ def minmax_to_scale_offset(
     elif config.policy.has_property(QuantizationProperty.SYMMETRICAL):
         range = 2 * float(max(abs(max_val), abs(min_val)))
         scale  = range / (config.quant_max - config.quant_min)
-        if scale < scale_threshold: 
+        if scale < scale_threshold and OBSERVER_WARNING: 
             ppq_warning('Numeric instability detected: '
                         'ppq find there is a scale value < 1e-7, '
                         'which probably cause numeric underflow in further computation.')
@@ -120,6 +126,8 @@ class TorchHistObserver(TorchMinMaxObserver):
         self._phase = 'Detecting Minmax'
         self._hist  = None
         self._hist_scale = None
+        if OBSERVER_KL_HIST_BINS_MANUL_OVERRIDE in quant_cfg.detail:
+            hist_bins = quant_cfg.detail[OBSERVER_KL_HIST_BINS_MANUL_OVERRIDE]
         self._hist_bins  = hist_bins
         super().__init__(watch_on, quant_cfg)
 
@@ -165,6 +173,8 @@ class TorchHistObserver(TorchMinMaxObserver):
         Returns:
             Tuple[float, int]: scale(fp32) and offset(int).
         """
+        if OBSERVER_MIN_SCALE_MANUL_OVERRIDE in config.detail:
+            scale_threshold = config.detail[OBSERVER_MIN_SCALE_MANUL_OVERRIDE]
 
         # move histogram to cpu, speedup computation.
         histogram = histogram.to(computing_device).float()
@@ -215,7 +225,7 @@ class TorchHistObserver(TorchMinMaxObserver):
         best_bin_range = sorted(losses, key=lambda x: x['kl'])[0]['bin_range']
         scale, offset = (best_bin_range / self._hist_bins) * hist_scale * (self._hist_bins / quant_bins), 0
         
-        if scale < scale_threshold: 
+        if scale < scale_threshold and OBSERVER_WARNING: 
             ppq_warning('Numeric instability detected: '
                         'ppq find there is a scale value < 1e-7, '
                         'which probably cause numeric underflow in further computation.')
@@ -252,7 +262,9 @@ class TorchHistObserver(TorchMinMaxObserver):
 class TorchPercentileObserver(BaseTensorObserver):
     def __init__(self, watch_on: Variable, quant_cfg: TensorQuantizationConfig):
         super().__init__(watch_on, quant_cfg)
-        self._percentile = OBSERVER_PERCENTILE
+        if not OBSERVER_PERCENTILE_MANUL_OVERRIDE in quant_cfg.detail:
+            self._percentile = OBSERVER_PERCENTILE
+        else: self._percentile = quant_cfg.detail[OBSERVER_PERCENTILE_MANUL_OVERRIDE]
         self._percentile_collector = []
         self._percentile_maxs = []
         self._percentile_mins = []
@@ -354,6 +366,9 @@ class TorchMSEObserver(TorchHistObserver):
         config: TensorQuantizationConfig,
         scale_threshold: float = OBSERVER_MIN_SCALE
     ) -> Tuple[float, int]:
+        if OBSERVER_MIN_SCALE_MANUL_OVERRIDE in config.detail:
+            scale_threshold = config.detail[OBSERVER_MIN_SCALE_MANUL_OVERRIDE]
+
         histogram = convert_any_to_numpy(histogram).tolist()
         total_elements = sum(histogram)
 

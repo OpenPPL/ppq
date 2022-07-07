@@ -108,6 +108,12 @@ def ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op: Operation, values: List[torch.Tensor],
     if any([devices[0] != d for d in devices]):
         raise ValueError(f'Input tensors do not share a same device. ({[d for d in devices]})')
 
+def GET_VALUE_FROM_INPUTS(values: list, idx: int) -> torch.Tensor:
+    assert isinstance(idx, int)
+    assert idx > 0
+    if len(values) > idx: return values[idx]
+    else: return None
+
 def ASSERT_IS_QUANT_OP(op: QuantableOperation):
     if not isinstance(op, QuantableOperation):
         raise TypeError(f'Given Operation is expected as a QuantableOperation, however {type(op)} was given.')

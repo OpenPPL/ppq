@@ -7,6 +7,7 @@ from ppq.executor import QuantOPRuntimeHook
 from ppq.IR import QuantableOperation, Variable
 
 from .base import BaseTensorObserver
+from .order import TorchIsotoneObserver
 from .range import (TorchHistObserver, TorchMinMaxObserver, TorchMSEObserver,
                     TorchPercentileObserver)
 
@@ -14,7 +15,8 @@ PPQ_OBSERVER_TABLE = {
     'minmax': TorchMinMaxObserver,
     'kl': TorchHistObserver,
     'percentile': TorchPercentileObserver,
-    'mse': TorchMSEObserver
+    'mse': TorchMSEObserver,
+    'isotone': TorchIsotoneObserver
 }
 
 

@@ -13,6 +13,7 @@ from ppq.IR import (BaseGraph, Operation, QuantableOperation,
                     QuantableVariable, Variable)
 from ppq.IR.base.command import GraphCommand, GraphCommandType
 from ppq.IR.morph import GraphDeviceSwitcher, GraphFormatter
+from ppq.core.common import GRAPH_OPSET_ATTRIB
 from ppq.utils.round import ppq_tensor_round
 
 from .onnx_exporter import OnnxExporter
@@ -346,8 +347,8 @@ class MetaxExporter(OnnxExporter):
         extra_opsets = self.required_opsets()
 
         opsets = []
-        if 'opsets' in graph._detail:
-            for opset in graph._detail['opsets']:
+        if GRAPH_OPSET_ATTRIB in graph._detail:
+            for opset in graph._detail[GRAPH_OPSET_ATTRIB]:
                 if opset['domain'] in extra_opsets or opset['domain'] == '':
                     continue
                 op = onnx.OperatorSetIdProto()

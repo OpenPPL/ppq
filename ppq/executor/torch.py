@@ -1,9 +1,9 @@
 from typing import Any, Callable, Dict, List, Union
 
 import numpy
-from ppq.core import (DataType, OperationMeta, QuantizationStates,
-                      TargetPlatform, TensorMeta, TensorQuantizationConfig,
-                      empty_ppq_cache, ppq_warning)
+from ppq.core import (IS_DISPATCHED_GRAPH, DataType, OperationMeta,
+                      QuantizationStates, TargetPlatform, TensorMeta,
+                      TensorQuantizationConfig, empty_ppq_cache, ppq_warning)
 from ppq.IR import BaseGraph, Operation, QuantableOperation, RunnableGraph
 from ppq.IR.base.command import GraphDeployCommand
 from ppq.quantization.qfunction.linear import PPQLinearQuantFunction
@@ -116,6 +116,11 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
         self._device = device
         self._executing_context = TorchBackendContext(executing_device=self._device)
         super().__init__(graph)
+        
+        if not graph.extension_attrib.get(IS_DISPATCHED_GRAPH, False):
+            ppq_warning('Can initilize executor with your graph, cause it has not been correctly dispatched, '
+                        'use dispatch_graph(graph=ir, platform=platfrom, setting=setting) first.')
+        
         self._runnable_graph = RunnableGraph(self._graph)
         self._delegates = {}
 

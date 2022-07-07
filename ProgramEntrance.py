@@ -152,7 +152,7 @@ with ENABLE_CUDA_KERNEL():
         platform=TARGET_PLATFORM,
         device=EXECUTING_DEVICE,
         do_quantize=True)
-
+    
     # -----------------------------------------------------------------
     # 我们允许你在标准量化流程之后添加自定义量化逻辑，通常在标准量化流程之后添加的逻辑用于：
     # 调整量化信息，再训练网络权重
