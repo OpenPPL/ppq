@@ -8,3 +8,7 @@ __pycache__/
 /build
 /dist
 /ppq.egg-info
+
+**/*.pt
+/benchmark/Assets/
+**/*.json

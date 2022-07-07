@@ -19,15 +19,15 @@ from ppq.api import *
 import os
 
 # modify configuration below:
-WORKING_DIRECTORY = './benchmark'                        # choose your working directory
+WORKING_DIRECTORY = './'                        # choose your working directory
 TARGET_PLATFORM   = TargetPlatform.PPL_CUDA_INT8          # choose your target platform
 MODEL_TYPE        = NetworkFramework.ONNX                 # or NetworkFramework.CAFFE
 INPUT_LAYOUT          = 'chw'                             # input data layout, chw or hwc
 NETWORK_INPUTSHAPE    = [1, 3, 224, 224]                  # input shape of your network
 CALIBRATION_BATCHSIZE = 16                                # batchsize of calibration dataset
 EXECUTING_DEVICE      = 'cuda'                            # 'cuda' or 'cpu'.
-REQUIRE_ANALYSE       = False
-DUMP_RESULT           = False
+REQUIRE_ANALYSE       = True                              #量化误差分析
+DUMP_RESULT           = False                              
 
 # -------------------------------------------------------------------
 # 加载你的模型文件，PPQ 将会把 onnx 或者 caffe 模型文件解析成自己的格式
@@ -36,7 +36,7 @@ DUMP_RESULT           = False
 # -------------------------------------------------------------------
 graph = None
 if MODEL_TYPE == NetworkFramework.ONNX:
-    graph = load_onnx_graph(onnx_import_file = os.path.join(WORKING_DIRECTORY, 'model.onnx'))
+    graph = load_onnx_graph(onnx_import_file = os.path.join(WORKING_DIRECTORY, 'resnet18.onnx'))
 if MODEL_TYPE == NetworkFramework.CAFFE:
     graph = load_caffe_graph(
         caffemodel_path = os.path.join(WORKING_DIRECTORY, 'model.caffemodel'),
