@@ -1,10 +1,10 @@
 # PPL Quantization Tool 0.6.5(PPL 量化工具)
 PPL QuantTool (PPQ) is a highly efficient neural network quantization tool with custimized IR, cuda based executor, automatic dispacher and powerful optimization passes. Together with OpenPPL ecosystem, we offer you this industrial-grade network deploy tool that empowers AI developers to unleash the full potential of AI hardware. With quantization and other optimizations, nerual network model can run 5~10x faster than ever.
 
-PPL QuantTool 是一个高效的工业级神经网络量化工具.
-PPQ 被设计为一个灵活而全面的神经网络离线量化工具，我们允许你控制对量化进行细致入微的控制，同时严格控制硬件模拟误差，即便在网络极度复杂的情况下，我们依然能够得到正确的网络量化结果。PPQ 有着自定义的量化算子库、网络执行器、神经网络调度器、量化计算图等独特设计，这些转为量化而设计的组件相互协作，共同构成了这一先进神经网络量化框架。借助 PPQ, OpenPPL, TensorRT, Tengine，ncnn等框架，开发者可以将神经网络模型加速 10 ~ 100 倍，并部署到多种多样的目标终端，我们期待你将人工智慧带到千家万户之间。
+PPL QuantTool 是一个高效的工业级神经网络量化工具。
+PPQ 被设计为一个灵活而全面的神经网络离线量化工具，我们允许你控制对量化进行细致入微的控制，同时严格控制硬件模拟误差。即便在网络极度复杂的情况下，我们依然能够得到正确的网络量化结果。PPQ 有着自定义的量化算子库、网络执行器、神经网络调度器、量化计算图等独特设计，这些为量化而设计的组件相互协作，共同构成了这一先进神经网络量化框架。借助 PPQ, OpenPPL, TensorRT, Tengine，ncnn等框架，你可以将神经网络模型提速 10 ~ 100 倍，并部署到多种多样的目标硬件平台，我们期待你将人工智慧带到千家万户之间。
 
-目前 PPQ 使用 onnx(opset 11 ~ 13) 模型文件作为输入，覆盖常用的 90 余种 onnx 算子类型。，如果你是Pytorch, tensorflow 的用户，你可以使用这些框架提供的方法将模型转换到onnx。截止目前 PPQ 支持向TensorRT, OpenPPL, Openvino, ncnn, Onnxruntime, Tengine, Snpe等多个推理引擎生成目标文件并完成部署。借助算子自定义与平台自定义功能，你还可以将 PPQ 的量化能力扩展到其他可能的硬件平台。
+目前 PPQ 使用 onnx(opset 11 ~ 13) 模型文件作为输入，覆盖常用的 90 余种 onnx 算子类型。如果你是 Pytorch, tensorflow 的用户，你可以使用这些框架提供的方法将模型转换到 onnx。PPQ 支持向 TensorRT, OpenPPL, Openvino, ncnn, Onnxruntime, Tengine, Snpe 等多个推理引擎生成目标文件并完成部署。借助算子自定义与平台自定义功能，你还可以将 PPQ 的量化能力扩展到其他可能的硬件上。
 
 # Code Example
 | **使用例子(Examples)** | **网络部署平台(Platform)** | **输入模型格式(Format)** | **链接(Link)** | **相关视频(Video)** |
