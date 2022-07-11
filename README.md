@@ -1,10 +1,10 @@
-# PPL Quantization Tool 0.6.4(PPL 量化工具)
+# PPL Quantization Tool 0.6.5(PPL 量化工具)
 PPL QuantTool (PPQ) is a highly efficient neural network quantization tool with custimized IR, cuda based executor, automatic dispacher and powerful optimization passes. Together with OpenPPL ecosystem, we offer you this industrial-grade network deploy tool that empowers AI developers to unleash the full potential of AI hardware. With quantization and other optimizations, nerual network model can run 5~10x faster than ever.
 
-PPL QuantTool 是一个高效的工业级的神经网络量化工具.
-我们使用量化计算图(QIR)描述量化细节，即便在网络极度复杂的情况下，我们依然能够保证以正确的方法模拟硬件计算，从而降低模拟误差。PPQ 有着自定义的量化算子库、网络执行器、调度器与异构执行能力，在网络量化与量化训练方面，使用 PPQ 比原生 PyTorch 快3 ~ 50倍。 借助 PPQ, OpenPPL, TensorRT, Tengine，ncnn等框架，开发者可以将神经网络模型加速 10 ~ 100 倍，并部署到多种多样的目标终端，我们期待你将人工智慧带到千家万户之间。
+PPL QuantTool 是一个高效的工业级神经网络量化工具。
+PPQ 被设计为一个灵活而全面的神经网络离线量化工具，我们允许你控制对量化进行细致入微的控制，同时严格控制硬件模拟误差。即便在网络极度复杂的情况下，我们依然能够得到正确的网络量化结果。PPQ 有着自定义的量化算子库、网络执行器、神经网络调度器、量化计算图等独特设计，这些为量化而设计的组件相互协作，共同构成了这一先进神经网络量化框架。借助 PPQ, OpenPPL, TensorRT, Tengine，ncnn等框架，你可以将神经网络模型提速 10 ~ 100 倍，并部署到多种多样的目标硬件平台，我们期待你将人工智慧带到千家万户之间。
 
-目前 PPQ 接受任何可能的 onnx(opset 11) 模型文件作为输入，如果你是Pytorch, tensorflow的用户，你可以使用这些框架提供的方法将模型转换到onnx。截止目前 PPQ 支持向TensorRT, OpenPPL, Openvino, ncnn, Onnxruntime, Tengine, Snpe等多个推理引擎生成目标文件并完成部署。借助算子自定义与平台自定义功能，你还可以将 PPQ 的量化能力扩展到其他可能的硬件平台。
+目前 PPQ 使用 onnx(opset 11 ~ 13) 模型文件作为输入，覆盖常用的 90 余种 onnx 算子类型。如果你是 Pytorch, tensorflow 的用户，你可以使用这些框架提供的方法将模型转换到 onnx。PPQ 支持向 TensorRT, OpenPPL, Openvino, ncnn, Onnxruntime, Tengine, Snpe 等多个推理引擎生成目标文件并完成部署。借助算子自定义与平台自定义功能，你还可以将 PPQ 的量化能力扩展到其他可能的硬件上。
 
 # Code Example
 | **使用例子(Examples)** | **网络部署平台(Platform)** | **输入模型格式(Format)** | **链接(Link)** | **相关视频(Video)** |
@@ -14,16 +14,19 @@ PPL QuantTool 是一个高效的工业级的神经网络量化工具.
 | 量化你的第一个 onnx 网络 | - | onnx | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/quantize_onnx_model.py) | |
 | 量化你的第一个 caffe 网络 | - | caffe | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/quantize_caffe_model.py) | |
 | 走进 PPQ | - | onnx | [link](https://github.com/openppl-public/ppq/blob/master/md_doc/how_to_use.md) | [link](https://www.bilibili.com/video/BV1934y147p2 "PPQ User Guide") |
+| 量化函数 | - | - | [link](https://github.com/openppl-public/ppq/blob/master/md_doc/ppq_qlinear_function.md) |  |
+| 量化参数选择 | - | - |  | [link](https://www.bilibili.com/video/BV1QF41157aM) |
 | 量化误差分析 | - | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/analyse.py) | [link](https://www.bilibili.com/video/BV1xY411A7ea "Graph Dispatching & Pattern Matching.") |
 | 算子调度 | - | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/dispatch.py) | [link](https://www.bilibili.com/video/BV1xY411A7ea "Graph Dispatching & Pattern Matching.") |
 | 执行量化网络 | PPQ Executor | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/execute.py) ||
 | 启动 cuda kernel 加速执行 | PPQ Executor | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/enable_cuda_kernel.py) ||
 | `TensorRT` |  |  |  |  |
-| 使用 Torch2trt 加速你的网络 | pytorch | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/TensorRT/Example_Torch2trt.py) ||
-| TensorRT 量化训练 | TensorRT | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/TensorRT/Example_QAT.py) ||
-| TensorRT 后训练量化(PPQ) | TensorRT | onnx | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/TensorRT/Example_PTQ.py) ||
-| TensorRT fp32 部署 | TensorRT | onnx | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/TensorRT/Example_Fp32.py) ||
-| TensorRT 性能比较 | TensorRT | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/TensorRT/Example_Benchmark.py) ||
+| 使用 Torch2trt 加速你的网络 | pytorch | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/TensorRT/Example_Torch2trt.py) | [link](https://www.bilibili.com/video/BV1AU4y127Uo) |
+| TensorRT 量化训练 | TensorRT | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/TensorRT/Example_QAT.py) | [link](https://www.bilibili.com/video/BV1AU4y127Uo) |
+| TensorRT 后训练量化(PPQ) | TensorRT | onnx | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/TensorRT/Example_PTQ.py) | [link](https://www.bilibili.com/video/BV1AU4y127Uo) |
+| TensorRT fp32 部署 | TensorRT | onnx | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/TensorRT/Example_Fp32.py) | [link](https://www.bilibili.com/video/BV1AU4y127Uo) |
+| TensorRT 性能比较 | TensorRT | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/TensorRT/Example_Benchmark.py) | [link](https://www.bilibili.com/video/BV1AU4y127Uo) |
+| TensorRT 性能分析工具 | TensorRT | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/TensorRT/Example_Profiling.py) | [link](https://www.bilibili.com/video/BV1AU4y127Uo) |
 | `onnxruntime` |  |  |  |  |
 | 使用 onnxruntime 加速你的网络 | onnxruntime | onnx | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/Onnxruntime/Example_Fp32.py) | [link](https://www.bilibili.com/video/BV1t34y1E7Fz "Network Deploy") |
 | onnx 后训练量化(PPQ) | onnxruntime | onnx | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/Onnxruntime/Example_PTQ.py) | [link](https://www.bilibili.com/video/BV1t34y1E7Fz "Network Deploy") |
@@ -44,7 +47,9 @@ PPL QuantTool 是一个高效的工业级的神经网络量化工具.
 | 添加自定义量化平台 2 | - | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/create_your_platform.py) ||
 | 注册量化代理函数 | - | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/custimize_quant_func.py) ||
 | 自定义量化算子 | - | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/custimized_quant.py) ||
-
+| 绕过与量化无关的算子 | - | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/bypass_nms.py) ||
+| `其他` |  |  |  |  |
+| onnx 格式转换 | - | onnx | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/onnx_converter.py) ||
 
 # Video Tutorial(Bilibili 视频教程)
 Watch video tutorial series on www.bilibili.com, following are links of PPQ tutorial links(Only Chinese version).
@@ -79,9 +84,9 @@ ATTENTION: Make sure your Python version is >= 3.6.0. PPL Quantization Tool is w
 
     * For Windows User:
         * Download ninja.exe from [https://github.com/ninja-build/ninja/releases](https://github.com/ninja-build/ninja/releases), add it to Windows PATH Environment
-        * Download Visual Studio from [https://visualstudio.microsoft.com](https://visualstudio.microsoft.com/zh-hans/), if you already got a c++ compiler, you can skip this step.
-        * Please Update Visual studio to 2019, otherwise there might be some compile error like: CxxFrameHandler4 unresolved, GSHandlerCheck unresolved.
+        * Download Visual Studio 2019 from [https://visualstudio.microsoft.com](https://visualstudio.microsoft.com/zh-hans/), if you already got a c++ compiler, you can skip this step.
         * Add your c++ compiler to Windows PATH Environment, if you are using Visual Studio, it should be something like "C:\Program Files\Microsoft Visual Studio\2019\Community\VC\Tools\MSVC\14.16.27023\bin\Hostx86\x86"
+        * Update pytorch to 1.10+.
 
 * Install PPQ from source:
 

@@ -9,6 +9,12 @@ __pycache__/
 /dist
 /ppq.egg-info
 
+
 **/*.pt
 /benchmark/Assets/
 **/*.json
+/benchmark/classification/FP32_model
+/benchmark/classification/Ncnn_output
+/benchmark/classification/OpenVino_output
+/benchmark/classification/Snpe_output
+/benchmark/classification/TRT_output
