@@ -960,10 +960,12 @@ class LearningStepSizeOptimization(TrainingBasedPass):
                 epoch_loss = {name: 0.0 for name in output_names}
                 for idx,data in enumerate(block_dataloader):
                     fp_outputs, quant_input = data
-                    quant_outputs = executor.partial_graph_forward(blk.rps, {blk.sp.inputs[0].name: quant_input}, output_names)
+
                     if str(executor._device) != self.collecting_device:
                         quant_input = quant_input.to(executor._device)
                         fp_outputs  = [output.to(executor._device) for output in fp_outputs]
+
+                    quant_outputs = executor.partial_graph_forward(blk.rps, {blk.sp.inputs[0].name: quant_input}, output_names)
                     optimizer.zero_grad()
                     batch_loss = 0.0
                     for name, fp_output, quant_output in zip(output_names, fp_outputs, quant_outputs):
