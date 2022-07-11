@@ -14,7 +14,10 @@ from ppq.IR import BaseGraph
 from torch.utils.data.dataloader import DataLoader
 from torch.utils.data.dataset import Subset
 from tqdm import tqdm
+
 from ppq.core import *
+import openvino.runtime
+from trt_infer import TrtInferenceModel
 
 
 def accuracy(output, target, topk=(1,)):
@@ -150,17 +153,41 @@ def evaluate_ppq_module_with_imagenet(
     )
 
 def evaluate_openvino_module_with_imagenet(
-    model: BaseGraph, imagenet_validation_dir: str=None,
+    model_path: str, imagenet_validation_dir: str=None,
     batchsize: int = 32, device: str = 'cuda',
     imagenet_validation_loader: DataLoader = None,
     verbose: bool = True
     ) -> pd.DataFrame:
     """
-        一套用来测试 openvino 模块的逻辑，
+        一套用来测试 openvino 平台量化精度的代码
     """
+    openvino_executor = openvino.runtime.Core()
+    model_openvino = openvino_executor.compile_model(
+    model = openvino_executor.read_model(model=model_path), device_name="CPU")
 
     model_forward_function = lambda input_tensor: torch.tensor(list(
-        model([convert_any_to_numpy(input_tensor)]).values())[0])
+        model_openvino([convert_any_to_numpy(input_tensor)]).values())[0])
+    return _evaluate_any_module_with_imagenet(
+        model_forward_function=model_forward_function, batchsize=batchsize,
+        device=device, imagenet_validation_dir=imagenet_validation_dir,
+        imagenet_validation_loader=imagenet_validation_loader, verbose=verbose
+    )
+
+
+
+
+def evaluate_trt_module_with_imagenet(
+    model_path: str, imagenet_validation_dir: str=None,
+    batchsize: int = 32, device: str = 'cuda',
+    imagenet_validation_loader: DataLoader = None,
+    verbose: bool = True
+    ) -> pd.DataFrame:
+    """
+        一套用来测试 TensorRT 平台量化精度的代码
+    """
+
+    model_forward_function = TrtInferenceModel(model_path)
+
     return _evaluate_any_module_with_imagenet(
         model_forward_function=model_forward_function, batchsize=batchsize,
         device=device, imagenet_validation_dir=imagenet_validation_dir,

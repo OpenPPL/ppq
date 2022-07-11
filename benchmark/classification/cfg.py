@@ -9,6 +9,9 @@ MODELS = {
 
 FP32_BASE_PATH = "./FP32_model"
 OPENVINO_BASE_PATH = "./OpenVino_output"
+TRT_BASE_PATH = "./TRT_output"
+
+
 BATCHSIZE = 64     # 测试与calib时的 batchsize
 INPUT_SHAPE = (BATCHSIZE,3,224,224)
 DEVICE = "cuda"
