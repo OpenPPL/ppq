@@ -14,6 +14,7 @@ from ppq.IR import BaseGraph
 from torch.utils.data.dataloader import DataLoader
 from torch.utils.data.dataset import Subset
 from tqdm import tqdm
+from ppq.core import *
 
 
 def accuracy(output, target, topk=(1,)):
@@ -148,6 +149,24 @@ def evaluate_ppq_module_with_imagenet(
         imagenet_validation_loader=imagenet_validation_loader, verbose=verbose
     )
 
+def evaluate_openvino_module_with_imagenet(
+    model: BaseGraph, imagenet_validation_dir: str=None,
+    batchsize: int = 32, device: str = 'cuda',
+    imagenet_validation_loader: DataLoader = None,
+    verbose: bool = True
+    ) -> pd.DataFrame:
+    """
+        一套用来测试 openvino 模块的逻辑，
+    """
+
+    model_forward_function = lambda input_tensor: torch.tensor(list(
+        model([convert_any_to_numpy(input_tensor)]).values())[0])
+    return _evaluate_any_module_with_imagenet(
+        model_forward_function=model_forward_function, batchsize=batchsize,
+        device=device, imagenet_validation_dir=imagenet_validation_dir,
+        imagenet_validation_loader=imagenet_validation_loader, verbose=verbose
+    )
+
 
 def _evaluate_any_module_with_imagenet(
     model_forward_function: Callable, imagenet_validation_dir: str,
@@ -179,7 +198,8 @@ def _evaluate_any_module_with_imagenet(
         batch_input = batch_input.to(device)
         batch_label = batch_label.to(device)
         batch_time_mark_point = time.time()
-
+        # print("batch_input:",batch_input.shape)
+        
         batch_pred = model_forward_function(batch_input)
         if isinstance(batch_pred, list): batch_pred = torch.tensor(batch_pred)
         
