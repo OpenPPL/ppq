@@ -18,3 +18,4 @@ __pycache__/
 /benchmark/classification/OpenVino_output
 /benchmark/classification/Snpe_output
 /benchmark/classification/TRT_output
+**/*.txt

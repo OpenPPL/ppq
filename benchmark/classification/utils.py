@@ -6,7 +6,8 @@ from Utilities.Imagenet import (evaluate_onnx_module_with_imagenet,
                                 evaluate_openvino_module_with_imagenet,
                                 evaluate_trt_module_with_imagenet)
 import cfg
-import torchvision
+from onnxsim import simplify
+import onnx
 
 
 def get_onnx_models():
@@ -15,6 +16,13 @@ def get_onnx_models():
         model = model_builder(weights=weights).to("cpu")  #放在cpu上，防止爆显存
         dump_torch_to_onnx(model=model, onnx_export_file=f'{os.path.join(cfg.FP32_BASE_PATH, name)}-FP32.onnx',
             input_shape=cfg.INPUT_SHAPE,input_dtype=torch.float,device="cpu")
+
+        onnx_model = onnx.load(f'{os.path.join(cfg.FP32_BASE_PATH, name)}-FP32.onnx') 
+        model_simp, check = simplify(onnx_model)   #对onnx模型进行简化，消除冗余算子        
+        assert check, "Simplified ONNX model could not be validated"
+        onnx.save(model_simp, f'{os.path.join(cfg.FP32_BASE_PATH, name)}-FP32.onnx')
+
+
 
 def get_fp32_accuracy(model_name):
 
@@ -62,7 +70,7 @@ def get_platform_accuracy(model_name,platform,output_path):
 
     elif platform == "TRT":
         report = evaluate_trt_module_with_imagenet(
-            model_path=f'{os.path.join(output_path, model_name)}-TRT-INT8.onnx', 
+            model_path=f'{os.path.join(output_path, model_name)}-TRT-INT8.engine', 
             imagenet_validation_dir=cfg.VALIDATION_DIR, batchsize=cfg.BATCHSIZE,
             device=cfg.DEVICE)
     else:
@@ -76,3 +84,4 @@ def get_platform_accuracy(model_name,platform,output_path):
 
 if __name__ == "__main__":
     get_onnx_models()
+    # get_fp32_accuracy("ResNet18")
