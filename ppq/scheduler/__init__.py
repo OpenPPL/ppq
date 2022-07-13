@@ -7,5 +7,5 @@ DISPATCHER_TABLE = {
     'conservative': ConservativeDispatcher,
     'pplnn': PPLNNDispatcher,
     'aggresive': AggresiveDispatcher,
-    'pointwise': PointDispatcher
+    'pointwise': PointDispatcher,
 }

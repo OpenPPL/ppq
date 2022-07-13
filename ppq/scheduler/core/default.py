@@ -186,7 +186,7 @@ def Resize_Socket(op: Operation) -> OpSocket:
             N-D tensor after resizing
     """
     CEHCK_TYPE(op=op, t='Resize')
-    CHECK_OPSET(op=op, min_version_supported=11, max_version_supported=13, strict_check=True)
+    CHECK_OPSET(op=op, min_version_supported=10, max_version_supported=13, strict_check=True)
     cls_input = [VProperty.VALUE, VProperty.SOI, VProperty.ATTRIB, VProperty.SOI]
     return OpSocket(
         op=op, cls_input=cls_input[: op.num_of_input], 

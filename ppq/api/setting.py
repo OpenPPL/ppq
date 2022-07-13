@@ -297,7 +297,6 @@ class LearningStepSizeSetting():
         self.collecting_device      = 'cuda'
 
 
-
 class BlockwiseReconstructionSetting():
      def __init__(self) -> None:
         # if given, only block containing op in interested_layers will be optimized, otherwise every
@@ -356,8 +355,8 @@ class DispatchingTable():
 
 class QuantizationSetting():
     def __init__(self) -> None:
-        # 子图切分与调度算法，可从 'aggresive', 'conservative', 'PPLNN' 中三选一，不区分大小写
-        self.dispatcher                      = 'conservative'
+        # 子图切分与调度算法，可从 'aggresive', 'conservative', 'PPLNN', 'prusus' 中三选一，不区分大小写
+        self.dispatcher                      = 'pursus'
 
         self.graph_format_setting            = GraphFormatSetting()
 
@@ -438,14 +437,12 @@ class QuantizationSettingFactory:
     def academic_setting() -> QuantizationSetting:
         default_setting = QuantizationSetting()
         default_setting.fusion = False
-        default_setting.dispatcher = 'pointwise'
         return default_setting
     
     @staticmethod
     def ncnn_setting() -> QuantizationSetting:
         default_setting = QuantizationSetting()
         default_setting.fusion = False
-        default_setting.dispatcher = 'pointwise'
         return default_setting
 
     @ staticmethod
@@ -492,7 +489,6 @@ class QuantizationSettingFactory:
     def trt_setting() -> QuantizationSetting:
         default_setting = QuantizationSetting()
         default_setting.fusion = False # 我也不知道对不对
-        default_setting.dispatcher = 'pointwise'
         return default_setting
 
     @ staticmethod

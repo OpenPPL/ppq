@@ -344,8 +344,9 @@ class BaseQuantizer(metaclass = ABCMeta):
                 lr                     = lsq_setting.lr,
                 scale_multiplier       = lsq_setting.scale_multiplier,
                 collecting_device      = lsq_setting.collecting_device
-            )
-        )
+            ))
+            # requant passive parameters
+            list_of_passes.append(PassiveParameterQuantizePass(override=True))
 
         if setting.blockwise_reconstruction:
             brecq_setting = setting.blockwise_reconstruction_setting
@@ -357,8 +358,9 @@ class BaseQuantizer(metaclass = ABCMeta):
                 lamda             = brecq_setting.lamda,
                 scale_multiplier  = brecq_setting.scale_multiplier,
                 collecting_device = brecq_setting.collecting_device
-            )
-        )
+            ))
+            # requant passive parameters
+            list_of_passes.append(PassiveParameterQuantizePass(override=True))
 
         if setting.advanced_optimization:
             optim_setting = setting.advanced_optimization_setting
@@ -370,8 +372,9 @@ class BaseQuantizer(metaclass = ABCMeta):
                 interested_layers = optim_setting.interested_layers,
                 interested_outputs= optim_setting.interested_outputs,
                 steps             = optim_setting.steps
-            )
-        )
+            ))
+            # requant passive parameters
+            list_of_passes.append(PassiveParameterQuantizePass(override=True))
 
         if setting.bias_correct:
             list_of_passes.append(BiasCorrectionPass(
