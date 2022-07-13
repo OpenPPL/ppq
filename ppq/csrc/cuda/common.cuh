@@ -9,7 +9,7 @@ using at::Tensor;
 using Rounding = int;
 
 # define __inline__ inline
-constexpr int64_t CUDA_NUM_THREADS     = 512;
+constexpr int64_t CUDA_NUM_THREADS     = 1024;
 constexpr int64_t CUDA_TARGET_BLOCKS   = 2560;
 
 constexpr int ROUND_HALF_EVEN          = 0;

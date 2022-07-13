@@ -29,6 +29,7 @@ except Exception as e:
                 'PPQ will disable CUDA KERNEL for now.')
     ppq_warning('Following are detailed error information: ')
     print(traceback.format_exc())
+    __CUDA_EXTENTION__ = None
     pass
 
 # helper class for calling cuda methods.
@@ -66,6 +67,8 @@ class CUDA:
         if not tensor.is_contiguous(): tensor = tensor.contiguous()
         # if scale is too small, quantization might cause fp32 underflow.
         # if scale < 1e-7: raise ValueError('scale is too small.')
+        if __CUDA_EXTENTION__ is None:
+            raise ValueError('Can not invoke cuda kernel, kernel compilation failed. See error report above.')
         return __CUDA_EXTENTION__.QuantizeTensor_LT(
             tensor, scales, offsets, minimum, maximum, rounding, dropout)
 
@@ -81,6 +84,8 @@ class CUDA:
         dropout: float = 0,
     ) -> torch.Tensor:
         if not tensor.is_contiguous(): tensor = tensor.contiguous()
+        if __CUDA_EXTENTION__ is None:
+            raise ValueError('Can not invoke cuda kernel, kernel compilation failed. See error report above.')
         return __CUDA_EXTENTION__.QuantizeTensor_LC(
             tensor, scales, offsets, minimum, maximum, channel_axis, rounding, dropout)
 
@@ -96,6 +101,8 @@ class CUDA:
         maximum: int
     ) -> torch.Tensor:
         if not tensor.is_contiguous(): tensor = tensor.contiguous()
+        if __CUDA_EXTENTION__ is None:
+            raise ValueError('Can not invoke cuda kernel, kernel compilation failed. See error report above.')
         return __CUDA_EXTENTION__.QuantizeTensor_LT_B(
             tensor, quantized, scales, offsets,
             dy, grad_factor, minimum, maximum
@@ -114,6 +121,8 @@ class CUDA:
         channel_axis: int,
     ) -> torch.Tensor:
         if not tensor.is_contiguous(): tensor = tensor.contiguous()
+        if __CUDA_EXTENTION__ is None:
+            raise ValueError('Can not invoke cuda kernel, kernel compilation failed. See error report above.')
         return __CUDA_EXTENTION__.QuantizeTensor_LC_B(
             tensor, quantized, scales, offsets,
             dy, grad_factor, minimum, maximum, channel_axis
@@ -127,6 +136,8 @@ class CUDA:
         clip_outliers: bool = True
     ) -> torch.Tensor:
         # if scale < 1e-7: raise ValueError('scale is too small.')
+        if __CUDA_EXTENTION__ is None:
+            raise ValueError('Can not invoke cuda kernel, kernel compilation failed. See error report above.')
         __CUDA_EXTENTION__.Histogram_T(tensor, scale, clip_outliers, histogram)
         return histogram
 
@@ -139,6 +150,8 @@ class CUDA:
         clip_outliers: bool = True
     ) -> torch.Tensor:
         # if scale < 1e-7: raise ValueError('scale is too small.')
+        if __CUDA_EXTENTION__ is None:
+            raise ValueError('Can not invoke cuda kernel, kernel compilation failed. See error report above.')
         __CUDA_EXTENTION__.Histogram_C(tensor, channel_axis, scale, clip_outliers, histogram)
         return histogram
 
@@ -147,6 +160,8 @@ class CUDA:
         tensor: torch.Tensor,
         q: float,
     ) -> torch.Tensor:
+        if __CUDA_EXTENTION__ is None:
+            raise ValueError('Can not invoke cuda kernel, kernel compilation failed. See error report above.')
         return __CUDA_EXTENTION__.Quantile_T(tensor, q)
 
     @ staticmethod
@@ -157,6 +172,8 @@ class CUDA:
     ) -> torch.Tensor:
         if not tensor.is_contiguous(): tensor = tensor.contiguous()
         if not reference.is_contiguous(): tensor = reference.contiguous()
+        if __CUDA_EXTENTION__ is None:
+            raise ValueError('Can not invoke cuda kernel, kernel compilation failed. See error report above.')
         return __CUDA_EXTENTION__.TensorClip_T(tensor, reference, limit)
 
     @ staticmethod
@@ -168,6 +185,8 @@ class CUDA:
     ) -> torch.Tensor:
         if not tensor.is_contiguous(): tensor = tensor.contiguous()
         if not reference.is_contiguous(): tensor = reference.contiguous()
+        if __CUDA_EXTENTION__ is None:
+            raise ValueError('Can not invoke cuda kernel, kernel compilation failed. See error report above.')
         return __CUDA_EXTENTION__.TensorClip_C(
             tensor, reference, limit, channel_axis)
 
@@ -181,6 +200,8 @@ class CUDA:
         rounding: int = 0
     ) -> torch.Tensor:
         if not tensor.is_contiguous(): tensor = tensor.contiguous()
+        if __CUDA_EXTENTION__ is None:
+            raise ValueError('Can not invoke cuda kernel, kernel compilation failed. See error report above.')
         return __CUDA_EXTENTION__.RoundingLoss_LT(
             tensor, scales, offsets, minimum, maximum, rounding)
 
@@ -195,6 +216,8 @@ class CUDA:
         rounding: int = 0
     ) -> torch.Tensor:
         if not tensor.is_contiguous(): tensor = tensor.contiguous()
+        if __CUDA_EXTENTION__ is None:
+            raise ValueError('Can not invoke cuda kernel, kernel compilation failed. See error report above.')
         return __CUDA_EXTENTION__.RoundingLoss_LT_B(
             tensor, dy, scales, offsets, minimum, maximum, rounding)
 
@@ -209,6 +232,8 @@ class CUDA:
         rounding: int = 0
     ) -> torch.Tensor:
         if not tensor.is_contiguous(): tensor = tensor.contiguous()
+        if __CUDA_EXTENTION__ is None:
+            raise ValueError('Can not invoke cuda kernel, kernel compilation failed. See error report above.')
         return __CUDA_EXTENTION__.RoundingLoss_LC(
             tensor, scales, offsets, minimum, maximum, channel_axis, rounding)
 
@@ -224,6 +249,8 @@ class CUDA:
         rounding: int = 0
     ) -> torch.Tensor:
         if not tensor.is_contiguous(): tensor = tensor.contiguous()
+        if __CUDA_EXTENTION__ is None:
+            raise ValueError('Can not invoke cuda kernel, kernel compilation failed. See error report above.')
         return __CUDA_EXTENTION__.RoundingLoss_LC_B(
             tensor, dy, scales, offsets, minimum, maximum, channel_axis, rounding)
 
@@ -232,6 +259,8 @@ class CUDA:
         tensor: torch.Tensor,
     ) -> torch.Tensor:
         if not tensor.is_contiguous(): tensor = tensor.contiguous()
+        if __CUDA_EXTENTION__ is None:
+            raise ValueError('Can not invoke cuda kernel, kernel compilation failed. See error report above.')
         return __CUDA_EXTENTION__.RoundingLoss_LC_B(tensor)
 
 

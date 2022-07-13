@@ -252,44 +252,45 @@ void _QuantizeTensor_LC_B(
     float * grad_s,
     float * grad_o
 ){
-    int64_t iter;
-    int64_t iter_offset = (blockIdx.x * element_per_channel * num_of_channel) +
-                          (blockIdx.y * element_per_channel);
-    float partial_gard_o = 0; float partial_gard_s = 0;
-    int c = blockIdx.y; float s = scales[c]; int o = std::nearbyint(offsets[c]);
+    const int64_t num_of_channel_elements = element_per_channel * num_of_channel;
+    int channel_idx = blockIdx.x;
+    float s = scales[channel_idx]; float inv_s = 1 / s;
+    int o = std::nearbyint(offsets[channel_idx]);
 
-    for(iter = (blockIdx.x * blockDim.x) + threadIdx.x;
-        // if processing element is not belongs to correct channel, skip its computation
-        iter < element_per_channel;
-        iter += blockDim.x * gridDim.x)
+    for(int64_t iter = (blockIdx.x * element_per_channel) + blockIdx.y * CUDA_NUM_THREADS + threadIdx.x;
+        iter < num_of_elements; iter += num_of_channel_elements)
     {
-        float g = grad_y[iter + iter_offset];
+        float partial_gard_o = 0;
+        float partial_gard_s = 0;
 
-        /* Calculate grad for scales, offsets, alpha */
-        partial_gard_s = (quantized[iter + iter_offset] - value[iter + iter_offset]) * (g / s);
-        float partial_gard_v = g;
+        // if processing element is not belongs to correct channel, skip its computation
+        if (blockIdx.y * CUDA_NUM_THREADS + threadIdx.x < element_per_channel){
+            float g = grad_y[iter];
 
-        if(value[iter + iter_offset] > s * (clip_max - o)) {
-            partial_gard_s = (clip_max - o) * g * grad_factor;
-            partial_gard_o = -g * s * grad_factor;
-            partial_gard_v = 0;
+            /* Calculate grad for scales, offsets, alpha */
+            partial_gard_s = (quantized[iter] - value[iter]) * (g * inv_s);
+            float partial_gard_v = g;
+    
+            if(value[iter] > s * (clip_max - o)) {
+                partial_gard_s = (clip_max - o) * g * grad_factor;
+                partial_gard_o = -g * s * grad_factor;
+                partial_gard_v = 0;
+            }
+            else if(value[iter] < s * (clip_min - o)) {
+                partial_gard_s = (clip_min - o) * g * grad_factor;
+                partial_gard_o = -g * s * grad_factor;
+                partial_gard_v = 0;
+            }
+            grad_v[iter] = partial_gard_v;
         }
-        else if(value[iter + iter_offset] < s * (clip_min - o)) {
-            partial_gard_s = (clip_min - o) * g * grad_factor;
-            partial_gard_o = -g * s * grad_factor;
-            partial_gard_v = 0;
-        }
-
-        grad_v[iter + iter_offset] = partial_gard_v;
 
         /* Reduce Gradient */
         float reduced_grad_o = BlockReduceSum<float>(partial_gard_o); __syncthreads();
         float reduced_grad_s = BlockReduceSum<float>(partial_gard_s); __syncthreads();
 
         if (threadIdx.x == 0) {
-            // printf("ro=%.2f\t rs=%.2f\t c=%d\t\n", reduced_grad_o, reduced_grad_s, c);
-            atomicAdd(&grad_o[c], reduced_grad_o);
-            atomicAdd(&grad_s[c], reduced_grad_s);
+            atomicAdd(&grad_o[channel_idx], reduced_grad_o);
+            atomicAdd(&grad_s[channel_idx], reduced_grad_s);
         }
     }
 }
@@ -320,9 +321,12 @@ __host__ std::vector<Tensor> QuantizeTensor_LC_B(
         element_per_channel *= value.sizes()[axis];
     }
 
-    const int batchs = NUM_OF_ELEMENT(value) / (element_per_channel * num_of_channel);
-    const dim3 grid_size(batchs, num_of_channel, NUM_OF_BLOCK(element_per_channel));
-    _QuantizeTensor_LC_B<<<grid_size, CUDA_NUM_THREADS, 0, at::cuda::getCurrentCUDAStream()>>>(
+    dim3 grid;
+    grid.x = static_cast<unsigned int>(num_of_channel);
+    grid.y = static_cast<unsigned int>(NUM_OF_BLOCK(element_per_channel));
+    grid.z = 1;
+
+    _QuantizeTensor_LC_B<<<grid, CUDA_NUM_THREADS, 0, at::cuda::getCurrentCUDAStream()>>>(
         NUM_OF_ELEMENT(value),
         element_per_channel,
         num_of_channel,
