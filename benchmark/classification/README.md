@@ -5,7 +5,7 @@
 
 |model|TargetPlatform|ORT FP32|PPQ INT8|QDQ ORT INT8|RealPlatform INT8|
 |----|----|----|----|----|----|
-|resnet18|OpenVino|69.764|69.466|67.109|66.985|
+|resnet18|OpenVino|69.764|69.466|**67.109**|**66.985**|
 |resnet18|TRT|69.764|69.548|69.524|69.534|
 |resnet18|Snpe|69.764|69.278|69.266|-|
 |resnet18|Ncnn|69.764|69.132|69.062|-|
