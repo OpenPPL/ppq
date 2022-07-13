@@ -6,10 +6,10 @@ import os
 # 分类模型相关配置
 MODELS = {
     'ResNet18':  (resnet18, ResNet18_Weights.DEFAULT),
-    'MobileNetV2': (mobilenet_v2, MobileNet_V2_Weights.DEFAULT),
-    "ResNeXt101_64x4d": (resnext101_64x4d, ResNeXt101_64X4D_Weights.DEFAULT),
-    "Vit_B_16": (vit_b_16, ViT_B_16_Weights.IMAGENET1K_V1),   
-    "ShuffleNetV2_x1_0": (shufflenet_v2_x1_0, ShuffleNet_V2_X1_0_Weights.DEFAULT)
+    # 'MobileNetV2': (mobilenet_v2, MobileNet_V2_Weights.DEFAULT),
+    # "ResNeXt101_64x4d": (resnext101_64x4d, ResNeXt101_64X4D_Weights.DEFAULT),
+    # "Vit_B_16": (vit_b_16, ViT_B_16_Weights.IMAGENET1K_V1),   
+    # "ShuffleNetV2_x1_0": (shufflenet_v2_x1_0, ShuffleNet_V2_X1_0_Weights.DEFAULT)
     }
 
 # 一些重要的目录

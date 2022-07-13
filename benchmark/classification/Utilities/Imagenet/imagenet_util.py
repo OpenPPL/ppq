@@ -18,6 +18,7 @@ from tqdm import tqdm
 from ppq.core import *
 import openvino.runtime
 from trt_infer import TrtInferenceModel
+import numpy as np
 
 
 def accuracy(output, target, topk=(1,)):
@@ -108,8 +109,9 @@ def evaluate_onnx_module_with_imagenet(
     input_placeholder_name = sess.get_inputs()[0].name
     with torch.no_grad():
         # TODO 可能导致一些内存资源浪费
-        model_forward_function = lambda input_tensor: torch.tensor(sess.run(
-            input_feed={input_placeholder_name: input_tensor.cpu().numpy()}, output_names=None))[0]
+        # 将[numpy.darray]提前转为numpy.darray,显著地提升推理速度
+        model_forward_function = lambda input_tensor: torch.tensor(np.array(sess.run(
+            input_feed={input_placeholder_name: input_tensor.cpu().numpy()}, output_names=None)))[0]
         return _evaluate_any_module_with_imagenet(
             model_forward_function=model_forward_function, batchsize=batchsize,
             device=device, imagenet_validation_dir=imagenet_validation_dir,

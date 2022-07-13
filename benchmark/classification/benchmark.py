@@ -1,16 +1,17 @@
 # 这个文件会对多模型按照多平台策略进行量化操作，并将量化的模型导出到预设的目录
 import torchvision
-from benchmark.classification.utils import *
+from utils import *
 from ppq import *
 from ppq.api import *
 from Utilities.Imagenet import load_imagenet_from_directory
 import os
 import cfg
+import pandas as pd
 
-acc_all = {}
-for model_name,_ in cfg.MODELS:
+report = []
+for model_name in cfg.MODELS.keys():
     acc_model = {}
-    for platform,config in cfg.PLATFORM_CONFIGS:
+    for platform,config in cfg.PLATFORM_CONFIGS.items():
 
         if not os.path.exists(config["OutputPath"]):
             os.makedirs(config["OutputPath"])
@@ -48,13 +49,23 @@ for model_name,_ in cfg.MODELS:
                 graph_save_to=f'{os.path.join(config["OutputPath"], model_name)}-{platform}-INT8.onnx')
 
             # 评估FP32准确度
-            fp32_acc,_ = get_fp32_accuracy(model_name)
+            # fp32_acc,_ = get_fp32_accuracy(model_name)
 
             # 评估PPQ模拟量化准确度
-            ppq_acc,_ = get_ppq_accuracy()
+            ppq_acc,_ = get_ppq_accuracy(model_name,platform,ppq_quant_ir)
 
             # 评估ORT模型准确度
+            ort_acc,_ = get_ort_accuracy(model_name,platform,config["OutputPath"])
 
             # 评估目标平台部署准确度
-    
+            if platform in {"OpenVino","TRT"}:
+                platform_acc,_  = get_platform_accuracy(model_name,platform,config["OutputPath"])
+            else:
+                platform_acc = None
 
+            report.append([model_name,platform,fp32_acc,ppq_acc,ort_acc,platform_acc])
+
+report = pd.DataFrame(report,columns=["model","paltform","fp32_acc","ppq_acc","ort_acc","platform_acc"])
+print("-------------------测试报告如下---------------------")
+print(report)
+report.to_csv(f"{cfg.BASE_PATH}/report.csv",index=False)
