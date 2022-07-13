@@ -143,7 +143,8 @@ def SOI_receivers(graph: BaseGraph) -> Set[Operation]:
             #   constant_value (optional) : T
             #       (Optional) A scalar value to be used if the mode chosen is `constant` (by default it is 0).
             # https://github.com/onnx/onnx/blob/master/docs/Changelog.md#Pad-11
-            _ret_collection.add(operation.inputs[1].source_op)
+            if len(operation.inputs) >= 2:
+                _ret_collection.add(operation.inputs[1].source_op)
 
         if operation.type == 'Resize':
             # Inputs (3 - 4)

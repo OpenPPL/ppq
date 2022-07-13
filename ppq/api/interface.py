@@ -674,8 +674,26 @@ def dispatch_graph(graph: BaseGraph, platform: TargetPlatform, setting: Quantiza
     A dispatching table can be passed via QuantizationSetting to override
         the default dispatching logic of ppq dispatcher manually.
     """
-    dispatcher = Perseus(graph=graph)
-    dispatching_table = dispatcher.dispatch()
+    assert platform in QUANTIZER_COLLECTION, (
+        f'Platform misunderstood, except one of following platform {QUANTIZER_COLLECTION.keys()}')
+    quantizer = QUANTIZER_COLLECTION[platform](graph) # 初始化一个 quantizer 没有很大代价...
+
+    if str(setting.dispatcher).lower() == 'pursus':
+        dispatcher = Perseus(graph=graph)
+        dispatching_table = dispatcher.dispatch()
+    else:
+        if str(setting.dispatcher).lower() not in DISPATCHER_TABLE:
+            raise ValueError(f'Can not found dispatcher type "{setting.dispatcher}", check your input again.')
+        dispatcher = DISPATCHER_TABLE[str(setting.dispatcher).lower()]()
+        assert isinstance(dispatcher, GraphDispatcher)
+        assert isinstance(quantizer, BaseQuantizer)
+        quant_types = quantizer.quant_operation_types
+
+        dispatching_table = dispatcher.dispatch(
+            graph=graph, quant_types=quant_types,
+            quant_platform=TargetPlatform.UNSPECIFIED, # MUST BE UNSPECIFIED, 这里的意思是交由 Quantizer 决定是否量化这个算子
+            fp32_platform=TargetPlatform.FP32,
+            SOI_platform=TargetPlatform.SHAPE_OR_INDEX)
 
     # override dispatching result with setting
     dispatching_override = setting.dispatching_table

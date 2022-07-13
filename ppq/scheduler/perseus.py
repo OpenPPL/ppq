@@ -247,6 +247,7 @@ class Perseus(GraphDispatcher):
         """
         computing_ops     = self.mark_quantable_op()
         non_quantable_ops = self.mark_non_quantable_op()
+
         dispatching_table = {}
         for op in self.graph.operations.values():
             dispatching_table[op.name] = TargetPlatform.FP32
