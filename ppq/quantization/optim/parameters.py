@@ -21,8 +21,9 @@ class PassiveParameterQuantizePass(QuantizationOptimizationPass):
     if there is any parameter that can not be quantized with current quantization configuration(
         if their positive counterparts have not been properly quantized), an error will be thrown.
     """
-    def __init__(self, bias_scale_multiplier=1):
+    def __init__(self, bias_scale_multiplier: float = 1, override: bool = False):
         self.scale_multiplier = bias_scale_multiplier
+        self._override = override # whether to override existed passive parameter config
         super().__init__(name='PPQ Passive Parameter Quantization')
 
     def optimize(self, processor: GraphCommandProcessor,
@@ -43,7 +44,7 @@ class PassiveParameterQuantizePass(QuantizationOptimizationPass):
                 # inputs are [input value, weight, bias(optional)]
                 if op.num_of_input == 3:
                     i_cfg, w_cfg, b_cfg = op.config.input_quantization_config
-                    if b_cfg.state != QuantizationStates.PASSIVE_INIT: continue
+                    if b_cfg.state != QuantizationStates.PASSIVE_INIT and not self._override: continue
                     if not check_state(w_cfg.state):
                         raise PermissionError(f'Can not quantize bias of layer {op.name}, '
                             'cause weight has not been correctly quantized.')
@@ -68,7 +69,7 @@ class PassiveParameterQuantizePass(QuantizationOptimizationPass):
                         'cause input has not been correctly quantized.')
                 i_cfg = i_cfg.dominated_by
                 for config in op.config.input_quantization_config[1: ]:
-                    if config.state != QuantizationStates.PASSIVE_INIT: continue
+                    if config.state != QuantizationStates.PASSIVE_INIT and not self._override: continue
 
                     config.scale  = i_cfg.scale
                     config.offset = i_cfg.offset
@@ -78,7 +79,7 @@ class PassiveParameterQuantizePass(QuantizationOptimizationPass):
                 # inputs are [input value, pad[shape-related], pad value[optional]]
                 if op.num_of_input != 3: continue
                 i_cfg = op.config.input_quantization_config[0]
-                if i_cfg.state != QuantizationStates.PASSIVE_INIT: continue
+                if i_cfg.state != QuantizationStates.PASSIVE_INIT and not self._override: continue
 
                 if not check_state(i_cfg.state):
                     raise PermissionError(f'Can not quantize pad value of layer {op.name}, '
