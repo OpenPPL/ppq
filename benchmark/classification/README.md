@@ -1,5 +1,5 @@
 # Classification Benchmark
-对5种模型：Resnet-18, ResNeXt101_64x4d, EfficientNet-b7, ShuffleNetV2_x1_0, MobileNetV2    
+对5种模型：Resnet-18, ResNeXt101_64x4d, RegNet_X_1_6GF, ShuffleNetV2_x1_0, MobileNetV2    
 在四个平台上:TensorRT, OpenVino, Snpe, Ncnn (gpu, x86cpu, Dsp&Npu, ARM cpu)  
 测试四个精度：Onnxruntime FP32，PPQ INT8, QDQ onnxruntime INT8, TargetPlatform INT8 
 
