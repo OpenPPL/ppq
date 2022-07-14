@@ -110,6 +110,60 @@ __host__ void Histogram_T(
     );
 }
 
+__global__ void _Histogram_Asymmetric_T(
+    const float min,
+    const float max,
+    const int64_t num_of_elements,
+    const int64_t num_of_bins,
+    const float* value,
+    const bool clip_outliers,
+    int* hist){
+    int64_t iter;
+
+    float hist_scale = (max - min) / num_of_bins;
+    KERNEL_LOOP(iter, num_of_elements){
+        int b = floor((value[iter] - min) / hist_scale);
+
+        // process outliers.
+        if(b > num_of_bins - 1){
+            if(clip_outliers) continue;
+            else b = num_of_bins - 1;
+        }
+        if(b < 0){
+            if(clip_outliers) continue;
+            else b = 0;
+        }
+
+        atomicAdd(&hist[b], 1); // fast enough ...
+    }
+}
+
+__host__ void Histogram_Asymmetric_T(
+    const float min,
+    const float max,
+    const Tensor &value,
+    const bool clip_outliers,
+    Tensor &hist){
+    /**
+     * PPQ Tensorwise Histogram Implementation(Asymmetric Version)
+     * This function computes histogram of given value.
+     * Result will sum up to hist tensor.
+     *
+     * Say we have a float value f, and a float value hist_scale
+     * We will select hist_bin = floor(f / hist_scale)
+     */
+    CheckTensor(value, at::kFloat, "Value(Expect to be FP32)");
+    CheckTensor(hist, at::kInt, "Histogram(Expect to be INT32)");
+
+    _Histogram_Asymmetric_T<<<
+        NUM_OF_BLOCK(NUM_OF_ELEMENT(value)), 
+        CUDA_NUM_THREADS, 
+        0, at::cuda::getCurrentCUDAStream()>>>(
+        min, max, NUM_OF_ELEMENT(value), NUM_OF_ELEMENT(hist), PTR<float>(value),
+        clip_outliers, PTR<int>(hist)
+    );
+}
+
 __global__ void _Histogram_C(
     const int64_t num_of_elements,
     const int64_t element_per_channel,
