@@ -25,10 +25,6 @@
 |ShuffleNetV2_x1_0|TRT|69.370|68.718|--|68.706|
 |ShuffleNetV2_x1_0|Snpe|69.370|68.564|--|-|
 |ShuffleNetV2_x1_0|Ncnn|69.370|68.748|-|-|
-|Vit_B_16|OpenVino|81.074|--|--|-|
-|Vit_B_16|TRT|81.074|--|--|-|
-|Vit_B_16|Snpe|81.074|--|--|-|
-|Vit_B_167|Ncnn|81.074|--|--|-|
 
 
 - [x] 完成resnet18在openvino上的前三项精度测试 
