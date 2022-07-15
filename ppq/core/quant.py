@@ -502,7 +502,8 @@ class TensorQuantizationConfig(Serializable):
             QuantizationStates.DEACTIVATED,
             QuantizationStates.INITIAL,
             QuantizationStates.PASSIVE_INIT,
-            QuantizationStates.PASSIVE
+            QuantizationStates.PASSIVE,
+            QuantizationStates.FP32
         })
 
     @ property

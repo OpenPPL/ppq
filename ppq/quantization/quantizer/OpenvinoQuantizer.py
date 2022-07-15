@@ -16,8 +16,8 @@ class OpenvinoQuantizer(BaseQuantizer):
     ) -> Union[torch.Tensor, list, dict]:
         super().__init__(graph=graph)
         self._num_of_bits = 8
-        self._quant_min = 0
-        self._quant_max = 255
+        self._quant_min = -127
+        self._quant_max = 127
 
     def init_quantize_config(
         self, operation: Operation) -> OperationQuantizationConfig:
@@ -35,7 +35,7 @@ class OpenvinoQuantizer(BaseQuantizer):
             # layout: [out_channel, in_channel, kernel_size, kernel_size]
             if operation.type in {'Conv', 'ConvTranspose'}:
                 conv_weight_config = base_quant_config.input_quantization_config[1]
-                conv_weight_config._quant_min = -128
+                conv_weight_config._quant_min = -127
                 conv_weight_config._quant_max = 127
                 conv_weight_config.policy = QuantizationPolicy(
                     QuantizationProperty.SYMMETRICAL +
@@ -52,7 +52,7 @@ class OpenvinoQuantizer(BaseQuantizer):
             # layout: [in_dim, out_dim]
             elif operation.type in {'Gemm'}:
                 gemm_weight_config = base_quant_config.input_quantization_config[1]
-                gemm_weight_config._quant_min = -128
+                gemm_weight_config._quant_min = -127
                 gemm_weight_config._quant_max = 127
                 gemm_weight_config.policy = QuantizationPolicy(
                     QuantizationProperty.SYMMETRICAL +
@@ -106,7 +106,7 @@ class OpenvinoQuantizer(BaseQuantizer):
     @ property
     def quantize_policy(self) -> QuantizationPolicy:
         return QuantizationPolicy(
-            QuantizationProperty.ASYMMETRICAL +
+            QuantizationProperty.SYMMETRICAL +
             QuantizationProperty.LINEAR +
             QuantizationProperty.PER_TENSOR)
 
