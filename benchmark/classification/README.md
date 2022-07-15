@@ -14,17 +14,17 @@
 |mobilenetV2|Snpe|72.017|70.102|70.072|-|
 |mobilenetV2|Ncnn|72.017|71.671|71.657|-|
 |ResNeXt101_64x4d|OpenVino|82.774|81.978|81.834|**79.297**|
-|ResNeXt101_64x4d|TRT|82.985|81.920|--|81.882|
-|ResNeXt101_64x4d|Snpe|82.985|81.492|--|-|
-|ResNeXt101_64x4d|Ncnn|82.985|82.911|--|-|
+|ResNeXt101_64x4d|TRT|82.985|81.920|81.854|81.882|
+|ResNeXt101_64x4d|Snpe|82.985|81.492|81.468|-|
+|ResNeXt101_64x4d|Ncnn|82.985|82.911|82.885|-|
 |RegNet_X_1_6GF|OpenVino|79.341|78.443|78.593|**72.531**|
 |RegNet_X_1_6GF|TRT|79.341|78.531|78.737|78.539|
-|RegNet_X_1_6GF|Snpe|79.341|76.616|--|-|
-|RegNet_X_1_6GF|Ncnn|79.341|79.243|--|-|
+|RegNet_X_1_6GF|Snpe|79.341|76.616|76.735|-|
+|RegNet_X_1_6GF|Ncnn|79.341|79.243|79.199|-|
 |ShuffleNetV2_x1_0|OpenVino|69.370|68.806|68.802|-|
-|ShuffleNetV2_x1_0|TRT|69.370|68.718|--|68.706|
-|ShuffleNetV2_x1_0|Snpe|69.370|68.564|--|-|
-|ShuffleNetV2_x1_0|Ncnn|69.370|68.748|-|-|
+|ShuffleNetV2_x1_0|TRT|69.370|68.718|68.752|68.706|
+|ShuffleNetV2_x1_0|Snpe|69.370|68.564|68.520|-|
+|ShuffleNetV2_x1_0|Ncnn|69.370|68.748|68.768|-|
 
 
 - [x] 完成resnet18在openvino上的前三项精度测试 
