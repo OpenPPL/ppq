@@ -193,6 +193,9 @@ class TorchHistObserver(TorchMinMaxObserver):
         Returns:
             Tuple[float, int]: scale(fp32) and offset(int).
         """
+        if config.policy.has_property(QuantizationProperty.ASYMMETRICAL):
+            raise PermissionError('KL observer is not designed for ASYMMETRICAL quantization')
+        
         if OBSERVER_MIN_SCALE_MANUL_OVERRIDE in config.detail:
             scale_threshold = config.detail[OBSERVER_MIN_SCALE_MANUL_OVERRIDE]
 
