@@ -12,7 +12,7 @@ OBSERVER_WARNING = False
 # Observer 中 kl 散度的计算设备
 OBSERVER_KL_COMPUTING_DEVICE = 'cpu'
 # Observer 中 hist 箱子的个数
-OBSERVER_KL_HIST_BINS = 8192
+OBSERVER_KL_HIST_BINS = 4096
 # Observer 中 hist 箱子的属性
 OBSERVER_KL_HIST_BINS_MANUL_OVERRIDE = 'OBSERVER_KL_HIST_BINS_MANUL_OVERRIDE'
 # Observer 中 percentile 的参数
@@ -20,7 +20,9 @@ OBSERVER_PERCENTILE = 0.9999
 # Observer 中 percentile 参数的属性
 OBSERVER_PERCENTILE_MANUL_OVERRIDE = 'OBSERVER_PERCENTILE_MANUL_OVERRIDE'
 # Observer 中 mse 校准方法 hist 箱子的个数
-OBSERVER_MSE_HIST_BINS = 8192
+OBSERVER_MSE_HIST_BINS = 2048
+# Observer 中 mse 计算的间隔，间隔越小，所需时间越长
+OBSERVER_MSE_COMPUTE_INTERVAL = 8
 
 # PPLCUDA 中所有需要与 Conv 融合的激活函数
 PPLCUDA_ACTIVATIONS = {'Clip', 'LeakyRelu', 'Relu', 'Sigmoid'}

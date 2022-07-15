@@ -16,10 +16,11 @@ try:
     __CUDA_EXTENTION__ = load(
         name='PPQ_Cuda_Impls',
         sources=[
-            os.path.join(os.path.dirname(os.path.dirname(__file__)), 'csrc/cuda/export.cc'),
+            os.path.join(os.path.dirname(os.path.dirname(__file__)), 'csrc/export.cc'),
             os.path.join(os.path.dirname(os.path.dirname(__file__)), 'csrc/cuda/linear.cu'),
             os.path.join(os.path.dirname(os.path.dirname(__file__)), 'csrc/cuda/sort.cu'),
             os.path.join(os.path.dirname(os.path.dirname(__file__)), 'csrc/cuda/train.cu'),
+            os.path.join(os.path.dirname(os.path.dirname(__file__)), 'csrc/cpu/hist_mse.cc'),
         ],
         build_directory=os.path.join(os.path.dirname(os.path.dirname(__file__)), 'csrc/build/'),
         with_cuda=True,
@@ -139,6 +140,20 @@ class CUDA:
         if __CUDA_EXTENTION__ is None:
             raise ValueError('Can not invoke cuda kernel, kernel compilation failed. See error report above.')
         __CUDA_EXTENTION__.Histogram_T(tensor, scale, clip_outliers, histogram)
+        return histogram
+
+    @ staticmethod
+    def Histogram_Asymmetric_T(
+        min_value: float,
+        max_value: float,
+        tensor: torch.Tensor,
+        histogram: torch.Tensor,
+        clip_outliers: bool = True
+    ) -> torch.Tensor:
+        # if scale < 1e-7: raise ValueError('scale is too small.')
+        if __CUDA_EXTENTION__ is None:
+            raise ValueError('Can not invoke cuda kernel, kernel compilation failed. See error report above.')
+        __CUDA_EXTENTION__.Histogram_Asymmetric_T(min_value, max_value, tensor, clip_outliers, histogram)
         return histogram
 
     @ staticmethod
@@ -263,6 +278,16 @@ class CUDA:
             raise ValueError('Can not invoke cuda kernel, kernel compilation failed. See error report above.')
         return __CUDA_EXTENTION__.RoundingLoss_LC_B(tensor)
 
+    @ staticmethod
+    def compute_mse_loss(
+        histogram: list,
+        start: int,
+        step: int,
+        end: int
+    ) -> float:
+        if __CUDA_EXTENTION__ is None:
+            raise ValueError('Can not invoke cuda kernel, kernel compilation failed. See error report above.')
+        return __CUDA_EXTENTION__.compute_mse_loss(histogram, start, step, end)
 
     @ staticmethod
     def Sync():

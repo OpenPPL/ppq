@@ -15,4 +15,11 @@ void Histogram_C(
     const bool clip_outliers,
     Tensor &hist);
 
+void Histogram_Asymmetric_T(
+    const float min,
+    const float max,
+    const Tensor &value,
+    const bool clip_outliers,
+    Tensor &hist);
+
 Tensor Isotone_T(const Tensor &source);
