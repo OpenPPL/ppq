@@ -8,6 +8,7 @@ from Utilities.Imagenet import (evaluate_onnx_module_with_imagenet,
 import cfg
 from onnxsim import simplify
 import onnx
+from ppq import *
 
 
 def get_onnx_models():
@@ -37,8 +38,10 @@ def get_fp32_accuracy(model_name):
 
     return (top1,top5)
 
+@ empty_ppq_cache
 def get_ppq_accuracy(model_name,platform,ppq_ir):
     print(f"正在测试模型 {model_name} 在{platform}上的PPQ准确度，测试集为ImageNet")
+    
     report = evaluate_ppq_module_with_imagenet(
         model=ppq_ir, imagenet_validation_dir=cfg.VALIDATION_DIR,
         batchsize=cfg.BATCHSIZE, device=cfg.DEVICE, verbose=True)

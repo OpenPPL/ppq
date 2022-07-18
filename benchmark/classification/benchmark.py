@@ -42,7 +42,7 @@ with ENABLE_CUDA_KERNEL():
             ppq_quant_ir = quantize_onnx_model(
                 onnx_import_file=model_path, calib_dataloader=dataloader, calib_steps=cfg.CALIBRATION_NUM // cfg.BATCHSIZE, 
                 setting=config["QuanSetting"],input_shape=cfg.INPUT_SHAPE, collate_fn=lambda x: x.to(cfg.DEVICE), 
-                platform=config["TargetPlatform"], do_quantize=True)
+                platform=config["QuantPlatform"], do_quantize=True)
                 
             # 评估PPQ模拟量化准确度
             if cfg.GET_PPQ_ACC:
@@ -64,7 +64,7 @@ with ENABLE_CUDA_KERNEL():
                 # 导出平台模型,暂时无法和ORT一起导出
                 export_ppq_graph(
                     graph = ppq_quant_ir,
-                    platform=config["TargetPlatform"],
+                    platform=config["ExportPlatform"],
                     graph_save_to=f'{os.path.join(config["OutputPath"], model_name)}-{platform}-INT8.onnx')
 
                 if platform in {"OpenVino","TRT"}:

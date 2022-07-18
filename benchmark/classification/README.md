@@ -1,9 +1,31 @@
 # Classification Benchmark
-对5种模型：Resnet-18, ResNeXt101_64x4d, RegNet_X_1_6GF, ShuffleNetV2_x1_0, MobileNetV2    
-在四个平台上:TensorRT, OpenVino, Snpe, Ncnn (gpu, x86cpu, Dsp&Npu, ARM cpu)  
-测试四个精度：Onnxruntime FP32，PPQ INT8, QDQ onnxruntime INT8, TargetPlatform INT8 
+本仓库是一个验证ppq在**多硬件平台**上量化**分类模型**的性能Benchmark，测试集为ImageNet(ILSVRC2019) val, 数据校准集来自ImageNet训练集采样。
 
-|model|TargetPlatform|ORT FP32|PPQ INT8|QDQ ORT INT8|RealPlatform INT8|
+对5种分类模型：
+> Resnet-18, ResNeXt101_64x4d, RegNet_X_1_6GF, ShuffleNetV2_x1_0, MobileNetV2
+
+在四个平台上:
+> TensorRT(gpu), OpenVino(x86 cpu), Snpe(dsp&npu), Ncnn(amd cpu)
+
+测试四个精度：
+> FP32 Onnxruntime(全精度)，PPQ INT8(模拟量化精度), QDQ onnxruntime INT8(部署参考精度), TargetPlatform INT8(目标硬件推理精度) 
+
+## 使用方法
+首先保证你已经下载ImageNet数据集，下载链接[ILSVRC2019](https://www.kaggle.com/competitions/imagenet-object-localization-challenge/data)  
+本仓库所有需要修改的内容都只在*cfg.py*这个配置文件中.
+```python3
+# must be modified in cfg.py
+BASE_PATH = "/home/geng/tinyml/ppq/benchmark/classification"  #项目目录
+VALIDATION_DIR = '/home/geng/tinyml/ppq/benchmark/Assets/Imagenet_Valid'   # ImageNet验证集目录
+TRAIN_DIR = '/home/geng/tinyml/ppq/benchmark/Assets/Imagenet_Train' #ImageNet训练集目录   
+```
+其他参数根据需求修改后，获取测试结果
+```python3
+python benchmark.py
+```
+
+## 测试结果
+|model|TargetPlatform|FP32 ORT|PPQ INT8|QDQ ORT INT8|RealPlatform INT8|
 |----|----|----|----|----|----|
 |resnet18|OpenVino|69.764|69.466|69.480|**66.975**|
 |resnet18|TRT|69.764|69.578|69.550|69.484|
@@ -30,10 +52,12 @@
 - [x] 完成resnet18在openvino上的前三项精度测试 
 - [x] 完成resnet18在四个平台的前三项精度测试
 - [x] 完成resnet18在TRT和OpenVino上的部署精度测试
-- [ ] 完成5个模型在4个平台上的前三项精度测试
+- [x] 完成5个模型在4个平台上的前三项精度测试
+- [x] 完成5个模型前三项测试和openvino+tensorRT部署测试
 - [ ] 完成5个模型在4个平台上的部署精度测试
 
-2022年7月13日：遇到问题：
+目前存在的问题：
+- OpeVino平台推理精度低。
 - Vit存在无法量化的算子ERF。
 - shufflenetV2无法在openvino上推理。
-- export_ppq_graph的参数copy_graph=True时，会导致导出的openvino和ORT模型推理精度为0。
+- export_ppq_graph的参数copy_graph=True时，会导致导出的openvino和ORT模型推理精度为0。目前脚本无法同时测试qdq ort和platform精度。
