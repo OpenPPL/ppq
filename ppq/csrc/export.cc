@@ -1,10 +1,13 @@
-# include "linear.h"
-# include "sort.h"
-# include "train.h"
+# include "cuda/linear.h"
+# include "cuda/sort.h"
+# include "cuda/train.h"
+# include "cuda/train.h"
+# include "cpu/hist_mse.h"
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("Quantile_T", Quantile_T, "Quantile_T");
     m.def("Histogram_T", Histogram_T, "Histogram_T");
+    m.def("Histogram_Asymmetric_T", Histogram_Asymmetric_T, "Histogram_Asymmetric_T");
     m.def("Histogram_C", Histogram_C, "Histogram_C");
 
     m.def("QuantizeTensor_LT", QuantizeTensor_LT, "QuantizeTensor_LT");
@@ -21,4 +24,5 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("RoundingLoss_LC_B", RoundingLoss_LC_B, "RoundingLoss_LC_B");
 
     m.def("Isotone_T", Isotone_T, "Isotone_T");
+    m.def("compute_mse_loss", compute_mse_loss, "compute_mse_loss");
 }

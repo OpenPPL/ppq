@@ -6,9 +6,10 @@ from ppq.core import (CUDA, OBSERVER_KL_COMPUTING_DEVICE,
                       OBSERVER_KL_HIST_BINS,
                       OBSERVER_KL_HIST_BINS_MANUL_OVERRIDE, OBSERVER_MIN_SCALE,
                       OBSERVER_MIN_SCALE_MANUL_OVERRIDE,
-                      OBSERVER_MSE_HIST_BINS, OBSERVER_PERCENTILE,
-                      OBSERVER_PERCENTILE_MANUL_OVERRIDE, OBSERVER_WARNING,
-                      PPQ_CONFIG, ChannelwiseTensorQuantizationConfig,
+                      OBSERVER_MSE_COMPUTE_INTERVAL, OBSERVER_MSE_HIST_BINS,
+                      OBSERVER_PERCENTILE, OBSERVER_PERCENTILE_MANUL_OVERRIDE,
+                      OBSERVER_WARNING, PPQ_CONFIG,
+                      ChannelwiseTensorQuantizationConfig,
                       QuantizationProperty, QuantizationStates, RoundingPolicy,
                       TensorQuantizationConfig, convert_any_to_numpy,
                       ppq_quant_param_computing_function, ppq_warning)
@@ -126,6 +127,8 @@ class TorchHistObserver(TorchMinMaxObserver):
         self._phase = 'Detecting Minmax'
         self._hist  = None
         self._hist_scale = None
+        self._min   = None
+        self._max   = None
         if OBSERVER_KL_HIST_BINS_MANUL_OVERRIDE in quant_cfg.detail:
             hist_bins = quant_cfg.detail[OBSERVER_KL_HIST_BINS_MANUL_OVERRIDE]
         self._hist_bins  = hist_bins
@@ -133,16 +136,33 @@ class TorchHistObserver(TorchMinMaxObserver):
 
     def observe(self, value: torch.Tensor):
         assert value.numel() > 0, (f'You are observing an empty tensor({self._watch_on.name}).')
+
         if self._phase == 'Detecting Minmax':
-            return super().observe(value)
+            return super().observe(value) # collect min, max
+
         elif self._phase == 'Collating Hist':
             if self._hist is None:
                 self._hist = torch.zeros(size=(self._hist_bins,), dtype=torch.int32, device=value.device)
-            if PPQ_CONFIG.USING_CUDA_KERNEL and value.is_cuda:
-                CUDA.Histogram_T(tensor=value, histogram=self._hist, scale=self._hist_scale)
+
+            if self._quant_cfg.policy.has_property(QuantizationProperty.ASYMMETRICAL):
+                # ASYMMETRICAL Hist
+                if PPQ_CONFIG.USING_CUDA_KERNEL and value.is_cuda:
+                    CUDA.Histogram_Asymmetric_T(self._min, self._max, tensor=value, histogram=self._hist)
+                else:
+                    hist = torch.histc(value, self._hist_bins, min=self._min, max=self._max)
+                    self._hist += hist.int()
+
+            elif self._quant_cfg.policy.has_property(QuantizationProperty.SYMMETRICAL):
+                # SYMMETRICAL Hist
+                if PPQ_CONFIG.USING_CUDA_KERNEL and value.is_cuda:
+                    CUDA.Histogram_T(tensor=value, histogram=self._hist, scale=self._hist_scale)
+                else:
+                    hist = torch.histc(torch.abs(value), self._hist_bins, min=0, max=self._hist_scale * self._hist_bins)
+                    self._hist += hist.int()
+
             else:
-                hist = torch.histc(torch.abs(value), self._hist_bins, min=0, max=self._hist_scale * self._hist_bins)
-                self._hist += hist.int()
+                raise TypeError('Quantization Property is invalid, '
+                                'expect either ASYMMETRICAL or SYMMETRICAL config here.')
 
     @ ppq_quant_param_computing_function
     def hist_to_scale_offset(
@@ -173,6 +193,9 @@ class TorchHistObserver(TorchMinMaxObserver):
         Returns:
             Tuple[float, int]: scale(fp32) and offset(int).
         """
+        if config.policy.has_property(QuantizationProperty.ASYMMETRICAL):
+            raise PermissionError('KL observer is not designed for ASYMMETRICAL quantization')
+        
         if OBSERVER_MIN_SCALE_MANUL_OVERRIDE in config.detail:
             scale_threshold = config.detail[OBSERVER_MIN_SCALE_MANUL_OVERRIDE]
 
@@ -236,17 +259,18 @@ class TorchHistObserver(TorchMinMaxObserver):
         return scale, offset
 
     def render_quantization_config(self):
-        if not self._quant_cfg.policy.has_property(QuantizationProperty.SYMMETRICAL):
-            ppq_warning('Applying hist observer with your tensor will make offset = 0'
-                '(However it is an ASYMMETRICAL quantized tensor)')
-
         if not self._quant_cfg.policy.has_property(QuantizationProperty.PER_TENSOR):
             raise ValueError('Hist observer can only apply with per-tensor quantization config.')
 
         if self._phase == 'Detecting Minmax':
             min_val = torch.min(torch.cat(self._min_val_collector, dim=0)).cpu().item()
             max_val = torch.max(torch.cat(self._max_val_collector, dim=0)).cpu().item()
-            hist_range = float(max(abs(max_val), abs(min_val)))
+            if self._quant_cfg.policy.has_property(QuantizationProperty.SYMMETRICAL):
+                hist_range = float(max(abs(max_val), abs(min_val)))
+            else:
+                hist_range = max_val - min_val
+            self._min = min_val
+            self._max = max_val
             self._hist_scale = hist_range / self._hist_bins
             self._phase = 'Collating Hist'
         elif self._phase == 'Collating Hist':
@@ -359,6 +383,40 @@ class TorchMSEObserver(TorchHistObserver):
         super().__init__(watch_on, quant_cfg)
         self._hist_bins = bins
 
+    def compute_mse_loss(self, histogram: list, start: int, step: int, end: int):
+        if PPQ_CONFIG.USING_CUDA_KERNEL:
+            from ppq.core import CUDA
+            return CUDA.compute_mse_loss(histogram=histogram, start=start, step=step, end=end)
+        else:
+            # 如果你觉得 mse 太慢，想办法加速这段代码就可以了
+            # 求解 mse 时，我们假设每一个 bin 里面的数据都是均匀分布的
+            # 我们需要给一个直方图，并用 start, end, step 给出量化表示的范围
+            # losses = [0 for _ in histogram]  debug
+            num_of_elements = sum(histogram)
+            loss = 0
+            for idx, bin in enumerate(histogram):
+                if idx < start:
+                    # 如果所选的 bin 已经超出了起点，那从 bin 的中心到起点的距离即
+                    # ((idx 到 起点的距离) + 0.5)
+                    # 注意 hist 统计时是直接取 floor 的，因此会在这里额外 - 1
+                    error = ((start - idx - 1) + 0.5)
+                elif idx > end:
+                    # 注意 hist 统计时是直接取 floor 的
+                    error = ((idx - end) + 0.5)
+                else:
+                    # 分别计算左右两侧的 err
+                    l_idx = (idx - start) % step
+                    r_idx = step - l_idx - 1
+                    if l_idx == r_idx:
+                        error = (l_idx + 0.25)
+                    else:
+                        l_err = (l_idx + 0.5)
+                        r_err = (r_idx + 0.5)
+                        error = min(l_err, r_err)
+                loss += (bin * error * error) / num_of_elements
+                # losses[idx] = bin * error * error
+            return loss
+
     @ ppq_quant_param_computing_function
     def hist_to_scale_offset(
         self, histogram: torch.Tensor,
@@ -366,40 +424,62 @@ class TorchMSEObserver(TorchHistObserver):
         config: TensorQuantizationConfig,
         scale_threshold: float = OBSERVER_MIN_SCALE
     ) -> Tuple[float, int]:
+        from tqdm import tqdm
         if OBSERVER_MIN_SCALE_MANUL_OVERRIDE in config.detail:
             scale_threshold = config.detail[OBSERVER_MIN_SCALE_MANUL_OVERRIDE]
-
         histogram = convert_any_to_numpy(histogram).tolist()
-        total_elements = sum(histogram)
+        num_of_quant_levels = (self._quant_cfg.quant_max - self._quant_cfg.quant_min) + 1
 
-        if config.policy.has_property(QuantizationProperty.ASYMMETRICAL):
-            raise PermissionError('Torch Mse observer do not support ASYMMETRICAL policy now, please wait.')
+        losses = []
+        if (config.policy.has_property(QuantizationProperty.ASYMMETRICAL) and
+            config.policy.has_property(QuantizationProperty.PER_TENSOR)):
+            
+            # at least we can have a min-max result
+            step = hist_bins // num_of_quant_levels + 1
+            loss = self.compute_mse_loss(histogram=histogram, start=0, step=step, end=num_of_quant_levels * step)
+            losses.append({'mse': loss, 'start': 0, 'end': num_of_quant_levels * step})
 
-        if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
+            for start in range(0, hist_bins, OBSERVER_MSE_COMPUTE_INTERVAL):
+                if (start * hist_scale) + self._min > 0:
+                    break # start can not > 0
+
+                for step in range(1, hist_bins // num_of_quant_levels + 1):
+                    end = start + num_of_quant_levels * step
+                    if end > (hist_bins + num_of_quant_levels): break
+                    loss = self.compute_mse_loss(histogram=histogram, start=start, step=step, end=end)
+                    losses.append({'mse': loss, 'start': start, 'end': end})
+        
+            best_policy = sorted(losses, key=lambda x: x['mse'])[0]
+            best_start  = best_policy['start']
+            best_end    = best_policy['end']
+
+            # translate start & end to scale & offset.
+            range_min, range_max = (best_start * hist_scale) + self._min, (best_end * hist_scale) + self._min
+            scale, offset = minmax_to_scale_offset(range_min, range_max, config, scale_threshold)
+            return scale, offset
+
+        elif config.policy.has_property(QuantizationProperty.PER_CHANNEL):
             raise PermissionError('Torch Mse observer do not support PER_CHANNEL policy now, please wait.')
 
-        if (config.policy.has_property(QuantizationProperty.SYMMETRICAL) and
-            config.policy.has_property(QuantizationProperty.PER_TENSOR)):
-            scale = 1 # hist scale
-            cover = scale * 2 ** (config.num_of_bits - 1)
-            losses = []
-            while cover < hist_bins * 1.5:
-                loss = 0
-                for bin_idx, num_of_elements in enumerate(histogram):
-                    idx = bin_idx + 1
-                    if idx > cover: error = idx - cover - .5
-                    else: error = scale * .25
-                    loss += (num_of_elements / total_elements) * error * error
-                scale += 1
-                cover = scale * 2 ** (config.num_of_bits - 1)
-                losses.append({'mse': loss, 'scale': scale})
+        elif (config.policy.has_property(QuantizationProperty.SYMMETRICAL) and
+              config.policy.has_property(QuantizationProperty.PER_TENSOR)):
+            # at least we can have a min-max result
+            step = hist_bins // num_of_quant_levels + 1
+            loss = self.compute_mse_loss(histogram=histogram, start=0, step=step, end=num_of_quant_levels * step)
+            losses.append({'mse': loss, 'end': num_of_quant_levels * step})
 
-            best_scale = sorted(losses, key=lambda x: x['mse'])[0]['scale']
-            scale, offset = best_scale * hist_scale, 0
-            scale = max(scale, scale_threshold)
+            for step in range(1, hist_bins // num_of_quant_levels + 1):
+                end = num_of_quant_levels * step
+                if end > (hist_bins + num_of_quant_levels): break
+                loss = self.compute_mse_loss(histogram=histogram, start=0, step=step, end=end)
+                losses.append({'mse': loss, 'end': end})
 
-            if config.policy.has_property(QuantizationProperty.POWER_OF_2):
-                scale = ppq_round_to_power_of_2(scale, policy=RoundingPolicy.ROUND_HALF_UP)
+            best_policy = sorted(losses, key=lambda x: x['mse'])[0]
+            best_end    = best_policy['end']
+
+            # translate start & end to scale & offset.
+            range_min, range_max = -(best_end * hist_scale), (best_end * hist_scale)
+            scale, offset = minmax_to_scale_offset(range_min, range_max, config, scale_threshold)
             return scale, offset
 
         raise Exception('Oops, there might be some mistakes.')

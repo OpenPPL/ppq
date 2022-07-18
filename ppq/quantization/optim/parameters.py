@@ -54,9 +54,9 @@ class PassiveParameterQuantizePass(QuantizationOptimizationPass):
                     w_cfg = w_cfg.dominated_by
                     i_cfg  = i_cfg.dominated_by
 
-                    b_cfg.scale  = w_cfg.scale * i_cfg.scale * self.scale_multiplier
+                    b_cfg._scale  = w_cfg.scale * i_cfg.scale * self.scale_multiplier
                     b_cfg.state  = QuantizationStates.PASSIVE
-                    b_cfg.offset = torch.zeros_like(b_cfg.scale)
+                    b_cfg._offset = torch.zeros_like(b_cfg.scale)
                     assert not b_cfg.policy.has_property(QuantizationProperty.ASYMMETRICAL), (
                         'Passive parameter does not support ASYMMETRICAL quantization')
 
@@ -71,8 +71,8 @@ class PassiveParameterQuantizePass(QuantizationOptimizationPass):
                 for config in op.config.input_quantization_config[1: ]:
                     if config.state != QuantizationStates.PASSIVE_INIT and not self._override: continue
 
-                    config.scale  = i_cfg.scale
-                    config.offset = i_cfg.offset
+                    config._scale  = i_cfg.scale
+                    config._offset = i_cfg.offset
                     config.state  = QuantizationStates.PASSIVE
 
             if op.type in {'Pad'}:
@@ -86,8 +86,8 @@ class PassiveParameterQuantizePass(QuantizationOptimizationPass):
                         'cause input has not been correctly quantized.')
                 i_cfg = i_cfg.dominated_by
                 pad_config = op.config.input_quantization_config[-1]
-                pad_config.scale  = i_cfg.scale
-                pad_config.offset = i_cfg.offset
+                pad_config._scale  = i_cfg.scale
+                pad_config._offset = i_cfg.offset
                 pad_config.state  = QuantizationStates.PASSIVE
 
         # final check
