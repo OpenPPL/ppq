@@ -128,7 +128,8 @@ class BaseQuantizer(metaclass = ABCMeta):
             if operation.meta_data is None:
                 raise ValueError(f'Operation {op_name} has no meta data yet. calling executor.tracing_meta')
 
-            if operation.type in quantable_operation_types:
+            if operation.type in quantable_operation_types or TargetPlatform.is_quantized_platform(operation.platform):
+                # TargetPlatform.is_quantized_platform(operation.platform) means override.
                 if op_name in operation_quantization_configs: continue
                 else: operation_quantization_configs[op_name] = (
                     self.init_quantize_config(operation=operation)

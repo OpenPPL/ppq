@@ -229,6 +229,14 @@ class ONNXRUNTIMExporter(OnnxExporter):
             graph.create_link_with_var(input_var, output_var)
         return graph
 
+    def remove_branch_duplicated_quant_dequant_op(self, graph: BaseGraph) -> BaseGraph:
+        for variable in graph.variables.values():
+            if len(variable.dest_ops) < 1: continue
+            if all([op.type == 'QuantizeLinear' for op in variable.dest_ops]):
+                # check if has the same scale and offset
+                pass
+
+
     @ property
     def required_opsets(self) -> Dict[str, int]:
         extra_domain_versions = [('ai.onnx', 13)]
