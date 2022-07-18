@@ -421,12 +421,25 @@ def Unsqueeze_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
     Returns:
         torch.Tensor: [description]
     """
-    ASSERT_ALL_TENSORS_AT_CPU(op=op, values=values)
-    ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
-    [unsqueezing_tensor] = values
-    axes = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='axes', compulsive=True)
-    output = torch.unsqueeze(unsqueezing_tensor, axes[0])
-    return output
+    if op.opset.is_onnx_v13():
+        ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=2, max_num_of_input=2)
+        unsqueezing_tensor, axes = values
+        ASSERT_ALL_TENSORS_AT_CPU(op=op, values=[axes])
+        axes = axes.tolist()
+    else:
+        ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
+        ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
+        [unsqueezing_tensor] = values
+        axes = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='axes', compulsive=True)
+
+    if isinstance(axes, list):
+        for squeezing_dim in sorted(axes, reverse=True):
+            unsqueezing_tensor = torch.unsqueeze(unsqueezing_tensor, squeezing_dim)
+    elif isinstance(axes, int):
+        unsqueezing_tensor = torch.unsqueeze(unsqueezing_tensor, axes)
+    else: raise TypeError(f'Parameter axes of operation {op.name} misunderstood, '
+                          f'expect int value of list of int, while {type(axes)} was given.')
+    return unsqueezing_tensor
 
 def Squeeze_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
     """Remove single-dimensional entries from the shape of a tensor. Takes an
@@ -453,11 +466,34 @@ def Squeeze_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackend
     Returns:
         torch.Tensor: [description]
     """
-    ASSERT_ALL_TENSORS_AT_CPU(op=op, values=values)
-    ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=2)
-    [squeezing_tensor], axes = values, GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='axes', compulsive=True)
-    if isinstance(axes, list): axes = axes[0] # axes 应该是一个整数，但是有些时候我们发现这里会传入一个list，不知道是不是图解析的问题。
-    return torch.squeeze(squeezing_tensor, axes)
+    if op.opset.is_onnx_v13():
+        ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=2)
+        squeezing_tensor = values[0]
+        axes = [axis for axis in range(squeezing_tensor.ndim) if squeezing_tensor.shape[axis] == 1]
+
+        if len(values) > 1:
+            axes = values[1]
+            ASSERT_ALL_TENSORS_AT_CPU(op=op, values=[axes])
+            axes = axes.tolist()
+    else:
+        ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
+        ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
+        [squeezing_tensor], axes = values, GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='axes', compulsive=False, default=None)
+    
+    # common part
+    if axes is None:
+        axes = []
+        shape = squeezing_tensor.shape
+        for dim, s in enumerate(shape):
+            if s == 1: axes.append(dim)
+    if isinstance(axes, list):
+        for squeezing_dim in sorted(axes, reverse=True):
+            squeezing_tensor = torch.squeeze(squeezing_tensor, squeezing_dim)
+    elif isinstance(axes, int):
+        squeezing_tensor = torch.squeeze(squeezing_tensor, axes)
+    else: raise TypeError(f'Parameter axes of operation {op.name} misunderstood, '
+                          f'expect int value of list of int, while {type(axes)} was given.')
+    return squeezing_tensor
 
 def Gather_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
     """Given data tensor of rank r >= 1, and indices tensor of rank q, gather
