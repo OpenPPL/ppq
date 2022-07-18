@@ -23,7 +23,7 @@ from ppq.core import (PPQ_CONFIG, DataType, OperationMeta,
 from ppq.IR import BaseGraph
 from ppq.IR.morph import GraphDeviceSwitcher
 from ppq.IR.quantize import QuantableOperation, QuantableVariable
-from ppq.core.quant import ChannelwiseTensorQuantizationConfig, QuantizationProperty
+from ppq.core.quant import ChannelwiseTensorQuantizationConfig, QuantizationProperty, QuantizationStates
 from ppq.utils.round import ppq_tensor_round
 
 try:
@@ -157,7 +157,8 @@ class TensorRTExporter(ONNXRUNTIMExporter):
                 i_config, w_config = operation.config.input_quantization_config[: 2]
                 i_var, w_var       = operation.inputs[: 2]
 
-                self.insert_quant_dequant_on_variable(graph=graph, var=i_var, config=i_config, op=operation)
+                if QuantizationStates.is_activated(i_config.state):
+                    self.insert_quant_dequant_on_variable(graph=graph, var=i_var, config=i_config, op=operation)
                 self.insert_quant_dequant_on_variable(graph=graph, var=w_var, config=w_config, op=operation)
 
             elif operation.type in {'AveragePool', 'GlobalAveragePool'}:
@@ -168,11 +169,16 @@ class TensorRTExporter(ONNXRUNTIMExporter):
                 i_config = operation.config.input_quantization_config[0]
                 i_var    = operation.inputs[0]
 
-                self.insert_quant_dequant_on_variable(graph=graph, var=i_var, config=i_config, op=operation)
+                if QuantizationStates.is_activated(i_config.state):
+                    self.insert_quant_dequant_on_variable(graph=graph, var=i_var, config=i_config, op=operation)
 
             else:
-                ppq_warning(f'Do not support export quantized operation {operation.name} to TensorRT, '
-                            'This operation is expected to run with fp32 mode')
+                super().convert_operation(
+                    graph=graph, op=operation, 
+                    process_activation=True, 
+                    process_parameter=True, 
+                    quant_param_to_int=False)
+
         return graph
 
     def export(self, file_path: str, graph: BaseGraph,
