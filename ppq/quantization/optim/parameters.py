@@ -44,21 +44,28 @@ class PassiveParameterQuantizePass(QuantizationOptimizationPass):
                 # inputs are [input value, weight, bias(optional)]
                 if op.num_of_input == 3:
                     i_cfg, w_cfg, b_cfg = op.config.input_quantization_config
-                    if b_cfg.state != QuantizationStates.PASSIVE_INIT and not self._override: continue
+
                     if not check_state(w_cfg.state):
                         raise PermissionError(f'Can not quantize bias of layer {op.name}, '
                             'cause weight has not been correctly quantized.')
                     if not check_state(i_cfg.state):
                         raise PermissionError(f'Can not quantize bias of layer {op.name}, '
                             'cause input has not been correctly quantized.')
-                    w_cfg = w_cfg.dominated_by
-                    i_cfg  = i_cfg.dominated_by
+                    
+                    # 在两种情况下可以执行后续逻辑，1 状态为 PASSIVE_INIT，2 要求 override
+                    if self._override and (b_cfg.state == QuantizationStates.PASSIVE):
+                        b_cfg.scale  = w_cfg.scale * i_cfg.scale * self.scale_multiplier
+                        b_cfg.state  = QuantizationStates.PASSIVE
+                        b_cfg.offset = torch.zeros_like(b_cfg.scale)
+                        assert not b_cfg.policy.has_property(QuantizationProperty.ASYMMETRICAL), (
+                            'Passive parameter does not support ASYMMETRICAL quantization')
 
-                    b_cfg._scale  = w_cfg.scale * i_cfg.scale * self.scale_multiplier
-                    b_cfg.state  = QuantizationStates.PASSIVE
-                    b_cfg._offset = torch.zeros_like(b_cfg.scale)
-                    assert not b_cfg.policy.has_property(QuantizationProperty.ASYMMETRICAL), (
-                        'Passive parameter does not support ASYMMETRICAL quantization')
+                    if b_cfg.state == QuantizationStates.PASSIVE_INIT:
+                        b_cfg.scale  = w_cfg.scale * i_cfg.scale * self.scale_multiplier
+                        b_cfg.state  = QuantizationStates.PASSIVE
+                        b_cfg.offset = torch.zeros_like(b_cfg.scale)
+                        assert not b_cfg.policy.has_property(QuantizationProperty.ASYMMETRICAL), (
+                            'Passive parameter does not support ASYMMETRICAL quantization')
 
             if op.type in {'Clip'}:
                 # inputs are [input value, min[optional], max[optional]]
@@ -67,13 +74,19 @@ class PassiveParameterQuantizePass(QuantizationOptimizationPass):
                 if not check_state(i_cfg.state):
                     raise PermissionError(f'Can not quantize clip value of layer {op.name}, '
                         'cause input has not been correctly quantized.')
-                i_cfg = i_cfg.dominated_by
-                for config in op.config.input_quantization_config[1: ]:
-                    if config.state != QuantizationStates.PASSIVE_INIT and not self._override: continue
 
-                    config._scale  = i_cfg.scale
-                    config._offset = i_cfg.offset
-                    config.state  = QuantizationStates.PASSIVE
+                for config in op.config.input_quantization_config[1: ]:
+
+                    # 在两种情况下可以执行后续逻辑，1 状态为 PASSIVE_INIT，2 要求 override
+                    if config.state == QuantizationStates.PASSIVE_INIT: 
+                        config.scale  = i_cfg.scale
+                        config.offset = i_cfg.offset
+                        config.state  = QuantizationStates.PASSIVE
+
+                    if self._override and (config.state == QuantizationStates.PASSIVE):
+                        config.scale  = i_cfg.scale
+                        config.offset = i_cfg.offset
+                        config.state  = QuantizationStates.PASSIVE
 
             if op.type in {'Pad'}:
                 # inputs are [input value, pad[shape-related], pad value[optional]]
@@ -84,11 +97,21 @@ class PassiveParameterQuantizePass(QuantizationOptimizationPass):
                 if not check_state(i_cfg.state):
                     raise PermissionError(f'Can not quantize pad value of layer {op.name}, '
                         'cause input has not been correctly quantized.')
-                i_cfg = i_cfg.dominated_by
-                pad_config = op.config.input_quantization_config[-1]
-                pad_config._scale  = i_cfg.scale
-                pad_config._offset = i_cfg.offset
-                pad_config.state  = QuantizationStates.PASSIVE
+                
+                if len(op.config.input_quantization_config) > 1:
+                    pad_config = op.config.input_quantization_config[-1]
+                    # 在两种情况下可以执行后续逻辑，1 状态为 PASSIVE_INIT，2 要求 override
+                    if pad_config.state == QuantizationStates.PASSIVE_INIT: 
+                        pad_config = op.config.input_quantization_config[-1]
+                        pad_config.scale  = i_cfg.scale
+                        pad_config.offset = i_cfg.offset
+                        pad_config.state  = QuantizationStates.PASSIVE
+
+                    if self._override and (pad_config.state == QuantizationStates.PASSIVE):
+                        pad_config = op.config.input_quantization_config[-1]
+                        pad_config.scale  = i_cfg.scale
+                        pad_config.offset = i_cfg.offset
+                        pad_config.state  = QuantizationStates.PASSIVE
 
         # final check
         for op in graph.operations.values():
