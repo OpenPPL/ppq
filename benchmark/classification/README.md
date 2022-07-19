@@ -31,7 +31,7 @@ python benchmark.py
 |resnet18|TRT|69.764|69.578|69.550|69.484|
 |resnet18|Snpe|69.764|69.278|69.266|-|
 |resnet18|Ncnn|69.764|69.132|69.064|-|
-|mobilenetV2|OpenVino|72.017|71.317|71.383|** 71.584**|
+|mobilenetV2|OpenVino|72.017|71.317|71.383|**71.584**|
 |mobilenetV2|TRT|72.017|71.413|71.441|71.367|
 |mobilenetV2|Snpe|72.017|70.102|70.072|-|
 |mobilenetV2|Ncnn|72.017|71.671|71.657|-|
