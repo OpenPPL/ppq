@@ -2570,12 +2570,12 @@ def LSTM_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
     s = 2 if bidirectional else 1
     if initial_h is None:
         initial_h = torch.zeros(
-            size=[s, x.shape[1], x.shape[2]], 
+            size=[s, x.shape[1], hidden_size], 
             device=x.device, dtype=torch.float32)
 
     if initial_c is None:
         initial_c = torch.zeros(
-            size=[s, x.shape[1], x.shape[2]], 
+            size=[s, x.shape[1], hidden_size], 
             device=x.device, dtype=torch.float32)
 
     result = _VF.lstm(
