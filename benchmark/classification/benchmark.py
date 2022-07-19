@@ -6,8 +6,6 @@ from Utilities.Imagenet import load_imagenet_from_directory
 import os
 import cfg
 import pandas as pd
-from copy import deepcopy
-import time
 
 report = []
 # 获取FP32 onnx模型
@@ -53,7 +51,7 @@ with ENABLE_CUDA_KERNEL():
                 # 导出ORT模型
                 export_ppq_graph(
                     graph = ppq_quant_ir,
-                    platform=TargetPlatform.ONNXRUNTIME,
+                    platform=TargetPlatform.ORT_OOS_INT8,
                     graph_save_to=f'{os.path.join(config["OutputPath"], model_name)}-ORT-INT8.onnx')
 
                 ort_acc,_ = get_ort_accuracy(model_name,platform,config["OutputPath"])

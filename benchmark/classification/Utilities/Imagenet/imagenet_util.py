@@ -16,9 +16,10 @@ from torch.utils.data.dataset import Subset
 from tqdm import tqdm
 
 from ppq.core import *
-import openvino.runtime
+# import openvino.runtime
 from trt_infer import TrtInferenceModel
 import numpy as np
+import openvino.inference_engine as ie
 
 
 def accuracy(output, target, topk=(1,)):
@@ -165,12 +166,23 @@ def evaluate_openvino_module_with_imagenet(
     """
         一套用来测试 openvino 平台量化精度的代码
     """
-    openvino_executor = openvino.runtime.Core()
-    model_openvino = openvino_executor.compile_model(
-    model = openvino_executor.read_model(model=model_path), device_name="CPU")
+    # 新版的2.0推理qdq模型精度低
+    # openvino_executor = openvino.runtime.Core()
+    # model_openvino = openvino_executor.compile_model(
+    # model = openvino_executor.read_model(model=model_path), device_name="CPU")
+    # model_forward_function = lambda input_tensor: torch.tensor(list(
+    #     model_openvino([convert_any_to_numpy(input_tensor)]).values())[0])
 
+
+    # 使用旧版的推理接口
+    core = ie.IECore()
+    network = core.read_network(model_path)
+    model_openvino = core.load_network(network, "CPU")
+    input_name = list(model_openvino.input_info.keys())[0]
     model_forward_function = lambda input_tensor: torch.tensor(list(
-        model_openvino([convert_any_to_numpy(input_tensor)]).values())[0])
+        model_openvino.infer({input_name:convert_any_to_numpy(input_tensor)}).values())[0])
+
+
     return _evaluate_any_module_with_imagenet(
         model_forward_function=model_forward_function, batchsize=batchsize,
         device=device, imagenet_validation_dir=imagenet_validation_dir,
