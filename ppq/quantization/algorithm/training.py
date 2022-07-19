@@ -729,7 +729,7 @@ class StraightThroughEstimateDelegator(TorchQuantizeDelegate):
         return params
 
     def finalize(self) -> None:
-        if self.config.dominated_by == self.config:
+        if self.config.dominated_by == self.config and self.config.__is_revisable():
             if not self.passive:
                 self.config.scale = self.scale.data.abs()
                 self.config.offset = torch.clamp(self.bias.data.abs() / self.scale.data.abs(), \
