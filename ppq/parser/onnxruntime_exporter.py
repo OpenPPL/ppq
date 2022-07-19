@@ -229,14 +229,6 @@ class ONNXRUNTIMExporter(OnnxExporter):
             graph.create_link_with_var(input_var, output_var)
         return graph
 
-    def remove_branch_duplicated_quant_dequant_op(self, graph: BaseGraph) -> BaseGraph:
-        for variable in graph.variables.values():
-            if len(variable.dest_ops) < 1: continue
-            if all([op.type == 'QuantizeLinear' for op in variable.dest_ops]):
-                # check if has the same scale and offset
-                pass
-
-
     @ property
     def required_opsets(self) -> Dict[str, int]:
         extra_domain_versions = [('ai.onnx', 13)]
@@ -252,6 +244,7 @@ class ONNXRUNTIMExporter(OnnxExporter):
         # this func transform representation of certain op from opset 11 to 13
         for op in graph.operations.values():
             if op.type == 'ReduceSum' or op.type == 'Squeeze' or op.type == 'Unsqueeze':
+                if 'axes' not in op.attributes: continue # is already v13
                 axes = convert_any_to_torch_tensor(op.attributes.pop('axes'), dtype=torch.int64)
                 var = graph.create_variable(name=None, value=axes, is_parameter=True)
                 graph.create_link_with_op(variable=var, upstream_op=None, downstream_op=op)
