@@ -80,7 +80,8 @@ EXPORTERS = {
     TargetPlatform.METAX_INT8_C:  ONNXRUNTIMExporter,
     TargetPlatform.METAX_INT8_T:  ONNXRUNTIMExporter,
     TargetPlatform.TRT_INT8:      TensorRTExporter,
-    TargetPlatform.NCNN_INT8:     NCNNExporter
+    TargetPlatform.NCNN_INT8:     NCNNExporter,
+    TargetPlatform.NCNN_INT8:     TengineExporter,
 }
 
 # 为你的导出模型取一个好听的后缀名
@@ -100,6 +101,7 @@ EXPORTING_POSTFIX = {
     TargetPlatform.ORT_OOS_INT8:  '.onnx',
     TargetPlatform.METAX_INT8_C:  '.onnx',
     TargetPlatform.METAX_INT8_T:  '.onnx',
+    TargetPlatform.TENGINE_INT8:  '.tmfile',
 }
 
 def load_graph(file_path: str, from_framework: NetworkFramework=NetworkFramework.ONNX, **kwargs) -> BaseGraph:
