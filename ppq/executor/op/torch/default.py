@@ -576,8 +576,20 @@ def Reshape_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackend
     if 'allowzero' in op.attributes: raise NotImplemented('Not implemented yet.')
     data, shape = values
     shape = [shape[i] if shape[i] != 0 else data.shape[i] for i in range(len(shape))]
-    if shape[0].item()==int(1) and shape[1].item()==int(-1):
+    
+    if isinstance(shape[0], torch.Tensor):
+        batch = shape[0].item()
+    elif isinstance(shape[0], int):
+        batch = shape[0]
+
+    if isinstance(shape[1], torch.Tensor):
+        channel = shape[1].item()
+    elif isinstance(shape[1], int):
+        channel = shape[1]
+
+    if batch == int(1) and channel == int(-1):
         shape[0] = torch.tensor([data.shape[0]])
+        
     return data.reshape(shape)
 
 
