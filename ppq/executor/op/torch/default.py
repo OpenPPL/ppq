@@ -2946,6 +2946,37 @@ def Elu_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
     return F.elu(x, alpha=alpha)
 
 
+def Erf_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
+    """
+    Elu takes one input data (Tensor) and produces one output data (Tensor) 
+    where the function f(x) = alpha * (exp(x) - 1.) for x < 0, f(x) = x for x >= 0., 
+    is applied to the tensor elementwise.
+
+    Version
+    This version of the operator has been available since version 6 of the default ONNX operator set.
+
+    Other versions of this operator: 1
+
+    Attributes
+        alpha : float (default is 1.0)
+            Coefficient of ELU.
+    
+    Inputs
+        X (differentiable) : T
+            1D input tensor
+    
+    Outputs
+        Y (differentiable) : T
+            1D output tensor
+    
+    Type Constraints
+    T : tensor(float16), tensor(float), tensor(double)
+    Constrain input and output types to float tensors.
+    """
+    ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
+    [x] = values
+    return torch.erf(x) # may require a higher version pytorch
+
 DEFAULT_BACKEND_TABLE = {
     'Abs': Abs_forward,
     'AdaptiveAvgPool2d': AdaptiveAvgPool2d_forward,
@@ -3042,4 +3073,5 @@ DEFAULT_BACKEND_TABLE = {
     'LSTM': LSTM_forward,
     'Sum': Sum_forward,
     'Elu': Elu_forward,
+    'Erf': Erf_forward
 }
