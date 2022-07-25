@@ -57,6 +57,6 @@ python benchmark.py
 - [ ] 完成5个模型在4个平台上的部署精度测试
 
 目前存在的问题：
-- [x] OpeVino平台推理精度低。
-- [x] shufflenetV2无法在openvino上推理。
+- [x] ~~OpeVino平台推理精度低。~~  已修复，opevino推理库存在问题，降低openvino版本到2021.04
+- [x] ~~shufflenetV2无法在openvino上推理。~~ 已修复，opevino推理库存在问题，降低openvino版本到2021.04
 - [ ] export_ppq_graph的参数copy_graph=True时，会导致导出的openvino和ORT模型推理精度为0。目前脚本无法同时测试qdq ort和platform精度。
