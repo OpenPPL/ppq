@@ -26,6 +26,7 @@ def _onnx_padding_to_torch(pads: List[int]) -> List[int]:
     # Convert padding from onnx format to torch format
     # onnx format: [x1_begin, x2_begin, ... , x1_end, x2_end, ...]
     # torch format [xn_begin, xn_end, ... , x2_begin, x2_end, x1_begin, x1_end]
+    if pads is None: return None
     middle = len(pads) // 2
     onnx_pad_begin, onnx_pad_end = pads[:middle], pads[middle:]
     onnx_pad_begin, onnx_pad_end = onnx_pad_begin[::-1], onnx_pad_end[::-1]
@@ -311,35 +312,64 @@ def ConvTranspose_forward(op: Operation, values: List[torch.Tensor], ctx: TorchB
     b = values[2] if len(values) > 2 else None
     ndim = x.ndim
 
+    _padding = _onnx_padding_to_torch(padding)
+    if len(_padding) == 2:
+        p1, p2 = _padding
+        if p1 == p2: 
+            padding = [p1]
+            _padding = None
+        else:
+            padding = [0]
+    if len(_padding) == 4:
+        p1, p2, p3, p4 = _padding
+        if p1==p2 and p3==p4: 
+            padding=[p1, p3]
+            _padding = None
+        else:
+            padding = [0, 0]
+    if len(_padding) == 6:
+        p1, p2, p3, p4, p5, p6 = _padding
+        if p1==p2 and p3==p4 and p5==p6: 
+            padding=[p1, p3, p5]
+            _padding = None
+        else:
+            padding = [0, 0, 0]
+
     # 2d conv transpose
     if ndim == 4:
-        # onnx pads format[top, left, bottom, right] to torch pads format[left, right, top, bottom]
-        if isinstance(padding, list) and len(padding) == 4:
-            p_left, p_right, p_top, p_bottom = padding[1], padding[3], padding[0], padding[2]
-            # torch does not support padding contains 4 value, there is a fix of it.
-            if p_left == p_right and p_top == p_bottom:
-                padding = [p_top, p_left]
-            else:
-                x = F.pad(x, pad=[p_left, p_right, p_top, p_bottom])
-                padding = 0
-
         output = F.conv_transpose2d(
             input=x, weight=w, bias=b, groups=groups, padding=padding,
             dilation=dilation, stride=stride, output_padding=output_padding)
-
+        if len(_padding) == 4:
+            p1, p2, p3, p4 = _padding
+            _, _, h, w = output.shape
+            output = output[:, :, 0 + p1: h - p2, 0 + p3: w - p4]
+        elif _padding is not None:
+            raise NotImplementedError(f'Invalid pad mode for Op {op.name}, 2D convTranspose expect a 4-d padding.')
+    
     # 1d conv transpose
     elif ndim in {2, 3}:
-        x = F.pad(x, _onnx_padding_to_torch(padding))
         output = F.conv_transpose1d(
             input=x, weight=w, bias=b, groups=groups,
             dilation=dilation, stride=stride, output_padding=output_padding)
+        if len(_padding) == 2:
+            p1, p2 = _padding
+            _, _, h = output.shape
+            output = output[:, :, 0 + p1: h - p2]
+        elif _padding is not None:
+            raise NotImplementedError(f'Invalid pad mode for Op {op.name}, 1D convTranspose expect a 2-d padding.')
 
+    # 3d conv transpose
     elif ndim == 5:
-        x = F.pad(x, _onnx_padding_to_torch(padding))
         output = F.conv_transpose3d(
             input=x, weight=w, bias=b, groups=groups,
             dilation=dilation, stride=stride, output_padding=output_padding)
-    
+        if len(_padding) == 6:
+            p1, p2, p3, p4, p5, p6 = _padding
+            _, _, d, h, w = output.shape
+            output = output[:, :, 0 + p1: d - p2, 0 + p3: h - p4, 0 + p5: w - p6]
+        elif _padding is not None:
+            raise NotImplementedError(f'Invalid pad mode for Op {op.name}, 3D convTranspose expect a 6-d padding.')
     else:
         raise ValueError(f'Operation {op.name} is invalid, {ndim}-d input is not supported.')
     return output
@@ -2570,12 +2600,12 @@ def LSTM_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
     s = 2 if bidirectional else 1
     if initial_h is None:
         initial_h = torch.zeros(
-            size=[s, x.shape[1], x.shape[2]], 
+            size=[s, x.shape[1], hidden_size], 
             device=x.device, dtype=torch.float32)
 
     if initial_c is None:
         initial_c = torch.zeros(
-            size=[s, x.shape[1], x.shape[2]], 
+            size=[s, x.shape[1], hidden_size], 
             device=x.device, dtype=torch.float32)
 
     result = _VF.lstm(
@@ -2916,6 +2946,37 @@ def Elu_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
     return F.elu(x, alpha=alpha)
 
 
+def Erf_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
+    """
+    Elu takes one input data (Tensor) and produces one output data (Tensor) 
+    where the function f(x) = alpha * (exp(x) - 1.) for x < 0, f(x) = x for x >= 0., 
+    is applied to the tensor elementwise.
+
+    Version
+    This version of the operator has been available since version 6 of the default ONNX operator set.
+
+    Other versions of this operator: 1
+
+    Attributes
+        alpha : float (default is 1.0)
+            Coefficient of ELU.
+    
+    Inputs
+        X (differentiable) : T
+            1D input tensor
+    
+    Outputs
+        Y (differentiable) : T
+            1D output tensor
+    
+    Type Constraints
+    T : tensor(float16), tensor(float), tensor(double)
+    Constrain input and output types to float tensors.
+    """
+    ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
+    [x] = values
+    return torch.erf(x) # may require a higher version pytorch
+
 DEFAULT_BACKEND_TABLE = {
     'Abs': Abs_forward,
     'AdaptiveAvgPool2d': AdaptiveAvgPool2d_forward,
@@ -3012,4 +3073,5 @@ DEFAULT_BACKEND_TABLE = {
     'LSTM': LSTM_forward,
     'Sum': Sum_forward,
     'Elu': Elu_forward,
+    'Erf': Erf_forward
 }

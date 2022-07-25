@@ -28,6 +28,7 @@ CALIBRATION_BATCHSIZE = 16                                # batchsize of calibra
 EXECUTING_DEVICE      = 'cuda'                            # 'cuda' or 'cpu'.
 REQUIRE_ANALYSE       = False
 DUMP_RESULT           = False
+TRAINING_YOUR_NETWORK = True                              # 是否需要 Finetuning 一下你的网络
 
 # -------------------------------------------------------------------
 # 加载你的模型文件，PPQ 将会把 onnx 或者 caffe 模型文件解析成自己的格式
@@ -62,29 +63,22 @@ if TARGET_PLATFORM == TargetPlatform.TRT_INT8:
     QS = QuantizationSettingFactory.trt_setting()
 
 # -------------------------------------------------------------------
-# 下面向你展示了常用参数调节选项：
+# 下面向你展示了如何使用 finetuning 过程提升量化精度
+# 在 PPQ 中我们提供了十余种算法用来帮助你恢复精度
+# 开启他们的方式都是 QS.xxxx = True
+# 按需使用，不要全部打开，容易起飞
 # -------------------------------------------------------------------
-if PPQ_CONFIG.USING_CUDA_KERNEL:
-    QS.advanced_optimization = True                                 # 启动网络再训练过程，降低量化误差
-    QS.advanced_optimization_setting.steps = 2500                   # 再训练步数，影响训练时间，2500步大概几分钟
-    QS.advanced_optimization_setting.collecting_device = 'executor' # 缓存数据放在那，executor 就是放在gpu，如果显存超了你就换成 'cpu'
-    QS.advanced_optimization_setting.auto_check = False             # 打开这个选项则训练过程中会防止过拟合，以及意外情况，通常不需要开。
-else:
+if TRAINING_YOUR_NETWORK:
     QS.lsq_optimization = True                                      # 启动网络再训练过程，降低量化误差
     QS.lsq_optimization_setting.epochs = 30                         # 再训练轮数，影响训练时间，30轮大概几分钟
     QS.lsq_optimization_setting.collecting_device = 'cuda'          # 缓存数据放在那，cuda 就是放在gpu，如果显存超了你就换成 'cpu'
 
-if TARGET_PLATFORM in {TargetPlatform.PPL_DSP_INT8,                 # 这些平台是 per tensor 量化的
-                       TargetPlatform.HEXAGON_INT8,
-                       TargetPlatform.SNPE_INT8,
-                       TargetPlatform.METAX_INT8_T,
-                       TargetPlatform.FPGA_INT8}:
-    QS.equalization = True                                          # per tensor 量化平台需要做 equalization
-
-if TARGET_PLATFORM in {TargetPlatform.ACADEMIC_INT8,                # 把量化的不太好的算子送回 FP32
-                       TargetPlatform.PPL_CUDA_INT8,                # 注意做这件事之前你需要确保你的执行框架具有混合精度执行的能力，以及浮点计算的能力
-                       TargetPlatform.TRT_INT8}:
-    QS.dispatching_table.append(operation='OP NAME', platform=TargetPlatform.FP32)
+# -------------------------------------------------------------------
+# 你可以把量化很糟糕的算子送回 FP32
+# 当然你要先确认你的硬件支持 fp32 的执行
+# 你可以使用 layerwise_error_analyse 来找出那些算子量化的很糟糕
+# -------------------------------------------------------------------
+QS.dispatching_table.append(operation='OP NAME', platform=TargetPlatform.FP32)
 
 print('正准备量化你的网络，检查下列设置:')
 print(f'WORKING DIRECTORY    : {WORKING_DIRECTORY}')
@@ -96,7 +90,11 @@ print(f'CALIBRATION BATCHSIZE: {CALIBRATION_BATCHSIZE}')
 # load_calibration_dataset 函数针对的是单输入模型，输入数据必须是图像数据 layout : [n c h w]
 # 如果你的模型具有更复杂的输入格式，你可以重写下面的 load_calibration_dataset 函数
 # 请注意，任何可遍历对象都可以作为 ppq 的数据集作为输入
+# 比如下面这个 dataloader = [torch.zeros(size=[1,3,224,224]) for _ in range(32)]
 # 当前这个函数的数据将从 WORKING_DIRECTORY/data 文件夹中进行数据加载
+# 
+# 如果你的数据不在这里
+# 你同样需要自己写一个 load_calibration_dataset 函数
 # -------------------------------------------------------------------
 dataloader = load_calibration_dataset(
     directory    = WORKING_DIRECTORY,
@@ -104,41 +102,9 @@ dataloader = load_calibration_dataset(
     batchsize    = CALIBRATION_BATCHSIZE,
     input_format = INPUT_LAYOUT)
 
-# -------------------------------------------------------------------
-# CustimizedPass 创建了一个自定义的量化优化过程
-# 在 PPQ 中，你的网络是被一个个的 QuantizationOptimizationPass 所量化的
-# 你可以在 CustimizedPass 中书写自己的逻辑，或者添加新的 QuantizationOptimizationPass 子类
-# 在 manop 函数中调用你定义的方法从而完成自定义的量化优化过程。
-# -------------------------------------------------------------------
-class CustimizedPass(QuantizationOptimizationPass):
-    def __init__(self) -> None:
-        super().__init__('Custimized Optimization Pass')
-    def optimize(self, processor: GraphCommandProcessor,
-                 dataloader: Iterable, executor: TorchExecutor, **kwargs) -> None:
-        graph = processor.graph
-
 # ENABLE CUDA KERNEL 会加速量化效率 3x ~ 10x，但是你如果没有装相应编译环境的话是编译不了的
 # 你可以尝试安装编译环境，或者在不启动 CUDA KERNEL 的情况下完成量化：移除 with ENABLE_CUDA_KERNEL(): 即可
 with ENABLE_CUDA_KERNEL():
-    # -----------------------------------------------------------------
-    # 我们允许你在标准量化流程之前添加自定义量化逻辑，通常在标准量化流程之前添加的逻辑用于：
-    # 标准化网络格式，分裂或融合网络算子，变更网络结构以降低量化误差等
-    # 在标准量化流程开始之前，你不能访问或修改网络中的量化参数 -- 因为它们还未正确初始化。
-    # 当然，你也可以调用我们提供的任意 QuantizationOptimizationPass 来完成你的自定义量化逻辑。
-
-    # 在量化开始之前，你可以使用的 QuantizationOptimizationPass 包括
-    # LayerwiseEqualizationPass -- 用于调整网络权重以降低量化误差
-    # MetaxGemmSplitPass        -- 用于将 Gemm 分解成 matmul + add
-    # GRUSplitPass              -- 用于将 Gru  分解成 Gemm
-    # MatrixFactorizationPass   -- 用于执行纵向算子分裂，降低量化误差
-    # WeightSplitPass           -- 用于执行横向算子分裂，降低量化误差
-    # ChannelSplitPass          -- 用于执行通道分裂，降低量化误差
-    # -------------------------------------------------------------------
-    custimized_prequant_passes = [CustimizedPass()]
-    manop(graph=graph, list_of_passes=custimized_prequant_passes,
-        calib_dataloader=dataloader, executor=TorchExecutor(graph, device=EXECUTING_DEVICE),
-        collate_fn=None)
-
     print('网络正量化中，根据你的量化配置，这将需要一段时间:')
     quantized = quantize_native_model(
         setting=QS,                     # setting 对象用来控制标准量化逻辑
@@ -146,31 +112,13 @@ with ENABLE_CUDA_KERNEL():
         calib_dataloader=dataloader,
         calib_steps=32,
         input_shape=NETWORK_INPUTSHAPE, # 如果你的网络只有一个输入，使用这个参数传参
-        inputs=None,                    # 如果你的网络有多个输入，使用这个参数传参
+        inputs=None,                    # 如果你的网络有多个输入，使用这个参数传参，就是 input_shape=None, inputs=[torch.zeros(1,3,224,224), torch.zeros(1,3,224,224)]
         collate_fn=lambda x: x.to(EXECUTING_DEVICE),  # collate_fn 跟 torch dataloader 的 collate fn 是一样的，用于数据预处理，
-                                                    # 你当然也可以用 torch dataloader 的那个，然后设置这个为 None
+                                                      # 你当然也可以用 torch dataloader 的那个，然后设置这个为 None
         platform=TARGET_PLATFORM,
         device=EXECUTING_DEVICE,
         do_quantize=True)
     
-    # -----------------------------------------------------------------
-    # 我们允许你在标准量化流程之后添加自定义量化逻辑，通常在标准量化流程之后添加的逻辑用于：
-    # 调整量化信息，再训练网络权重
-    # 当然，你也可以调用我们提供的任意 QuantizationOptimizationPass 来完成你的自定义量化逻辑。
-
-    # 在量化开始之前，你可以使用的 QuantizationOptimizationPass 包括
-    # ParameterBakingPass           -- 用于将权重直接烘焙成量化后的值
-    # RuntimeCalibrationPass        -- 用于重新确定量化参数
-    # MishFusionPass                -- 用于执行 Mish 算子联合定点
-    # SwishFusionPass               -- 用于执行 Swish 算子联合定点
-    # AdvancedQuantOptimization     -- 用于再训练网络，降低量化误差
-    # LearningStepSizeOptimization  -- 用于再训练网络，降低量化误差
-    # -------------------------------------------------------------------
-    custimized_postquant_passes = [CustimizedPass()]
-    manop(graph=graph, list_of_passes=custimized_postquant_passes,
-        calib_dataloader=dataloader, executor=TorchExecutor(graph, device=EXECUTING_DEVICE),
-        collate_fn=None)
-
     # -------------------------------------------------------------------
     # 如果你需要执行量化后的神经网络并得到结果，则需要创建一个 executor
     # 这个 executor 的行为和 torch.Module 是类似的，你可以利用这个东西来获取执行结果
@@ -178,15 +126,6 @@ with ENABLE_CUDA_KERNEL():
     # -------------------------------------------------------------------
     executor = TorchExecutor(graph=quantized, device=EXECUTING_DEVICE)
     # output = executor.forward(input)
-
-    # -------------------------------------------------------------------
-    # 导出 PPQ 执行网络的所有中间结果，该功能是为了和硬件对比结果
-    # 中间结果可能十分庞大，所有的中间结果将被产生在 WORKING_DIRECTORY 中
-    # -------------------------------------------------------------------
-    if DUMP_RESULT:
-        dump_internal_results(
-            graph=quantized, dataloader=dataloader, sample=False,
-            dump_dir=WORKING_DIRECTORY, executing_device=EXECUTING_DEVICE)
 
     # -------------------------------------------------------------------
     # PPQ 计算量化误差时，使用信噪比的倒数作为指标，即噪声能量 / 信号能量
