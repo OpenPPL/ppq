@@ -51,7 +51,14 @@ class PassiveParameterQuantizePass(QuantizationOptimizationPass):
                     if not check_state(i_cfg.state):
                         raise PermissionError(f'Can not quantize bias of layer {op.name}, '
                             'cause input has not been correctly quantized.')
-                    
+
+                    # PATCH 2022.07.29 有的时候 bias 是个多维的东西，此时要求前面的维度都是1
+                    bias = op.inputs[-1].value
+                    assert bias.numel() == bias.shape[-1], (
+                        f'For op {op.name}, expect Bias shape to be {[bias.numel()]}, '
+                        f'however {bias.shape} was given')
+                    op.inputs[-1].value = bias.squeeze()
+
                     # 在两种情况下可以执行后续逻辑，1 状态为 PASSIVE_INIT，2 要求 override
                     if self._override and (b_cfg.state == QuantizationStates.PASSIVE):
                         b_cfg.scale  = w_cfg.scale * i_cfg.scale * self.scale_multiplier
