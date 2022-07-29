@@ -502,7 +502,7 @@ class GraphMerger(GraphCommandProcessor):
             beta  = bn_op.parameters[1].value
             mean  = bn_op.parameters[2].value
             var   = bn_op.parameters[3].value
-            epsilon = bn_op.attributes.get('epislon', 1e-5)
+            epsilon = bn_op.attributes.get('epsilon', 1e-5)
 
             if computing_op.num_of_parameters == 1:
                 w = computing_op.parameters[0].value  # no bias.
