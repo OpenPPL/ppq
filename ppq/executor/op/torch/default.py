@@ -159,6 +159,8 @@ def Conv_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
 
     x, w = values[: 2]
     b = values[2] if len(values) > 2 else None
+    if hasattr(b,"shape") and len(b.shape) == 0:
+        b = b.unsqueeze(0)
 
     ndim = w.ndim
     # conv - 1d
