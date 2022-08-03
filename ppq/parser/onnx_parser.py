@@ -55,6 +55,36 @@ class OnnxParser(GraphBuilder):
                 var.value = initializer[var.name]
                 var.is_parameter = True
         return graph
+      
+    def de_inplace(self, graph: BaseGraph) -> BaseGraph:
+        """Remove inplace layer in netdef If the names of bottom and top are same,
+        it means the computation of this layer is in place."""
+        def new_name(_name):
+            if current_write_times[_name] == total_write_times[_name]:
+                return _name
+            else:
+                return f'{_name}_ver{current_write_times[_name]}'
+        
+        total_write_times = {}
+        for op in graph.operations.values():
+            for top in op.outputs:
+                total_write_times.setdefault(top._name, 0)
+                total_write_times[top._name] += 1
+
+        current_write_times = {}
+        for name in graph.inputs.keys():
+            total_write_times[name] = 0
+            current_write_times[name] = 0
+        
+        for op in graph.operations.values():
+            for bottom in op.inputs:
+                if bottom.is_parameter:
+                    continue
+                bottom._name = new_name(bottom._name)
+            for top in op.outputs:
+                current_write_times.setdefault(top._name, 0)
+                current_write_times[top._name] += 1
+                top._name = new_name(top._name)
 
     def refine_graph(self, graph: BaseGraph) -> BaseGraph:
         for op in graph.operations.values():
@@ -135,4 +165,5 @@ class OnnxParser(GraphBuilder):
             graph, graph_inputs=inputs, graph_outputs=outputs,
             op_inputs=op_inputs_dict, op_outputs=op_outputs_dict)
         graph = self.initialize_params(graph, initializer)
+        self.de_inplace(graph)
         return self.refine_graph(graph)
