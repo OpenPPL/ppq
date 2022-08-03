@@ -63,7 +63,6 @@ class OnnxParser(GraphBuilder):
             if current_write_times[_name] == total_write_times[_name]:
                 return _name
             else:
-                print(_name)
                 return f'{_name}_ver{current_write_times[_name]}'
         
         total_write_times = {}
@@ -73,7 +72,6 @@ class OnnxParser(GraphBuilder):
                 total_write_times[top._name] += 1
 
         current_write_times = {}
-
         for name in graph.inputs.keys():
             total_write_times[name] = 0
             current_write_times[name] = 0
