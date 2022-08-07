@@ -1,4 +1,5 @@
 import json
+from pickletools import uint8
 from typing import Union
 
 import numpy as np
@@ -97,14 +98,14 @@ class TengineExporter(GraphExporter):
                 for config, _var in operation.config_with_variable:
                     if config.dominated_by == config:
                         var_scales[_var.name] = {
-                            "scale": convert_value(config.scale),
-                            "zero_point": convert_value(config.offset),
+                            "scale": convert_value(config.scale)[0],
+                            "zero_point": convert_value(config.offset)[0],
                         }
 
         with open(file=scale_path, mode="w") as file:
-            for k, v in var_scales.items:
+            for k, v in var_scales.items():
                 scale = v["scale"]
-                zp = v["zero_point"]
+                zp = int(round(v["zero_point"]))
                 file.write(f"{k} {scale} {zp}\n")
 
     def export_quantization_config(self, config_path: str, graph: BaseGraph):
