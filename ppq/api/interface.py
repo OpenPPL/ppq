@@ -103,7 +103,7 @@ EXPORTING_POSTFIX = {
     TargetPlatform.ORT_OOS_INT8:  '.onnx',
     TargetPlatform.METAX_INT8_C:  '.onnx',
     TargetPlatform.METAX_INT8_T:  '.onnx',
-    TargetPlatform.TENGINE_INT8:  '.tmfile',
+    TargetPlatform.TENGINE_INT8:  '.onnx',
 }
 
 def load_graph(file_path: str, from_framework: NetworkFramework=NetworkFramework.ONNX, **kwargs) -> BaseGraph:
