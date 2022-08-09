@@ -83,6 +83,10 @@ class ONNXRUNTIMExporter(OnnxExporter):
             assert isinstance(config, ChannelwiseTensorQuantizationConfig)
             created.attributes['axis'] = config.channel_axis
 
+        # PATCH 20220803, OPSET 13 REQUIRES AXIS = 0
+        if config.policy.has_property(QuantizationProperty.PER_TENSOR):
+            created.attributes['axis'] = 0
+
         if related_op is not None and var in related_op.inputs:
             graph.insert_op_between_var_and_op(created, up_var=var, down_op=related_op)
         else: graph.insert_op_on_var(created, var=var.name)
@@ -111,9 +115,14 @@ class ONNXRUNTIMExporter(OnnxExporter):
         s_var = graph.create_variable(name=None, value=scale.clone(), is_parameter=True)
         z_var = graph.create_variable(name=None, value=offset.clone(), is_parameter=True)
         created = graph.create_operation(op_type='DequantizeLinear', attributes={})
+
         if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
             assert isinstance(config, ChannelwiseTensorQuantizationConfig)
             created.attributes['axis'] = config.channel_axis
+
+        # PATCH 20220803, OPSET 13 REQUIRES AXIS = 0
+        if config.policy.has_property(QuantizationProperty.PER_TENSOR):
+            created.attributes['axis'] = 0
 
         if var in related_op.inputs:
             graph.insert_op_between_var_and_op(created, up_var=var, down_op=related_op)

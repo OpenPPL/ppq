@@ -56,8 +56,8 @@ int64_t NUM_OF_ELEMENT(Tensor t){
 }
 
 __host__ __inline__
-int64_t NUM_OF_BLOCK(int64_t elements){
-    return std::min((elements + CUDA_NUM_THREADS - 1) / CUDA_NUM_THREADS, CUDA_TARGET_BLOCKS);
+int64_t NUM_OF_BLOCK(const int64_t elements, const int threads_per_block){
+    return std::min((elements + threads_per_block - 1) / threads_per_block, CUDA_TARGET_BLOCKS);
 }
 
 template<typename Dtype>

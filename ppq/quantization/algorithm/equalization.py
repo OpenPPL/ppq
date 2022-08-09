@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import List
+from typing import List, Tuple
 
 import torch
 from ppq.IR import Operation
@@ -59,12 +59,7 @@ class EqualizationPair:
         self.downstream_layers = all_downstream_layers
         self.method = method
 
-
-    def layerwise_equalize(
-        self,
-        weight_threshold: float,
-        including_bias: bool
-    ):
+    def extract_key_value(self, including_bias: bool) -> Tuple[torch.Tensor, torch.Tensor]:
         # extract all params from upstream_layers
         upstream_params, downstream_params = [], []
         for upstream_layer in self.upstream_layers:
@@ -139,12 +134,21 @@ class EqualizationPair:
         # format all params
         upstream_key_values   = self.reduce_by_axis(upstream_params, method=self.method, aggerate_axis=1)
         downstream_key_values = self.reduce_by_axis(downstream_params, method=self.method, aggerate_axis=1)
+        return upstream_key_values, downstream_key_values
+
+    def layerwise_equalize(
+        self,
+        value_threshold: float,
+        including_bias: bool
+    ):
+        # extract key value from pair
+        upstream_key_values, downstream_key_values = self.extract_key_value(including_bias=including_bias)
 
         # calculate scale
         scale = self.calculate_scale(
             upstream_key_values=upstream_key_values,
             downstream_key_values=downstream_key_values,
-            minval_threshold=weight_threshold
+            minval_threshold=value_threshold
         )
 
         # write back all params
@@ -198,6 +202,10 @@ class EqualizationPair:
 
                 self.set_linear_params(downstream_layer, bias, weight)
 
+    def layerwise_channel_split(
+        self, value_threshold: float,
+        including_bias: bool):
+        pass
 
     def display(self) -> str:
         for layer in self.upstream_layers + self.downstream_layers:
@@ -229,6 +237,11 @@ class EqualizationPair:
 
         assert conv.type == 'Conv', (
             'Except input object with type Conv, but %s got' % conv.type)
+        assert conv.inputs[1].is_parameter, (
+            f'Convolution layer {conv.name} has no static weights, please remove it from layerwise optimization.')
+        assert conv.inputs[1].value.ndim == 4, (
+            f'Convolution layer {conv.name} is not a 2-d convolution, '
+            'layerwise equalization or split with n-d convolution is not supported yet.')
 
         weight, bias = conv.parameters[0].value, None
         if including_bias and len(conv.parameters) > 1:
@@ -241,6 +254,11 @@ class EqualizationPair:
 
         assert conv.type == 'ConvTranspose', (
             'Except input object with type Conv, but %s got' % conv.type)
+        assert conv.inputs[1].is_parameter, (
+            f'Convolution layer {conv.name} has no static weights, please remove it from layerwise optimization.')
+        assert conv.inputs[1].value.ndim == 4, (
+            f'Convolution layer {conv.name} is not a 2-d convolution, '
+            'layerwise equalization or split with n-d convolution is not supported yet.')
 
         weight, bias = conv.parameters[0].value, None
         if including_bias and len(conv.parameters) > 1:
@@ -253,6 +271,8 @@ class EqualizationPair:
 
         assert linear.type == 'Gemm', (
             'Except input object with type Gemm, but %s got' % linear.type)
+        assert linear.inputs[1].is_parameter, (
+            f'Linear layer {linear.name} has no static weights, please remove it from layerwise optimization.')
 
         weight, bias = linear.parameters[0].value, None
         if including_bias and len(linear.parameters) > 1:
@@ -272,6 +292,7 @@ class EqualizationPair:
         conv.parameters[0].value = weight
         if bias is not None and len(conv.parameters) > 1:
             conv.parameters[1].value = bias
+
 
     def set_convtranspose2d_params(self, conv: Operation, bias: torch.Tensor, weight: torch.Tensor):
 
@@ -308,6 +329,7 @@ class EqualizationPair:
 
         return scale
 
+
     def reduce_by_axis(
         self,
         params: List[torch.Tensor],
@@ -334,7 +356,7 @@ class EqualizationPair:
 def layerwise_equalization(
     equalization_pairs: List[EqualizationPair],
     weight_threshold: float = 0.5,
-    incluing_bias: bool = True,
+    including_bias: bool = True,
     iteration: int = 10,
     verbose: bool = False
 ):
@@ -359,7 +381,7 @@ def layerwise_equalization(
     Args:
         equalization_pairs (list): 所有需要被拉平的层的组合结构 all equalization pairs.
         weight_threshold (float, optional): 参与权重均一化的最小权重 minimum weight for weight equalization defaults to 0.5.
-        incluing_bias (bool, optional): 是否执行带bias的权重均一化 whether to include bias defaults to True.
+        including_bias (bool, optional): 是否执行带bias的权重均一化 whether to include bias defaults to True.
         iteration (int, optional): 均一化执行次数 num of equalization iterations defaults to 10.
         verbose (bool, optional): 是否输出均一化的相关结果，这将打印均一化前后的权重变化情况 whether to print details defaults to True.
     """
@@ -375,10 +397,11 @@ def layerwise_equalization(
                 'Input equalization pairs should be encapsuled with class EqualizationPair')
 
             equalization_pair.layerwise_equalize(
-                weight_threshold=weight_threshold,
-                including_bias=incluing_bias
+                value_threshold=weight_threshold,
+                including_bias=including_bias
             )
 
     if verbose:
         for equalization_pair in equalization_pairs:
             equalization_pair.display()
+

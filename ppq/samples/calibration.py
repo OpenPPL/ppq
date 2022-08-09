@@ -2,14 +2,14 @@ from typing import Iterable
 
 import torch
 import torchvision
-from ppq import TargetPlatform, graphwise_error_analyse
+from ppq import QuantableOperation, TargetPlatform, graphwise_error_analyse
 from ppq.api import quantize_torch_model
-from ppq.api.interface import ENABLE_CUDA_KERNEL
-from ppq.quantization.analyse.graphwise import statistical_analyse
-from ppq.quantization.analyse.layerwise import layerwise_error_analyse
+from ppq.api.interface import (ENABLE_CUDA_KERNEL, dispatch_graph,
+                               dump_torch_to_onnx, load_onnx_graph)
+from ppq.api.setting import QuantizationSettingFactory
 
 # ------------------------------------------------------------
-# 在 PPQ 中我们提供许多方法帮助你进行误差分析，误差分析是量化网络的第一步
+# 在 PPQ 中我们提供许多校准方法，这些校准方法将计算出网络的量化参数
 # 这个脚本将以随机数据和 mobilenet v2 网络为例向你展示它们的使用方法
 # ------------------------------------------------------------
 
@@ -39,15 +39,36 @@ model = torchvision.models.mobilenet.mobilenet_v2(pretrained=True)
 model = model.to(DEVICE)
 
 # ------------------------------------------------------------
+# PPQ 提供 kl, mse, minmax, isotone, percentile(默认) 五种校准方法
+# 每一种校准方法还有更多参数可供调整，PPQ 也允许你单独调整某一层的量化校准方法
+# 在这里我们首先展示以 QSetting 的方法调整量化校准参数(推荐)
+# ------------------------------------------------------------
+QSetting = QuantizationSettingFactory.default_setting()
+QSetting.quantize_activation_setting.calib_algorithm = 'kl'
+QSetting.quantize_parameter_setting.calib_algorithm  = 'minmax'
+# ------------------------------------------------------------
+# 更进一步地，当你选择了某种校准方法，你可以进入 ppq.core.common
+# OBSERVER_KL_HIST_BINS, OBSERVER_PERCENTILE, OBSERVER_MSE_HIST_BINS 皆是与校准方法相关的可调整参数
+# OBSERVER_KL_HIST_BINS - KL 算法相关的箱子个数，你可以试试将其调整为 512, 1024, 2048, 4096, 8192 ...
+# OBSERVER_PERCENTILE - Percentile 算法相关的百分比，你可以试试将其调整为 0.9999, 0.9995, 0.99999, 0.99995 ...
+# OBSERVER_MSE_HIST_BINS - MSE 算法相关的箱子个数，你可以试试将其调整为 512, 1024, 2048, 4096, 8192 ...
+# ------------------------------------------------------------
+
+# ------------------------------------------------------------
 # 如果你使用 ENABLE_CUDA_KERNEL 方法
 # PPQ 将会尝试编译自定义的高性能量化算子，这一过程需要编译环境的支持
 # 如果你在编译过程中发生错误，你可以删除此处对于 ENABLE_CUDA_KERNEL 方法的调用
 # 这将显著降低 PPQ 的运算速度；但即使你无法编译这些算子，你仍然可以使用 pytorch 的 gpu 算子完成量化
 # ------------------------------------------------------------
 with ENABLE_CUDA_KERNEL():
+    dump_torch_to_onnx(model=model, onnx_export_file='Output/model.onnx', 
+                       input_shape=INPUT_SHAPE, input_dtype=torch.float32)
+    graph = load_onnx_graph(onnx_import_file='Output/model.onnx')
+    graph = dispatch_graph(graph=graph, platform=PLATFORM, setting=QSetting)
+
     quantized = quantize_torch_model(
         model=model, calib_dataloader=CALIBRATION,
-        calib_steps=32, input_shape=[BATCHSIZE] + INPUT_SHAPE,
+        calib_steps=32, input_shape=INPUT_SHAPE,
         collate_fn=collate_fn, platform=PLATFORM,
         onnx_export_file='Output/onnx.model', device=DEVICE, verbose=0)
 
@@ -57,33 +78,8 @@ with ENABLE_CUDA_KERNEL():
     # 这一误差是累积的，意味着网络后面的算子总是会比网络前面的算子拥有更高的输出误差
     # 留意网络输出的误差情况，如果你想获得一个精度较高的量化网络，那么那些靠近输出的节点误差不应超过 10%
     # 该方法只衡量 Conv, Gemm 算子的误差情况，如果你对其余算子的误差情况感兴趣，需要手动修改方法逻辑
+    # 你可以使用该方法对比不同校准方法对量化结果所产生的影响
     # ------------------------------------------------------------
     reports = graphwise_error_analyse(
         graph=quantized, running_device=DEVICE, collate_fn=collate_fn,
         dataloader=CALIBRATION)
-
-    # ------------------------------------------------------------
-    # layerwise_error_analyse 是更为强大的分析方法，它分析算子的量化敏感性
-    # 与 graphwise_error_analyse 不同，该方法分析的误差不是累计的
-    # 该方法首先解除网络中所有算子的量化，而后单独地量化每一个 Conv, Gemm 算子
-    # 以此来衡量量化单独一个算子对网络输出的影响情况，该方法常被用来决定网络调度与混合精度量化
-    # 你可以将那些误差较大的层送往 TargetPlatform.FP32
-    # ------------------------------------------------------------
-    reports = layerwise_error_analyse(
-        graph=quantized, running_device=DEVICE, collate_fn=collate_fn,
-        dataloader=CALIBRATION)
-
-    # ------------------------------------------------------------
-    # statistical_analyse 是强有力的统计分析方法，该方法统计每一层的输入、输出以及参数的统计分布情况
-    # 使用这一方法，你将更清晰地了解网络的量化情况，并能够有针对性地选择优化方案
-    # 推荐在网络量化情况不佳时，使用 statistical_analyse 辅助你的分析
-    # 该方法不打印任何数据，你需要手动将数据保存到硬盘并进行分析
-    # ------------------------------------------------------------
-    report = statistical_analyse(
-        graph=quantized, running_device=DEVICE, 
-        collate_fn=collate_fn, dataloader=CALIBRATION)
-
-    from pandas import DataFrame
-
-    report = DataFrame(report)
-    report.to_csv('1.csv')

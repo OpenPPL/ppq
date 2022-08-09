@@ -33,15 +33,9 @@ REQUIRE_ANALYSE  = True
 # -------------------------------------------------------------------
 # 下面向你展示了常用参数调节选项：
 # -------------------------------------------------------------------
-if PPQ_CONFIG.USING_CUDA_KERNEL:
-    QS.advanced_optimization = FINETUNE                             # 启动网络再训练过程，降低量化误差
-    QS.advanced_optimization_setting.steps = 2500                   # 再训练步数，影响训练时间，2500步大概几分钟
-    QS.advanced_optimization_setting.collecting_device = 'executor' # 缓存数据放在那，executor 就是放在gpu，如果显存超了你就换成 'cpu'
-    QS.advanced_optimization_setting.auto_check = False             # 打开这个选项则训练过程中会防止过拟合，以及意外情况，通常不需要开。
-else:
-    QS.lsq_optimization = FINETUNE                                  # 启动网络再训练过程，降低量化误差
-    QS.lsq_optimization_setting.epochs = 30                         # 再训练轮数，影响训练时间，30轮大概几分钟
-    QS.lsq_optimization_setting.collecting_device = 'cuda'          # 缓存数据放在那，cuda 就是放在gpu，如果显存超了你就换成 'cpu'
+QS.lsq_optimization = FINETUNE                                  # 启动网络再训练过程，降低量化误差
+QS.lsq_optimization_setting.steps = 500                         # 再训练步数，影响训练时间，500 步大概几分钟
+QS.lsq_optimization_setting.collecting_device = 'cuda'          # 缓存数据放在那，cuda 就是放在 gpu，如果显存超了你就换成 'cpu'
 
 if QUANT_PLATFROM in {TargetPlatform.PPL_DSP_INT8,                  # 这些平台是 per tensor 量化的
                        TargetPlatform.HEXAGON_INT8,

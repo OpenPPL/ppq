@@ -6,13 +6,13 @@ from ppq.core import (ChannelwiseTensorQuantizationConfig,
                       OperationQuantizationConfig, QuantizationPolicy,
                       QuantizationProperty, QuantizationStates, RoundingPolicy,
                       TargetPlatform)
-from ppq.IR import BaseGraph, GraphCommandProcessor
+from ppq.IR import BaseGraph, BaseGraph
 from .base import BaseQuantizer
 
 
 class TensorRTQuantizer(BaseQuantizer):
     def __init__(
-        self, graph: Union[BaseGraph, GraphCommandProcessor]
+        self, graph: Union[BaseGraph, BaseGraph]
     ) -> Union[torch.Tensor, list, dict]:
         super().__init__(graph=graph)
         self._num_of_bits = 8
@@ -46,7 +46,7 @@ class TensorRTQuantizer(BaseQuantizer):
                     base_quant_config.input_quantization_config[1] = \
                         ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
                             convert_from = conv_weight_config,
-                            offsets = None, scales  = None, channel_axis = 0
+                            offset = None, scale  = None, channel_axis = 0
                         )
                     base_quant_config.input_quantization_config[1].observer_algorithm = 'Minmax'
             # first parameter must exits, for gemm layer it will be gemm_weight
@@ -62,7 +62,7 @@ class TensorRTQuantizer(BaseQuantizer):
                     base_quant_config.input_quantization_config[1] = \
                         ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
                             convert_from = gemm_weight_config,
-                            offsets = None, scales  = None, channel_axis = 0
+                            offset = None, scale  = None, channel_axis = 0
                         )
                     base_quant_config.input_quantization_config[1].observer_algorithm = 'Minmax'
             # if operation has bias

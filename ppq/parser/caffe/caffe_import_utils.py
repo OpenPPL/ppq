@@ -2,10 +2,11 @@ from typing import Dict, List
 
 import numpy as np
 import torch
-from ppq.core import NetworkFramework, empty_ppq_cache, CAFFE_DOMAIN
+from ppq.core import (CAFFE_DOMAIN, IS_DISPATCHED_GRAPH, NetworkFramework,
+                      empty_ppq_cache)
 from ppq.executor import TorchExecutor
 from ppq.IR import (BaseGraph, GraphCommand, GraphCommandType, GraphFormatter,
-                    GraphMerger, Operation, Variable, Opset)
+                    GraphMerger, Operation, Opset, Variable)
 
 from . import ppl_caffe_pb2
 
@@ -199,6 +200,8 @@ class CaffeOpBuilder(object):
         formatter(GraphCommand(GraphCommandType.FORMAT_CAST))
         formatter(GraphCommand(GraphCommandType.DELETE_ISOLATED))
 
+        # PATCH 20220805, add dispatching tag for executing.
+        temp_graph.set_extension_attrib(IS_DISPATCHED_GRAPH, True)
         executor = TorchExecutor(graph=temp_graph, device=self.device)
         outputs = executor.forward(input_value, list(self.layer.top))
         self.out_shape = [list(i.shape) for i in outputs]

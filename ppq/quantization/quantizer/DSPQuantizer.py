@@ -7,7 +7,7 @@ from ppq.core import (PASSIVE_OPERATIONS, OperationQuantizationConfig,
                       QuantizationStates, RoundingPolicy, TargetPlatform,
                       ChannelwiseTensorQuantizationConfig)
 from ppq.executor.base import BaseGraphExecutor
-from ppq.IR import BaseGraph, GraphCommandProcessor
+from ppq.IR import BaseGraph, BaseGraph
 from ppq.IR.base.graph import Operation
 from ppq.quantization.optim import QuantizationOptimizationPipeline, PPLDSPTIReCalibrationPass
 from .base import BaseQuantizer
@@ -16,7 +16,7 @@ from .base import BaseQuantizer
 class PPL_DSP_Quantizer(BaseQuantizer):
     def __init__(
         self,
-        graph: Union[BaseGraph, GraphCommandProcessor]
+        graph: Union[BaseGraph, BaseGraph]
     ) -> Union[torch.Tensor, list, dict]:
         super().__init__(graph=graph)
         self._num_of_bits = 8
@@ -73,8 +73,7 @@ class PPL_DSP_Quantizer(BaseQuantizer):
             'GlobalMaxPool', 'GlobalAveragePool', 'Softmax',
             'Mul', 'Add', 'Max', 'Sub', 'Div', 'Reshape',
             'LeakyRelu', 'Concat', 'Sigmoid', 'Slice', 'Interp',
-            'ReduceMean','Transpose','Pow','ReduceSum','Split'
-        }
+            'ReduceMean'}
 
     @ property
     def quantize_policy(self) -> QuantizationPolicy:
@@ -94,15 +93,15 @@ class PPL_DSP_Quantizer(BaseQuantizer):
 
 
 class PPL_DSP_TI_Quantizer(PPL_DSP_Quantizer):
-    def __init__(self, graph: Union[BaseGraph, GraphCommandProcessor]) -> Union[torch.Tensor, list, dict]:
+    def __init__(self, graph: Union[BaseGraph, BaseGraph]) -> Union[torch.Tensor, list, dict]:
         super().__init__(graph)
         self._num_of_bits = 8
         self._quant_min   = -int(pow(2, self._num_of_bits - 1))
         self._quant_max   = int(pow(2, self._num_of_bits - 1)) - 1
 
     def build_quant_pipeline(
-        self, setting: QuantizationSetting, executor: BaseGraphExecutor) -> QuantizationOptimizationPipeline:
-        pipeline = super().build_quant_pipeline(setting, executor)
+        self, setting: QuantizationSetting) -> QuantizationOptimizationPipeline:
+        pipeline = super().build_quant_pipeline(setting)
         pipeline.append_optimization_to_pipeline(PPLDSPTIReCalibrationPass())
         return pipeline
 
@@ -130,7 +129,7 @@ class PPL_DSP_TI_Quantizer(PPL_DSP_Quantizer):
                 base_quant_config.input_quantization_config[1] = \
                     ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
                         convert_from = conv_weight_config,
-                        offsets = None, scales  = None, channel_axis = 0
+                        offset = None, scale  = None, channel_axis = 0
                     )
                 base_quant_config.input_quantization_config[1].observer_algorithm = 'Minmax'
 
@@ -144,7 +143,7 @@ class PPL_DSP_TI_Quantizer(PPL_DSP_Quantizer):
                 base_quant_config.input_quantization_config[1] = \
                     ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
                         convert_from = conv_weight_config,
-                        offsets = None, scales  = None, channel_axis = 1
+                        offset = None, scale  = None, channel_axis = 1
                     )
                 base_quant_config.input_quantization_config[1].observer_algorithm = 'Minmax'
             # first parameter must exits, for gemm layer it will be gemm_weight
@@ -159,7 +158,7 @@ class PPL_DSP_TI_Quantizer(PPL_DSP_Quantizer):
                 base_quant_config.input_quantization_config[1] = \
                     ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
                         convert_from = gemm_weight_config,
-                        offsets = None, scales  = None, channel_axis = 0
+                        offset = None, scale  = None, channel_axis = 0
                     )
                 base_quant_config.input_quantization_config[1].observer_algorithm = 'Minmax'
             # if operation has bias

@@ -17,19 +17,14 @@
 from typing import Dict
 
 import torch
-from ppq.core import (PPQ_CONFIG, DataType, OperationMeta,
-                      TensorMeta, TensorQuantizationConfig,
-                      convert_any_to_torch_tensor, ppq_warning)
+from ppq.core import (PPQ_CONFIG, DataType, OperationMeta, TensorMeta,
+                      TensorQuantizationConfig, convert_any_to_torch_tensor)
+from ppq.core.quant import (ChannelwiseTensorQuantizationConfig,
+                            QuantizationProperty, QuantizationStates)
 from ppq.IR import BaseGraph
 from ppq.IR.morph import GraphDeviceSwitcher
 from ppq.IR.quantize import QuantableOperation, QuantableVariable
-from ppq.core.quant import ChannelwiseTensorQuantizationConfig, QuantizationProperty, QuantizationStates
 from ppq.utils.round import ppq_tensor_round
-
-try:
-    import tensorrt as trt
-except ImportError:
-    ppq_warning('TensorRT is not installed, TRT Exporter is disabled.')
 
 from .onnxruntime_exporter import ONNXRUNTIMExporter
 
@@ -188,9 +183,10 @@ class TensorRTExporter(ONNXRUNTIMExporter):
 
         # step 2, convert onnx file to tensorRT engine.
         try:
+            import tensorrt as trt
             TRT_LOGGER = trt.Logger(trt.Logger.INFO)
         except Exception as e:
-            raise Exception('TensorRT is not successfully loaded, therefore ppq can not export tensorRT engine directly, '
+            raise Exception('TensorRT is not successfully loaded, Exporter can not create tensorRT engine directly, '
                             f'a model named {file_path} has been created so that you can send it to tensorRT manually.')
         network_flags = 1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)
         network_flags = network_flags | (1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_PRECISION))

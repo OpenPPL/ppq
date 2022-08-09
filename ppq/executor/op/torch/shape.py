@@ -1617,6 +1617,78 @@ def ScatterElements_forward(op: Operation, values: List[torch.Tensor], ctx: Torc
     return output
 
 
+def Onehot_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
+    """Produces a one-hot tensor based on inputs. The locations represented by
+    the index values in the 'indices' input tensor will have 'on_value' and the
+    other locations will have 'off_value' in the output tensor,
+
+    where 'on_value' and 'off_value' are specified as part of required input argument 'values',
+    which is a two-element tensor of format [off_value, on_value].
+
+    The rank of the output tensor will be one greater than the rank of the input tensor.
+    The additional dimension is for one-hot representation. The additional dimension will be inserted at the position specified by 'axis'.
+    If 'axis' is not specified then then additional dimension will be inserted as the innermost dimension,
+    i.e. axis=-1. The size of the additional dimension is specified by required scalar input 'depth'.
+
+    The type of the output tensor is the same as the type of the 'values' input. Any entries in the 'indices'
+    input tensor with values outside the range [-depth, depth-1] will result in one-hot representation
+    with all 'off_value' values in the output tensor.
+
+    when axis = 0:
+    output[input[i, j, k], i, j, k] = 1 for all i, j, k and 0 otherwise.
+
+    when axis = -1:
+    output[i, j, k, input[i, j, k]] = 1 for all i, j, k and 0 otherwise.
+    Version
+    This version of the operator has been available since version 11 of the default ONNX operator set.
+
+    Attributes
+    axis : int (default is -1)
+    (Optional) Axis along which one-hot representation in added. Default: axis=-1. axis=-1 means that
+        the additional dimension will be inserted as the innermost/last dimension in the output tensor.
+    Negative value means counting dimensions from the back. Accepted range is [-r-1, r] where r = rank(indices).
+
+    Inputs
+    indices (non-differentiable) : T1
+        Input tensor containing indices. Any entries in the 'indices' input tensor with values outside the range [-depth, depth-1]
+            will result in one-hot representation with all 'off_value' values in the output tensor.In case 'indices' is of non-integer type,
+            the values will be casted to int64 before use.
+
+    depth (non-differentiable) : T2
+        Scalar specifying the number of classes in one-hot tensor.
+        This is also the size of the one-hot dimension (specified by 'axis' attribute) added on in the output tensor.
+            The values in the 'indices' input tensor are expected to be in the range [-depth, depth-1].
+            In case 'depth' is of non-integer type, it will be casted to int64 before use.
+
+    values (non-differentiable) : T3
+        Rank 1 tensor containing exactly two elements,
+        in the format [off_value, on_value], where 'on_value' is the value used for filling locations specified in 'indices' input tensor,
+        and 'off_value' is the value used for filling locations other than those specified in 'indices' input tensor.
+
+    Outputs
+    output (non-differentiable) : T3
+        Tensor of rank one greater than input tensor 'indices', i.e. rank(output) = rank(indices) + 1.
+        The data type for the elements of the output tensor is the same as the type of input 'values' is used.
+    """
+    # implementation from https://github.com/ToriML/onnx2pytorch/blob/master/onnx2pytorch/operations/onehot.py
+    ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=3, max_num_of_input=3)
+    axis = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='axis', default=-1)
+    indices, depth, values = values
+
+    off_value, on_value = values
+    out = F.one_hot(indices.to(int), depth.to(int).item())
+    out = out * (on_value - off_value) + off_value
+
+    rank = len(indices.shape)
+    if axis < 0:
+        axis += rank + 1
+    if not rank == axis:  # permute only if dim not last dimension
+        order = list(range(len(indices.shape)))
+        order.insert(axis, -1)
+        out = out.permute(order)
+    return out
+
+
 SOI_BACKEND_TABLE = {
     'Shape': Shape_forward,
     'Div': Div_forward,
@@ -1663,4 +1735,5 @@ SOI_BACKEND_TABLE = {
     'LessOrEqual': LessOrEqual_forward,
     'ReduceSum': ReduceSum_forward,
     'ScatterElements': ScatterElements_forward,
+    'OneHot': Onehot_forward
 }

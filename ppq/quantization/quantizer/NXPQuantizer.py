@@ -7,7 +7,7 @@ from ppq.core import (ChannelwiseTensorQuantizationConfig,
                       QuantizationProperty, QuantizationStates, RoundingPolicy,
                       TargetPlatform)
 from ppq.executor.base import BaseGraphExecutor
-from ppq.IR import BaseGraph, GraphCommandProcessor
+from ppq.IR import BaseGraph, BaseGraph
 from ppq.IR.base.graph import Operation
 from ppq.quantization.optim import (NxpInputRoundingRefinePass,
                                     NXPResizeModeChangePass,
@@ -19,16 +19,15 @@ from .base import BaseQuantizer
 class NXP_Quantizer(BaseQuantizer):
     def __init__(
         self,
-        graph: Union[BaseGraph, GraphCommandProcessor],
+        graph: Union[BaseGraph, BaseGraph],
     ) -> Union[torch.Tensor, list, dict]:
         super().__init__(graph=graph)
         self._num_of_bits = 8
         self._quant_min = - int(pow(2, self._num_of_bits - 1))
         self._quant_max = int(pow(2, self._num_of_bits - 1) - 1)
 
-    def build_quant_pipeline(
-        self, setting: QuantizationSetting, executor: BaseGraphExecutor) -> QuantizationOptimizationPipeline:
-        pipeline = super().build_quant_pipeline(setting, executor)
+    def build_quant_pipeline(self, setting: QuantizationSetting) -> QuantizationOptimizationPipeline:
+        pipeline = super().build_quant_pipeline(setting)
         pipeline.append_optimization_to_pipeline(NXPResizeModeChangePass(), at_front=True)
         pipeline.append_optimization_to_pipeline(NxpInputRoundingRefinePass(), at_front=True)
         return pipeline
@@ -59,7 +58,7 @@ class NXP_Quantizer(BaseQuantizer):
                 base_quant_config.input_quantization_config[1] = \
                     ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
                         convert_from = conv_weight_config,
-                        offsets = None, scales = None, channel_axis = 0
+                        offset = None, scale = None, channel_axis = 0
                     )
                 base_quant_config.input_quantization_config[1].observer_algorithm = 'Minmax'
             # first parameter must exits, for gemm layer it will be gemm_weight
@@ -76,7 +75,7 @@ class NXP_Quantizer(BaseQuantizer):
                 base_quant_config.input_quantization_config[1] = \
                     ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
                         convert_from = gemm_weight_config,
-                        offsets = None, scales = None, channel_axis = 0
+                        offset = None, scale = None, channel_axis = 0
                     )
                 base_quant_config.input_quantization_config[1].observer_algorithm = 'Minmax'
             # if operation has bias
@@ -94,8 +93,8 @@ class NXP_Quantizer(BaseQuantizer):
                 bias_config.state = QuantizationStates.PASSIVE_INIT
                 base_quant_config.input_quantization_config[-1] = \
                     ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
-                        convert_from = bias_config, offsets = None,
-                        scales = None, channel_axis = 0)
+                        convert_from = bias_config, offset = None,
+                        scale = None, channel_axis = 0)
                 base_quant_config.input_quantization_config[-1].observer_algorithm = 'Minmax'
 
         if operation.type in PASSIVE_OPERATIONS:

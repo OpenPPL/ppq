@@ -3,7 +3,7 @@ from typing import Iterable
 import torch
 from ppq.core import QuantizationProperty, QuantizationStates, ppq_warning
 from ppq.executor import BaseGraphExecutor, TorchExecutor
-from ppq.IR import GraphCommandProcessor, QuantableOperation
+from ppq.IR import BaseGraph, QuantableOperation
 from ppq.quantization.observer import OperationObserver
 
 from .base import QuantizationOptimizationPass
@@ -26,7 +26,7 @@ class PassiveParameterQuantizePass(QuantizationOptimizationPass):
         self._override = override # whether to override existed passive parameter config
         super().__init__(name='PPQ Passive Parameter Quantization')
 
-    def optimize(self, processor: GraphCommandProcessor,
+    def optimize(self, graph: BaseGraph,
         dataloader: Iterable, executor: BaseGraphExecutor, **kwargs) -> None:
 
         def check_state(state: QuantizationStates):
@@ -37,7 +37,6 @@ class PassiveParameterQuantizePass(QuantizationOptimizationPass):
                 QuantizationStates.OVERLAPPED
             }
 
-        graph = processor.graph
         for op in graph.operations.values():
             if not isinstance(op, QuantableOperation): continue
             if op.type in {'Conv', 'ConvTranspose', 'Gemm'}:
@@ -58,6 +57,9 @@ class PassiveParameterQuantizePass(QuantizationOptimizationPass):
                         f'For op {op.name}, expect Bias shape to be {[bias.numel()]}, '
                         f'however {bias.shape} was given')
                     op.inputs[-1].value = bias.squeeze()
+                    # PATCH 2022.08.02 只有一个数的 bias 经过 squeeze 会变成零维的, 再给它多加一维补回来
+                    if op.inputs[-1].value.ndim == 0 and op.inputs[-1].value.numel() == 1:
+                        op.inputs[-1].value = op.inputs[-1].value.unsqueeze(0)
 
                     # 在两种情况下可以执行后续逻辑，1 状态为 PASSIVE_INIT，2 要求 override
                     if self._override and (b_cfg.state == QuantizationStates.PASSIVE):
@@ -148,14 +150,14 @@ class ParameterQuantizePass(QuantizationOptimizationPass):
 
     def optimize(
         self,
-        processor: GraphCommandProcessor,
+        graph: BaseGraph,
         dataloader: Iterable,
         executor: BaseGraphExecutor,
         **kwargs
     ) -> None:
         # build observer and hook for each quantable operation
         hooks, observers, state_records = {}, {}, {}
-        for op_name, operation in processor.graph.operations.items():
+        for op_name, operation in graph.operations.items():
             if not isinstance(operation, QuantableOperation): continue
 
             for config, var in operation.config_with_variable:
@@ -179,7 +181,7 @@ class ParameterQuantizePass(QuantizationOptimizationPass):
         executor.dummy_forward(hooks=hooks)
 
         # render quantization config, restore non-parameter quantization state
-        for op_name, operation in processor.graph.operations.items():
+        for op_name, operation in graph.operations.items():
             if not isinstance(operation, QuantableOperation): continue
 
             for cfg, var in operation.config_with_variable:
