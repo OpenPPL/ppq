@@ -70,7 +70,7 @@ class RunnableGraph(GraphCommandProcessor):
         for _, variable in self._graph.variables.items():
             assert isinstance(variable, Variable), \
                 f'Failed to send graph to device, incorrect variable {variable} found.'
-            variable.value = convert_any_to_numpy(variable.value, accepet_none=True)
+            variable.value = convert_any_to_numpy(variable.value, accept_none=True)
 
         return self
 
@@ -86,12 +86,12 @@ class RunnableGraph(GraphCommandProcessor):
             if operator.type == 'Constant' and operator.platform != TargetPlatform.SHAPE_OR_INDEX:
                 operator.attributes['value'] = \
                     convert_any_to_torch_tensor(
-                        operator.attributes['value'], accepet_none=False).to(device)
+                        operator.attributes['value'], accept_none=False).to(device)
 
             if operator.type == 'Constant' and operator.platform == TargetPlatform.SHAPE_OR_INDEX:
                 value = operator.attributes['value']
                 operator.attributes['value'] = convert_any_to_torch_tensor(
-                    value, accepet_none=False, device='cpu')
+                    value, accept_none=False, device='cpu')
 
             # PATCH 20220706, send quantization config to device.
             if isinstance(operator, QuantableOperation):
@@ -116,10 +116,10 @@ class RunnableGraph(GraphCommandProcessor):
             # if all downstream operations are shape related operations, send value to cpu
             if platform == TargetPlatform.SHAPE_OR_INDEX:
                 variable.value = convert_any_to_torch_tensor(
-                    variable.value, accepet_none=True).to('cpu')
+                    variable.value, accept_none=True).to('cpu')
             else:
                 variable.value = convert_any_to_torch_tensor(
-                    variable.value, accepet_none=True).to(device=device)
+                    variable.value, accept_none=True).to(device=device)
 
             # if variable is a shape-related variable, send it to cpu.
             if variable.is_parameter:
@@ -134,5 +134,5 @@ class RunnableGraph(GraphCommandProcessor):
                     'Split', 'TopK', 'Tile', 'Expand'}:
                     if dest_idx >= 1 and len(variable.dest_ops) == 1:
                         variable.value = convert_any_to_torch_tensor(
-                            variable.value, accepet_none=True).to('cpu')
+                            variable.value, accept_none=True).to('cpu')
         return self

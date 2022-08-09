@@ -107,7 +107,7 @@ class GraphFormatter(GraphCommandProcessor):
         if command.command_type == GraphCommandType.FORMAT_INT64_CONSTANT:
             return self.format_int64_constant()
         if command.command_type == GraphCommandType.REPLACE_SUB:
-            return self.replace_substarction()
+            return self.replace_substraction()
         if command.command_type == GraphCommandType.FORMAT_PARAMETERS:
             return self.format_parameter_variables()
         if command.command_type == GraphCommandType.FORMAT_CONSTANT_INPUT:
@@ -401,7 +401,7 @@ class GraphFormatter(GraphCommandProcessor):
             # pop variable from graph
             self.graph.remove_variable(var)
 
-    def replace_substarction(self) -> None:
+    def replace_substraction(self) -> None:
         substractions = []
         for operation in self.graph.operations.values():
             if operation.type == 'Sub':
