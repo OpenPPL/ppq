@@ -325,18 +325,16 @@ class TorchPercentileObserver(BaseTensorObserver):
                     self._percentile_collector.append(CUDA.Quantile(value, self._percentile).view(1, -1))
             elif self._quant_cfg.policy.has_property(QuantizationProperty.PER_CHANNEL) or \
                 self._quant_cfg.policy.has_property(QuantizationProperty.PER_CHANNEL_BNC):
-                import pdb
-                pdb.set_trace()
-                raise PermissionError('Percentile observer can not deal with per channel quantization.')
+                # raise PermissionError('Percentile observer can not deal with per channel quantization.')
             
-                # assert isinstance(self._quant_cfg, ChannelwiseTensorQuantizationConfig), (
-                #     'Your quantization config has PER_CHAN=NEL while it is not a '
-                #     'ChannelwiseTensorQuantizationConfig instance.')
-                # channel_axis = self._quant_cfg.channel_axis
-                # channelwise_view = value.transpose(dim0=0, dim1=channel_axis)
-                # channelwise_view = torch.flatten(channelwise_view, start_dim=1)
-                # self._percentile_mins.append(-torch.quantile(-channelwise_view, q=self._percentile, dim=1, keepdim=True)[0])
-                # self._percentile_maxs.append(torch.quantile(channelwise_view, q=self._percentile, dim=1, keepdimTrue)[0])
+                assert isinstance(self._quant_cfg, ChannelwiseTensorQuantizationConfig), (
+                    'Your quantization config has PER_CHAN=NEL while it is not a '
+                    'ChannelwiseTensorQuantizationConfig instance.')
+                channel_axis = self._quant_cfg.channel_axis
+                channelwise_view = value.transpose(dim0=0, dim1=channel_axis)
+                channelwise_view = torch.flatten(channelwise_view, start_dim=1)
+                self._percentile_mins.append(-torch.quantile(-channelwise_view, q=self._percentile, dim=1, keepdim=True)[0])
+                self._percentile_maxs.append(torch.quantile(channelwise_view, q=self._percentile, dim=1, keepdim=True)[0])
             else:
                 raise TypeError('Min-max Observer only work with per-tensor or per-channel quantize policy.')
 

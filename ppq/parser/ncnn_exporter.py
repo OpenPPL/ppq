@@ -111,16 +111,8 @@ class NCNNExporter(GraphExporter):
 
                 elif op.type in {'Add'}:
                     # Add may have multiple input node
-                    input_scale = []
-                    zero_point = []
-                    
-                    for cfg in op.config.input_quantization_config:
-                        assert cfg.state in {QuantizationStates.BAKED, QuantizationStates.ACTIVATED,  QuantizationStates.SLAVE} \
-                            and cfg.observer_algorithm in {'minmax', 'Minmax'}
-                        input_scale.append(convert_value(1.0 / cfg.scale, True, DataType.FP32))
-                        zero_point.extend(convert_value(cfg.offset, False, DataType.INT32))
-                    
-                    item['input_scale'] = input_scale
+                    cfg_out = op.config.output_quantization_config[0]
+                    item['output_scale'] = convert_value(1.0 / cfg_out.scale, True, DataType.FP32)
 
                 elif op.type in {'Gelu'}:
                     cfg = op.config.input_quantization_config[0]
@@ -130,12 +122,15 @@ class NCNNExporter(GraphExporter):
                     item['input_scale'] = convert_value(1.0 / cfg.scale, True, DataType.FP32)
 
                 elif op.type in {'LayerNorm'}:
-                    cfg = op.config.input_quantization_config[0]
+                    cfg_in = op.config.input_quantization_config[0]
+                    cfg_out = op.config.output_quantization_config[0]
 
-                    assert cfg.state in {QuantizationStates.BAKED, QuantizationStates.ACTIVATED} \
-                        and cfg.observer_algorithm in {'minmax', 'Minmax'}
-                    item['input_scale'] = convert_value(1.0 / cfg.scale, False, DataType.FP32)
-                    item['zero_point'] = convert_value(cfg.offset, True, DataType.INT32)
+                    assert cfg_in.state in {QuantizationStates.BAKED, QuantizationStates.ACTIVATED} \
+                        and cfg_in.observer_algorithm in {'minmax', 'Minmax'} \
+                        and cfg_out.state in {QuantizationStates.BAKED, QuantizationStates.ACTIVATED}
+                        
+                    item['input_scales'] = convert_value(1.0 / cfg_in.scale, False, DataType.FP32)
+                    item['output_scale'] = convert_value(1.0 / cfg_out.scale, True, DataType.FP32)
 
                 elif op.type == 'MultiHeadAttention':
                     # write input scale

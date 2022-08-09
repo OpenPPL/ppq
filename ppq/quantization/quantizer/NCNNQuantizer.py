@@ -104,8 +104,18 @@ class NCNNQuantizer(BaseQuantizer):
                 wconfig.state = QuantizationStates.FP32
                 bconfig.state = QuantizationStates.FP32
                 
+                # 输出量化
+                output_policy = QuantizationPolicy(
+                    QuantizationProperty.SYMMETRICAL +
+                    QuantizationProperty.LINEAR +
+                    QuantizationProperty.PER_TENSOR
+                )
+                base_quant_config.output_quantization_config[0].policy = output_policy
+                base_quant_config.output_quantization_config[0].observer_algorithm = 'Minmax'
+                
             elif operation.type in {'Add'}:
                 # use default param
+                
                 pass
             
             elif operation.type == 'MultiHeadAttention':
@@ -158,7 +168,7 @@ class NCNNQuantizer(BaseQuantizer):
                 
             
             # 显式说明输出不量化
-            if operation.type != 'MultiHeadAttention':
+            if operation.type not in {'MultiHeadAttention', 'LayerNorm', 'Add'}:
                 base_quant_config.output_quantization_config[0].state = QuantizationStates.FP32
         return base_quant_config
 
@@ -172,11 +182,9 @@ class NCNNQuantizer(BaseQuantizer):
 
     @ property
     def quant_operation_types(self) -> set:
-        # return {
-        #     'Add', 'Conv', 'LayerNorm', 'MultiHeadAttention', 'Gemm', 'Gelu'
-        # }
         return {
-            'Add', 'Conv', 'MultiHeadAttention', 'Gemm'
+            'Add', 'Conv', 'LayerNorm', 'MultiHeadAttention', 'Gemm'
+            # 'Add', 'Conv', 'LayerNorm', 'MultiHeadAttention', 'Gemm'
         }
 
     @ property
