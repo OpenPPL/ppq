@@ -89,7 +89,6 @@ class TargetPlatform(Enum):
     CAFFE         = -5
     NATIVE        = -6
     ONNXRUNTIME   = -7
-    TENGINE       = -8
     # THIS IS A DUUMY PLATFORM JUST FOR CREATING YOUR OWN EXTENSION.
     EXTENSION     = -10086
 
@@ -328,7 +327,7 @@ class QuantizationStates(Enum):
         return state in {QuantizationStates.ACTIVATED, QuantizationStates.PASSIVE, QuantizationStates.SLAVE}
 
     @ classmethod
-    def can_export(cls, state)->bool:
+    def can_export(cls, state) -> bool:
         return state not in {QuantizationStates.INITIAL, QuantizationStates.DEACTIVATED,
                              QuantizationStates.DEQUANTIZED, QuantizationStates.PASSIVE_INIT}
 

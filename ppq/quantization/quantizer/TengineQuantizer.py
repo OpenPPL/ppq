@@ -1,18 +1,10 @@
 from typing import Union
 
 import torch
-from ppq.core import (
-    PASSIVE_OPERATIONS,
-    OperationQuantizationConfig,
-    QuantizationPolicy,
-    QuantizationProperty,
-    QuantizationStates,
-    RoundingPolicy,
-    TargetPlatform,
-)
-
+from ppq.core import (PASSIVE_OPERATIONS, OperationQuantizationConfig,
+                      QuantizationPolicy, QuantizationProperty,
+                      QuantizationStates, RoundingPolicy, TargetPlatform)
 from ppq.IR import BaseGraph, GraphCommandProcessor, Operation
-
 
 from .base import BaseQuantizer
 
@@ -24,7 +16,7 @@ class TengineQuantizer(BaseQuantizer):
         super().__init__(graph=graph)
         self._num_of_bits = 8
         self._quant_min = 0
-        self._quant_max = 256
+        self._quant_max = 255
 
     def init_quantize_config(self, operation: Operation) -> OperationQuantizationConfig:
         base_quant_config = self.create_default_quant_config(
@@ -69,7 +61,7 @@ class TengineQuantizer(BaseQuantizer):
 
     @property
     def default_platform(self) -> TargetPlatform:
-        return TargetPlatform.TENGINE
+        return TargetPlatform.FP32
 
     @property
     def quant_operation_types(self) -> set:

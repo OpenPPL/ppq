@@ -211,9 +211,7 @@ class ONNXRUNTIMExporter(OnnxExporter):
 
         mark_to_remove = set()
         for qt_op, dq_op in interested_pairs:
-            assert isinstance(dq_op, Operation)
-            assert isinstance(qt_op, Operation)
-
+            assert isinstance(dq_op, Operation) and isinstance(qt_op, Operation)
             scale_diff     = torch.max(torch.abs(dq_op.inputs[1].value - qt_op.inputs[1].value)).item()
             zeropoint_diff = torch.max(torch.abs(dq_op.inputs[2].value - qt_op.inputs[2].value)).item()
             if scale_diff < 1e-5 and zeropoint_diff < 0.5: # zero point 是整数，所以只要误差小于1就行了。

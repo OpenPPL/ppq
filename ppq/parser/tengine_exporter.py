@@ -18,6 +18,7 @@ from ppq.core import (
 from ppq.IR import BaseGraph, GraphExporter, Operation, OperationExporter, Variable
 from ppq.IR.morph import GraphDeviceSwitcher
 from ppq.IR.quantize import QuantableOperation
+from ppq.core.quant import QuantizationStates
 
 
 class ConstantOfShapeExporter(OperationExporter):
@@ -96,7 +97,7 @@ class TengineExporter(GraphExporter):
         for operation in graph.operations.values():
             if isinstance(operation, QuantableOperation):
                 for config, _var in operation.config_with_variable:
-                    if config.dominated_by == config:
+                    if QuantizationStates.is_activated(config.state):
                         var_scales[_var.name] = {
                             "scale": convert_value(config.scale)[0],
                             "zero_point": convert_value(config.offset)[0],
