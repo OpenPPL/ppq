@@ -46,6 +46,7 @@ def convert_onnx_pads_to_torch(onnx_pads: List[int], mode: str=None) -> List[int
     for begin, end in zip(onnx_pad_begin, onnx_pad_end):
         torch_pads.extend([begin, end])
 
+    if mode is None: return torch_pads
     # check if we can merge torch pads
     if len(torch_pads) == 2:
         p1, p2 = torch_pads
@@ -415,7 +416,7 @@ def MaxPool2d_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
             x = F.pad(x, torch_pads)
             torch_pads = 0
         output = F.max_pool3d(
-            x, kernel_size=kernel_size, padding=onnx_pads,
+            x, kernel_size=kernel_size, padding=torch_pads,
             dilation=dilation, stride=stride, ceil_mode=ceil_mode)
 
     elif ndim == 4:
@@ -440,7 +441,7 @@ def MaxPool2d_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
             x = F.pad(x, torch_pads)
             torch_pads = 0
         output = F.max_pool1d(
-            x, kernel_size=kernel_size, padding=onnx_pads,
+            x, kernel_size=kernel_size, padding=torch_pads,
             dilation=dilation, stride=stride, ceil_mode=ceil_mode)
     else:
         raise ValueError(f'Operation {op.name} is invalid, {ndim}-d input is not supported.')
@@ -679,7 +680,6 @@ def AveragePool_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBac
         if isinstance(torch_pads, list) and len(torch_pads) != 3:
             x = F.pad(x, torch_pads)
             torch_pads = 0
-        print(torch_pads)
         output = F.avg_pool3d(
             x, kernel_size=kernel_size, padding=torch_pads,
             stride=stride, ceil_mode=ceil_mode)

@@ -1689,6 +1689,11 @@ def Onehot_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendC
     return out
 
 
+def Identity_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
+    ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
+    return values[0]
+
+
 SOI_BACKEND_TABLE = {
     'Shape': Shape_forward,
     'Div': Div_forward,
@@ -1735,5 +1740,6 @@ SOI_BACKEND_TABLE = {
     'LessOrEqual': LessOrEqual_forward,
     'ReduceSum': ReduceSum_forward,
     'ScatterElements': ScatterElements_forward,
-    'OneHot': Onehot_forward
+    'OneHot': Onehot_forward,
+    'Identity': Identity_forward
 }
