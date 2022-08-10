@@ -5,9 +5,7 @@ from ppq.api.setting import *
 from ppq.core import (OperationQuantizationConfig, QuantizationPolicy,
                       QuantizationProperty, QuantizationStates, RoundingPolicy,
                       TargetPlatform)
-from ppq.executor.base import BaseGraphExecutor
-from ppq.IR import BaseGraph, BaseGraph
-from ppq.IR.base.graph import Operation
+from ppq.IR import BaseGraph, Operation
 from ppq.quantization.optim import QuantizationOptimizationPipeline
 
 from .base import BaseQuantizer
@@ -16,7 +14,7 @@ from .base import BaseQuantizer
 class FPGAQuantizer(BaseQuantizer):
     def __init__(
         self,
-        graph: Union[BaseGraph, BaseGraph],
+        graph: BaseGraph,
     ) -> Union[torch.Tensor, list, dict]:
         super().__init__(graph=graph)
         self._num_of_bits = 8

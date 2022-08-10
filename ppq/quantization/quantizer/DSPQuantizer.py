@@ -2,21 +2,21 @@ from typing import Union
 
 import torch
 from ppq.api.setting import *
-from ppq.core import (PASSIVE_OPERATIONS, OperationQuantizationConfig,
-                      QuantizationPolicy, QuantizationProperty,
-                      QuantizationStates, RoundingPolicy, TargetPlatform,
-                      ChannelwiseTensorQuantizationConfig)
-from ppq.executor.base import BaseGraphExecutor
-from ppq.IR import BaseGraph, BaseGraph
-from ppq.IR.base.graph import Operation
-from ppq.quantization.optim import QuantizationOptimizationPipeline, PPLDSPTIReCalibrationPass
+from ppq.core import (PASSIVE_OPERATIONS, ChannelwiseTensorQuantizationConfig,
+                      OperationQuantizationConfig, QuantizationPolicy,
+                      QuantizationProperty, QuantizationStates, RoundingPolicy,
+                      TargetPlatform)
+from ppq.IR import BaseGraph, Operation
+from ppq.quantization.optim import (PPLDSPTIReCalibrationPass,
+                                    QuantizationOptimizationPipeline)
+
 from .base import BaseQuantizer
 
 
 class PPL_DSP_Quantizer(BaseQuantizer):
     def __init__(
         self,
-        graph: Union[BaseGraph, BaseGraph]
+        graph: BaseGraph
     ) -> Union[torch.Tensor, list, dict]:
         super().__init__(graph=graph)
         self._num_of_bits = 8
@@ -93,7 +93,7 @@ class PPL_DSP_Quantizer(BaseQuantizer):
 
 
 class PPL_DSP_TI_Quantizer(PPL_DSP_Quantizer):
-    def __init__(self, graph: Union[BaseGraph, BaseGraph]) -> Union[torch.Tensor, list, dict]:
+    def __init__(self, graph: BaseGraph) -> Union[torch.Tensor, list, dict]:
         super().__init__(graph)
         self._num_of_bits = 8
         self._quant_min   = -int(pow(2, self._num_of_bits - 1))

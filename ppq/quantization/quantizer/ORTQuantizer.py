@@ -1,19 +1,19 @@
 from typing import Union
 
-from ppq.core import (PASSIVE_OPERATIONS, OperationQuantizationConfig, ChannelwiseTensorQuantizationConfig,
-                      QuantizationPolicy, QuantizationProperty,
-                      QuantizationStates, RoundingPolicy, TargetPlatform)
-from ppq.IR import BaseGraph, BaseGraph
-from ppq.IR.base.graph import Operation
+import torch
+from ppq.core import (PASSIVE_OPERATIONS, ChannelwiseTensorQuantizationConfig,
+                      OperationQuantizationConfig, QuantizationPolicy,
+                      QuantizationProperty, QuantizationStates, RoundingPolicy,
+                      TargetPlatform)
+from ppq.IR import BaseGraph, Operation
 
 from .base import BaseQuantizer
 
-import torch
 
 class ORT_PerTensorQuantizer(BaseQuantizer):
     def __init__(
         self,
-        graph: Union[BaseGraph, BaseGraph]
+        graph: BaseGraph
     ) -> Union[torch.Tensor, list, dict]:
         super().__init__(graph=graph)
         self._num_of_bits = 8
@@ -90,7 +90,7 @@ class ORT_PerTensorQuantizer(BaseQuantizer):
 
 class ORT_PerChannelQuantizer(BaseQuantizer):
     def __init__(
-        self, graph: Union[BaseGraph, BaseGraph]
+        self, graph: BaseGraph
     ) -> Union[torch.Tensor, list, dict]:
         super().__init__(graph=graph)
         self._num_of_bits = 8

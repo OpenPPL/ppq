@@ -6,9 +6,7 @@ from ppq.core import (ChannelwiseTensorQuantizationConfig,
                       OperationQuantizationConfig, QuantizationPolicy,
                       QuantizationProperty, QuantizationStates, RoundingPolicy,
                       TargetPlatform)
-from ppq.executor.base import BaseGraphExecutor
-from ppq.IR import BaseGraph, BaseGraph
-from ppq.IR.base.graph import Operation
+from ppq.IR import BaseGraph, Operation
 from ppq.quantization.optim import (NxpInputRoundingRefinePass,
                                     NXPResizeModeChangePass,
                                     QuantizationOptimizationPipeline)
@@ -19,7 +17,7 @@ from .base import BaseQuantizer
 class NXP_Quantizer(BaseQuantizer):
     def __init__(
         self,
-        graph: Union[BaseGraph, BaseGraph],
+        graph: BaseGraph,
     ) -> Union[torch.Tensor, list, dict]:
         super().__init__(graph=graph)
         self._num_of_bits = 8

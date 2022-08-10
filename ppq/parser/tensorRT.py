@@ -17,10 +17,10 @@
 from typing import Dict
 
 import torch
-from ppq.core import (PPQ_CONFIG, DataType, OperationMeta, TensorMeta,
-                      TensorQuantizationConfig, convert_any_to_torch_tensor)
-from ppq.core.quant import (ChannelwiseTensorQuantizationConfig,
-                            QuantizationProperty, QuantizationStates)
+from ppq.core import (PPQ_CONFIG, ChannelwiseTensorQuantizationConfig,
+                      DataType, OperationMeta, QuantizationProperty,
+                      QuantizationStates, TensorMeta, TensorQuantizationConfig,
+                      convert_any_to_torch_tensor)
 from ppq.IR import BaseGraph
 from ppq.IR.morph import GraphDeviceSwitcher
 from ppq.IR.quantize import QuantableOperation, QuantableVariable

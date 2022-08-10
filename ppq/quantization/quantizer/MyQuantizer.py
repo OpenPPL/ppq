@@ -8,8 +8,7 @@ import torch
 from ppq.core import (PASSIVE_OPERATIONS, OperationQuantizationConfig,
                       QuantizationPolicy, QuantizationProperty,
                       QuantizationStates, RoundingPolicy, TargetPlatform)
-from ppq.IR import BaseGraph, BaseGraph
-from ppq.IR.base.graph import Operation
+from ppq.IR import BaseGraph, Operation
 
 from .base import BaseQuantizer
 
@@ -29,7 +28,7 @@ class ExtQuantizer(BaseQuantizer):
         BaseQuantizer ([type]): [description]
     """
     def __init__(
-        self, graph: Union[BaseGraph, BaseGraph]
+        self, graph: BaseGraph
     ) -> Union[torch.Tensor, list, dict]:
         super().__init__(graph=graph) # do not forget to initialize super class.
         

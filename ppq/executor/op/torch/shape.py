@@ -977,7 +977,7 @@ def NMS_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
     bboxs, scores = values[: 2]
     bboxs = bboxs.to(ctx.executing_device)
     scores = scores.to(ctx.executing_device)
-    return _NMS_forward(op=op, input_value=[bboxs, scores] + values[2: ]).to('cpu')
+    return _NMS_forward(op=op, values=[bboxs, scores] + values[2: ]).to('cpu')
 
 def Equal_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
     """Returns the tensor resulted from performing the equal logical operation

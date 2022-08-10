@@ -3,7 +3,8 @@ import copy
 from typing import Union
 from ppq.core import *
 
-# Legacy settings
+# ----------------------------------
+# Legacy Settings, Following Settings are not used in PPQ 0.6.5
 class AdvancedOptimizationSetting():
     def __init__(self) -> None:
         self.collecting_device    = 'executor'
@@ -14,23 +15,34 @@ class AdvancedOptimizationSetting():
         self.interested_layers = []
         self.interested_outputs = []
         self.verbose            = True
-# Legacy settings
-class BlockwiseReconstructionSetting():
-     def __init__(self) -> None:
-        self.interested_layers  = []
-        self.tune_act_scale     = True
-        self.lr                 = 1e-3
-        self.epochs             = 300
-        self.lamda              = 1.0
-        self.scale_multiplier   = 2.0
-        self.collecting_device  = 'cuda'
-# Legacy settings
+
 class MatrixFactorizationSetting():
     def __init__(self) -> None:
         self.interested_layers = []
         self.method = 'svd'
+# ----------------------------------
 
-# Legacy settings
+class BlockwiseReconstructionSetting():
+    def __init__(self) -> None:
+        # 训练那些层，不设置则训练全部层
+        self.interested_layers  = []
+        
+        # scale 是否可以训练
+        self.is_scale_trainable = False
+        
+        # 学习率
+        self.lr                 = 1e-3
+        
+        # 学习步数
+        self.epochs             = 300
+        
+        # 正则化参数
+        self.gamma              = 1.0
+        
+        # 缓存设备
+        self.collecting_device  = 'cuda'
+
+
 class SSDEqualizationSetting():
     def __init__(self) -> None:
         # Equalization 优化级别，目前只支持level 1，对应 Conv--Relu--Conv 和 Conv--Conv 的拉平
@@ -57,6 +69,7 @@ class SSDEqualizationSetting():
         # it takes about 10 mins for one iteration
         self.iteration            = 3
 
+
 class ChannelSplitSetting():
     def __init__(self) -> None:
         # 所有需要分裂的层的名字，Channel Split 会降低网络执行的性能，你必须手动指定那些层要被分裂
@@ -77,6 +90,7 @@ class ChannelSplitSetting():
         # cancel out round effect
         self.grid_aware        =  True
 
+
 class BiasCorrectionSetting():
     def __init__(self) -> None:
         # 指定所有需要执行 BiasCorrection 的层的名字，不写就是所有层全部进行 bias correction
@@ -90,6 +104,7 @@ class BiasCorrectionSetting():
 
         # 缓存数据放在哪
         self.collecting_device      = 'executor'
+
 
 class WeightSplitSetting():
     def __init__(self) -> None:
@@ -235,23 +250,6 @@ class QuantizationFusionSetting():
         self.force_alignment_overlap = False
 
 
-class TemplateSetting():
-    """TemplateSetting 只是为了向你展示如何创建一个新的 Setting 并传递给相对应的 pass 传递的过程在
-    ppq.quantization.quantizer.base.py 里面.
-
-    TemplateSetting just shows you how to create a setting class.
-        parameter passing is inside ppq.quantization.quantizer.base.py
-
-    Raises:
-        TypeError: [description]
-
-    Returns:
-        [type]: [description]
-    """
-    def __init__(self) -> None:
-        self.my_first_parameter = 'This Parameter just shows you how to create your own parameter.'
-
-
 class LSQSetting():
     def __init__(self) -> None:
 
@@ -280,6 +278,23 @@ class LSQSetting():
         
         # block size of graph cutting.
         self.block_size             = 4
+
+
+class TemplateSetting():
+    """TemplateSetting 只是为了向你展示如何创建一个新的 Setting 并传递给相对应的 pass 传递的过程在
+    ppq.quantization.quantizer.base.py 里面.
+
+    TemplateSetting just shows you how to create a setting class.
+        parameter passing is inside ppq.quantization.quantizer.base.py
+
+    Raises:
+        TypeError: [description]
+
+    Returns:
+        [type]: [description]
+    """
+    def __init__(self) -> None:
+        self.my_first_parameter = 'This Parameter just shows you how to create your own parameter.'
 
 
 class DispatchingTable():
@@ -316,9 +331,26 @@ class QuantizationSetting():
 
         self.graph_format_setting            = GraphFormatSetting()
 
-        # layer wise equalization 与相关配置
+        # ssd with loss check equalization 相关设置
+        # may take longer time(about 30min for default 3 iterations), but guarantee better result than baseline
+        # should not be followed by a plain equalization when turned on
+        self.ssd_equalization                = False
+        self.ssd_setting                     = SSDEqualizationSetting()
+
+        # layer wise equalizition 与相关配置
         self.equalization                    = False
         self.equalization_setting            = EqualizationSetting()
+
+        self.weight_split                    = False
+        self.weight_split_setting            = WeightSplitSetting()
+
+        # OCS channel split configuration
+        self.channel_split                   = False
+        self.channel_split_setting           = ChannelSplitSetting()
+
+        # Matrix Factorization Split. (Experimental method)
+        self.matrix_factorization            = False
+        self.matrix_factorization_setting    = MatrixFactorizationSetting()
 
         # activation 量化与相关配置
         self.quantize_activation             = True
@@ -328,11 +360,19 @@ class QuantizationSetting():
         self.quantize_parameter              = True
         self.quantize_parameter_setting      = ParameterQuantizationSetting()
 
-        # 是否启动网络微调过程
+        # 是否执行网络微调
         self.lsq_optimization                = False
         self.lsq_optimization_setting        = LSQSetting()
 
-        # 量化图融合相关配置
+
+        self.blockwise_reconstruction         = False
+        self.blockwise_reconstruction_setting = BlockwiseReconstructionSetting()
+
+        # 是否启动 bias correction pass
+        self.bias_correct                    = False
+        self.bias_correct_setting            = BiasCorrectionSetting()
+
+        # 量化融合相关配置
         self.fusion                          = True
         self.fusion_setting                  = QuantizationFusionSetting()
 
@@ -346,28 +386,9 @@ class QuantizationSetting():
         self.version                         = PPQ_CONFIG.VERSION
         self.signature                       = PPQ_CONFIG.NAME
 
-        # 算子调度表，你可以编辑它来手动调度算子。
-        self.dispatching_table               = DispatchingTable()
-        
         # Following setting will be removed.
-        self.ssd_equalization                 = False
-        self.ssd_setting                      = SSDEqualizationSetting()
-        self.weight_split                     = False
-        self.weight_split_setting             = WeightSplitSetting()
-        self.channel_split                    = False
-        self.channel_split_setting            = ChannelSplitSetting()
-        self.matrix_factorization             = False
-        self.matrix_factorization_setting     = MatrixFactorizationSetting()
-        self.blockwise_reconstruction         = False
-        self.blockwise_reconstruction_setting = BlockwiseReconstructionSetting()
         self.advanced_optimization            = False
         self.advanced_optimization_setting    = AdvancedOptimizationSetting()
-        self.bias_correct                     = False
-        self.bias_correct_setting             = BiasCorrectionSetting()
-
-        # 程序签名
-        self.version                         = PPQ_CONFIG.VERSION
-        self.signature                       = PPQ_CONFIG.NAME
 
         # 算子调度表，你可以编辑它来手动调度算子。
         self.dispatching_table               = DispatchingTable()

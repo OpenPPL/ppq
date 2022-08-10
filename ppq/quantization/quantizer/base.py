@@ -243,12 +243,6 @@ class BaseQuantizer(metaclass = ABCMeta):
         if setting.advanced_optimization == True:
             ppq_warning('PPQ Advanced optimization has been removed since 0.6.5, use setting.finetune = True instead')
             ppq_warning('PPQ Advanced optimization 在 0.6.5 版本中已经被移除且不会起到任何效果，作为替代方案我们建议你使用 setting.lsq_optimization = True')
-        if setting.lsq_optimization == True:
-            ppq_warning('PPQ LSQ optimization has been removed since 0.6.5, use setting.finetune = True instead')
-            ppq_warning('PPQ LSQ optimization 在 0.6.5 版本中已经被移除且不会起到任何效果，作为替代方案我们建议你使用 setting.lsq_optimization = True')
-        if setting.blockwise_reconstruction == True:
-            ppq_warning('PPQ Blockwise optimization has been removed since 0.6.5, use setting.finetune = True instead')
-            ppq_warning('PPQ Blockwise optimization 在 0.6.5 版本中已经被移除且不会起到任何效果，作为替代方案我们建议你使用 setting.lsq_optimization = True')
         if setting.matrix_factorization == True:
             ppq_warning('PPQ Matrix Factorization Pass has been removed from QuantizationSetting since 0.6.5, this pass must be called manually now.')
             ppq_warning('PPQ Matrix Factorization Pass 已经不能通过 QuantizationSetting 调用，现在你必须手动调用该优化过程')
@@ -331,6 +325,20 @@ class BaseQuantizer(metaclass = ABCMeta):
                 gamma              = lsq_setting.gamma,
                 is_scale_trainable = lsq_setting.is_scale_trainable,
                 block_size         = lsq_setting.block_size
+            ))
+            # requant passive parameters
+            list_of_passes.append(PassiveParameterQuantizePass(override=True))
+
+        if setting.blockwise_reconstruction:
+            blockwise_reconstruction_setting = setting.blockwise_reconstruction_setting
+            list_of_passes.append(AdaroundPass(
+                interested_layers  = blockwise_reconstruction_setting.interested_layers,
+                lr                 = blockwise_reconstruction_setting.lr,
+                collecting_device  = blockwise_reconstruction_setting.collecting_device,
+                steps              = blockwise_reconstruction_setting.steps,
+                gamma              = blockwise_reconstruction_setting.gamma,
+                is_scale_trainable = blockwise_reconstruction_setting.is_scale_trainable,
+                block_size         = blockwise_reconstruction_setting.block_size
             ))
             # requant passive parameters
             list_of_passes.append(PassiveParameterQuantizePass(override=True))

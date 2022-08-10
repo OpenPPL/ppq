@@ -1,18 +1,18 @@
 from typing import Union
 
 import torch
-from ppq.IR import Operation
 from ppq.core import (ChannelwiseTensorQuantizationConfig,
                       OperationQuantizationConfig, QuantizationPolicy,
                       QuantizationProperty, QuantizationStates, RoundingPolicy,
                       TargetPlatform)
-from ppq.IR import BaseGraph, BaseGraph
+from ppq.IR import BaseGraph, Operation
+
 from .base import BaseQuantizer
 
 
 class TensorRTQuantizer(BaseQuantizer):
     def __init__(
-        self, graph: Union[BaseGraph, BaseGraph]
+        self, graph: BaseGraph
     ) -> Union[torch.Tensor, list, dict]:
         super().__init__(graph=graph)
         self._num_of_bits = 8

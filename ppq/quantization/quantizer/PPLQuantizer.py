@@ -5,16 +5,15 @@ from ppq.core import (PASSIVE_OPERATIONS, ChannelwiseTensorQuantizationConfig,
                       OperationQuantizationConfig, QuantizationPolicy,
                       QuantizationProperty, QuantizationStates, RoundingPolicy,
                       TargetPlatform)
-from ppq.IR import BaseGraph, BaseGraph
-from ppq.IR.base.graph import Operation, Variable
 from ppq.core.quant import TensorQuantizationConfig
+from ppq.IR import BaseGraph, Operation, Variable
 
 from .base import BaseQuantizer
 
 
 class PPLCUDAQuantizer(BaseQuantizer):
     def __init__(
-        self, graph: Union[BaseGraph, BaseGraph]
+        self, graph: BaseGraph
     ) -> Union[torch.Tensor, list, dict]:
         super().__init__(graph=graph)
         self._num_of_bits = 8
