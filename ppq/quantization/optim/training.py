@@ -348,7 +348,7 @@ class BiasCorrectionPass(TrainingBasedPass):
     def __init__(self, auto_check: bool=False, interested_output: List[str] = None,
                  verbose: bool = True, max_steps:int = 8) -> None:
         """Quantization can introduce a biased error in the activations. Bias
-        correction serves as a useful prosedure to eliminate those introduced
+        correction serves as a useful procedure to eliminate those introduced
         bias error.
 
         let: Y = WX + b
