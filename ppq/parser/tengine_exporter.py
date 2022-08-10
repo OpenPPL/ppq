@@ -75,7 +75,7 @@ def convert_value(value: Union[int, float, np.ndarray, torch.Tensor]) -> str:
     if type(value) in {int, float}:
         return value
     else:
-        value = convert_any_to_numpy(value, accepet_none=True)
+        value = convert_any_to_numpy(value, accept_none=True)
         if value is None:
             return value  # SOI config has Nona as its scale and
         return value.tolist()
@@ -97,7 +97,10 @@ class TengineExporter(GraphExporter):
         for operation in graph.operations.values():
             if isinstance(operation, QuantableOperation):
                 for config, _var in operation.config_with_variable:
-                    if QuantizationStates.is_activated(config.state):
+                    if (
+                        QuantizationStates.is_activated(config.state)
+                        or config.state == QuantizationStates.OVERLAPPED
+                    ):
                         var_scales[_var.name] = {
                             "scale": convert_value(config.scale)[0],
                             "zero_point": convert_value(config.offset)[0],
