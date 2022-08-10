@@ -115,7 +115,6 @@ class NCNNQuantizer(BaseQuantizer):
                 
             elif operation.type in {'Add'}:
                 # use default param
-                
                 pass
             
             elif operation.type == 'MultiHeadAttention':

@@ -1,3 +1,4 @@
+from lib2to3.pytree import convert
 from typing import List
 
 from ppq.core import (DataType, NetworkFramework, QuantizationProperty,
@@ -111,6 +112,13 @@ class NCNNExporter(GraphExporter):
 
                 elif op.type in {'Add'}:
                     # Add may have multiple input node
+                    input_scales = []
+                    for cfg_in in op.config.input_quantization_config:
+                        assert cfg_in.state in {QuantizationStates.BAKED, QuantizationStates.ACTIVATED} \
+                            and cfg_in.observer_algorithm in {'minmax', 'Minmax'}
+                        input_scales.append(convert_value(1.0 / cfg_in.scale, True, DataType.FP32))
+                    item['input_scales'] = input_scales
+
                     cfg_out = op.config.output_quantization_config[0]
                     item['output_scale'] = convert_value(1.0 / cfg_out.scale, True, DataType.FP32)
 
