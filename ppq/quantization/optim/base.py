@@ -90,6 +90,10 @@ class QuantizationOptimizationPipeline(Container, Iterable):
                 padding_length = abs(max_name_length - len(optim_pass.name))
                 print(f'[{time.strftime("%H:%M:%S", time.localtime())}] {optim_pass.name} Running ... '
                       + ' ' * padding_length, end='')
+            
+            if not isinstance(graph, BaseGraph): 
+                raise TypeError(f'parameter 1 should be an instance of PPQ BaseGraph when calling optim pass, '
+                                f'however {type(graph)} was given.')
             optim_pass.apply(graph=graph, dataloader=dataloader, executor=executor, **kwargs)
             if verbose: print(f'Finished.')
 
