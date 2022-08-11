@@ -5,14 +5,14 @@ You are not allowed to modify this 请勿修改此文件
 
 import os
 import traceback
+from typing import List
 
 import torch
-from torch.utils.cpp_extension import load
 from torch.cuda import synchronize
-
-from .defs import ppq_warning
+from torch.utils.cpp_extension import load
 
 try:
+
     __CUDA_EXTENTION__ = load(
         name='PPQ_Cuda_Impls',
         sources=[
@@ -25,13 +25,10 @@ try:
         build_directory=os.path.join(os.path.dirname(os.path.dirname(__file__)), 'csrc/build/'),
         with_cuda=True,
         extra_cflags=['-O3'])
+
 except Exception as e:
-    ppq_warning('PPQ can not complie cuda extensions, please check your compiler and system environment, '
-                'PPQ will disable CUDA KERNEL for now.')
-    ppq_warning('Following are detailed error information: ')
     print(traceback.format_exc())
     __CUDA_EXTENTION__ = None
-    pass
 
 # helper class for calling cuda methods.
 class CUDA:
@@ -62,8 +59,7 @@ class CUDA:
         offsets: torch.Tensor,
         minimum: int = -128,
         maximum: int = 127,
-        rounding: int = 0,
-        dropout: float = 0
+        rounding: int = 0
     ) -> torch.Tensor:
         if not tensor.is_contiguous(): tensor = tensor.contiguous()
         # if scale is too small, quantization might cause fp32 underflow.
@@ -71,7 +67,7 @@ class CUDA:
         if __CUDA_EXTENTION__ is None:
             raise ValueError('Can not invoke cuda kernel, kernel compilation failed. See error report above.')
         return __CUDA_EXTENTION__.QuantizeTensor_LT(
-            tensor, scales, offsets, minimum, maximum, rounding, dropout)
+            tensor, scales, offsets, minimum, maximum, rounding)
 
     @ staticmethod
     def LinearQuantize_C(
@@ -81,52 +77,49 @@ class CUDA:
         channel_axis: int,
         minimum: int = -128,
         maximum: int = 127,
-        rounding: int = 0,
-        dropout: float = 0,
+        rounding: int = 0
     ) -> torch.Tensor:
         if not tensor.is_contiguous(): tensor = tensor.contiguous()
         if __CUDA_EXTENTION__ is None:
             raise ValueError('Can not invoke cuda kernel, kernel compilation failed. See error report above.')
         return __CUDA_EXTENTION__.QuantizeTensor_LC(
-            tensor, scales, offsets, minimum, maximum, channel_axis, rounding, dropout)
+            tensor, scales, offsets, minimum, maximum, rounding, channel_axis)
 
     @ staticmethod
     def LinearQuantize_T_B(
         tensor: torch.Tensor,
-        quantized: torch.Tensor,
         scales: torch.Tensor,
         offsets: torch.Tensor,
         dy: torch.Tensor,
-        grad_factor: float,
         minimum: int,
-        maximum: int
-    ) -> torch.Tensor:
+        maximum: int,
+        rounding: int,
+    ) -> List[torch.Tensor]:
         if not tensor.is_contiguous(): tensor = tensor.contiguous()
         if __CUDA_EXTENTION__ is None:
             raise ValueError('Can not invoke cuda kernel, kernel compilation failed. See error report above.')
         return __CUDA_EXTENTION__.QuantizeTensor_LT_B(
-            tensor, quantized, scales, offsets,
-            dy, grad_factor, minimum, maximum
+            tensor, scales, offsets,
+            dy, minimum, maximum, rounding
         )
 
     @ staticmethod
     def LinearQuantize_C_B(
         tensor: torch.Tensor,
-        quantized: torch.Tensor,
         scales: torch.Tensor,
         offsets: torch.Tensor,
         dy: torch.Tensor,
-        grad_factor: float,
         minimum: int,
         maximum: int,
         channel_axis: int,
-    ) -> torch.Tensor:
+        rounding: int,
+    ) -> List[torch.Tensor]:
         if not tensor.is_contiguous(): tensor = tensor.contiguous()
         if __CUDA_EXTENTION__ is None:
             raise ValueError('Can not invoke cuda kernel, kernel compilation failed. See error report above.')
         return __CUDA_EXTENTION__.QuantizeTensor_LC_B(
-            tensor, quantized, scales, offsets,
-            dy, grad_factor, minimum, maximum, channel_axis
+            tensor, scales, offsets,
+            dy, minimum, maximum, rounding, channel_axis
         )
 
     @ staticmethod

@@ -1,10 +1,8 @@
 from typing import Iterable
 
-import torch
-from ppq.core import QuantizationStates, empty_ppq_cache
+from ppq.core import empty_ppq_cache
 from ppq.executor import BaseGraphExecutor
-from ppq.IR import GraphCommandProcessor, Operation, QuantableOperation
-from ppq.quantization.qfunction import BaseQuantFunction
+from ppq.IR import BaseGraph, QuantableOperation
 from ppq.quantization.qfunction.linear import PPQLinearQuantFunction
 
 from .base import QuantizationOptimizationPass
@@ -40,53 +38,12 @@ class ParameterBakingPass(QuantizationOptimizationPass):
     @ empty_ppq_cache
     def optimize(
         self,
-        processor: GraphCommandProcessor,
+        graph: BaseGraph,
         dataloader: Iterable,
         executor: BaseGraphExecutor,
         **kwargs
     ) -> None:
 
-        graph = processor.graph
         for _, operation in graph.operations.items():
             if not isinstance(operation, QuantableOperation): continue
             operation.baking_parameters(self._quantize_function)
-
-
-class ConstantBakingPass(QuantizationOptimizationPass):
-    def __init__(self, quantize_function: BaseQuantFunction) -> None:
-        super().__init__(name='PPQ Constant Baking Pass')
-        self._quantize_function = quantize_function
-
-    @ empty_ppq_cache
-    def optimize(self, processor: GraphCommandProcessor, dataloader: Iterable,
-        executor: BaseGraphExecutor, **kwargs) -> None:
-        raise NotImplementedError('This pass has been removed from current PPQ version.')
-
-        graph = processor.graph
-        for _, operation in graph.operations.items():
-            assert isinstance(operation, Operation)
-
-            if operation.type != 'Constant': continue
-            assert torch.is_tensor(operation.attributes['value']), \
-                'Constant Baking Pass needs all constants to be torch.tensor.'
-
-            # check if all down-stream operations are Quantable Operations
-            # up-stream constant can be pre-quantized only if all down-stream operations are Quantable.
-            # And all down-stream operations should share a same quant_config.
-            down_stream_ops = operation.outputs[0].dest_ops
-            down_stream_idx = operation.outputs[0].dest_idx
-            quant_configs, quant_flag = [], True
-            for op, output_idx in zip(down_stream_ops, down_stream_idx):
-                if not isinstance(op, QuantableOperation): quant_flag = False
-                else:
-                    quant_config = op.config.input_quantization_config[output_idx]
-                    if not QuantizationStates.is_activated(quant_config.state): quant_flag = False
-                    quant_configs.append(quant_config)
-            if len(down_stream_ops) == 0: raise ValueError(
-                'Oops, isolated constant operation can not go through PPQ Constant Baking Pass')
-
-            # ready for constant baking.
-            if all([config == quant_configs[0] for config in quant_configs]) and quant_flag:
-                for config in quant_configs: config.state = QuantizationStates.BAKED
-                operation.attributes['value'] = self._quantize_function(
-                    operation.attributes['value'], quantization_config=quant_configs[0])

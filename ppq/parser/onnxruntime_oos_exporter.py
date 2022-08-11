@@ -55,7 +55,7 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
             'Gemm': 'QGemm',
             'Concat': 'Concat', # no need to convert concat.
             'LeakyRelu': 'QLinearLeakyRelu',
-            # "ReduceMean": "QLinearReduceMean", # onnx not implemented.
+             # "ReduceMean": "QLinearReduceMean", # onnx not implemented.
             'Sigmoid': 'QLinearSigmoid'}
 
     def conversion_preprocess(self, op: Operation) -> Tuple[List[Variable], List[TensorMeta]]:

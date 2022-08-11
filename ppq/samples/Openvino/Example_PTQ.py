@@ -26,15 +26,9 @@ REQUIRE_ANALYSE  = True
 # -------------------------------------------------------------------
 # 下面向你展示了常用参数调节选项：
 # -------------------------------------------------------------------
-if PPQ_CONFIG.USING_CUDA_KERNEL:
-    QS.advanced_optimization = FINETUNE                             # 启动网络再训练过程，降低量化误差
-    QS.advanced_optimization_setting.steps = 2500                   # 再训练步数，影响训练时间，2500步大概几分钟
-    QS.advanced_optimization_setting.collecting_device = 'executor' # 缓存数据放在那，executor 就是放在gpu，如果显存超了你就换成 'cpu'
-    QS.advanced_optimization_setting.auto_check = False             # 打开这个选项则训练过程中会防止过拟合，以及意外情况，通常不需要开。
-else:
-    QS.lsq_optimization = FINETUNE                                  # 启动网络再训练过程，降低量化误差
-    QS.lsq_optimization_setting.epochs = 30                         # 再训练轮数，影响训练时间，30轮大概几分钟
-    QS.lsq_optimization_setting.collecting_device = 'cuda'          # 缓存数据放在那，cuda 就是放在gpu，如果显存超了你就换成 'cpu'
+QS.lsq_optimization = FINETUNE                                  # 启动网络再训练过程，降低量化误差
+QS.lsq_optimization_setting.steps = 500                         # 再训练步数，影响训练时间，500 步大概几分钟
+QS.lsq_optimization_setting.collecting_device = 'cuda'          # 缓存数据放在那，cuda 就是放在 gpu，如果显存超了你就换成 'cpu'
 
 # 把量化的不太好的算子送回 FP32
 QS.dispatching_table.append(operation='OP NAME', platform=TargetPlatform.FP32)
@@ -75,13 +69,6 @@ with ENABLE_CUDA_KERNEL():
     export_ppq_graph(
         graph=qir, platform=QUANT_PLATFROM,
         graph_save_to = 'model_int8.onnx')
-
-    # -------------------------------------------------------------------
-    # 记录一下输入输出的名字，openvino 跑的时候需要提供这些名字
-    # 我写的只是单输出单输入的版本，多输出多输入你得自己改改
-    # -------------------------------------------------------------------
-    int8_input_names  = [name for name, _ in qir.inputs.items()]
-    int8_output_names = [name for name, _ in qir.outputs.items()]
 
     # -------------------------------------------------------------------
     # 启动 openvino 进行推理

@@ -5,8 +5,6 @@ from onnx import helper, mapping, numpy_helper
 from ppq.core import (DEFAULT_OPSET_DOMAIN, DEFAULT_OPSET_VERSION,
                       GRAPH_OPSET_ATTRIB, NetworkFramework, is_file_exist)
 from ppq.IR import BaseGraph, GraphBuilder, Operation, Opset, Variable
-from torch import random
-
 
 class OnnxParser(GraphBuilder):
     def build_variables(

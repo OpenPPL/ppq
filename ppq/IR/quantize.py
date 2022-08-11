@@ -72,7 +72,7 @@ class QuantableOperation(Operation):
         return self._config
 
     @ config.setter
-    def set_config(self, config):
+    def config(self, config):
         """we will update variable's during this function.
 
         Args:
@@ -88,6 +88,14 @@ class QuantableOperation(Operation):
         if not isinstance(config, OperationQuantizationConfig):
             raise TypeError(f'object {str(config)}({type(config)}) is not a acceptable config for operation {self.name}')
         self._config = config
+    
+    @ property
+    def input_quant_config(self) -> List[TensorQuantizationConfig]:
+        return self.config.input_quantization_config
+    
+    @ property
+    def output_quant_config(self) -> List[TensorQuantizationConfig]:
+        return self.config.output_quantization_config
 
     def baking_parameters(self, quant_func: BaseQuantFunction):
         for config, var in self.config_with_variable:
@@ -174,6 +182,7 @@ class QuantableOperation(Operation):
             quantize_config=self.config.copy(), 
             platform=self.platform)
 
+
 class QuantableVariable(Variable):
     def __init__(self, convert_from: Variable) -> None:
         super().__init__(
@@ -204,7 +213,7 @@ class QuantableVariable(Variable):
         return _dest_op_configs
 
     @ property
-    def dest_op_platfroms(self) -> List[TargetPlatform]:
+    def dest_op_platforms(self) -> List[TargetPlatform]:
         _dest_op_platforms = []
         for op in self.dest_ops:
             if op is not None:
@@ -235,7 +244,7 @@ class QuantableVariable(Variable):
 
 class DeviceSwitchOP(Operation):
     """DeviceSwitch is a PPQ internal operation. This operation is inserted at
-    platfrom's boundary for transferring data between devices.
+    platform's boundary for transferring data between devices.
 
     Args:
         Operation ([type]): [description]
@@ -287,7 +296,7 @@ class QuantableGraph(GraphCommandProcessor):
         # calling other chain responder to replace operation with quantized one.
         if self._next_command_processor is None:
             raise RuntimeError(
-                'To replace a operation, your processor chain must have a GraphMorpher Processor.')
+                'To replace a operation, your processor chain must have a GraphReplacer Processor.')
         self._next_command_processor(ReplaceOperationCommand(operation_name, quantized_operation))
 
         # replace all related variable with quantable one.

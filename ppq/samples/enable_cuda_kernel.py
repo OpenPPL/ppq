@@ -33,9 +33,9 @@ with ENABLE_CUDA_KERNEL():
 
     # create a setting for quantizing your network with PPL CUDA.
     quant_setting = QuantizationSettingFactory.pplcuda_setting()
-    quant_setting.equalization = True # use layerwise equalization algorithm.
-    quant_setting.dispatcher   = 'conservative' # dispatch this network in conservertive way.
-    quant_setting.advanced_optimization = True  # finetune your network.
+    quant_setting.equalization     = True # use layerwise equalization algorithm.
+    quant_setting.dispatcher       = 'conservative' # dispatch this network in conservertive way.
+    quant_setting.lsq_optimization = True  # finetune your network.
 
     # Load training data for creating a calibration dataloader.
     calibration_dataset = load_calibration_dataset()

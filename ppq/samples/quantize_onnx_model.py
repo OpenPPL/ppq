@@ -8,8 +8,8 @@ from ppq.api import export_ppq_graph, quantize_onnx_model
 
 BATCHSIZE = 32
 INPUT_SHAPE = [3, 224, 224]
-DEVICE = 'cuda' # only cuda is fully tested :(  For other executing device there might be bugs.
-PLATFORM = TargetPlatform.PPL_CUDA_INT8  # identify a target platform for your network.
+DEVICE    = 'cuda' # only cuda is fully tested :(  For other executing device there might be bugs.
+PLATFORM  = TargetPlatform.TRT_INT8  # identify a target platform for your network.
 ONNX_PATH = 'Models/cls_model/mobilenet_v2.onnx'
 
 def load_calibration_dataset() -> Iterable:
@@ -18,10 +18,7 @@ def load_calibration_dataset() -> Iterable:
 def collate_fn(batch: torch.Tensor) -> torch.Tensor:
     return batch.to(DEVICE)
 
-# create a setting for quantizing your network with PPL CUDA.
-quant_setting = QuantizationSettingFactory.pplcuda_setting()
-quant_setting.equalization = True # use layerwise equalization algorithm.
-quant_setting.dispatcher   = 'conservative' # dispatch this network in conservertive way.
+quant_setting = QuantizationSettingFactory.trt_setting()
 
 # Load training data for creating a calibration dataloader.
 calibration_dataset = load_calibration_dataset()

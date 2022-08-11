@@ -355,15 +355,15 @@ class TensorQuantizationConfig(Serializable):
     def __init__(
         self,
         policy: QuantizationPolicy,
-        rounding: RoundingPolicy,
-        num_of_bits: int,
-        quant_min: int,
-        quant_max: int,
-        scale: Any,
-        offset: Any,
-        observer_algorithm: str,
-        detail: Any = None,
-        inplace: bool = False,
+        rounding: RoundingPolicy  = RoundingPolicy.ROUND_HALF_EVEN,
+        num_of_bits: int          = 8,
+        quant_min: int            = -127,
+        quant_max: int            = 128,
+        scale: Any                = None,
+        offset: Any               = None,
+        observer_algorithm: str   = None,
+        detail: Any               = None,
+        inplace: bool             = False,
         state: QuantizationStates = QuantizationStates.INITIAL
     ):
         """Create a PPQ Tensor Quantization Configuration Instance.
@@ -495,7 +495,7 @@ class TensorQuantizationConfig(Serializable):
             self._father_config = master
             self.state = QuantizationStates.SLAVE
 
-    def __is_revisable(self):
+    def is_revisable(self):
         return (self.dominated_by == self and self.state in {
             QuantizationStates.ACTIVATED,
             QuantizationStates.DEQUANTIZED,
@@ -548,7 +548,7 @@ class TensorQuantizationConfig(Serializable):
 
     @ scale.setter
     def scale(self, value: Any):
-        if not self.__is_revisable():
+        if not self.is_revisable():
             raise PermissionError(
                 'Can not change scale of this tensor quantization configuration now. '
                 'It has been overlapped or has an inactive state. '
@@ -559,7 +559,7 @@ class TensorQuantizationConfig(Serializable):
 
     @ offset.setter
     def offset(self, value: Any):
-        if not self.__is_revisable():
+        if not self.is_revisable():
             raise PermissionError(
                 'Can not change offset of this tensor quantization configuration now. '
                 'It has been overlapped or has an inactive state. '
@@ -570,7 +570,7 @@ class TensorQuantizationConfig(Serializable):
 
     @ policy.setter
     def policy(self, policy: QuantizationPolicy):
-        if not self.__is_revisable():
+        if not self.is_revisable():
             raise PermissionError(
                 'Can not change policy of this tensor quantization configuration now. '
                 'It has been overlapped or has an inactive state. '
@@ -581,7 +581,7 @@ class TensorQuantizationConfig(Serializable):
 
     @ num_of_bits.setter
     def num_of_bits(self, bits: int):
-        if not self.__is_revisable():
+        if not self.is_revisable():
             raise PermissionError(
                 'Can not change num_of_bits of this tensor quantization configuration now. '
                 'It has been overlapped or has an inactive state. '
@@ -592,7 +592,7 @@ class TensorQuantizationConfig(Serializable):
 
     @ rounding.setter
     def rounding(self, policy: RoundingPolicy):
-        if not self.__is_revisable():
+        if not self.is_revisable():
             raise PermissionError(
                 'Can not change rounding of this tensor quantization configuration now. '
                 'It has been overlapped or has an inactive state. '
@@ -603,7 +603,7 @@ class TensorQuantizationConfig(Serializable):
 
     @ quant_min.setter
     def quant_min(self, min: int):
-        if not self.__is_revisable():
+        if not self.is_revisable():
             raise PermissionError(
                 'Can not change quant_min of this tensor quantization configuration now. '
                 'It has been overlapped or has an inactive state. '
@@ -614,7 +614,7 @@ class TensorQuantizationConfig(Serializable):
 
     @ quant_max.setter
     def quant_max(self, max: int):
-        if not self.__is_revisable():
+        if not self.is_revisable():
             raise PermissionError(
                 'Can not change quant_max of this tensor quantization configuration now. '
                 'It has been overlapped or has an inactive state. '
@@ -687,17 +687,19 @@ class ChannelwiseTensorQuantizationConfig(TensorQuantizationConfig):
 
     @ classmethod
     def convert_from_tensor_config(cls,
-        convert_from:TensorQuantizationConfig,
-        scales: Iterable,
-        offsets: Iterable,
-        channel_axis: int
+        convert_from: TensorQuantizationConfig,
+        scale: Iterable = None,
+        offset: Iterable = None,
+        channel_axis: int = 1,
     ):
+        if scale is None: scale = convert_from.scale
+        if offset is None: offset = convert_from.offset
         this = ChannelwiseTensorQuantizationConfig(
             policy=convert_from.policy,
             num_of_bits=convert_from.num_of_bits,
             quant_min=convert_from.quant_min,
             quant_max=convert_from.quant_max,
-            scale=scales, offset=offsets,
+            scale=scale, offset=offset,
             observer_algorithm=convert_from.observer_algorithm,
             detail=convert_from.detail.copy(),
             state=convert_from.state,
@@ -709,7 +711,7 @@ class ChannelwiseTensorQuantizationConfig(TensorQuantizationConfig):
     def copy(self):
         config = super().copy()
         return self.convert_from_tensor_config(
-            config, scales=config.scale, offsets=config.offset,
+            config, scale=config.scale, offset=config.offset,
             channel_axis=self.channel_axis)
 
 

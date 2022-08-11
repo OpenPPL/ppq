@@ -37,7 +37,7 @@ class Perseus(GraphDispatcher):
     Args:
         GraphDispatcher (_type_): _description_
     """
-    
+
     def __init__(self, graph: BaseGraph, verbose: bool = False) -> None:
         """ 初始化英仙座调度器
         在这一过程中，英仙座调度器将为每一个算子生成它的 OpSocket 接线器

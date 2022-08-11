@@ -9,7 +9,7 @@ from ppq.api import quantize_torch_model
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-class MyQuantDelegator(TorchQuantizeDelegate):
+class MyQuantDelegator(TorchQuantizeDelegator):
     """Use This class to realize your quantization logic.
 
     Inherit class TorchQuantizeDelegate, implement interface __call__, then

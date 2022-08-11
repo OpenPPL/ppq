@@ -285,7 +285,7 @@ def convert_any_to_torch_tensor(
         if dtype is None:
             dtype = DataType.convert_from_numpy(x.dtype)
             dtype = DataType.to_torch(dtype)
-        return torch.tensor(x, dtype=dtype, device=device)
+        return torch.tensor(x.copy(), dtype=dtype, device=device)
     else:
         raise TypeError(f'input value {x}({type(x)}) can not be converted as torch tensor.')
 
