@@ -1816,6 +1816,7 @@ def ReduceL2_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacken
 
 def PRelu_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
     input_data, weight = values
+    weight = weight.reshape(-1)
     output = F.prelu(input_data, weight)
     return output
 
