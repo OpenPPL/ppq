@@ -1,8 +1,10 @@
+from ppq.core import QuantizationStates
 from ppq.IR import BaseGraph, GraphExporter
+from ppq.IR.quantize import QuantableOperation
 
 
 class ExtensionExporter(GraphExporter):
-    """ExtensionExporter is an empty exporter for you to implement custimized
+    """ExtensionExporter is an empty exporter for you to implement customized
     logic. rewrite function export in order to dump ppq graph to disk.
 
     use export_ppq_graph(..., platform=TargetPlatform.EXTENSION) to invoke this class.
@@ -15,12 +17,16 @@ class ExtensionExporter(GraphExporter):
         super().__init__()
 
     def export(self, file_path: str, graph: BaseGraph, config_path: str = None):
-        """Write cusimized logic for dumping ppq graph.
+        """Sample Export Function -- export all quantization params into txt"""
+        
+        if config_path is None:
+            raise ValueError('Can not export ppq quantization params, cause configuration path is empty.')
+        with open(file=config_path, mode='w') as file:
+        
+            for op in graph.operations.values():
+                if not isinstance(op, QuantableOperation): continue
 
-        Args:
-            file_path (str): [description]
-            graph (BaseGraph): [description]
-            config_path (str, optional): [description]. Defaults to None.
-        """
-        print('You are using Extension Exporter now, however there has no logic yet, so i just print this.')
-        print('你调用了 Extension Exporter，但你很可能还没有在这里写任何逻辑，所以我就打印了这行信息。')
+                for cfg, var in op.config_with_variable:
+                    if QuantizationStates.can_export(cfg.state):
+                        
+                        pass

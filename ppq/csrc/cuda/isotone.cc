@@ -7,10 +7,6 @@ float SolveIsotoneScale(
     const float *second_largest_arr, 
     const int64 length, const int quant_max){
     /**
-     * @brief 求解保序量化参数，复杂度为0(n^2)
-     * n 为 batch 数量，可以进一步优化到O(n log n)
-     * 不过看起来一般并没有那么多 batch 需要处理
-     * 
      * Solving isotonic quantization scale
      * Algorithm Complexity is 0(n^2), where n denotes the num of batches
      * This can be optimized further to reach O(n log n) complexity.

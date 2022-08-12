@@ -1,5 +1,5 @@
 import os
-from typing import Any, Callable, List, Iterable
+from typing import Any, Callable, Iterable, List
 
 import torch
 from ppq.core import (NetworkFramework, TargetPlatform, empty_ppq_cache,
@@ -10,6 +10,7 @@ from ppq.IR import (BaseGraph, GraphBuilder, GraphCommand, GraphCommandType,
                     GraphExporter, GraphFormatter, GraphMerger)
 from ppq.IR.morph import GraphDeviceSwitcher
 from ppq.parser import *
+from ppq.quantization.observer import PPQ_OBSERVER_TABLE, OperationObserver
 from ppq.quantization.optim.base import QuantizationOptimizationPass
 from ppq.quantization.quantizer import (ACADEMIC_INT4_Quantizer,
                                         ACADEMIC_Mix_Quantizer,
@@ -28,9 +29,8 @@ from ppq.quantization.quantizer import (ACADEMIC_INT4_Quantizer,
                                         PPLCUDAQuantizer, TensorRTQuantizer,
                                         TengineQuantizer)
 from ppq.scheduler import DISPATCHER_TABLE, GraphDispatcher
-from torch.utils.data import DataLoader
-
 from ppq.scheduler.perseus import Perseus
+from torch.utils.data import DataLoader
 
 from .setting import *
 
@@ -620,10 +620,10 @@ def export_ppq_graph(
         if save_path is None: continue
         if os.path.exists(save_path):
             if os.path.isfile(save_path):
-                ppq_warning(f'File {save_path} has already exist, ppq exporter will overwrite it.')
+                ppq_warning(f'File {save_path} is already existed, Exporter will overwrite it.')
             if os.path.isdir(save_path):
-                raise FileExistsError(f'File {save_path} has already exist, and it is a directory, '
-                                    'ppq exporter can not create file here.')
+                raise FileExistsError(f'File {save_path} is already existed, and it is a directory, '
+                                    'Exporter can not create file here.')
 
     if platform not in EXPORTERS:
         raise KeyError(f'Requiring framework {platform} does not support export now.')
@@ -728,7 +728,7 @@ class UnbelievableUserFriendlyQuantizationSetting:
     这个文件包含了最基本的量化配置。
     """
 
-    def __init__(self, platform: TargetPlatform, finetune_steps: int = 5000, finetune_lr: float = 3e-4,
+    def __init__(self, platform: TargetPlatform, finetune_steps: int = 500, finetune_lr: float = 3e-5,
                  interested_outputs: List[str] = None, calibration: str = 'percentile', equalization: bool = True,
                  non_quantable_op: List[str] = None) -> None:
         """
@@ -762,19 +762,13 @@ class UnbelievableUserFriendlyQuantizationSetting:
         daddy = QuantizationSettingFactory.default_setting()
         daddy.quantize_activation_setting.calib_algorithm = self.calibration
 
-        if self.platform in {TargetPlatform.PPL_CUDA_INT4, TargetPlatform.PPL_CUDA_INT8}:
-            daddy.fusion_setting.fuse_conv_add   = True
-        else: daddy.fusion_setting.fuse_conv_add = False
-
         if self.platform in {TargetPlatform.METAX_INT8_C, TargetPlatform.METAX_INT8_T}:
             daddy.fusion_setting.force_alignment_overlap = True
 
         if self.finetune_steps > 0:
-            daddy.advanced_optimization               = True
-            daddy.advanced_optimization_setting.steps = self.finetune_steps
-            daddy.advanced_optimization_setting.lr    = self.finetune_lr
-            daddy.advanced_optimization_setting.limit = 2.0
-            daddy.advanced_optimization_setting.interested_outputs = self.interested_outputs
+            daddy.lsq_optimization               = True
+            daddy.lsq_optimization_setting.steps = self.finetune_steps
+            daddy.lsq_optimization_setting.lr    = self.finetune_lr
 
         if self.equalization == True:
             daddy.equalization                    = True
@@ -951,9 +945,7 @@ class ENABLE_CUDA_KERNEL:
     memory cost.
     """
     def __init__(self) -> None:
-        ppq_warning('PPQ is compling CUDA Kernels. Please wait...\n'
-                    'If there is any problem with kernel compilation, '
-                    'feel free to remove ENABLE_CUDA_KERNEL clause.')
+        ppq_warning('Compling CUDA Kernels. Please wait...')
         self._state = False
 
     def __enter__(self):
@@ -1052,6 +1044,27 @@ def register_network_exporter(exporter: type, platform: TargetPlatform):
     if not issubclass(exporter, GraphExporter):
         raise TypeError('You can only register a subclass of GraphExporter as custimized exporter.')
     EXPORTERS[platform] = exporter
+
+
+def register_calibration_observer(algorithm: str, observer: type):
+    """Register an calibration observer to  PPQ_OBSERVER_TABLE, then you can calling your own observer with 
+        ppq.quantize_onnx_model.
+
+    This function will override the existing OBSERVER_TABLE without warning.
+    
+    registed observer must be a sub class of OperationObserver.
+
+    Args:
+        exporter (type): exporter to be inserted.
+        platform (TargetPlatform): corresponding platfrom of your exporter.
+    """
+    if not isinstance(observer, type):
+        raise TypeError(
+            f'You can only register an OperationObserver as custimized ppq observer, '
+            f'however {type(observer)} is given. ')
+    if not issubclass(observer, OperationObserver):
+        raise TypeError('Regitsing observer must be a subclass of OperationObserver.')
+    PPQ_OBSERVER_TABLE[algorithm] = observer
 
 
 __all__ = ['load_graph', 'load_onnx_graph', 'load_caffe_graph',

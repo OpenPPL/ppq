@@ -130,7 +130,7 @@ def dump_to_file(
         raise FileExistsError(f'Can not dump data to file: {filename}',
                               ' Cause it is a directory.')
     if os.path.exists(filename):
-        ppq_warning(f'Overwritting file {filename} ...')
+        ppq_warning(f'Overwriting file {filename} ...')
 
     data = convert_any_to_numpy(data)
     if format == '.npy':

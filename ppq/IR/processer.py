@@ -33,7 +33,7 @@ class GraphCommandProcessor(Callable, metaclass=ABCMeta):
                 GraphCommandProcessor 将按照自定义逻辑解析 GraphCommand，
                 在 BaseGraph 做出相应处理并给出结果，实现方法请参考 RunnableGraph
 
-            GraphCommandProcessor is an absract class for manipulating the graph
+            GraphCommandProcessor is an abstract class for manipulating the graph
 
             We use Command-Responsibility Chain to process operations on the computational graph:
 
@@ -93,7 +93,7 @@ class GraphCommandProcessor(Callable, metaclass=ABCMeta):
     def __call__(self, command: GraphCommand) -> Any:
         """Invoking interface of GraphCommandProcessor responsibility chain.
         All processors within the chain shall be invoked by this function one
-        be one, unitl there is a processor claim to accept input command
+        be one, until there is a processor claim to accept input command
         object, the entire processing of responsibility chain ends then.
 
             invoke a GraphCommandProcessor chain like that:

@@ -1,6 +1,33 @@
 import torch
 
 def torch_mean_square_error(y_pred: torch.Tensor, y_real: torch.Tensor, reduction: str='mean') -> torch.Tensor:
+    """
+    Compute mean square error between y_pred(tensor) and y_real(tensor)
+    
+    MSE error can be calcualted as following equation:
+    
+        MSE(x, y) = (x - y) ^ 2
+    
+    if x and y are matrixs, MSE error over matrix should be the mean value of MSE error over all elements.
+    
+        MSE(X, Y) = mean((X - Y) ^ 2)
+
+    By this equation, we can easily tell that MSE is an symmtrical measurement:
+        MSE(X, Y) == MSE(Y, X)
+        MSE(0, X) == X ^ 2
+
+    Args:
+        y_pred (torch.Tensor): _description_
+        y_real (torch.Tensor): _description_
+        reduction (str, optional): _description_. Defaults to 'mean'.
+
+    Raises:
+        ValueError: _description_
+        ValueError: _description_
+
+    Returns:
+        torch.Tensor: _description_
+    """
     if y_pred.shape != y_real.shape:
         raise ValueError(f'Can not compute mse loss for tensors with different shape. '
             f'({y_pred.shape} and {y_real.shape})')

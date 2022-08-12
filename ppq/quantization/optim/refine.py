@@ -1,16 +1,15 @@
-from collections import defaultdict
 from typing import Iterable, List, Set
 
 import torch
-from ppq.core import (COMPELING_OP_TYPES, PPLCUDA_ACTIVATIONS,
-                      QuantizationProperty, QuantizationStates, RoundingPolicy,
-                      TargetPlatform, TensorQuantizationConfig,
-                      empty_ppq_cache, ppq_warning)
+from ppq.core import (TYPES_FOR_ALIGNMENT, QuantizationProperty,
+                      QuantizationStates, RoundingPolicy, TargetPlatform,
+                      TensorQuantizationConfig, empty_ppq_cache, ppq_warning)
+from ppq.core.common import ALIGNMENT_MANUL_OVERRIDE
 from ppq.executor import BaseGraphExecutor
-from ppq.IR import GraphCommandProcessor, QuantableOperation, Variable
+from ppq.IR import BaseGraph, QuantableOperation, Variable
 from ppq.IR.base.graph import Operation
 from ppq.IR.quantize import QuantableVariable
-from ppq.IR.search import SearchableGraph, TraversalCommand
+from ppq.IR.search import SearchableGraph
 from ppq.quantization.observer.range import minmax_to_scale_offset
 
 from .base import QuantizationOptimizationPass
@@ -62,13 +61,11 @@ class QuantizeReducePass(QuantizationOptimizationPass):
 
     def optimize(
         self,
-        processor: GraphCommandProcessor,
+        graph: BaseGraph,
         dataloader: Iterable,
         executor: BaseGraphExecutor,
         **kwargs
     ) -> None:
-
-        graph = processor.graph
         for _, variable in graph.variables.items():
             assert isinstance(variable, Variable)
             source_op = variable.source_op
@@ -116,13 +113,11 @@ class QuantizeRefinePass(QuantizationOptimizationPass):
     @ empty_ppq_cache
     def optimize(
         self,
-        processor: GraphCommandProcessor,
+        graph: BaseGraph,
         dataloader: Iterable,
         executor: BaseGraphExecutor,
         **kwargs
     ) -> None:
-
-        graph = processor.graph
         for _, operation in graph.operations.items():
             if not isinstance(operation, QuantableOperation): continue
 
@@ -258,9 +253,8 @@ class NxpInputRoundingRefinePass(QuantizationOptimizationPass):
     def __init__(self) -> None:
         super().__init__(name='PPQ Input Quantization Refine Pass')
 
-    def optimize(self, processor: GraphCommandProcessor,
+    def optimize(self, graph: BaseGraph,
         dataloader: Iterable, executor: BaseGraphExecutor, **kwargs) -> None:
-        graph = processor.graph
         for variable in graph.variables.values():
             if isinstance(variable, QuantableVariable):
                 if variable.source_op is None or not isinstance(variable.source_op, QuantableOperation):
@@ -276,13 +270,12 @@ class NxpQuantizeFusionPass(QuantizationOptimizationPass):
     @ empty_ppq_cache
     def optimize(
         self,
-        processor: GraphCommandProcessor,
+        graph: BaseGraph,
         dataloader: Iterable,
         executor: BaseGraphExecutor,
         **kwargs
     ) -> None:
-        graph = processor.graph
-        processor = SearchableGraph(processor)
+        processor = SearchableGraph(graph)
 
         relu_fusion_matching = processor.activation_matching(
             start_op_types=['Conv', 'Add'], end_types=['Relu'])
@@ -328,13 +321,12 @@ class QuantizeFusionPass(QuantizationOptimizationPass):
     @ empty_ppq_cache
     def optimize(
         self,
-        processor: GraphCommandProcessor,
+        graph: BaseGraph,
         dataloader: Iterable,
         executor: BaseGraphExecutor,
         **kwargs
     ) -> None:
-        graph = processor.graph
-        processor = SearchableGraph(processor)
+        processor = SearchableGraph(graph)
 
         # fuse computing operations and its following activation.
         if self.fuse_activation:
@@ -403,126 +395,29 @@ class QuantizeFusionPass(QuantizationOptimizationPass):
                         output_cfg.dominated_by = input_cfg
 
 
-class InplaceQuantizationSettingPass(QuantizationOptimizationPass):
-    def __init__(self) -> None:
-        super().__init__(name='Inplace Qunantization Setting Pass')
-
-    def optimize(self, processor: GraphCommandProcessor, dataloader: Iterable,
-        executor: BaseGraphExecutor, **kwargs) -> None:
-        for op in processor.graph.operations.values():
-            if isinstance(op, QuantableOperation):
-                # set all tensor to be inplace quantized for memory saving.
-                for cfg, var in op.config_with_variable:
-                    if not var.is_parameter:
-                        cfg.inplace = True
-
-
-class PPLCudaAddConvReluMerge(QuantizationOptimizationPass):
-    def __init__(self) -> None:
-        super().__init__(name='PPL CUDA Conv(Relu) - Add - Relu Merge')
-
-    def is_same_platform(self, operations: List[Operation]):
-        platforms = [operation.platform for operation in operations]
-        return all([platform == platforms[0] for platform in platforms])
-
-    def optimize(self,
-                 processor: GraphCommandProcessor,
-                 dataloader: Iterable,
-                 executor: BaseGraphExecutor,
-                 **kwargs) -> None:
-
-        def ep_expr(operation: Operation):
-            if not isinstance(operation, QuantableOperation): return False
-            if operation.type == 'Conv': return True
-            if operation.type in PPLCUDA_ACTIVATIONS:
-                upstream_ops = graph.get_upstream_operations(operation=operation)
-                if len(upstream_ops) == 0 and upstream_ops[0].type == 'Conv': return True
-                if upstream_ops[0] in merged: return True
-            return False
-
-        def retrospect(operation: QuantableOperation) -> QuantableOperation:
-            if not isinstance(operation, QuantableOperation): return None
-            if len(graph.get_upstream_operations(operation)) != 1: return None
-
-            parent = graph.get_upstream_operations(operation)[0]
-            if parent.type != 'Conv': return None
-            if not isinstance(parent, QuantableOperation): return None
-            return parent
-
-        def merge_fn(operation: QuantableOperation):
-            assert isinstance(operation, QuantableOperation) and operation.type == 'Add'
-            # check if upstream ops can be merged
-            up_ops = graph.get_upstream_operations(operation)
-            if not self.is_same_platform(up_ops + [operation]): return
-
-            # Conv - Add - Relu Merge
-            config = operation.config.output_quantization_config[0]
-
-            # Step - 1: merge add output to next activation.
-            down_ops = graph.get_downstream_operations(operation)
-            if (len(down_ops) == 1 and
-                down_ops[0].type in PPLCUDA_ACTIVATIONS and
-                isinstance(down_ops[0], QuantableOperation) and
-                down_ops[0].platform == operation.platform):
-                config.dominated_by = down_ops[0].config.output_quantization_config[0]
-
-            # Step - 2: disable input conv's quantization(only one).
-            up_ops = graph.get_upstream_operations(operation)
-            assert len(up_ops) == 2, f'Opeartion {operation.name} should has exact 2 input operations.'
-
-            target_operation = None
-            for op in up_ops:
-                if op.type == 'Conv':
-                    target_operation = op
-                elif op.type in PPLCUDA_ACTIVATIONS:
-                    target_operation = retrospect(operation)
-                if target_operation is not None:
-                    break
-
-            if target_operation is not None:
-                target_operation.config.output_quantization_config[0].dominated_by = config
-
-        graph, merged, unchanged = processor.graph, set(), False
-
-        # merge conv - add iteratively, until there is no one left.
-        while not unchanged:
-            unchanged = True
-
-            search_engine = SearchableGraph(processor)
-            matchings = search_engine(TraversalCommand(
-                sp_expr=lambda x: (x.type == 'Add' and
-                                   isinstance(x, QuantableOperation) and
-                                   x not in merged),
-                rp_expr=lambda x, y: False,
-                ep_expr=ep_expr,
-                direction='up'))
-
-            # count how many matched inputs does an add operation has.
-            counter = defaultdict(lambda : 0)
-
-            # path[0] is add operation.
-            for path in matchings: counter[path[0]] += 1
-
-            for operation, count in counter.items():
-                if count == 2:
-                    merge_fn(operation)
-                    merged.add(operation)
-                    unchanged = False
-
-
 class QuantAlignmentPass(QuantizationOptimizationPass):
-    """对多输入算子执行强制定点覆盖."""
+    """
+    对特殊算子执行强制定点覆盖.
+    
+    对于加法、减法算子, 一般要求输入定点信息一致
+    对于concat, split 算子, 一般要求输入输出定点信息一致
+    对于average pooling 算子, 一般不做要求, 可以要求输入输出定点信息一致
+    """
     def __init__(self,
                  elementwise_merge_method: str = 'Align to Large',
                  concat_merge_method: str = 'Align to Output',
+                 averagepool_method: str = 'None',
                  force_overlap: bool = False) -> None:
+        self.averagepool_method       = averagepool_method
         self.elementwise_merge_method = elementwise_merge_method
         self.concat_merge_method      = concat_merge_method
         self.force_overlap            = force_overlap
-        assert self.elementwise_merge_method in {'Align to Large', 'Align to Output'}, (
-            'elementwise_merge_method can only be Align to Large or Align to Output')
-        assert self.concat_merge_method in {'Align to Large', 'Align to Output'}, (
-            'concat_merge_method can only be Align to Large or Align to Output')
+        assert self.elementwise_merge_method in {'Align to Large', 'Align to Output', 'None'}, (
+            'elementwise_merge_method can only be (None), (Align to Large) or (Align to Output)')
+        assert self.concat_merge_method in {'Align to Large', 'Align to Output', 'None'}, (
+            'concat_merge_method can only be (None), (Align to Large) or (Align to Output)')
+        assert self.averagepool_method in {'Align to Output', 'None'}, (
+            'concat_merge_method can only be (None) or (Align to Output)')
         super().__init__(name='PPQ Quantization Alignment Pass')
 
     def align_to_large(self, op: QuantableOperation) -> TensorQuantizationConfig:
@@ -572,22 +467,41 @@ class QuantAlignmentPass(QuantizationOptimizationPass):
         return master_config
 
     def optimize(
-        self, processor: GraphCommandProcessor,
+        self, graph: BaseGraph,
         dataloader: Iterable,
         executor: BaseGraphExecutor, **kwargs) -> None:
-        graph = processor.graph
-        for operation in processor.graph.operations.values():
-            if isinstance(operation, QuantableOperation) and operation.type in COMPELING_OP_TYPES:
-                assert operation.config.output_quantization_config[0].state != QuantizationStates.INITIAL, (
-                    f'Can not modify quantization state of operation {operation.name}, '
-                    'cause it has not been correctly quantized.')
 
-                method = self.elementwise_merge_method if operation.type != 'Concat' else self.concat_merge_method
+        for operation in graph.operations.values():
+            if not isinstance(operation, QuantableOperation): continue
 
-                if method == 'Align to Large':
+            master_config = None
+            if operation.type in TYPES_FOR_ALIGNMENT['Elementwise']:
+                if self.elementwise_merge_method == 'None': continue
+                if self.elementwise_merge_method == 'Align to Large':
                     master_config = self.align_to_large(operation)
                 else: master_config = self.align_to_output(operation)
 
+            elif operation.type in TYPES_FOR_ALIGNMENT['Concat']:
+                if self.concat_merge_method == 'None': continue
+                if self.concat_merge_method == 'Align to Large':
+                    master_config = self.align_to_large(operation)
+                else: master_config = self.align_to_output(operation)
+
+            elif operation.type in TYPES_FOR_ALIGNMENT['Pooling']:
+                if self.averagepool_method == 'None': continue
+                if self.averagepool_method == 'Align to Output':
+                    self.align_to_output(operation)
+
+            elif ALIGNMENT_MANUL_OVERRIDE in operation.extension_attrib:
+                method = operation.extension_attrib[ALIGNMENT_MANUL_OVERRIDE]
+                if self.concat_merge_method == 'Align to Large':
+                    master_config = self.align_to_large(operation)
+                elif self.concat_merge_method == 'Align to Large': 
+                    master_config = self.align_to_output(operation)
+                else:
+                    ppq_warning(f'Unrecognized Alignment Method {method} for operation {operation.name}')
+
+            if master_config is not None:
                 # override up stream layer's config if possible
                 for up_op in graph.get_upstream_operations(operation):
                     if not isinstance(up_op, QuantableOperation): continue
@@ -607,9 +521,8 @@ class SwishFusionPass(QuantizationOptimizationPass):
     def __init__(self) -> None:
         super().__init__('Swish Fusion')
 
-    def optimize(self, processor: GraphCommandProcessor,
+    def optimize(self, graph: BaseGraph,
                  dataloader: Iterable, executor: BaseGraphExecutor, **kwargs) -> None:
-        graph = processor.graph
         search_engine = SearchableGraph(graph)
         patterns = search_engine.pattern_matching(
             patterns = [lambda x: x.is_computing_op, 'Sigmoid', 'Mul'],
@@ -645,9 +558,8 @@ class MishFusionPass(QuantizationOptimizationPass):
     def __init__(self) -> None:
         super().__init__('Mish Fusion')
 
-    def optimize(self, processor: GraphCommandProcessor,
+    def optimize(self, graph: BaseGraph,
                  dataloader: Iterable, executor: BaseGraphExecutor, **kwargs) -> None:
-        graph = processor.graph
         search_engine = SearchableGraph(graph)
         patterns = search_engine.pattern_matching(
             patterns = [lambda x: x.is_computing_op, 'Softplus', 'Tanh', 'Mul'],

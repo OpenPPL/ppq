@@ -7,8 +7,7 @@ from ppq.core import (PASSIVE_OPERATIONS, ChannelwiseTensorQuantizationConfig,
                       QuantizationProperty, QuantizationStates, RoundingPolicy,
                       TargetPlatform)
 from ppq.executor.base import BaseGraphExecutor
-from ppq.IR import BaseGraph, GraphCommandProcessor
-from ppq.IR.base.graph import Operation
+from ppq.IR import BaseGraph, Operation
 from ppq.quantization.optim.base import QuantizationOptimizationPipeline
 from ppq.quantization.optim.morph import MetaxGemmSplitPass
 
@@ -18,7 +17,7 @@ from .base import BaseQuantizer
 class MetaxTensorwiseQuantizer(BaseQuantizer):
     def __init__(
         self,
-        graph: Union[BaseGraph, GraphCommandProcessor]
+        graph: BaseGraph
     ) -> Union[torch.Tensor, list, dict]:
         super().__init__(graph=graph)
         self._num_of_bits = 8
@@ -50,7 +49,7 @@ class MetaxTensorwiseQuantizer(BaseQuantizer):
                     QuantizationProperty.SYMMETRICAL +
                     QuantizationProperty.LINEAR +
                     QuantizationProperty.PER_TENSOR)
-                bias_config.state = QuantizationStates.PASSIVE_INIT
+                bias_config.state = QuantizationStates.FP32
             for config in base_quant_config.input_quantization_config[1: ]:
                 config.observer_algorithm = 'minmax'
 
@@ -100,7 +99,7 @@ class MetaxTensorwiseQuantizer(BaseQuantizer):
 
 class MetaxChannelwiseQuantizer(BaseQuantizer):
     def __init__(
-        self, graph: Union[BaseGraph, GraphCommandProcessor]
+        self, graph: Union[BaseGraph, BaseGraph]
     ) -> Union[torch.Tensor, list, dict]:
         super().__init__(graph=graph)
         self._num_of_bits = 8
@@ -133,7 +132,7 @@ class MetaxChannelwiseQuantizer(BaseQuantizer):
                 base_quant_config.input_quantization_config[1] = \
                     ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
                         convert_from = conv_weight_config,
-                        offsets = None, scales  = None, channel_axis = 0
+                        offset = None, scale  = None, channel_axis = 0
                     )
                 base_quant_config.input_quantization_config[1].observer_algorithm = 'Minmax'
             # first parameter must exits, for gemm layer it will be gemm_weight
@@ -150,7 +149,7 @@ class MetaxChannelwiseQuantizer(BaseQuantizer):
                 base_quant_config.input_quantization_config[1] = \
                     ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
                         convert_from = matmul_weight_config,
-                        offsets = None, scales  = None, channel_axis = 1
+                        offset = None, scale  = None, channel_axis = 1
                     )
                 base_quant_config.input_quantization_config[1].observer_algorithm = 'Minmax'
             # if operation has bias
@@ -167,8 +166,8 @@ class MetaxChannelwiseQuantizer(BaseQuantizer):
                 bias_config.state = QuantizationStates.PASSIVE_INIT
                 base_quant_config.input_quantization_config[-1] = \
                     ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
-                        convert_from = bias_config, offsets = None,
-                        scales = None, channel_axis = 0
+                        convert_from = bias_config, offset = None,
+                        scale = None, channel_axis = 0
                     )
                 base_quant_config.input_quantization_config[-1].observer_algorithm = 'Minmax'
 

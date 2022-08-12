@@ -2,8 +2,7 @@ from ppq.core import (PASSIVE_OPERATIONS, OperationQuantizationConfig,
                       QuantizationPolicy, QuantizationProperty,
                       QuantizationStates, RoundingPolicy, TargetPlatform,
                       TensorQuantizationConfig)
-from ppq.IR import BaseGraph
-from ppq.IR.base.graph import Operation, Variable
+from ppq.IR import BaseGraph, Operation, Variable
 
 from .base import BaseQuantizer
 

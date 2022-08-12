@@ -2,7 +2,7 @@ from typing import Iterable
 from ppq.IR.base.graph import BaseGraph
 
 from ppq.executor import BaseGraphExecutor
-from ppq.IR import GraphCommandProcessor
+from ppq.IR import BaseGraph
 
 from .base import QuantizationOptimizationPass
 
@@ -28,12 +28,11 @@ class ExtensionPass(QuantizationOptimizationPass):
 
     def optimize(
         self,
-        processor: GraphCommandProcessor,
+        graph: BaseGraph,
         dataloader: Iterable,
         executor: BaseGraphExecutor,
         **kwargs
     ) -> None:
-        graph = processor.graph
         assert isinstance(graph, BaseGraph)
 
         print('You are invoking Extension Pass now.')

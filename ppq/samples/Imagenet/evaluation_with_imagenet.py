@@ -24,6 +24,7 @@ CFG_TRAIN_DIR = 'Assets/Imagenet_Train'        # 用来读取 train dataset，�
 CFG_PLATFORM = TargetPlatform.PPL_CUDA_INT8    # 用来指定目标平台
 CFG_DUMP_PATH = 'Output/'                      # 所有模型保存的路径名
 QUANT_SETTING = QuantizationSettingFactory.default_setting() # 用来指定量化配置
+QUANT_SETTING.lsq_optimization = True
 
 with ENABLE_CUDA_KERNEL():
     if __name__ == '__main__':
