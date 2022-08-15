@@ -77,8 +77,8 @@ EXPORTERS = {
     TargetPlatform.METAX_INT8_C:  ONNXRUNTIMExporter,
     TargetPlatform.METAX_INT8_T:  ONNXRUNTIMExporter,
     TargetPlatform.TRT_INT8:      TensorRTExporter,
-    TargetPlatform.NCNN_INT8:     NCNNExporter
-    TargetPlatform.TENGINE_INT8:  TengineExporter,
+    TargetPlatform.NCNN_INT8:     NCNNExporter,
+    TargetPlatform.TENGINE_INT8:  TengineExporter
 }
 
 # 为你的导出模型取一个好听的后缀名
