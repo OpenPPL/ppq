@@ -275,9 +275,16 @@ class BlockBuilder:
 
         def _find_coherent_ep(op: Operation):
             # 如果当前节点后继节点只有一个，向下寻找直系节点
+            # 但如果直系后继节点有多于一个输入，算法立即停机
             ops = self.graph.get_downstream_operations(op)
-            if len(ops) == 1 and len(self.graph.get_upstream_operations(ops[0])) == 1:
-                return ops[0]
+            if len(ops) == 1:
+                following_op = ops[0]
+                # PATCH 20220811，get_upstream_operations 不足以判断算子是否只有一个输入
+                # 因为算子可以直接与图的 input 相连...
+                non_parameter_input = following_op.num_of_input - following_op.num_of_parameter
+                upstream_ops = len(self.graph.get_upstream_operations(following_op))
+                if non_parameter_input == 1 and upstream_ops == 1:
+                    return ops[0]
             return None
 
         sp, ep, future_ep = op, op, op

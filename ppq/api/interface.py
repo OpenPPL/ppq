@@ -23,11 +23,8 @@ from ppq.quantization.quantizer import (ACADEMIC_INT4_Quantizer,
                                         ORT_PerChannelQuantizer,
                                         ORT_PerTensorQuantizer,
                                         PPL_DSP_Quantizer,
-                                        PPL_DSP_TI_Quantizer,
-                                        PPLCUDA_INT4_Quantizer,
-                                        PPLCUDAMixPrecisionQuantizer,
-                                        PPLCUDAQuantizer, TensorRTQuantizer,
-                                        TengineQuantizer)
+                                        PPL_DSP_TI_Quantizer, PPLCUDAQuantizer,
+                                        TensorRTQuantizer, TengineQuantizer)
 from ppq.scheduler import DISPATCHER_TABLE, GraphDispatcher
 from ppq.scheduler.perseus import Perseus
 from torch.utils.data import DataLoader
@@ -48,8 +45,6 @@ QUANTIZER_COLLECTION = {
     # TargetPlatform.ORT_OOS_INT8: ORT_PerChannelQuantizer,
     TargetPlatform.PPL_CUDA_INT8: PPLCUDAQuantizer,
     TargetPlatform.EXTENSION:     ExtQuantizer,
-    TargetPlatform.PPL_CUDA_MIX:  PPLCUDAMixPrecisionQuantizer,
-    TargetPlatform.PPL_CUDA_INT4: PPLCUDA_INT4_Quantizer,
     TargetPlatform.ACADEMIC_INT8: ACADEMICQuantizer,
     TargetPlatform.ACADEMIC_INT4: ACADEMIC_INT4_Quantizer,
     TargetPlatform.ACADEMIC_MIX:  ACADEMIC_Mix_Quantizer,
@@ -82,7 +77,7 @@ EXPORTERS = {
     TargetPlatform.METAX_INT8_C:  ONNXRUNTIMExporter,
     TargetPlatform.METAX_INT8_T:  ONNXRUNTIMExporter,
     TargetPlatform.TRT_INT8:      TensorRTExporter,
-    TargetPlatform.NCNN_INT8:     NCNNExporter,
+    TargetPlatform.NCNN_INT8:     NCNNExporter
     TargetPlatform.TENGINE_INT8:  TengineExporter,
 }
 

@@ -1,13 +1,15 @@
 # This file defines export functions & class of PPQ.
 from ppq.api.setting import (ActivationQuantizationSetting, DispatchingTable,
-                             EqualizationSetting, LSQSetting,
-                             GraphFormatSetting, ParameterQuantizationSetting,
+                             EqualizationSetting, GraphFormatSetting,
+                             LSQSetting, ParameterQuantizationSetting,
                              QuantizationFusionSetting, QuantizationSetting,
                              QuantizationSettingFactory, TemplateSetting)
 from ppq.core import *
-from ppq.executor import TorchExecutor, TorchQuantizeDelegator
-from ppq.IR import (BaseGraph, GraphCommand, GraphFormatter, Operation,
-                    QuantableGraph, SearchableGraph, Variable)
+from ppq.executor import (BaseGraphExecutor, TorchExecutor,
+                          TorchQuantizeDelegator)
+from ppq.IR import (BaseGraph, GraphBuilder, GraphCommand, GraphExporter,
+                    GraphFormatter, Operation, QuantableGraph, SearchableGraph,
+                    Variable)
 from ppq.IR.deploy import RunnableGraph
 from ppq.IR.quantize import QuantableOperation, QuantableVariable
 from ppq.IR.search import SearchableGraph
