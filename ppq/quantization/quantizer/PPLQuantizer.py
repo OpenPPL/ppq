@@ -5,8 +5,7 @@ from ppq.core import (PASSIVE_OPERATIONS, ChannelwiseTensorQuantizationConfig,
                       OperationQuantizationConfig, QuantizationPolicy,
                       QuantizationProperty, QuantizationStates, RoundingPolicy,
                       TargetPlatform)
-from ppq.core.quant import TensorQuantizationConfig
-from ppq.IR import BaseGraph, Operation, Variable
+from ppq.IR import BaseGraph, Operation
 
 from .base import BaseQuantizer
 
@@ -119,40 +118,3 @@ class PPLCUDAQuantizer(BaseQuantizer):
     @ property
     def activation_fusion_types(self) -> set:
         return {'Relu', 'Clip', 'Sigmoid', 'LeakyRelu'}
-
-
-class PPLCUDAMixPrecisionQuantizer(PPLCUDAQuantizer):
-    def __init__(
-        self, graph: Union[BaseGraph, BaseGraph]
-    ) -> Union[torch.Tensor, list, dict]:
-        super().__init__(graph=graph)
-
-    def init_quantize_config(self, operation: Operation) -> OperationQuantizationConfig:
-        config = super().init_quantize_config(operation=operation)
-        if operation.platform == TargetPlatform.PPL_CUDA_INT4:
-            for cfg, var in zip(config.input_quantization_config, operation.inputs):
-                assert isinstance(cfg, TensorQuantizationConfig)
-                assert isinstance(var, Variable)
-                if cfg.state == QuantizationStates.INITIAL:
-                    cfg.num_of_bits, cfg.quant_max, cfg.quant_min = 4, 7, -8
-        return config
-
-
-class PPLCUDA_INT4_Quantizer(PPLCUDAQuantizer):
-    def __init__(
-        self, graph: Union[BaseGraph, BaseGraph]
-    ) -> Union[torch.Tensor, list, dict]:
-        super().__init__(graph=graph)
-
-    def __init__(
-        self, graph: Union[BaseGraph, BaseGraph]
-    ) -> Union[torch.Tensor, list, dict]:
-
-        super().__init__(graph=graph)
-        self._num_of_bits = 4
-        self._quant_min = - int(pow(2, self._num_of_bits - 1))
-        self._quant_max = int(pow(2, self._num_of_bits - 1) - 1)
-
-    @ property
-    def target_platform(self) -> TargetPlatform:
-        return TargetPlatform.PPL_CUDA_INT8
