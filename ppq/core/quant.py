@@ -52,7 +52,7 @@ class TargetPlatform(Enum):
     NCNN_INT8     = 102
     OPENVINO_INT8 = 103
     TENGINE_INT8  = 104
-
+    
     PPL_CUDA_INT8 = 201
     PPL_CUDA_INT4 = 202
     PPL_CUDA_FP16 = 203
@@ -75,7 +75,6 @@ class TargetPlatform(Enum):
 
     HEXAGON_INT8 = 801
 
-    
 
     FP32 = 0
     # SHAPE-OR-INDEX related operation
@@ -328,7 +327,7 @@ class QuantizationStates(Enum):
         return state in {QuantizationStates.ACTIVATED, QuantizationStates.PASSIVE, QuantizationStates.SLAVE}
 
     @ classmethod
-    def can_export(cls, state)->bool:
+    def can_export(cls, state) -> bool:
         return state not in {QuantizationStates.INITIAL, QuantizationStates.DEACTIVATED,
                              QuantizationStates.DEQUANTIZED, QuantizationStates.PASSIVE_INIT}
 
@@ -367,7 +366,7 @@ class TensorQuantizationConfig(Serializable):
         offset: Any               = None,
         observer_algorithm: str   = None,
         detail: Any               = None,
-        inplace: bool             = False,
+        require_export: bool      = None,
         state: QuantizationStates = QuantizationStates.INITIAL
     ):
         """Create a PPQ Tensor Quantization Configuration Instance.
@@ -397,7 +396,7 @@ class TensorQuantizationConfig(Serializable):
             detail (Any, optional): Only used by PPQ internal logic, detail is used to store some internal data,
                 you are not supposed to use it.
 
-            inplace (bool, optional): Indicates whether quantization is taken inplace(rewrite tensor value).
+            require_export (bool, optional): If require_export == True, PPQ exporter will export this TQC ignoring state checks.
 
             state (QuantizationStates, optional):
                 Defaults to QuantizationStates.INITIAL, see QuantizationStates for more detail.
@@ -415,10 +414,10 @@ class TensorQuantizationConfig(Serializable):
         self._quant_min = quant_min
         self._quant_max = quant_max
         self.observer_algorithm = observer_algorithm
-        self.inplace = inplace
         self.detail = {} if detail is None else detail
         self._father_config = self # union-find
         self._hash = self.__create_hash()
+        self._require_export = require_export
         super().__init__()
 
     @ abstractmethod
@@ -510,6 +509,18 @@ class TensorQuantizationConfig(Serializable):
             QuantizationStates.FP32
         })
 
+    @ property
+    def exportable(self) -> bool:
+        value_check = isinstance(self.scale, torch.Tensor)
+        if self._require_export is None:
+            state_check = QuantizationStates.can_export(self.state)
+            return (value_check and state_check)
+        else: return (self._require_export and value_check)
+    
+    @ exportable.setter
+    def exportable(self, export_override: bool):
+        self._require_export = export_override
+        
     @ property
     def scale(self) -> torch.Tensor:
         if self.dominated_by == self: return self._scale
@@ -651,7 +662,6 @@ class TensorQuantizationConfig(Serializable):
             scale=scale, offset=offset,
             observer_algorithm=self.observer_algorithm,
             detail=self.detail.copy(),
-            inplace=self.inplace,
             state=self.state
         )
         if self.state == QuantizationStates.OVERLAPPED:

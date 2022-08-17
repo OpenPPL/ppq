@@ -44,13 +44,6 @@ class PassiveParameterQuantizePass(QuantizationOptimizationPass):
                 if op.num_of_input == 3:
                     i_cfg, w_cfg, b_cfg = op.config.input_quantization_config
 
-                    if not check_state(w_cfg.state):
-                        raise PermissionError(f'Can not quantize bias of layer {op.name}, '
-                            'cause weight has not been correctly quantized.')
-                    if not check_state(i_cfg.state):
-                        raise PermissionError(f'Can not quantize bias of layer {op.name}, '
-                            'cause input has not been correctly quantized.')
-
                     # PATCH 2022.07.29 有的时候 bias 是个多维的东西，此时要求前面的维度都是1
                     bias = op.inputs[-1].value
                     assert bias.numel() == bias.shape[-1], (
@@ -63,6 +56,13 @@ class PassiveParameterQuantizePass(QuantizationOptimizationPass):
 
                     # 在两种情况下可以执行后续逻辑，1 状态为 PASSIVE_INIT，2 要求 override
                     if self._override and (b_cfg.state == QuantizationStates.PASSIVE):
+                        if not check_state(w_cfg.state):
+                            raise PermissionError(f'Can not quantize bias of layer {op.name}, '
+                                'cause weight has not been correctly quantized.')
+                        if not check_state(i_cfg.state):
+                            raise PermissionError(f'Can not quantize bias of layer {op.name}, '
+                                'cause input has not been correctly quantized.')
+                        
                         b_cfg.scale  = w_cfg.scale * i_cfg.scale * self.scale_multiplier
                         b_cfg.state  = QuantizationStates.PASSIVE
                         b_cfg.offset = torch.zeros_like(b_cfg.scale)
@@ -70,6 +70,13 @@ class PassiveParameterQuantizePass(QuantizationOptimizationPass):
                             'Passive parameter does not support ASYMMETRICAL quantization')
 
                     if b_cfg.state == QuantizationStates.PASSIVE_INIT:
+                        if not check_state(w_cfg.state):
+                            raise PermissionError(f'Can not quantize bias of layer {op.name}, '
+                                'cause weight has not been correctly quantized.')
+                        if not check_state(i_cfg.state):
+                            raise PermissionError(f'Can not quantize bias of layer {op.name}, '
+                                'cause input has not been correctly quantized.')
+                        
                         b_cfg.scale  = w_cfg.scale * i_cfg.scale * self.scale_multiplier
                         b_cfg.state  = QuantizationStates.PASSIVE
                         b_cfg.offset = torch.zeros_like(b_cfg.scale)

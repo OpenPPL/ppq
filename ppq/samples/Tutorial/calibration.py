@@ -5,7 +5,7 @@ import torchvision
 from ppq import QuantableOperation, TargetPlatform, graphwise_error_analyse
 from ppq.api import quantize_torch_model
 from ppq.api.interface import (ENABLE_CUDA_KERNEL, dispatch_graph,
-                               dump_torch_to_onnx, load_onnx_graph)
+                               dump_torch_to_onnx, load_onnx_graph, quantize_native_model)
 from ppq.api.setting import QuantizationSettingFactory
 
 # ------------------------------------------------------------
@@ -64,13 +64,11 @@ with ENABLE_CUDA_KERNEL():
     dump_torch_to_onnx(model=model, onnx_export_file='Output/model.onnx', 
                        input_shape=INPUT_SHAPE, input_dtype=torch.float32)
     graph = load_onnx_graph(onnx_import_file='Output/model.onnx')
-    graph = dispatch_graph(graph=graph, platform=PLATFORM, setting=QSetting)
-
-    quantized = quantize_torch_model(
-        model=model, calib_dataloader=CALIBRATION,
+    quantized = quantize_native_model(
+        model=graph, calib_dataloader=CALIBRATION,
         calib_steps=32, input_shape=INPUT_SHAPE,
         collate_fn=collate_fn, platform=PLATFORM,
-        onnx_export_file='Output/onnx.model', device=DEVICE, verbose=0)
+        device=DEVICE, verbose=0)
 
     # ------------------------------------------------------------
     # graphwise_error_analyse 是最常用的分析方法，它分析网络中的量化误差情况，它的结果将直接打印在屏幕上

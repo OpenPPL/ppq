@@ -6,8 +6,7 @@ from .MetaxQuantizer import MetaxChannelwiseQuantizer, MetaxTensorwiseQuantizer
 from .MyQuantizer import ExtQuantizer
 from .NXPQuantizer import NXP_Quantizer
 from .ORTQuantizer import ORT_PerChannelQuantizer, ORT_PerTensorQuantizer
-from .PPLQuantizer import (PPLCUDA_INT4_Quantizer,
-                           PPLCUDAMixPrecisionQuantizer, PPLCUDAQuantizer)
+from .PPLQuantizer import PPLCUDAQuantizer
 from .TRTQuantizer import TensorRTQuantizer
 from .FPGAQuantizer import FPGAQuantizer
 from .NCNNQuantizer import NCNNQuantizer

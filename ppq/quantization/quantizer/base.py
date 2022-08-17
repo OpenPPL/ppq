@@ -197,7 +197,6 @@ class BaseQuantizer(metaclass = ABCMeta):
     def default_platform(self) -> TargetPlatform:
         return TargetPlatform.FP32
 
-    @ abstractproperty
     @ property
     def quantize_policy(self) -> QuantizationPolicy:
         raise NotImplementedError('Quantizier does not have a default quantization policy yet.')

@@ -47,7 +47,7 @@ model = model.to(DEVICE)
 with ENABLE_CUDA_KERNEL():
     quantized = quantize_torch_model(
         model=model, calib_dataloader=CALIBRATION,
-        calib_steps=32, input_shape=[BATCHSIZE] + INPUT_SHAPE,
+        calib_steps=32, input_shape=INPUT_SHAPE,
         collate_fn=collate_fn, platform=PLATFORM,
         onnx_export_file='Output/onnx.model', device=DEVICE, verbose=0)
 

@@ -13,9 +13,9 @@ from ppq.quantization.analyse.graphwise import graphwise_error_analyse
 BATCHSIZE        = 1
 INPUT_SHAPES     = {'input.1': [BATCHSIZE, 3, 224, 224]}
 DEVICE           = 'cuda'
-QUANT_PLATFORM   = TargetPlatform.PPL_DSP_INT8
-ONNX_PATH        = 'Models/defect_rec_res18_cls3_wx_finetune.onnx'
-ONNX_OUTPUT_PATH = 'Output/res18.onnx'
+QUANT_PLATFORM   = TargetPlatform.TRT_INT8
+ONNX_PATH        = 'model.onnx'
+ONNX_OUTPUT_PATH = 'Output/model.onnx'
 
 # ------------------------------------------------------------
 # 在这个例子中我们将向你展示如何量化一个 onnx 模型，执行误差分析，并与 onnxruntime 对齐结果
@@ -38,7 +38,7 @@ def collate_fn(batch: dict) -> torch.Tensor:
 # ------------------------------------------------------------
 QSetting = QuantizationSettingFactory.default_setting()
 QSetting.dispatcher = 'conservative'
-QSetting.lsq_optimization   = True
+QSetting.lsq_optimization = True
 
 # ------------------------------------------------------------
 # 准备好 QuantizationSetting 后，我们加载模型，并且要求 ppq 按照规则完成图调度

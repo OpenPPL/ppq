@@ -1,4 +1,5 @@
 import json
+from pickletools import uint8
 from typing import Union
 
 import numpy as np
@@ -17,6 +18,7 @@ from ppq.core import (
 from ppq.IR import BaseGraph, GraphExporter, Operation, OperationExporter, Variable
 from ppq.IR.morph import GraphDeviceSwitcher
 from ppq.IR.quantize import QuantableOperation
+from ppq.core.quant import QuantizationStates
 
 
 class ConstantOfShapeExporter(OperationExporter):
@@ -73,7 +75,7 @@ def convert_value(value: Union[int, float, np.ndarray, torch.Tensor]) -> str:
     if type(value) in {int, float}:
         return value
     else:
-        value = convert_any_to_numpy(value, accepet_none=True)
+        value = convert_any_to_numpy(value, accept_none=True)
         if value is None:
             return value  # SOI config has Nona as its scale and
         return value.tolist()
@@ -95,16 +97,19 @@ class TengineExporter(GraphExporter):
         for operation in graph.operations.values():
             if isinstance(operation, QuantableOperation):
                 for config, _var in operation.config_with_variable:
-                    if config.dominated_by == config:
+                    if (
+                        QuantizationStates.is_activated(config.state)
+                        or config.state == QuantizationStates.OVERLAPPED
+                    ):
                         var_scales[_var.name] = {
-                            "scale": convert_value(config.scale),
-                            "zero_point": convert_value(config.offset),
+                            "scale": convert_value(config.scale)[0],
+                            "zero_point": convert_value(config.offset)[0],
                         }
 
         with open(file=scale_path, mode="w") as file:
-            for k, v in var_scales.items:
+            for k, v in var_scales.items():
                 scale = v["scale"]
-                zp = v["zero_point"]
+                zp = int(round(v["zero_point"]))
                 file.write(f"{k} {scale} {zp}\n")
 
     def export_quantization_config(self, config_path: str, graph: BaseGraph):
