@@ -279,7 +279,7 @@ class BaseQuantizer(metaclass = ABCMeta):
             ))
 
             if fusion_setting.remove_useless_quantization:
-                list_of_passes.append(QuantizeReducePass())
+                list_of_passes.append(QuantizeSimplifyPass())
 
         if setting.quantize_parameter:
             param_setting = setting.quantize_parameter_setting

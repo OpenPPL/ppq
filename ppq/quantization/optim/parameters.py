@@ -62,7 +62,7 @@ class PassiveParameterQuantizePass(QuantizationOptimizationPass):
                         if not check_state(i_cfg.state):
                             raise PermissionError(f'Can not quantize bias of layer {op.name}, '
                                 'cause input has not been correctly quantized.')
-                        
+
                         b_cfg.scale  = w_cfg.scale * i_cfg.scale * self.scale_multiplier
                         b_cfg.state  = QuantizationStates.PASSIVE
                         b_cfg.offset = torch.zeros_like(b_cfg.scale)

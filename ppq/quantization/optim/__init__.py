@@ -9,7 +9,7 @@ from .morph import (GRUSplitPass, HorizontalLayerSplitPass, MetaxGemmSplitPass,
 from .parameters import ParameterQuantizePass, PassiveParameterQuantizePass
 from .refine import (MishFusionPass, NxpInputRoundingRefinePass,
                      NxpQuantizeFusionPass, QuantAlignmentPass,
-                     QuantizeFusionPass, QuantizeReducePass,
+                     QuantizeFusionPass, QuantizeSimplifyPass,
                      QuantizeRefinePass, SwishFusionPass)
 from .ssd import SSDEqualizationPass
 from .training import BiasCorrectionPass, LearnedStepSizePass

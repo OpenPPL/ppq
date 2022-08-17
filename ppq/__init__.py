@@ -33,7 +33,7 @@ from ppq.quantization.optim import (BiasCorrectionPass, GRUSplitPass,
                                     PassiveParameterQuantizePass,
                                     QuantizationOptimizationPass,
                                     QuantizationOptimizationPipeline,
-                                    QuantizeFusionPass, QuantizeReducePass,
+                                    QuantizeFusionPass, QuantizeSimplifyPass,
                                     QuantizeRefinePass, RuntimeCalibrationPass,
                                     SwishFusionPass)
 from ppq.quantization.qfunction import BaseQuantFunction
