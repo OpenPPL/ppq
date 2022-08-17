@@ -88,7 +88,6 @@ class TargetPlatform(Enum):
     CAFFE         = -5
     NATIVE        = -6
     ONNXRUNTIME   = -7
-    TENGINE       = -8
     # THIS IS A DUUMY PLATFORM JUST FOR CREATING YOUR OWN EXTENSION.
     EXTENSION     = -10086
 
