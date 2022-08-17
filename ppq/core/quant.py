@@ -76,7 +76,6 @@ class TargetPlatform(Enum):
     HEXAGON_INT8 = 801
 
 
-
     FP32 = 0
     # SHAPE-OR-INDEX related operation
     SHAPE_OR_INDEX = -1

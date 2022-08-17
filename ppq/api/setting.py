@@ -326,7 +326,7 @@ class DispatchingTable():
 
 class QuantizationSetting():
     def __init__(self) -> None:
-        # 子图切分与调度算法，可从 'pointwise', 'conservative', 'prusus' 中三选一，不区分大小写
+        # 子图切分与调度算法，可从 'pointwise', 'conservative', 'prusus', 'allin', 'pplnn' 中五选一，不区分大小写
         self.dispatcher                      = 'pursus'
 
         self.graph_format_setting            = GraphFormatSetting()
