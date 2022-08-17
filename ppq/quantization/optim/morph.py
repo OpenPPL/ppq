@@ -51,7 +51,7 @@ class NCNNFormatGemmPass(QuantizationOptimizationPass):
 
 class HorizontalLayerSplitPass(QuantizationOptimizationPass):
     """
-    Horizontal Layer Split Pass(矩阵水平分裂过程)
+    Horizontal Layer Split Pass(算子分裂过程)
 
     Split convolution layers or GEMM layers for better performance.
     

@@ -2,8 +2,7 @@ from collections import defaultdict
 from typing import Callable, Dict, Iterable, List, Union
 
 import torch
-from ppq.core import QuantizationStates
-from ppq.core.data import convert_any_to_numpy
+from ppq.core import convert_any_to_numpy
 from ppq.executor import TorchExecutor
 from ppq.IR import BaseGraph, QuantableOperation
 from ppq.IR.quantize import QuantableGraph

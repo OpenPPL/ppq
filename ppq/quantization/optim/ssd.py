@@ -7,7 +7,6 @@ from ppq.core import QuantizationProperty, QuantizationStates
 from ppq.executor import BaseGraphExecutor
 from ppq.executor.base import GLOBAL_DISPATCHING_TABLE
 from ppq.IR import BaseGraph, Operation, QuantableOperation, Variable
-from ppq.IR.base.graph import BaseGraph
 from ppq.IR.search import Path, SearchableGraph, TraversalCommand
 from ppq.log import NaiveLogger
 from ppq.quantization.measure import torch_mean_square_error
