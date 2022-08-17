@@ -6,27 +6,58 @@ PPQ 被设计为一个灵活而全面的神经网络离线量化工具，我们�
 
 目前 PPQ 使用 onnx(opset 11 ~ 13) 模型文件作为输入，覆盖常用的 90 余种 onnx 算子类型。如果你是 Pytorch, tensorflow 的用户，你可以使用这些框架提供的方法将模型转换到 onnx。PPQ 支持向 TensorRT, OpenPPL, Openvino, ncnn, Onnxruntime, Tengine, Snpe 等多个推理引擎生成目标文件并完成部署。借助算子自定义与平台自定义功能，你还可以将 PPQ 的量化能力扩展到其他可能的硬件上。
 
-# Code Example
+## Learning Path 学习路线
+
+### PPQ Basic 基础内容
+| | **Description 介绍** | **Link 链接** |
+| :-: | :- | :-: |
+| 01 | 欢迎，在第一部分的内容中，我们首先向你展示如何使用 ppq 量化来自 pytorch, onnx, caffe 的模型 | [onnx](https://github.com/openppl-public/ppq/blob/master/ppq/samples/Tutorial/quantize.py), [caffe](https://github.com/openppl-public/ppq/blob/master/ppq/samples/quantize_caffe_model.py), [pytorch](https://github.com/openppl-public/ppq/blob/master/ppq/samples/quantize_torch_model.py) |
+| 02 | 接下来让我们看看如何执行量化后的模型 | [executor](https://github.com/openppl-public/ppq/blob/master/ppq/samples/Tutorial/execute.py) |
+| 03 | 渐入佳境，让我们试着使用 PPQ 的误差分析功能 | [analyser](https://github.com/openppl-public/ppq/blob/master/ppq/samples/Tutorial/analyse.py) |
+| 04 | 我的网络误差很高？让我们调整校准算法来尝试降低误差 | [calibration](https://github.com/openppl-public/ppq/blob/master/ppq/samples/Tutorial/calibration.py) |
+| 05 | 进一步降低量化误差，为什么不让我们对网络展开进一步的训练？ | [finetune](https://github.com/openppl-public/ppq/blob/master/ppq/samples/Tutorial/finetune.py) |
+| 06 | 让我们看看 PPQ 的图调度功能能帮我们做什么 | [dispatch](https://github.com/openppl-public/ppq/blob/master/ppq/samples/Tutorial/dispatch.py) |
+| 07 | 最佳实践！向你展示模型在 PPQ 中的量化流程 | [Best Practice](https://github.com/openppl-public/ppq/blob/master/ppq/samples/Tutorial/bestPractice.py) |
+|  |  | |
+| 08 | 创建我们自己的量化规则！了解目标平台与量化器 | [platform](https://github.com/openppl-public/ppq/blob/master/ppq/samples/Tutorial/platform.py) |
+| 09 | 自定义量化优化过程 | [Optim](https://github.com/openppl-public/ppq/blob/master/ppq/samples/Tutorial/optimization.py) |
+
+### PPQ Optim 优化过程文档
+| | **Description 介绍** | **Link 链接** |
+| :-: | :-: | :-: |
+| 01 | QuantSimplifyPass(通用量化精简过程) | [doc](https://github.com/openppl-public/ppq/blob/master/md_doc/Passes/QuantSimplify.md) |
+| 02 | QuantFusionPass(通用量化图融合过程) | [doc](https://github.com/openppl-public/ppq/blob/master/md_doc/Passes/QuantFusion.md) |
+| 03 | QuantAlignmentPass(通用量化对齐过程) | [doc](https://github.com/openppl-public/ppq/blob/master/md_doc/Passes/QuantAlignment.md) |
+| 04 | RuntimeCalibrationPass(参数校准过程) | [doc](https://github.com/openppl-public/ppq/blob/master/md_doc/Passes/RuntimeCalibrationPass.md) |
+| 05 | BiasCorrectionPass(Bias修正过程) | [doc](https://github.com/openppl-public/ppq/blob/master/md_doc/Passes/BiasCorrectionPass.md) |
+| 06 | QuantSimplifyPass(通用量化精简过程) | [doc](https://github.com/openppl-public/ppq/blob/master/md_doc/Passes/QuantSimplify.md) |
+| 07 | LayerwiseEqualizationPass(层间权重均衡过程) | [doc](https://github.com/openppl-public/ppq/blob/master/md_doc/Passes/LayerwiseEqualization.md) |
+| 08 | LayerSpilitPass(算子分裂过程) | [doc](https://github.com/openppl-public/ppq/blob/master/md_doc/Passes/LayerSpilit.md) |
+| 09 | LearnedStepSizePass(网络微调过程) | [doc](https://github.com/openppl-public/ppq/blob/master/md_doc/Passes/LearnedStepSizePass.md) |
+| 10 | Other(其他) | [refer to](https://github.com/openppl-public/ppq/tree/master/ppq/quantization/optim) |
+
+### Quantized Computing 量化计算
+|  | **Desc 介绍** | **Link 链接** |
+| :-: | :-: | :-: |
+| 01 | 计算机体系结构基础知识 |  [link](https://www.bilibili.com/video/BV1gS4y1Y7KR) |
+| 02 | 网络性能分析 |  [link](https://www.bilibili.com/video/BV1oT4y1h73e) |
+| 03 | 量化计算原理 | [part1](https://www.bilibili.com/video/BV1fB4y1m7fJ), [part2](https://www.bilibili.com/video/BV1qA4y1Q7Uh) |
+| 04 | 图优化与量化模拟 |  [link](https://www.bilibili.com/video/BV1Kr4y1n7cy) |
+| 05 | 图调度与模式匹配 |  [link](https://www.bilibili.com/video/BV1xY411A7ea) |
+| 06 | 神经网络部署 |  [link](https://www.bilibili.com/video/BV1t34y1E7Fz) |
+| 07 | 量化参数选择 |  [link](https://www.bilibili.com/video/BV1QF41157aM) |
+| 08 | 量化误差传播分析 |  [link](https://www.bilibili.com/video/BV1CU4y1q7tr) |
+
+### PPQ Deploy 量化部署教程
 | **使用例子(Examples)** | **网络部署平台(Platform)** | **输入模型格式(Format)** | **链接(Link)** | **相关视频(Video)** |
 | :- | :-: | :-: | :-: | :-: |
-| `新手上路` |  |  |  | [link](https://www.bilibili.com/video/BV1oT4y1h73e "Analysing Your Model") |
-| 量化你的第一个 pytorch 网络 | - | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/quantize_torch_model.py) | |
-| 量化你的第一个 onnx 网络 | - | onnx | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/quantize_onnx_model.py) | |
-| 量化你的第一个 caffe 网络 | - | caffe | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/quantize_caffe_model.py) | |
-| 走进 PPQ | - | onnx | [link](https://github.com/openppl-public/ppq/blob/master/md_doc/how_to_use.md) | [link](https://www.bilibili.com/video/BV1934y147p2 "PPQ User Guide") |
-| 量化函数 | - | - | [link](https://github.com/openppl-public/ppq/blob/master/md_doc/ppq_qlinear_function.md) |  |
-| 量化参数选择 | - | - |  | [link](https://www.bilibili.com/video/BV1QF41157aM) |
-| 量化误差分析 | - | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/analyse.py) | [link](https://www.bilibili.com/video/BV1xY411A7ea "Graph Dispatching & Pattern Matching.") |
-| 算子调度 | - | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/dispatch.py) | [link](https://www.bilibili.com/video/BV1xY411A7ea "Graph Dispatching & Pattern Matching.") |
-| 执行量化网络 | PPQ Executor | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/execute.py) ||
-| 启动 cuda kernel 加速执行 | PPQ Executor | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/enable_cuda_kernel.py) ||
 | `TensorRT` |  |  |  |  |
 | 使用 Torch2trt 加速你的网络 | pytorch | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/TensorRT/Example_Torch2trt.py) | [link](https://www.bilibili.com/video/BV1AU4y127Uo) |
 | TensorRT 量化训练 | TensorRT | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/TensorRT/Example_QAT.py) | [link](https://www.bilibili.com/video/BV1AU4y127Uo) |
 | TensorRT 后训练量化(PPQ) | TensorRT | onnx | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/TensorRT/Example_PTQ.py) | [link](https://www.bilibili.com/video/BV1AU4y127Uo) |
 | TensorRT fp32 部署 | TensorRT | onnx | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/TensorRT/Example_Fp32.py) | [link](https://www.bilibili.com/video/BV1AU4y127Uo) |
 | TensorRT 性能比较 | TensorRT | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/TensorRT/Example_Benchmark.py) | [link](https://www.bilibili.com/video/BV1AU4y127Uo) |
-| TensorRT 性能分析工具 | TensorRT | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/TensorRT/Example_Profiling.py) | [link](https://www.bilibili.com/video/BV1AU4y127Uo) |
+| TensorRT Profiler | TensorRT | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/TensorRT/Example_Profiling.py) | [link](https://www.bilibili.com/video/BV1AU4y127Uo) |
 | `onnxruntime` |  |  |  |  |
 | 使用 onnxruntime 加速你的网络 | onnxruntime | onnx | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/Onnxruntime/Example_Fp32.py) | [link](https://www.bilibili.com/video/BV1t34y1E7Fz "Network Deploy") |
 | onnx 后训练量化(PPQ) | onnxruntime | onnx | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/Onnxruntime/Example_PTQ.py) | [link](https://www.bilibili.com/video/BV1t34y1E7Fz "Network Deploy") |
@@ -42,32 +73,32 @@ PPQ 被设计为一个灵活而全面的神经网络离线量化工具，我们�
 | ncnn 后训练量化(PPQ) | ncnn | onnx | [link](https://github.com/openppl-public/ppq/blob/master/md_doc/inference_with_ncnn.md) ||
 | `OpenPPL` |  |  |  |  |
 | ppl cuda 后训练量化(PPQ) | ppl cuda | onnx | [link](https://github.com/openppl-public/ppq/blob/master/md_doc/inference_with_ppl_cuda.md) ||
-| `自定义量化` |  |  |  |  |
-| 添加自定义量化平台 1 | - | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/md_doc/add_new_platform.md) ||
-| 添加自定义量化平台 2 | - | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/create_your_platform.py) ||
+
+### Appendix 额外内容
+| **使用例子(Examples)** | **网络部署平台(Platform)** | **输入模型格式(Format)** | **链接(Link)** | **相关视频(Video)** |
+| :- | :-: | :-: | :-: | :-: |
 | 注册量化代理函数 | - | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/custimize_quant_func.py) ||
 | 自定义量化算子 | - | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/custimized_quant.py) ||
 | 绕过与量化无关的算子 | - | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/bypass_nms.py) ||
-| `其他` |  |  |  |  |
 | onnx 格式转换 | - | onnx | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/onnx_converter.py) ||
+| `Yolo` |  |  |  |  |
+| 使用 TensorRT 推理 Yolo 模型 | TensorRT | onnx | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/Yolo/00_FloatModel.py) | [link](https://www.bilibili.com/video/BV1ua411D7vn) |
+| 使用 PPQ 量化 Yolo | TensorRT | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/Yolo/02_Quantization.py) | [link](https://www.bilibili.com/video/BV1ua411D7vn) |
+| 分析 Yolo 量化性能 | TensorRT | onnx | [benckmark](https://github.com/openppl-public/ppq/blob/master/ppq/samples/Yolo/04_Benchmark.py), [profiler](https://github.com/openppl-public/ppq/blob/master/ppq/samples/Yolo/03_Profile.py) | [link](https://www.bilibili.com/video/BV1jN4y1M7jt) |
+| 尝试修改 Yolo 量化策略以提高性能 | TensorRT | onnx | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/Yolo/05_QuantizationAgain.py) | [link](https://www.bilibili.com/video/BV1ra411S7io) |
 
-# Video Tutorial(Bilibili 视频教程)
-Watch video tutorial series on www.bilibili.com, following are links of PPQ tutorial links(Only Chinese version).
+### Dive into PPQ 深入理解量化框架
+|  | **Desc 介绍** | **Link 链接** |
+| :-: | :-: | :-: |
+| 01 | PPQ 量化执行流程 |  [link](https://www.bilibili.com/video/BV1kt4y1b75m) |
+| 02 | PPQ 网络解析 |  [link](https://www.bilibili.com/video/BV16B4y1h7u4) |
+| 03 | PPQ 量化图调度 | [link](https://www.bilibili.com/video/BV1ig411f7f5) |
+| 04 | PPQ 目标平台与 TQC |  [link](https://www.bilibili.com/video/BV1Lf4y1o7Zd) |
+| 05 | PPQ 量化器 |  [link](https://www.bilibili.com/video/BV1494y1971i) |
+| 06 | PPQ 量化优化过程 |  [link](https://www.bilibili.com/video/BV1zT411g7Ly) |
+| 07 | PPQ 量化函数 |  [link](https://www.bilibili.com/video/BV1CU4y1q7tr) |
 
-* 安装教程: [https://www.bilibili.com/video/BV1WS4y1N7Kn](https://www.bilibili.com/video/BV1WS4y1N7Kn "PPQ Installation Tutorial")
-* 使用教程: [https://www.bilibili.com/video/BV1934y147p2](https://www.bilibili.com/video/BV1934y147p2 "PPQ User Guide")
-* 基础知识：[https://www.bilibili.com/video/BV1gS4y1Y7KR](https://www.bilibili.com/video/BV1gS4y1Y7KR "Basic Theory")
-* 网络性能分析：[https://www.bilibili.com/video/BV1oT4y1h73e](https://www.bilibili.com/video/BV1oT4y1h73e "Analysing Your Model")
-* 量化计算原理(Part 1)：[https://www.bilibili.com/video/BV1fB4y1m7fJ](https://www.bilibili.com/video/BV1fB4y1m7fJ "Quantized Computing")
-* 量化计算原理(Part 2)：[https://www.bilibili.com/video/BV1qA4y1Q7Uh](https://www.bilibili.com/video/BV1qA4y1Q7Uh "Quantized Computing")
-* 图优化与量化模拟：[https://www.bilibili.com/video/BV1Kr4y1n7cy](https://www.bilibili.com/video/BV1Kr4y1n7cy "Graph Optimization & quantization simulating.")
-* 图调度与模式匹配：[https://www.bilibili.com/video/BV1xY411A7ea](https://www.bilibili.com/video/BV1xY411A7ea "Graph Dispatching & Pattern Matching.")
-* 神经网络部署: [https://www.bilibili.com/video/BV1t34y1E7Fz](https://www.bilibili.com/video/BV1t34y1E7Fz "Network Deploy")
-* TensorRT 部署: [https://www.bilibili.com/video/BV1AU4y127Uo](https://www.bilibili.com/video/BV1AU4y127Uo "TensorRT Deploy")
-* 量化参数选择: [https://www.bilibili.com/video/BV1QF41157aM](https://www.bilibili.com/video/BV1QF41157aM "Quantization Param Searching")
-* 其他教程: 等待缓慢更新...
-
-# Installation
+## Installation
 
 To release the power of this advanced quantization tool, at least one CUDA computing device is required.
 Install CUDA from [CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit-archive), PPL Quantization Tool will use CUDA compiler to compile cuda kernels at runtime.
@@ -109,7 +140,7 @@ python setup.py install
 python3 -m pip install ppq
 ```
 
-# Contact Us
+## Contact Us
 
 | WeChat Official Account | QQ Group |
 | :----:| :----: |
@@ -118,19 +149,19 @@ python3 -m pip install ppq
 
 Email: openppl.ai@hotmail.com
 
-# Other Resources
+## Other Resources
 
 * [Sensetime Parrots](https://www.sensetime.com/cn)
 * [Sensetime Parrots Primitive Libraries](https://github.com/openppl-public/ppl.nn)
 * [Sensetime mmlab](https://github.com/open-mmlab)
 
-# Contributions
+## Contributions
 
 We appreciate all contributions. If you are planning to contribute back bug-fixes, please do so without any further discussion.
 
 If you plan to contribute new features, utility functions, or extensions to the core, please first open an issue and discuss the feature with us. Sending a PR without discussion might end up resulting in a rejected PR because we might be taking the core in a different direction than you might be aware of.
 
-# Benchmark
+## Benchmark
 
 PPQ is tested with models from mmlab-classification, mmlab-detection, mmlab-segamentation, mmlab-editing, here we listed part of out testing result.
 
@@ -162,6 +193,6 @@ PPQ is tested with models from mmlab-classification, mmlab-detection, mmlab-sega
 * Classification models are evaluated with ImageNet, Detection and Segamentation models are evaluated with COCO dataset, Editing models are evaluated with DIV2K dataset.
 * All calibration datasets are randomly picked from training data.
 
-# License
+## License
 
 This project is distributed under the [Apache License, Version 2.0](LICENSE).
