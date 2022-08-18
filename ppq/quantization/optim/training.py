@@ -463,11 +463,11 @@ class BiasCorrectionPass(TrainingBasedPass):
 
             bias_cloned, interested_outputs, fp_cache, qt_cache = {}, [], defaultdict(list), defaultdict(list)
             for op in block.rps:
-                type_check = op.type in {'Conv', 'ConvTranspose', 'Gemm'} and len(op.inputs) == 3
+                op_check = op.type in {'Conv', 'ConvTranspose', 'Gemm'} and len(op.inputs) == 3
                 bias_check = op.inputs[-1].is_parameter
                 type_check = isinstance(op.inputs[-1].value, torch.Tensor)
 
-                if type_check and bias_check and type_check:
+                if op_check and bias_check and type_check:
                     bias_cloned[op.name] = op.inputs[-1].value.clone()
                     interested_outputs.append(op.outputs[0].name)
 
