@@ -113,10 +113,6 @@ class NCNNQuantizer(BaseQuantizer):
                 base_quant_config.output_quantization_config[0].policy = output_policy
                 base_quant_config.output_quantization_config[0].observer_algorithm = 'Minmax'
                 
-            elif operation.type in {'Add'}:
-                # use default param
-                pass
-            
             elif operation.type == 'MultiHeadAttention':
                 # setup input quant param
                 input_policy = QuantizationPolicy(
@@ -182,7 +178,7 @@ class NCNNQuantizer(BaseQuantizer):
     @ property
     def quant_operation_types(self) -> set:
         return {
-            'Add', 'Conv', 'LayerNorm', 'MultiHeadAttention', 'Gemm'
+            'Conv', 'LayerNorm', 'MultiHeadAttention', 'Gemm'
             # 'Add', 'Conv', 'LayerNorm', 'MultiHeadAttention', 'Gemm'
         }
 

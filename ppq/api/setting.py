@@ -443,7 +443,7 @@ class QuantizationSettingFactory:
     @staticmethod
     def ncnn_setting() -> QuantizationSetting:
         default_setting = QuantizationSetting()
-        # default_setting.bias_correct = True
+        default_setting.bias_correct = True
         default_setting.fusion = False
         default_setting.dispatcher = 'pointwise'
         
