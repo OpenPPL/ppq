@@ -136,7 +136,6 @@ class NCNNExporter(GraphExporter):
                     assert cfg_in.state in {QuantizationStates.BAKED, QuantizationStates.ACTIVATED} \
                         and cfg_in.observer_algorithm in {'minmax', 'Minmax'} \
                         and cfg_out.state in {QuantizationStates.BAKED, QuantizationStates.ACTIVATED}
-                        
                     item['input_scales'] = convert_value(1.0 / cfg_in.scale, False, DataType.FP32)
                     item['output_scale'] = convert_value(1.0 / cfg_out.scale, True, DataType.FP32)
 

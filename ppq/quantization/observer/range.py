@@ -355,9 +355,9 @@ class TorchPercentileObserver(BaseTensorObserver):
             self._quant_cfg.state = QuantizationStates.ACTIVATED
         elif self._quant_cfg.policy.has_property(QuantizationProperty.PER_CHANNEL) or \
             self._quant_cfg.policy.has_property(QuantizationProperty.PER_CHANNEL_BNC):
-            import pdb
-            pdb.set_trace()
-            raise PermissionError('Percentile observer can not deal with per channel quantization.')
+            # import pdb
+            # pdb.set_trace()
+            # raise PermissionError('Percentile observer can not deal with per channel quantization.')
             if len(self._percentile_maxs) == 0:
                 raise ValueError('Can not render quantization config yet, Observer data collator is empty. ' \
                     'Invoke observe() function before render config.')
