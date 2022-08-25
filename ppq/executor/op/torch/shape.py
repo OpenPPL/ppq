@@ -1693,7 +1693,7 @@ def Identity_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacken
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
     return values[0]
 
-
+from .default import Tan_forward, Tanh_forward
 SOI_BACKEND_TABLE = {
     'Shape': Shape_forward,
     'Div': Div_forward,
@@ -1741,5 +1741,7 @@ SOI_BACKEND_TABLE = {
     'ReduceSum': ReduceSum_forward,
     'ScatterElements': ScatterElements_forward,
     'OneHot': Onehot_forward,
-    'Identity': Identity_forward
+    'Identity': Identity_forward,
+    'Tanh': Tanh_forward,
+    'Tan': Tan_forward
 }

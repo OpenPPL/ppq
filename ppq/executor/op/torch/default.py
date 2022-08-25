@@ -1209,10 +1209,33 @@ def Slice_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCo
     if axes is not None: axes = axes.tolist()
     starts, ends, steps = starts.tolist(), ends.tolist(), steps.tolist()
 
+    slices, flip_dims = {}, []
+    for start, end, axis, step in zip(starts, ends, axes, steps):
+        if step < 0:
+            flip_dims.append(axis)
+            start, end, step = -start - 1, -end - 1, -step
+        slices[axis] = slice(start, end, step)
+
+    pos_axes_slices = list(slices.get(a, slice(None, None)) for a in range(max(axes) + 1))
+    neg_axes_slices = list(slices.get(a, slice(None, None)) for a in range(min(axes), 0))
+    if neg_axes_slices: neg_axes_slices = [Ellipsis] + neg_axes_slices
+
+    if flip_dims: data = torch.flip(data, dims=flip_dims)
+    if pos_axes_slices: data = data[pos_axes_slices]
+    if neg_axes_slices: data = data[neg_axes_slices]
+    return data
+
+    ''' Legacy implementation
+    data, starts, ends = values[: 3]
+    axes  = values[3] if len(values) > 3 else None
+    steps = values[4] if len(values) > 4 else torch.ones_like(starts)
+    if axes is not None: axes = axes.tolist()
+    starts, ends, steps = starts.tolist(), ends.tolist(), steps.tolist()
+
     slice_args = list(zip(starts, ends, steps))
     if axes is not None and all([_ != 0 for _ in axes]):
         assert len(axes) == len(slice_args)
-        new_axes = [x if x >= 0 else data.dim() + x for x in axes]
+        new_axes = [data if data >= 0 else data.dim() + data for data in axes]
         full_axes = [i for i in range(data.dim())]
         slice_args = [slice_args[new_axes.index(i)] if i in new_axes else (None,) for i in full_axes]
 
@@ -1233,6 +1256,7 @@ def Slice_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCo
 
     output = data[slice_func]
     return output
+    '''
 
 
 def Interp_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
@@ -2041,6 +2065,10 @@ def Tanh_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
     output = torch.tanh(input_data)
     return output
 
+def Tan_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
+    input_data = values[0]
+    output = torch.tan(input_data)
+    return output
 
 def Pow_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
     input_data = values[0]
@@ -3117,6 +3145,7 @@ DEFAULT_BACKEND_TABLE = {
     'DepthToSpace': DepthToSpace_forward,
     'Scale': Scale_forward,  # caffe op
     'Tanh': Tanh_forward,
+    'Tan': Tan_forward,
     'Pow': Pow_forward,
     'Crop': Crop_forward,  # caffe op
     'ChannelShuffle': ChannelShuffle_forward,  # caffe op
@@ -3135,5 +3164,5 @@ DEFAULT_BACKEND_TABLE = {
     'LSTM': LSTM_forward,
     'Sum': Sum_forward,
     'Elu': Elu_forward,
-    'Erf': Erf_forward
+    'Erf': Erf_forward,
 }
