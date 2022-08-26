@@ -940,7 +940,8 @@ class ENABLE_CUDA_KERNEL:
     memory cost.
     """
     def __init__(self) -> None:
-        ppq_warning('Compling CUDA Kernels. Please wait...')
+        from ppq.core.ffi import CUDA_COMPLIER
+        CUDA_COMPLIER.complie()
         self._state = False
 
     def __enter__(self):
