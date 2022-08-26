@@ -100,7 +100,7 @@ class CUDA:
     ) -> torch.Tensor:
         if not tensor.is_contiguous(): tensor = tensor.contiguous()
         return CUDA_COMPLIER.CUDA_EXTENSION.QuantizeTensor_LC(
-            tensor, scales, offsets, minimum, maximum, rounding, channel_axis)
+            tensor, scales, offsets, minimum, maximum, channel_axis, rounding)
 
     @ staticmethod
     def LinearQuantize_T_B(
