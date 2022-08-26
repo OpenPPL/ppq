@@ -70,7 +70,7 @@ if TARGET_PLATFORM == TargetPlatform.TRT_INT8:
 # -------------------------------------------------------------------
 if TRAINING_YOUR_NETWORK:
     QS.lsq_optimization = True                                      # 启动网络再训练过程，降低量化误差
-    QS.lsq_optimization_setting.steps = 30                          # 再训练轮数，影响训练时间，30轮大概几分钟
+    QS.lsq_optimization_setting.steps = 500                         # 再训练步数，影响训练时间，500 步大概几分钟
     QS.lsq_optimization_setting.collecting_device = 'cuda'          # 缓存数据放在那，cuda 就是放在gpu，如果显存超了你就换成 'cpu'
 
 # -------------------------------------------------------------------
