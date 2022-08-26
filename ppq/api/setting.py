@@ -34,13 +34,16 @@ class BlockwiseReconstructionSetting():
         self.lr                 = 1e-3
         
         # 学习步数
-        self.epochs             = 300
+        self.steps              = 5000
         
         # 正则化参数
         self.gamma              = 1.0
         
         # 缓存设备
         self.collecting_device  = 'cuda'
+        
+        # 区块大小
+        self.block_size         = 4
 
 
 class SSDEqualizationSetting():
