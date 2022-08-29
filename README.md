@@ -21,6 +21,7 @@ PPQ 被设计为一个灵活而全面的神经网络离线量化工具，我们�
 |  |  | |
 | 08 | 创建我们自己的量化规则！了解目标平台与量化器 | [platform](https://github.com/openppl-public/ppq/blob/master/ppq/samples/Tutorial/targetPlatform.py) |
 | 09 | 自定义量化优化过程 | [Optim](https://github.com/openppl-public/ppq/blob/master/ppq/samples/Tutorial/optimization.py) |
+| 10 | 自定义图融合过程与量化管线 | [Fusion](https://github.com/openppl-public/ppq/blob/master/ppq/samples/Tutorial/fusion.py) |
 
 ### PPQ Optim 优化过程文档
 | | **Description 介绍** | **Link 链接** |
