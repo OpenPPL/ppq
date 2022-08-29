@@ -421,7 +421,7 @@ def Unsqueeze_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
     Returns:
         torch.Tensor: [description]
     """
-    if op.opset.is_onnx_v13():
+    if op.opset.onnx_opset_version() >= 13:
         ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=2, max_num_of_input=2)
         unsqueezing_tensor, axes = values
         ASSERT_ALL_TENSORS_AT_CPU(op=op, values=[axes])
@@ -466,7 +466,7 @@ def Squeeze_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackend
     Returns:
         torch.Tensor: [description]
     """
-    if op.opset.is_onnx_v13():
+    if op.opset.onnx_opset_version() >= 13:
         ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=2)
         squeezing_tensor = values[0]
         axes = [axis for axis in range(squeezing_tensor.ndim) if squeezing_tensor.shape[axis] == 1]
