@@ -1751,11 +1751,14 @@ def ScatterND_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
     ASSERT_ALL_TENSORS_AT_CPU(op=op, values=[None, values[1], None])
 
     data, indices, updates = values
+
     output = data.clone()
-    indices = indices.long()
-    update_indices = indices.shape[:-1]
-    for idx in np.ndindex(update_indices):
-        output[tuple(indices[idx])] = updates[idx]
+    ind_dim = indices.dim()
+    # last dimension is a partial-index into data
+    indices = indices.reshape((-1, indices.shape[-1])).T.tolist()
+    # update.shape = indices.shape[0:ind_dim-1] ++ data.shape[indices.shape[-1]:data.dim()-1]
+    updates = updates.reshape((-1, *updates.shape[ind_dim - 1 :]))
+    output[indices] = updates
     return output
 
 
