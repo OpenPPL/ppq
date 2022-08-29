@@ -28,13 +28,17 @@ class Opset():
         """
         self.domain  = domain
         self.version = version
-    
+
     def is_onnx_v13(self):
         return self.domain == ONNX_DOMAIN and self.version == 13
-    
+
     def is_onnx_v11(self):
         return self.domain == ONNX_DOMAIN and self.version == 11
-    
+
+    def onnx_opset_version(self) -> int:
+        if self.domain == ONNX_DOMAIN: return self.version
+        else: return -1   
+
     def is_onnx(self):
         return self.domain == ONNX_DOMAIN
     

@@ -905,7 +905,7 @@ def Squeeze_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackend
     """
     # we acquire axes in different ways according to opset
     # only opset=11 or opset=13 supported
-    if op.opset.is_onnx_v13():
+    if op.opset.onnx_opset_version() >= 13:
         ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=2)
         squeezing_tensor = values[0]
         axes = [axis for axis in range(squeezing_tensor.ndim) if squeezing_tensor.shape[axis] == 1]
@@ -977,7 +977,7 @@ def Unsqueeze_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
     Returns:
         torch.Tensor: [description]
     """
-    if op.opset.is_onnx_v13():
+    if op.opset.onnx_opset_version() >= 13:
         ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=2, max_num_of_input=2)
         unsqueezing_tensor, axes = values
         ASSERT_ALL_TENSORS_AT_CPU(op=op, values=[axes])
@@ -1494,7 +1494,7 @@ def ReduceMean_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBack
 
 
 def ReduceSum_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
-    if op.opset.is_onnx_v13():
+    if op.opset.onnx_opset_version() >= 13:
         ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=2)
         input_value, dim = values[0], None
         if len(values) > 1:
@@ -1760,7 +1760,7 @@ def ScatterND_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
 
 
 def Split_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
-    if op.opset.is_onnx_v13():
+    if op.opset.onnx_opset_version() >= 13:
         ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=2)
         input_value = values[0]
         axis = op.attributes.get('axis', 0)
