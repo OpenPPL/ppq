@@ -287,8 +287,10 @@ class TrainingBasedPass(QuantizationOptimizationPass):
             quant_graph.restore_quantize_state()
             for data in dataloader:
                 if collate_fn is not None: data = collate_fn(data)
-                qt_input = executor.forward(data, [block.sp.inputs[0].name])
-                qt_input = {block.sp.inputs[0].name: cache_fn(qt_input[0])}
+                # PATCH 20220829, 有些 computing op 权重并非定值
+                non_constant_input = [var for var in block.sp.inputs if not var.is_parameter]
+                qt_input = executor.forward(data, [var.name for var in non_constant_input])
+                qt_input = {var.name: cache_fn(value) for var, value in zip(non_constant_input, qt_input)}
                 qt_inputs.append(qt_input)
                 cur_iter += 1
                 if steps is not None and cur_iter > steps: break
@@ -322,7 +324,7 @@ class TrainingBasedPass(QuantizationOptimizationPass):
                 feed_dict = {k: v.to(executor._device) for k, v in qt_input.items()}
 
                 qt_output = executor.partial_graph_forward(
-                    operations=block.rps, feed_dict=feed_dict, 
+                    operations=block.rps, feed_dict=feed_dict,
                     output_names=output_names)
 
                 for name, quant_output in zip(output_names, qt_output):
@@ -735,7 +737,8 @@ class LearnedStepSizePass(TrainingBasedPass):
 
             if op.is_computing_op: 
                 for var in op.inputs[1:]: 
-                    trainable_params.append(var.value)
+                    if var.is_parameter:
+                        trainable_params.append(var.value)
 
             # register quant delegator
             for cfg, var in op.config_with_variable:
