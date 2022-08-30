@@ -8,8 +8,7 @@ from ppq.executor.torch import TorchExecutor
 from ppq.IR import (BaseGraph, Operation, QuantableOperation,
                     SearchableGraph, TraversalCommand)
 from ppq.IR.base.graph import BaseGraph
-from ppq.quantization.algorithm.equalization import (EqualizationPair,
-                                                     layerwise_equalization)
+from ppq.quantization.algorithm.equalization import EqualizationPair
 from tqdm import tqdm
 
 from .base import QuantizationOptimizationPass
@@ -173,8 +172,8 @@ class LayerwiseEqualizationPass(QuantizationOptimizationPass):
     """
     def __init__(
         self, iterations: int, weight_threshold: float = 0.5,
-        including_bias: bool = False, including_activation: bool = False,
-        bias_multiplier: float = 0.5, activation_multiplier: float = 0.5,
+        including_bias: bool = False, including_act: bool = False,
+        bias_multiplier: float = 0.5, act_multiplier: float = 0.5,
         interested_layers: List[str] = None, optimize_level: int = 2,
         verbose:bool = False) -> None:
         """PPQ Customized Layerwise Equalization Pass.
@@ -200,7 +199,7 @@ class LayerwiseEqualizationPass(QuantizationOptimizationPass):
                     set this to be True if your hardware does not allow a 32-bit bias.
                 Defaults to False.
 
-            including_activation (bool, optional):
+            including_act (bool, optional):
                 whether to include activation into consideration.
                 Defaults to False.
 
@@ -208,7 +207,7 @@ class LayerwiseEqualizationPass(QuantizationOptimizationPass):
                 a multiplier to bias, if not necessary do not change this.
                 Defaults to 0.5.
 
-            activation_multiplier (float, optional):
+            act_multiplier (float, optional):
                 a multiplier to activation, if not necessary do not change this.
                 Defaults to 0.5.
 
@@ -221,13 +220,13 @@ class LayerwiseEqualizationPass(QuantizationOptimizationPass):
         """
         self.optimize_level         = optimize_level
         self.iterations             = iterations
-        self.weight_threshold       = weight_threshold
+        self.value_threshold        = weight_threshold
 
         self.including_bias         = including_bias
-        self.bias_multiplier         = bias_multiplier
+        self.bias_multiplier        = bias_multiplier
 
-        self.including_activation   = including_activation
-        self.activation_multiplier   = activation_multiplier
+        self.including_act          = including_act
+        self.act_multiplier         = act_multiplier
 
         self.interested_layers      = interested_layers
         self.verbose                = verbose
@@ -287,25 +286,23 @@ class LayerwiseEqualizationPass(QuantizationOptimizationPass):
             # construct a new equalization pair.
             if len(upstream_ops) > 0 and len(downstream_ops) > 0:
                 pairs.append(EqualizationPair(
-                    all_upstream_layers=list(upstream_ops),
-                    all_downstream_layers=list(downstream_ops)))
+                    upstream_layers=list(upstream_ops),
+                    downstream_layers=list(downstream_ops)))
         return pairs
 
-    def collect_activations(self,
+    def collect_activations(self, graph: BaseGraph,
         executor: TorchExecutor, dataloader: Iterable,
         collate_fn: Callable, operations: List[Operation],
-        steps: int = 16) -> Dict[Operation, torch.Tensor]:
+        steps: int = 16) -> Dict[str, torch.Tensor]:
 
-        def aggregate(tensor: torch.Tensor):
-            if tensor.ndim == 4: # Conv result: [n,c,h,w]
+        def aggregate(op: Operation, tensor: torch.Tensor):
+            if op.type in {'Conv', 'ConvTranspose'}: # Conv result: [n,c,h,w]
                 num_of_channel = tensor.shape[1]
-                tensor = tensor.permute(dims=[1, 0, 2, 3])
+                tensor = tensor.transpose(0, 1)
                 tensor = tensor.reshape(shape=[num_of_channel, -1])
                 tensor = torch.max(tensor.abs(), dim=-1, keepdim=False)[0]
-            elif tensor.ndim == 2: # Gemm result: [n, c]
-                num_of_channel = tensor.shape[1]
-                tensor = tensor.permute(dims=[1, 0])
-                tensor = tensor.reshape(shape=[num_of_channel, -1])
+            elif op.type in {'MatMul', 'Gemm'}: # Gemm result: [n, c]
+                tensor = tensor.transpose(0, 1)
                 tensor = torch.max(tensor.abs(), dim=-1, keepdim=False)[0]
             return tensor
 
@@ -322,12 +319,14 @@ class LayerwiseEqualizationPass(QuantizationOptimizationPass):
             data    = collate_fn(batch)
             outputs = executor.forward(data, output_names=output_names)
             for name, output in zip(output_names, outputs):
-                output_collector[name].append(aggregate(output).unsqueeze(-1))
+                op = graph.variables[name].source_op
+                output_collector[name].append(aggregate(op, output).unsqueeze(-1))
             if idx > steps: break
 
         result = {}
         for name, output in zip(output_names, outputs):
-            result[name] = torch.max(torch.cat(output_collector[name], dim=-1)[0], dim=-1)
+            result[name] = torch.cat(output_collector[name], dim=-1)
+            print(name, result[name].shape)
         return result
 
     @ empty_ppq_cache
@@ -351,19 +350,33 @@ class LayerwiseEqualizationPass(QuantizationOptimizationPass):
         pairs = self.find_equalization_pair(
             graph=graph, interested_operations=interested_operations)
 
-        '''
+        if self.including_act:
+            activations = self.collect_activations(
+                graph=graph, executor=executor, dataloader=dataloader, collate_fn=collate_fn,
+                operations=interested_operations)
+
+            for name, act in activations.items():
+                graph.variables[name].value = act # 将激活值写回网络
+            
+            for name, act in activations.items():
+                print(name, torch.max(act, dim=-1)[0][:25])
+
+        print(f'{len(pairs)} equalization pair(s) was found, ready to run optimization.')
+        for iter_times in tqdm(range(self.iterations), desc='Layerwise Equalization', total=self.iterations):
+            for equalization_pair in pairs:
+                equalization_pair.equalize(
+                    value_threshold=self.value_threshold,
+                    including_bias=self.including_bias,
+                    including_act=self.including_act,
+                    bias_multiplier=self.bias_multiplier,
+                    act_multiplier=self.act_multiplier)
+
         activations = self.collect_activations(
-            executor=executor, dataloader=dataloader, collate_fn=collate_fn,
+            graph=graph, executor=executor, dataloader=dataloader, collate_fn=collate_fn,
             operations=interested_operations)
-        '''
 
-        layerwise_equalization(
-            equalization_pairs=pairs,
-            weight_threshold=self.weight_threshold,
-            including_bias=self.including_bias,
-            iteration=self.iterations,
-            verbose=self.verbose)
-
+        for name, act in activations.items():
+            print(name, torch.max(act, dim=-1)[0][:25])
         # equalization progress directly changes fp32 value of weight,
         # store it for following procedure.
         for op in graph.operations.values():

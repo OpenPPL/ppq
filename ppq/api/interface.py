@@ -157,7 +157,7 @@ def dump_torch_to_onnx(
     model: torch.nn.Module,
     onnx_export_file: str,
     input_shape: List[int],
-    input_dtype: torch.dtype,
+    input_dtype: torch.dtype = torch.float,
     inputs: List[Any] = None,
     device: str = 'cuda'):
     """

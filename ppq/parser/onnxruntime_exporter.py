@@ -3,18 +3,44 @@ from typing import Dict, List
 import onnx
 import torch
 from onnx import helper
-from ppq.core import (EXPORT_OVERLAPPED_CONFIG, GRAPH_OPSET_ATTRIB, PPQ_CONFIG,
+from ppq.core import (GRAPH_OPSET_ATTRIB, PPQ_CONFIG,
                       ChannelwiseTensorQuantizationConfig, DataType,
                       OperationMeta, QuantizationProperty, QuantizationStates,
                       TensorMeta, TensorQuantizationConfig,
-                      convert_any_to_torch_tensor)
-from ppq.IR import BaseGraph, Operation, QuantableOperation, QuantableVariable
-from ppq.IR.base.command import GraphCommand, GraphCommandType
-from ppq.IR.morph import GraphDeviceSwitcher, GraphFormatter
+                      convert_any_to_torch_tensor, ppq_warning)
+from ppq.IR import (BaseGraph, Operation, QuantableOperation,
+                    QuantableVariable, Variable)
+from ppq.IR.morph import GraphDeviceSwitcher
 from ppq.quantization.qfunction.linear import PPQLinearQuant_toInt
 from ppq.utils.round import ppq_tensor_round
 
 from .onnx_exporter import OnnxExporter
+
+
+class QDQHelper():
+    """Helper class for processing onnx qdq format"""
+    @ staticmethod
+    def TQC_Exportable_Check(
+        TQC: TensorQuantizationConfig, bounded_var: Variable) -> bool:
+        if not TQC.can_export(): return False
+        meta_check = bounded_var.meta is not None
+
+        if TQC.num_of_bits == 8:
+            if TQC.policy.has_property(QuantizationProperty.ASYMMETRICAL):
+                range_check = (TQC.quant_max <= 255 and TQC.quant_min >= 0)
+            else: range_check = (TQC.quant_max <= 127 and TQC.quant_min >= -128)
+        else: range_check = True
+
+        if not range_check:
+            ppq_warning(f'Is it not safe to export TQC({bounded_var.name}) to Onnx, '
+                        f'INT8 value range must be [-128, 127] or [0, 255], '
+                        f'however [{TQC.quant_min, TQC.quant_max}] was given.')
+            return False
+
+        if not meta_check:
+            raise ValueError(f'Meta Data is missing! Graph Export Failed. '
+                             f'(Check Meta For Varaible: {bounded_var.name})')
+        return True
 
 
 class ONNXRUNTIMExporter(OnnxExporter):
@@ -145,7 +171,7 @@ class ONNXRUNTIMExporter(OnnxExporter):
         be removed from your network safely. Their function can be replaced by
         quant & dequant operations.
 
-        So to say those activation is unnecessary for Asymmetric quantized network.
+        Those activation is unnecessary for Asymmetric quantized network.
 
         Args:
             graph (BaseGraph): Processing Graph
@@ -157,11 +183,29 @@ class ONNXRUNTIMExporter(OnnxExporter):
             if op.type in {'Relu', 'Clip'}:
                 config = op.config.output_quantization_config[0]
                 # Only ASYMMETRICAL quantized activations can be safely removed.
-                if config.policy.has_property(QuantizationProperty.ASYMMETRICAL):
-                    # Patch 2022 06 29, 有些时候当我们启动了 alignment pass, relu 后面的定点信息将不再是 0，
-                    # 此时我们拒绝移除激活函数
-                    if config._father_config != config: continue
-                    removed_activations.append(op)
+                if config.policy.has_property(QuantizationProperty.SYMMETRICAL): continue
+
+                if not isinstance(config.scale, torch.Tensor): continue
+                if not isinstance(config.offset, torch.Tensor): continue
+
+                range_min = (config.scale * (config.quant_min - config.offset)).min().item()
+                range_max = (config.scale * (config.quant_max - config.offset)).max().item()
+
+                if op.type == 'Relu':
+                    if range_min >= 0:
+                        removed_activations.append(op)
+
+                if op.type == 'Clip':
+                    if op.num_of_input == 3:
+                        clip_min = op.inputs[1].value
+                        clip_max = op.inputs[2].value
+                        if clip_min is not None: clip_min = clip_min.item()
+                        else: clip_min = float('-inf')
+                        if clip_max is not None: clip_max = clip_max.item()
+                        else: clip_max = float('+inf')
+
+                        if range_min >= clip_min and range_max <= clip_max:
+                            removed_activations.append(op)
 
         # Activation op can only be relu and clip,
         # so it is safe to access op.inputs[0], op.outputs[0] as their input and output.
@@ -193,23 +237,22 @@ class ONNXRUNTIMExporter(OnnxExporter):
                 graph=graph, var=input_var, config=quant_config, 
                 related_op=upstream_op, meta=input_var.meta)
 
-        formatter = GraphFormatter(graph)
-        formatter(GraphCommand(GraphCommandType.DELETE_ISOLATED))
+        # formatter = GraphFormatter(graph)
+        # formatter(GraphCommand(GraphCommandType.DELETE_ISOLATED))
         return graph
 
     def remove_duplicated_quant_op(self, graph: BaseGraph) -> BaseGraph:
-        """Some time there will be more than 1 quant operation inserted with a
+        """
+        Pattern:        Quant - Dequant - Quant - Dequant
+
+        Can reduced to: Quant - Dequant
+
+        Some time there will be more than 1 quant operation inserted with a
         single variable. This function will remove duplicated quant operation
         from variable if it is possible.
 
         If inserted quant operations do not share a same zeropoint and scale,
         Then there is no way to remove any one of them.
-
-        Args:
-            graph (BaseGraph): Processing Graph
-
-        Returns:
-            _type_: Processed Graph
         """
         interested_pairs = []
         for qt_op in graph.operations.values():
@@ -234,6 +277,19 @@ class ONNXRUNTIMExporter(OnnxExporter):
             input_var, output_var = op.inputs[0], op.outputs[0]
             graph.remove_operation(op)
             graph.create_link_with_var(input_var, output_var)
+
+        """
+        There is another type of fusion:
+        Pattern:        Quant +-- Dequant
+                              |
+                              +-- Dequant
+
+        Can reduce to:  Quant - Dequant +--
+                                        |
+                                        +--
+                
+        Not implemented.
+        """
         return graph
 
     @ property
@@ -291,54 +347,40 @@ class ONNXRUNTIMExporter(OnnxExporter):
         """
         # collect quantable vars, where we need to insert quant and dequant op
         for config, var in op.config_with_variable:
-            meta = var.meta
-            if var.is_parameter:
-                # we do not want to process clip value here.
-                if op.type in {'Clip'}: continue
+            if not QDQHelper.TQC_Exportable_Check(TQC=config, bounded_var=var): continue
 
+            meta = var.meta
+            if var.is_parameter and process_parameter:
+                # we do not want to process clip value here.
+                if op.type in {'Clip', 'Pad'}: continue                
                 assert len(var.dest_ops) == 1, (
                 f'Can not export variable {var.name}, cause it has more than 1 destination operations. '
                 'PPQ require all parameters to have only 1 destination operation.')
 
-                if not process_parameter: continue
                 # override quantization state, so that we can export parameter correctly.
                 if config.state == QuantizationStates.BAKED:
                     config.state = QuantizationStates.ACTIVATED
                 if config.state == QuantizationStates.PASSIVE_BAKED:
                     config.state = QuantizationStates.PASSIVE
 
-                if QuantizationStates.can_export(config.state) and config.state not in {
-                    QuantizationStates.FP32, QuantizationStates.SOI}:
-                    if (config.state == QuantizationStates.OVERLAPPED and 
-                        not EXPORT_OVERLAPPED_CONFIG):
-                        continue
-
-                    # if not quant parameter to int, all parameter should export as fp32.
-                    # needs insert both quant and dequant op for them
-                    if not quant_param_to_int:
-                        created = self.insert_quant_on_variable(
-                            graph=graph, var=var, config=config, related_op=op, meta=meta)
-                        var = created.outputs[0]
-
-                    self.insert_dequant_on_variable(
-                        graph=graph, var=var, config=config, related_op=op, meta=meta)
-                    if quant_param_to_int:
-                        var.value = PPQLinearQuant_toInt(tensor=var.value, config=config)
-
-            else:
-                if not process_activation: continue
-
-                if QuantizationStates.can_export(config.state) and config.state not in {
-                    QuantizationStates.FP32, QuantizationStates.SOI}:
-                    if (config.state == QuantizationStates.OVERLAPPED and 
-                        not EXPORT_OVERLAPPED_CONFIG):
-                        continue
-
+                # if not quant parameter to int, all parameter should export as fp32.
+                # needs insert both quant and dequant op for them
+                if not quant_param_to_int:
                     created = self.insert_quant_on_variable(
                         graph=graph, var=var, config=config, related_op=op, meta=meta)
                     var = created.outputs[0]
-                    self.insert_dequant_on_variable(
-                        graph=graph, var=var, config=config, related_op=op, meta=meta)
+
+                self.insert_dequant_on_variable(
+                    graph=graph, var=var, config=config, related_op=op, meta=meta)
+                if quant_param_to_int:
+                    var.value = PPQLinearQuant_toInt(tensor=var.value, config=config)
+
+            elif (not var.is_parameter) and process_activation:
+                created = self.insert_quant_on_variable(
+                    graph=graph, var=var, config=config, related_op=op, meta=meta)
+                self.insert_dequant_on_variable(
+                    graph=graph, var=created.outputs[0], config=config, 
+                    related_op=op, meta=meta)
 
     def prepare_graph(
         self, graph: BaseGraph,
@@ -369,11 +411,6 @@ class ONNXRUNTIMExporter(OnnxExporter):
             processor = GraphDeviceSwitcher(graph)
             processor.remove_switcher()
 
-        # remove activations
-        if remove_activation_fn:
-            # remove useless activation.
-            self.remove_activation_ops(graph)
-
         # mark quantable variables
         for op in [op for op in graph.operations.values()]:
             if not isinstance(op, QuantableOperation): continue
@@ -382,6 +419,11 @@ class ONNXRUNTIMExporter(OnnxExporter):
                 process_activation=process_activation,
                 process_parameter=process_parameter,
                 quant_param_to_int=quant_parameter_to_int)
+
+        # remove activations
+        if remove_activation_fn:
+            # remove useless activation.
+            self.remove_activation_ops(graph)
 
         return self.remove_duplicated_quant_op(graph)
 

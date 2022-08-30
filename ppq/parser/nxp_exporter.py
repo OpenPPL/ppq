@@ -63,9 +63,8 @@ class NxpExporter(GraphExporter):
                 if variable.is_parameter and not export_param: continue
                 for config in configs:
                     if config is None: continue # source_op can be None
-                    if config.state in {QuantizationStates.ACTIVATED, QuantizationStates.BAKED,
-                                        QuantizationStates.OVERLAPPED, QuantizationStates.PASSIVE_BAKED}:
-                        if config.state == QuantizationStates.OVERLAPPED: config = config.dominated_by
+                    if config.can_export():
+
                         tensor_range = config.scale * pow(2, config.num_of_bits - 1)
                         min_val, max_val = -tensor_range, tensor_range - config.scale
                         min_tensor = numpy_helper.from_array(

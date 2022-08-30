@@ -35,7 +35,9 @@ class TensorwiseLinearQuantImpl(Function):
                 offsets: torch.Tensor, quant_min: int, quant_max: int,
                 rounding: RoundingPolicy) -> torch.Tensor:
 
-        if not PPQ_CONFIG.USING_CUDA_KERNEL:
+        if not PPQ_CONFIG.USING_CUDA_KERNEL or not tensor.is_cuda:
+            scales = scales.to(tensor.device)
+            offsets = offsets.to(tensor.device)
             # quantization function, pytorch implmentation
             tensor = ppq_tensor_round((tensor / scales), rounding) + offsets
             tensor = torch.clamp(tensor, quant_min, quant_max)
@@ -44,6 +46,7 @@ class TensorwiseLinearQuantImpl(Function):
         
         else:
             from ppq.core import CUDA
+
             # quantization function, pure cuda implmentation
             quantized = CUDA.LinearQuantize_T(
                 tensor=tensor,
@@ -78,7 +81,9 @@ class ChannelwiseLinearQuantImpl(Function):
                 offsets: torch.Tensor, channel_axis: int,
                 quant_min: int, quant_max: int,
                 rounding: RoundingPolicy) -> torch.Tensor:
-        if not PPQ_CONFIG.USING_CUDA_KERNEL:
+        if not PPQ_CONFIG.USING_CUDA_KERNEL or not tensor.is_cuda:
+            scales = scales.to(tensor.device)
+            offsets = offsets.to(tensor.device)
             # generate a shape that likes [1, 1, -1, 1], the only -1 is at channel axe.
             shape = [1 if axis != channel_axis else -1 for axis in range(tensor.ndim)]
             scale, offset = scales.view(shape), offsets.view(shape)
@@ -106,6 +111,19 @@ class ChannelwiseLinearQuantImpl(Function):
 
 def PPQLinearQuantFunction(
     tensor: torch.Tensor, config: TensorQuantizationConfig) -> torch.Tensor:
+    """
+    PPQ 核心量化函数
+
+    Args:
+        tensor (torch.Tensor): _description_
+        config (TensorQuantizationConfig): _description_
+
+    Raises:
+        ValueError: _description_
+
+    Returns:
+        torch.Tensor: _description_
+    """
     if not QuantizationStates.is_activated(config.state): return tensor
     if not config.policy.has_property(QuantizationProperty.LINEAR):
         raise ValueError('Critical Quantization Error! Non-linear config detected.')

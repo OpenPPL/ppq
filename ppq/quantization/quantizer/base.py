@@ -375,9 +375,9 @@ class BaseQuantizer(metaclass = ABCMeta):
                 iterations           = equalization_setting.iterations,
                 weight_threshold     = equalization_setting.value_threshold,
                 including_bias       = equalization_setting.including_bias,
-                including_activation = equalization_setting.including_act,
-                bias_multiplier       = equalization_setting.bias_multiplier,
-                activation_multiplier = equalization_setting.act_multiplier
+                including_act        = equalization_setting.including_act,
+                bias_multiplier      = equalization_setting.bias_multiplier,
+                act_multiplier       = equalization_setting.act_multiplier
             ))
 
         return QuantizationOptimizationPipeline(passes=list_of_passes)
