@@ -96,7 +96,7 @@ class BaseQuantizer(metaclass = ABCMeta):
                 operation_platforms[op_name] = self.target_platform
             else: operation_platforms[op_name] = self.default_platform
 
-            # maunnl override.
+            # manual override.
             if op_name in operation_platforms:
                 operation.platform = operation_platforms[op_name]
 
