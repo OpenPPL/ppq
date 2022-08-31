@@ -46,6 +46,9 @@ class PassiveParameterQuantizePass(QuantizationOptimizationPass):
 
                     # PATCH 2022.07.29 有的时候 bias 是个多维的东西，此时要求前面的维度都是1
                     bias = op.inputs[-1].value
+                    if bias is None: raise ValueError(f'Bias Varaible {op.inputs[-1].name} must be constant. '
+                                                      'Please check it again.')
+                    
                     assert bias.numel() == bias.shape[-1], (
                         f'For op {op.name}, expect Bias shape to be {[bias.numel()]}, '
                         f'however {bias.shape} was given')
@@ -108,12 +111,11 @@ class PassiveParameterQuantizePass(QuantizationOptimizationPass):
                 # inputs are [input value, pad[shape-related], pad value[optional]]
                 if op.num_of_input != 3: continue
                 i_cfg = op.config.input_quantization_config[0]
-                if i_cfg.state != QuantizationStates.PASSIVE_INIT and not self._override: continue
 
                 if not check_state(i_cfg.state):
                     raise PermissionError(f'Can not quantize pad value of layer {op.name}, '
                         'cause input has not been correctly quantized.')
-                
+
                 if len(op.config.input_quantization_config) > 1:
                     pad_config = op.config.input_quantization_config[-1]
                     # 在两种情况下可以执行后续逻辑，1 状态为 PASSIVE_INIT，2 要求 override

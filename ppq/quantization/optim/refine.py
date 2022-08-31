@@ -422,12 +422,12 @@ class QuantizeFusionPass(QuantizationOptimizationPass):
                     ppq_warning(f'Unexpected dispatching was found: '
                                 f'Op {computing_op.name} and {act_op.name} should be send to a same platform.')
                     continue
-            
+
                 if not isinstance(act_op, QuantableOperation):
                     ppq_warning(f'Unexpected dispatching was found: '
                                 f'Op {computing_op.name} and {act_op.name} should both be quantized operation.')
                     continue
-                
+
                 assert isinstance(act_op, QuantableOperation)
                 if (len(graph.get_downstream_operations(computing_op)) == 1 and 
                     len(graph.get_upstream_operations(act_op)) == 1):
@@ -435,7 +435,7 @@ class QuantizeFusionPass(QuantizationOptimizationPass):
                         act_op.config.output_quantization_config[0])
                     act_op.config.input_quantization_config[0].dominated_by = (
                         act_op.config.output_quantization_config[0])
-            
+
             # fuse relu and clip if possible
             for op in graph.operations.values():
                 if op.type in {'Relu', 'Clip'}:
@@ -642,7 +642,9 @@ class QuantAlignmentPass(QuantizationOptimizationPass):
             elif operation.type in TYPES_FOR_ALIGNMENT['Pooling']:
                 if self.averagepool_method == 'None': continue
                 if self.averagepool_method == 'Align to Output':
-                    self.align_to_output(operation)
+                    master_config = self.align_to_output(operation)
+                if self.averagepool_method == 'Align to Large':
+                    raise ValueError('Alignment Method Error, Pooling Op can not align to lager input.')
 
             elif ALIGNMENT_MANUL_OVERRIDE in operation.extension_attrib:
                 method = operation.extension_attrib[ALIGNMENT_MANUL_OVERRIDE]

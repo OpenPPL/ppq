@@ -18,6 +18,8 @@ class NCNNExporter(GraphExporter):
             if op.is_computing_op and isinstance(op, QuantableOperation):
                 fd.write(f'{op.name}_param_0 ')
                 param_cfg = op.config.input_quantization_config[1]
+                if not param_cfg.can_export(): continue
+
                 assert param_cfg.state in {QuantizationStates.BAKED, QuantizationStates.ACTIVATED}\
                     and param_cfg.observer_algorithm in {'minmax', 'Minmax'} and \
                         param_cfg.policy.has_property(QuantizationProperty.PER_CHANNEL)
@@ -32,6 +34,7 @@ class NCNNExporter(GraphExporter):
                 for s in scale:
                     fd.write('%f '% s)
                 fd.write('\n')
+
         for op in topo_order:
             if op.is_computing_op and isinstance(op, QuantableOperation):
                 fd.write(f'{op.name} ')

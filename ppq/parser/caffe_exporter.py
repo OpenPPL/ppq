@@ -40,12 +40,7 @@ class CaffeExporter(GraphExporter):
         for operation in graph.operations.values():
             if not isinstance(operation, QuantableOperation): continue
             for config, var in operation.config_with_variable:
-                if not QuantizationStates.can_export(config.state):
-                    raise PermissionError(
-                        'Can not export quant config cause not all quantization configurations '
-                        'have been correctly initialized(or some of them has been deactivated). '
-                        f'Operation {operation.name} has an invalid quantization config({config.state}) '
-                        f'at variable {var.name}.')
+                if not config.can_export(): continue
 
                 # PATCH 2021.11.25
                 # REMOVE BIAS FROM CONFIGURATION

@@ -2,7 +2,6 @@
 # PPQ System configuration
 # You can modify following codes for your own purpose.
 
-
 # Observer 中，最小 scale 限制，所有小于该值的 scale 将被该值覆盖
 OBSERVER_MIN_SCALE = 1e-8
 # Observer 中，最小 scale 的手动覆盖属性
@@ -64,9 +63,6 @@ DEFAULT_OPSET_DOMAIN  = 'ai.onnx'
 DEFAULT_OPSET_VERSION = 11
 STRICT_OPSET_CHECKING = False
 
-# 导出 qdq 节点时是否需要导出状态已经是 overlap 的节点
-EXPORT_OVERLAPPED_CONFIG = False
-
 # LSTM 算子的权重缓存属性
 LSTM_FLATTEN_WEIGHT_ATTRIB = 'LSTM_FLATTEN_WEIGHT_ATTRIB'
 # GRU 算子的权重缓存属性
@@ -91,3 +87,6 @@ CHECKPOINT_TOLERANCE = 1
 
 # 要做 Bias Correction 的算子种类
 BIAS_CORRECTION_INTERST_TYPE = {'Conv', 'Gemm', 'ConvTranspose'}
+
+# 导出 qdq 节点时是否需要导出状态已经是 overlap 的节点
+EXPORT_OVERLAPPED_CONFIG = False

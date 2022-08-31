@@ -4,14 +4,19 @@ You are not allowed to modify this 请勿修改此文件
 """
 
 import time  # for hash generation
-from abc import abstractmethod
 from enum import Enum
 from typing import Any, Iterable, List
 
 import torch
 
+from .common import EXPORT_OVERLAPPED_CONFIG
 from .storage import Serializable
 
+
+class QuantizationVisiblity(Enum):
+    FORCE_EXPORT       = 1
+    EXPOET_WHEN_ACTIVE = 2
+    INTERNAL           = 3
 
 class NetworkFramework(Enum):
     PPL     = 1
@@ -365,7 +370,7 @@ class TensorQuantizationConfig(Serializable):
         offset: Any               = None,
         observer_algorithm: str   = None,
         detail: Any               = None,
-        require_export: bool      = None,
+        visiblity: QuantizationVisiblity      = QuantizationVisiblity.EXPOET_WHEN_ACTIVE,
         state: QuantizationStates = QuantizationStates.INITIAL
     ):
         """Create a PPQ Tensor Quantization Configuration Instance.
@@ -395,7 +400,13 @@ class TensorQuantizationConfig(Serializable):
             detail (Any, optional): Only used by PPQ internal logic, detail is used to store some internal data,
                 you are not supposed to use it.
 
-            require_export (bool, optional): If require_export == True, PPQ exporter will export this TQC ignoring state checks.
+            visiblity (Visiblity): visiblity is the attribute that controls export logic.
+
+            Currently, there are 3 Visiblity level in PPQ:
+            if Visiblity == FORCE_EXPORT, ppq exporter will export this TQC 
+                ignoring state check(even if current TQC has been overrlapped).
+            if Visiblity == EXPORT_WHEN_ACTIVD, ppq exporter will export this TQC only when it has been actived.
+            if Visiblity == INTERNAL, This TQC will not be exported.
 
             state (QuantizationStates, optional):
                 Defaults to QuantizationStates.INITIAL, see QuantizationStates for more detail.
@@ -416,17 +427,25 @@ class TensorQuantizationConfig(Serializable):
         self.detail = {} if detail is None else detail
         self._father_config = self # union-find
         self._hash = self.__create_hash()
-        self._require_export = require_export
+        self._visiblity = visiblity
         super().__init__()
 
-    @ abstractmethod
-    def export(self) -> str:
-        raise Exception('Implement this first')
+    def can_export(self) -> bool:
+        if self.visiblity == QuantizationVisiblity.INTERNAL: return False
+        type_check  = isinstance(self.scale, torch.Tensor) and isinstance(self.offset, torch.Tensor)
+        valid_states = {QuantizationStates.BAKED, QuantizationStates.PASSIVE_BAKED}
+
+        if EXPORT_OVERLAPPED_CONFIG: valid_states.add(QuantizationStates.OVERLAPPED)
+        state_check = QuantizationStates.is_activated(self.state) or self.state in valid_states
+
+        if (state_check or self.visiblity == QuantizationVisiblity.FORCE_EXPORT):
+            if type_check: return True
+        return False
 
     def __eq__(self, o: object) -> bool:
         if not isinstance(o, TensorQuantizationConfig):
-            raise TypeError('Can only compare TensorQuantizationConfig object '\
-                'with another TensorQuantizationConfig object.')
+            raise TypeError('Can only compare TensorQuantizationConfig object '
+                            'with another TensorQuantizationConfig object.')
         return self._hash == o._hash
 
     def __str__(self) -> str:
@@ -509,17 +528,13 @@ class TensorQuantizationConfig(Serializable):
         })
 
     @ property
-    def exportable(self) -> bool:
-        value_check = isinstance(self.scale, torch.Tensor)
-        if self._require_export is None:
-            state_check = QuantizationStates.can_export(self.state)
-            return (value_check and state_check)
-        else: return (self._require_export and value_check)
-    
-    @ exportable.setter
-    def exportable(self, export_override: bool):
-        self._require_export = export_override
-        
+    def visiblity(self) -> bool:
+        return self._visiblity
+
+    @ visiblity.setter
+    def visiblity(self, visiblity: bool):
+        self._visiblity = visiblity
+
     @ property
     def scale(self) -> torch.Tensor:
         if self.dominated_by == self: return self._scale
