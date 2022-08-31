@@ -316,7 +316,9 @@ class LayerwiseEqualizationPass(QuantizationOptimizationPass):
         for idx, batch in tqdm(enumerate(dataloader),
                                desc='Equalization Data Collecting.',
                                total=min(len(dataloader), steps)):
-            data    = collate_fn(batch)
+            data = batch
+            if collate_fn is not None:
+                data = collate_fn(batch)
             outputs = executor.forward(data, output_names=output_names)
             for name, output in zip(output_names, outputs):
                 op = graph.variables[name].source_op
