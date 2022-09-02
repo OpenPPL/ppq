@@ -328,7 +328,6 @@ class LayerwiseEqualizationPass(QuantizationOptimizationPass):
         result = {}
         for name, output in zip(output_names, outputs):
             result[name] = torch.cat(output_collector[name], dim=-1)
-            print(name, result[name].shape)
         return result
 
     @ empty_ppq_cache
@@ -359,9 +358,6 @@ class LayerwiseEqualizationPass(QuantizationOptimizationPass):
 
             for name, act in activations.items():
                 graph.variables[name].value = act # 将激活值写回网络
-            
-            for name, act in activations.items():
-                print(name, torch.max(act, dim=-1)[0][:25])
 
         print(f'{len(pairs)} equalization pair(s) was found, ready to run optimization.')
         for iter_times in tqdm(range(self.iterations), desc='Layerwise Equalization', total=self.iterations):
@@ -373,12 +369,6 @@ class LayerwiseEqualizationPass(QuantizationOptimizationPass):
                     bias_multiplier=self.bias_multiplier,
                     act_multiplier=self.act_multiplier)
 
-        activations = self.collect_activations(
-            graph=graph, executor=executor, dataloader=dataloader, collate_fn=collate_fn,
-            operations=interested_operations)
-
-        for name, act in activations.items():
-            print(name, torch.max(act, dim=-1)[0][:25])
         # equalization progress directly changes fp32 value of weight,
         # store it for following procedure.
         for op in graph.operations.values():
