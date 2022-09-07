@@ -8,9 +8,6 @@ import cfg
 import pandas as pd
 
 report = []
-# 获取FP32 onnx模型
-if cfg.GET_FP32_MODEL:
-    get_onnx_models()
 
 # 获取校准数据
 dataloader = load_imagenet_from_directory(
@@ -21,17 +18,18 @@ dataloader = load_imagenet_from_directory(
 with ENABLE_CUDA_KERNEL():
     for model_name in cfg.MODELS.keys():
 
-        fp32_acc = None
+        fp32_map = None
         # 评估FP32准确度
         if cfg.GET_FP32_ACC:
-            fp32_acc,_ = get_fp32_accuracy(model_name)
+            fp32_map,_ = get_fp32_report(model_name)
+            pass
 
         for platform,config in cfg.PLATFORM_CONFIGS.items():
 
             if not os.path.exists(config["OutputPath"]):
                 os.makedirs(config["OutputPath"])
 
-            ppq_acc,ort_acc,platform_acc = None,None,None
+            ppq_map,ort_map,platform_map = None,None,None
 
             print(f'---------------------- PPQ Quantization Test Running with {model_name} on {platform}----------------------')
             model_path = f'{os.path.join(cfg.FP32_BASE_PATH, model_name)}-FP32.onnx'
@@ -44,18 +42,17 @@ with ENABLE_CUDA_KERNEL():
                 
             # 评估PPQ模拟量化准确度
             if cfg.GET_PPQ_ACC:
-                ppq_acc,_ = get_ppq_accuracy(model_name,platform,ppq_quant_ir)
+                ppq_map,_ = get_ppq_report(model_name,platform,ppq_quant_ir)
 
             # 评估ORT模型准确度
             if cfg.GET_ORT_ACC:
                 # 导出ORT模型
                 export_ppq_graph(
                     graph = ppq_quant_ir,
-                    copy_graph=True,
                     platform=TargetPlatform.ONNXRUNTIME,
                     graph_save_to=f'{os.path.join(config["OutputPath"], model_name)}-ORT-INT8.onnx')
 
-                ort_acc,_ = get_ort_accuracy(model_name,platform,config["OutputPath"])
+                ort_map,_ = get_ort_report(model_name,platform,config["OutputPath"])
 
 
             # 评估目标平台部署准确度
@@ -67,14 +64,14 @@ with ENABLE_CUDA_KERNEL():
                     graph_save_to=f'{os.path.join(config["OutputPath"], model_name)}-{platform}-INT8.onnx')
 
                 if platform in {"OpenVino","TRT"}:
-                    platform_acc,_  = get_platform_accuracy(model_name,platform,config["OutputPath"])
+                    platform_map,_  = get_platform_report(model_name,platform,config["OutputPath"])
                 else:
-                    platform_acc = None
+                    platform_map = None
 
 
-            report.append([model_name,platform,fp32_acc,ppq_acc,ort_acc,platform_acc])
+            report.append([model_name,platform,fp32_map,ppq_map,ort_map,platform_map])
 
-report = pd.DataFrame(report,columns=["model","paltform","fp32_acc","ppq_acc","ort_acc","platform_acc"])
+report = pd.DataFrame(report,columns=["model","paltform","fp32_map","ppq_map","ort_map","platform_map"])
 print("-------------------测试报告如下---------------------")
 print(report)
 report.to_csv(f"{cfg.BASE_PATH}/report.csv",index=False)

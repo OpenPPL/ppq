@@ -30,7 +30,6 @@ import cfg
 # SAMPLES = torch.rand(size=INPUT_SHAPE)
 name = 'ResNet18'
 target = "TRT"
-model_path = f'{os.path.join(cfg.TRT_BASE_PATH, name)}-{target}-INT8.engine'
 # model = TrtInferenceModel(model_path,batch_size=64)
 # # res = infer_trt(model_path,SAMPLES)
 # res = model(SAMPLES)
@@ -38,8 +37,19 @@ model_path = f'{os.path.join(cfg.TRT_BASE_PATH, name)}-{target}-INT8.engine'
 
 from Utilities.Imagenet import evaluate_trt_module_with_imagenet
 
-evaluate_trt_module_with_imagenet(model_path=model_path,imagenet_validation_dir=cfg.VALIDATION_DIR,
-batchsize=64,device="cuda")
+# evaluate_trt_module_with_imagenet(model_path=model_path,imagenet_validation_dir=cfg.VALIDATION_DIR,
+# batchsize=64,device="cuda")
 
-
-
+import cfg
+from Utilities.Imagenet import (evaluate_onnx_module_with_imagenet,
+                                evaluate_ppq_module_with_imagenet,
+                                evaluate_openvino_module_with_imagenet,
+                                evaluate_trt_module_with_imagenet)
+# report = evaluate_openvino_module_with_imagenet(
+#     model_path='/home/geng/tinyml/ppq/benchmark/classification/OpenVino_output/ResNet18-ORT-INT8.onnx', 
+#     imagenet_validation_dir=cfg.VALIDATION_DIR, batchsize=cfg.BATCHSIZE,
+#     device=cfg.DEVICE)
+report = evaluate_onnx_module_with_imagenet(
+    onnxruntime_model_path="/home/geng/tinyml/ppq/benchmark/classification/OpenVino_output/ResNet18-OpenVino-INT8.onnx", 
+    imagenet_validation_dir=cfg.VALIDATION_DIR, batchsize=cfg.BATCHSIZE, 
+    device=cfg.DEVICE)
