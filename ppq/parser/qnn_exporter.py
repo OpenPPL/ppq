@@ -12,7 +12,8 @@ from .util import convert_value
 class QNNDSPExporter(OnnxExporter):
     def export_quantization_config(self, config_path: str, graph: BaseGraph):
         activation_info, param_info = {}, {}
-        for operation in graph.operations.values():
+        topo_order =  graph.topological_sort()
+        for operation in topo_order:
             if not isinstance(operation, QuantableOperation): continue
             for config, var in operation.config_with_variable:
                 if not QuantizationStates.can_export(config.state):
