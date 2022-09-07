@@ -2,7 +2,7 @@
 from typing import Callable, Dict, Iterator, List
 
 import torch
-from ppq.core import PASSIVE_OPERATIONS, OperationMeta
+from ppq.core import PASSIVE_OPERATIONS, OperationMeta, ppq_warning
 from ppq.executor import RuntimeHook, TorchExecutor
 from ppq.IR import BaseGraph, Operation, QuantableOperation, Variable
 from ppq.quantization.measure.norm import torch_snr_error
@@ -23,8 +23,6 @@ class OutputRecorder(RuntimeHook):
         return super().pre_forward_hook(inputs, **kwargs)
 
     def post_forward_hook(self, outputs: list, **kwargs) -> list:
-        assert len(outputs) == 1, ('Multiple output tensor detected. '
-            'Can not monitoring an operation with more than 1 output.')
         output_tensor = outputs[0]
         assert isinstance(output_tensor, torch.Tensor), (
             'Output of monitoring operation is not a torch.Tensor')
@@ -126,6 +124,10 @@ def graphwise_error_analyse(
     recorders, hooks, caches = {}, {}, {}
     for operation in interested_op:
         if isinstance(operation, QuantableOperation):
+            if operation.num_of_output > 1:
+                ppq_warning(f'Operation {operation.name} has more than 1 output, '
+                            'analyser will process the first output of it.')
+
             recorders[operation.name] = MeasureRecorder(measurement=method)
             hooks[operation.name] = OutputRecorder(
                 operation=operation, operation_meta=operation.meta_data, fetchs=fetchs)
@@ -197,8 +199,8 @@ def statistical_analyse(
     The return value of this function is a collection of statistics parameters
     You are recommended to processing them with pandas
     
-    from pandas import Dataframe
-    report_df = Dataframe(report)
+    from pandas import DataFrame
+    report_df = DataFrame(report)
 
     Args:
         graph (BaseGraph): _description_

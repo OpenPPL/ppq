@@ -715,6 +715,32 @@ def Logical_Socket(op: Operation) -> OpSocket:
         cls_output=cls_output, links=[])
 
 
+def Onehot_Socket(op: Operation) -> OpSocket:
+    """
+    Inputs
+        indices (non-differentiable) : T1
+
+        depth (non-differentiable) : T2
+            
+        values (non-differentiable) : T3
+    
+    Outputs
+        output (non-differentiable) : T3
+
+    Args:
+        op (Operation): _description_
+
+    Returns:
+        OpSocket: _description_
+    """
+    CHECK_OPSET(op=op, min_version_supported=12, max_version_supported=16)
+    cls_input  = [VProperty.SOI, VProperty.SOI, VProperty.SOI]
+    cls_output = [VProperty.SOI]
+    return OpSocket(
+        op=op, cls_input=cls_input[: op.num_of_input], 
+        cls_output=cls_output, links=[])
+
+
 DEFAULT_SOCKET_TABLE = {
     'AdaptiveAvgPool2d': DEFAULT_SOCKET_CREATOR,
     'Add': DEFAULT_SOCKET_CREATOR,
@@ -802,7 +828,7 @@ DEFAULT_SOCKET_TABLE = {
     'GRU': DEFAULT_SOCKET_CREATOR,
     'PPQDeviceSwitch': DEFAULT_SOCKET_CREATOR,
     'Identity': DEFAULT_SOCKET_CREATOR,
-    'OneHot': DEFAULT_SOCKET_CREATOR,
+    'OneHot': Onehot_Socket,
     'Reciprocal': DEFAULT_SOCKET_CREATOR,
     'GreaterOrEqual': Logical_Socket,
     'LessOrEqual': Logical_Socket,

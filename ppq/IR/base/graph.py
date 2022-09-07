@@ -28,13 +28,17 @@ class Opset():
         """
         self.domain  = domain
         self.version = version
-    
+
     def is_onnx_v13(self):
         return self.domain == ONNX_DOMAIN and self.version == 13
-    
+
     def is_onnx_v11(self):
         return self.domain == ONNX_DOMAIN and self.version == 11
-    
+
+    def onnx_opset_version(self) -> int:
+        if self.domain == ONNX_DOMAIN: return self.version
+        else: return -1   
+
     def is_onnx(self):
         return self.domain == ONNX_DOMAIN
     
@@ -230,7 +234,9 @@ class Variable(Serializable):
                         'however its value is not an instance of torch.Tensor, '
                         'ppq will automaticall convert it to torch.Tensor now.')
             self.value = convert_any_to_torch_tensor(self.value)
-        return Variable(name=self.name, value=self.value.clone(), is_parameter=self.is_parameter)
+        if isinstance(self.value, torch.Tensor):
+            value = self.value.clone()
+        return Variable(name=self.name, value=value, is_parameter=self.is_parameter)
 
 
 class Operation(OperationBase, Serializable):

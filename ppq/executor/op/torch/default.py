@@ -1,6 +1,6 @@
 import operator
 from functools import reduce
-from typing import List
+from typing import List, Tuple
 
 import numpy as np
 from ppq.core import DataType, convert_any_to_python_primary_type
@@ -22,18 +22,44 @@ from .base import *
 logger = NaiveLogger.get_logger('PPQ')
 
 
-def _onnx_padding_to_torch(pads: List[int]) -> List[int]:
+def convert_onnx_pads_to_torch(onnx_pads: List[int], mode: str=None) -> List[int]:
     # Convert padding from onnx format to torch format
     # onnx format: [x1_begin, x2_begin, ... , x1_end, x2_end, ...]
     # torch format [xn_begin, xn_end, ... , x2_begin, x2_end, x1_begin, x1_end]
-    if pads is None: return None
-    middle = len(pads) // 2
-    onnx_pad_begin, onnx_pad_end = pads[:middle], pads[middle:]
+    if onnx_pads is None: return 0
+    if isinstance(onnx_pads, int): return onnx_pads
+
+    # check pads dimension
+    if mode is not None:
+        if mode == '1d': assert len(onnx_pads) == 2, (
+            f'1d Operation needs 2-d padding value, while your padding value is {onnx_pads}')
+        elif mode == '2d': assert len(onnx_pads) == 4, (
+            f'2d Operation needs 4-d padding value, while your padding value is {onnx_pads}')
+        elif mode == '3d': assert len(onnx_pads) == 6, (
+            f'3d Operation needs 6-d padding value, while your padding value is {onnx_pads}')
+
+    middle = len(onnx_pads) // 2
+    onnx_pad_begin, onnx_pad_end = onnx_pads[:middle], onnx_pads[middle:]
     onnx_pad_begin, onnx_pad_end = onnx_pad_begin[::-1], onnx_pad_end[::-1]
+    
     torch_pads = []
     for begin, end in zip(onnx_pad_begin, onnx_pad_end):
         torch_pads.extend([begin, end])
 
+    if mode is None: return torch_pads
+    # check if we can merge torch pads
+    if len(torch_pads) == 2:
+        p1, p2 = torch_pads
+        if p1 == p2: 
+            torch_pads = [p1]
+    if len(torch_pads) == 4:
+        p1, p2, p3, p4 = torch_pads
+        if p1==p2 and p3==p4: 
+            torch_pads=[p1, p3]
+    if len(torch_pads) == 6:
+        p1, p2, p3, p4, p5, p6 = torch_pads
+        if p1==p2 and p3==p4 and p5==p6: 
+            torch_pads=[p1, p3, p5]
     return torch_pads
 
 
@@ -152,51 +178,54 @@ def Conv_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=2, max_num_of_input=3)
 
     groups    = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='group', default=1)
-    padding   = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='pads', default=0)
+    onnx_pads = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='pads', default=0)
     dilation  = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='dilations', default=1)
     stride    = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='strides', default=1)
     auto_pad  = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='auto_pad', default='NOTSET')
 
     x, w = values[: 2]
     b = values[2] if len(values) > 2 else None
-    if hasattr(b,"shape") and len(b.shape) == 0:
-        b = b.unsqueeze(0)
 
     ndim = w.ndim
+
     # conv - 1d
     if ndim in {2, 3}:
-        if auto_pad != 'NOTSET':
-            raise NotImplementedError(f'auto_pad must be "NOTSET" with 1-d conv {op.name}')
-        x = F.pad(x, padding)
+        if auto_pad != 'NOTSET': raise NotImplementedError(f'auto_pad must be "NOTSET" with 1-d conv {op.name}')
+        torch_pads = convert_onnx_pads_to_torch(onnx_pads=onnx_pads, mode='1d')
+        if isinstance(torch_pads, list) and len(torch_pads) == 2:
+            x = F.pad(x, torch_pads)
+            torch_pads = 0
         output = F.conv1d(
-            input=x, weight=w, bias=b, groups=groups,
-            dilation=dilation, stride=stride)
+            input=x, weight=w, bias=b, groups=groups, 
+            padding=torch_pads, dilation=dilation, stride=stride)
 
     # conv - 2d
     elif ndim == 4:
         process_attribute(op.attributes, values[0].shape[2:], values[1].shape[2:])
         # onnx pads format[top, left, bottom, right] to torch pads format[left, right, top, bottom]
-        if isinstance(padding, list) and len(padding) == 4:
-            p_left, p_right, p_top, p_bottom = padding[1], padding[3], padding[0], padding[2]
+        if isinstance(onnx_pads, list) and len(onnx_pads) == 4:
+            p_left, p_right, p_top, p_bottom = onnx_pads[1], onnx_pads[3], onnx_pads[0], onnx_pads[2]
             # torch does not support padding contains 4 value, there is a fix of it.
             if p_left == p_right and p_top == p_bottom:
-                padding = [p_top, p_left]
+                onnx_pads = [p_top, p_left]
             else:
                 x = F.pad(x, pad=[p_left, p_right, p_top, p_bottom])
-                padding = 0
+                onnx_pads = 0
 
         output = F.conv2d(
-            input=x, weight=w, bias=b, groups=groups, padding=padding,
+            input=x, weight=w, bias=b, groups=groups, padding=onnx_pads,
             dilation=dilation, stride=stride)
 
     # conv - 3d
     elif ndim == 5:
-        if auto_pad != 'NOTSET':
-            raise NotImplementedError(f'auto_pad must be "NOTSET" with 3-d conv {op.name}')
-        x = F.pad(x, padding)
+        if auto_pad != 'NOTSET': raise NotImplementedError(f'auto_pad must be "NOTSET" with 3-d conv {op.name}')
+        torch_pads = convert_onnx_pads_to_torch(onnx_pads=onnx_pads, mode='3d')
+        if isinstance(torch_pads, list) and len(torch_pads) == 6:
+            x = F.pad(x, torch_pads)
+            torch_pads = 0
         output = F.conv3d(
-            input=x, weight=w, bias=b, groups=groups,
-            dilation=dilation, stride=stride)
+            input=x, weight=w, bias=b, groups=groups, 
+            padding=torch_pads, dilation=dilation, stride=stride)
     
     else:
         raise ValueError(f'Operation {op.name} is invalid, {ndim}-d input is not supported.')
@@ -305,7 +334,7 @@ def ConvTranspose_forward(op: Operation, values: List[torch.Tensor], ctx: TorchB
     process_attribute(op.attributes, values[0].shape[2:], values[1].shape[2:], 'ConvTranspose')
 
     groups    = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='group', default=1)
-    padding   = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='pads', default=0)
+    onnx_pads = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='pads', default=0)
     dilation  = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='dilations', default=1)
     stride    = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='strides', default=1)
     output_padding = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='output_padding', default=0)
@@ -314,64 +343,53 @@ def ConvTranspose_forward(op: Operation, values: List[torch.Tensor], ctx: TorchB
     b = values[2] if len(values) > 2 else None
     ndim = x.ndim
 
-    _padding = _onnx_padding_to_torch(padding)
-    if len(_padding) == 2:
-        p1, p2 = _padding
-        if p1 == p2: 
-            padding = [p1]
-            _padding = None
-        else:
-            padding = [0]
-    if len(_padding) == 4:
-        p1, p2, p3, p4 = _padding
-        if p1==p2 and p3==p4: 
-            padding=[p1, p3]
-            _padding = None
-        else:
-            padding = [0, 0]
-    if len(_padding) == 6:
-        p1, p2, p3, p4, p5, p6 = _padding
-        if p1==p2 and p3==p4 and p5==p6: 
-            padding=[p1, p3, p5]
-            _padding = None
-        else:
-            padding = [0, 0, 0]
-
     # 2d conv transpose
     if ndim == 4:
-        output = F.conv_transpose2d(
-            input=x, weight=w, bias=b, groups=groups, padding=padding,
-            dilation=dilation, stride=stride, output_padding=output_padding)
-        if len(_padding) == 4:
-            p1, p2, p3, p4 = _padding
+        torch_pads = convert_onnx_pads_to_torch(onnx_pads=onnx_pads, mode='2d')
+        if isinstance(torch_pads, list) and len(torch_pads) == 2:
+            output = F.conv_transpose2d(
+                input=x, weight=w, bias=b, groups=groups, padding=torch_pads,
+                dilation=dilation, stride=stride, output_padding=output_padding)
+        else:
+            output = F.conv_transpose2d(
+                input=x, weight=w, bias=b, groups=groups, padding=0,
+                dilation=dilation, stride=stride, output_padding=output_padding)
+
+            p1, p2, p3, p4 = torch_pads
             _, _, h, w = output.shape
             output = output[:, :, 0 + p1: h - p2, 0 + p3: w - p4]
-        elif _padding is not None:
-            raise NotImplementedError(f'Invalid pad mode for Op {op.name}, 2D convTranspose expect a 4-d padding.')
-    
+
     # 1d conv transpose
     elif ndim in {2, 3}:
-        output = F.conv_transpose1d(
-            input=x, weight=w, bias=b, groups=groups,
-            dilation=dilation, stride=stride, output_padding=output_padding)
-        if len(_padding) == 2:
-            p1, p2 = _padding
+        torch_pads = convert_onnx_pads_to_torch(onnx_pads=onnx_pads, mode='1d')
+        if isinstance(torch_pads, list) and len(torch_pads) == 1:
+            output = F.conv_transpose1d(
+                input=x, weight=w, bias=b, groups=groups, padding=torch_pads,
+                dilation=dilation, stride=stride, output_padding=output_padding)
+        else:
+            output = F.conv_transpose1d(
+                input=x, weight=w, bias=b, groups=groups, padding=0,
+                dilation=dilation, stride=stride, output_padding=output_padding)
+
+            p1, p2 = torch_pads
             _, _, h = output.shape
             output = output[:, :, 0 + p1: h - p2]
-        elif _padding is not None:
-            raise NotImplementedError(f'Invalid pad mode for Op {op.name}, 1D convTranspose expect a 2-d padding.')
 
     # 3d conv transpose
     elif ndim == 5:
-        output = F.conv_transpose3d(
-            input=x, weight=w, bias=b, groups=groups,
-            dilation=dilation, stride=stride, output_padding=output_padding)
-        if len(_padding) == 6:
-            p1, p2, p3, p4, p5, p6 = _padding
+        torch_pads = convert_onnx_pads_to_torch(onnx_pads=onnx_pads, mode='3d')
+        if isinstance(torch_pads, list) and len(torch_pads) == 3:
+            output = F.conv_transpose3d(
+                input=x, weight=w, bias=b, groups=groups, padding=torch_pads,
+                dilation=dilation, stride=stride, output_padding=output_padding)
+        else:
+            output = F.conv_transpose3d(
+                input=x, weight=w, bias=b, groups=groups, padding=0,
+                dilation=dilation, stride=stride, output_padding=output_padding)
+
+            p1, p2, p3, p4, p5, p6 = torch_pads
             _, _, d, h, w = output.shape
             output = output[:, :, 0 + p1: d - p2, 0 + p3: h - p4, 0 + p5: w - p6]
-        elif _padding is not None:
-            raise NotImplementedError(f'Invalid pad mode for Op {op.name}, 3D convTranspose expect a 6-d padding.')
     else:
         raise ValueError(f'Operation {op.name} is invalid, {ndim}-d input is not supported.')
     return output
@@ -383,41 +401,47 @@ def MaxPool2d_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
     process_attribute(op.attributes, values[0].shape[2:])
 
     [x] = values
-    padding   = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='pads', default=0)
+    onnx_pads   = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='pads', default=0)
     dilation  = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='dilations', default=1)
     stride    = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='strides', default=None)
     ceil_mode = bool(GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='ceil_mode', default=False))
-    if op.type == 'GlobalMaxPool': kernel_size = x.size()[-2:]
+    if op.type == 'GlobalMaxPool': kernel_size = x.size()[2:]
     else: kernel_size = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='kernel_shape', compulsive=True)
 
     ndim = x.ndim
     # pool - 3d
     if ndim == 5:
-        x = F.pad(x, _onnx_padding_to_torch(padding), value=float("-inf"))
+        torch_pads = convert_onnx_pads_to_torch(onnx_pads=onnx_pads, mode='3d')
+        if isinstance(torch_pads, list) and len(torch_pads) != 3:
+            x = F.pad(x, torch_pads)
+            torch_pads = 0
         output = F.max_pool3d(
-            x, kernel_size=kernel_size,
+            x, kernel_size=kernel_size, padding=torch_pads,
             dilation=dilation, stride=stride, ceil_mode=ceil_mode)
 
     elif ndim == 4:
         # onnx pads format[top, left, bottom, right] to torch pads format[left, right, top, bottom]
-        if isinstance(padding, list) and len(padding) == 4:
-            p_left, p_right, p_top, p_bottom = padding[1], padding[3], padding[0], padding[2]
+        if isinstance(onnx_pads, list) and len(onnx_pads) == 4:
+            p_left, p_right, p_top, p_bottom = onnx_pads[1], onnx_pads[3], onnx_pads[0], onnx_pads[2]
             # torch does not support padding contains 4 value, there is a fix of it.
             if p_left == p_right and p_top == p_bottom:
-                padding = [p_top, p_left]
+                onnx_pads = [p_top, p_left]
             else:
-                x = F.pad(x, pad=_onnx_padding_to_torch(padding), value=float("-inf"))
-                padding = 0
+                x = F.pad(x, pad=convert_onnx_pads_to_torch(onnx_pads), value=float("-inf"))
+                onnx_pads = 0
 
         output = F.max_pool2d(
             x, kernel_size=kernel_size,
-            padding=padding, dilation=dilation,
+            padding=onnx_pads, dilation=dilation,
             stride=stride, ceil_mode=ceil_mode)
 
     elif ndim in {2, 3}:
-        x = F.pad(x, _onnx_padding_to_torch(padding), value=float("-inf"))
+        torch_pads = convert_onnx_pads_to_torch(onnx_pads=onnx_pads, mode='1d')
+        if isinstance(torch_pads, list) and len(torch_pads) != 1:
+            x = F.pad(x, torch_pads)
+            torch_pads = 0
         output = F.max_pool1d(
-            x, kernel_size=kernel_size,
+            x, kernel_size=kernel_size, padding=torch_pads,
             dilation=dilation, stride=stride, ceil_mode=ceil_mode)
     else:
         raise ValueError(f'Operation {op.name} is invalid, {ndim}-d input is not supported.')
@@ -469,10 +493,24 @@ def Mul_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
 
 
 def MultiHeadAttention_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
+    """Perform MultiHeadAttetion opr forward.
+
+    Args:
+        op (Operation): MultiHeadAttention
+        values (List[torch.Tensor]): opr inputs
+        ctx (TorchBackendContext, optional): Context. Defaults to None.
+
+    Raises:
+        NotImplementedError: In [Vit Paper](https://arxiv.org/abs/2010.11929), MultiHeadAttention inputs are actually the same tensor, we suppose that this would **not** be simplified.
+        ValueError: MultiHeadAttention contains `embed_dim` and `num_heads`.
+
+    Returns:
+        list: opr output and internal result for quantization.
+    """
     if len(values) != 11:
         raise NotImplementedError('Not implement simplified MultiHeadAttention')
 
-    q,k,v,q_w,q_b,k_w,k_b,v_w,v_b,o_w,o_b = values
+    q_in,k_in,v_in,q_w,q_b,k_w,k_b,v_w,v_b,o_w,o_b = values
     embed_dim = op.attributes.get('embed_dim')
     num_heads = op.attributes.get('num_heads')
 
@@ -480,21 +518,27 @@ def MultiHeadAttention_forward(op: Operation, values: List[torch.Tensor], ctx: T
         raise ValueError('Cannot fetch embed_dim or num_heads')
 
     # setup parameters
-    batch_size = q.shape[0]
+    batch_size = q_in.shape[0]
     head_dim = embed_dim // num_heads
     scale = head_dim ** -0.5
 
-    q = F.linear(q, q_w, q_b)
-    k = F.linear(k, k_w, k_b)
-    v = F.linear(v, v_w, v_b)
+    xq = F.linear(q_in, q_w, q_b)
+    xk = F.linear(k_in, k_w, k_b)
+    xv = F.linear(v_in, v_w, v_b)
+    
+    B, N, _ = xq.shape
+    
+    q = xq.reshape(B, N, num_heads, head_dim).permute(0, 2, 1, 3)
+    k = xk.reshape(B, N, num_heads, head_dim).permute(0, 2, 1, 3)
+    v = xv.reshape(B, N, num_heads, head_dim).permute(0, 2, 1, 3)
 
     energy = (q @ k.transpose(-2, -1)) * scale
     attn = energy.softmax(dim=-1)
 
-    x = (attn @ v).transpose(1, 2).reshape(batch_size, -1, embed_dim)
-    x = F.linear(x, o_w, o_b)
-
-    return x
+    feat = (attn @ v).transpose(1, 2).reshape(batch_size, -1, embed_dim)
+    out = F.linear(feat, o_w, o_b)
+    
+    return out
 
 
 def Add_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
@@ -617,37 +661,52 @@ def AveragePool_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBac
     process_attribute(op.attributes, values[0].shape[2:])
 
     [x] = values
-    padding   = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='pads', default=0)
-    stride    = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='strides', default=None)
-    ceil_mode = bool(GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='ceil_mode', default=False))
-    if op.type == 'GlobalAveragePool': kernel_size = x.size()[-2:]
+    onnx_pads    = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='pads', default=0)
+    stride       = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='strides', default=None)
+    ceil_mode    = bool(GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='ceil_mode', default=False))
+    if op.type   == 'GlobalAveragePool': kernel_size = x.size()[2:]
     else: kernel_size = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='kernel_shape', compulsive=True)
-    
+
     ndim = x.ndim
+    # pool 1d
+    if ndim == 3:
+        torch_pads = convert_onnx_pads_to_torch(onnx_pads=onnx_pads, mode='1d')
+        if isinstance(torch_pads, list) and len(torch_pads) != 1:
+            x = F.pad(x, torch_pads)
+            torch_pads = 0
+        output = F.avg_pool1d(
+            x, kernel_size=kernel_size, padding=torch_pads,
+            stride=stride, ceil_mode=ceil_mode)
+        return output
     # pool 2d
     if ndim == 4:
         # onnx pads format[top, left, bottom, right] to torch pads format[left, right, top, bottom]
-        if isinstance(padding, list) and len(padding) == 4:
-            p_left, p_right, p_top, p_bottom = padding[1], padding[3], padding[0], padding[2]
+        if isinstance(onnx_pads, list) and len(onnx_pads) == 4:
+            p_left, p_right, p_top, p_bottom = onnx_pads[1], onnx_pads[3], onnx_pads[0], onnx_pads[2]
             # torch does not support padding contains 4 value, there is a fix of it.
             if p_left == p_right and p_top == p_bottom:
-                padding = [p_top, p_left]
+                onnx_pads = [p_top, p_left]
             else:
                 x = F.pad(x, pad=[p_left, p_right, p_top, p_bottom])
-                padding = 0
+                onnx_pads = 0
 
         output = F.avg_pool2d(
             x, kernel_size=kernel_size,
-            padding=padding, stride=stride, ceil_mode=ceil_mode)
+            padding=onnx_pads, stride=stride, ceil_mode=ceil_mode)
+        return output
     # pool 3d
     elif ndim == 5:
-        x = F.pad(x, padding)
+        torch_pads = convert_onnx_pads_to_torch(onnx_pads=onnx_pads, mode='3d')
+        if isinstance(torch_pads, list) and len(torch_pads) != 3:
+            x = F.pad(x, torch_pads)
+            torch_pads = 0
         output = F.avg_pool3d(
-            x, kernel_size=kernel_size,
+            x, kernel_size=kernel_size, padding=torch_pads,
             stride=stride, ceil_mode=ceil_mode)
+        return output
     else:
         raise ValueError(f'Operation {op.name} is invalid, {ndim}-d input is not supported.')
-    
+
     return output
 
 
@@ -846,7 +905,7 @@ def Squeeze_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackend
     """
     # we acquire axes in different ways according to opset
     # only opset=11 or opset=13 supported
-    if op.opset.is_onnx_v13():
+    if op.opset.onnx_opset_version() >= 13:
         ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=2)
         squeezing_tensor = values[0]
         axes = [axis for axis in range(squeezing_tensor.ndim) if squeezing_tensor.shape[axis] == 1]
@@ -918,7 +977,7 @@ def Unsqueeze_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
     Returns:
         torch.Tensor: [description]
     """
-    if op.opset.is_onnx_v13():
+    if op.opset.onnx_opset_version() >= 13:
         ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=2, max_num_of_input=2)
         unsqueezing_tensor, axes = values
         ASSERT_ALL_TENSORS_AT_CPU(op=op, values=[axes])
@@ -1150,10 +1209,33 @@ def Slice_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCo
     if axes is not None: axes = axes.tolist()
     starts, ends, steps = starts.tolist(), ends.tolist(), steps.tolist()
 
+    slices, flip_dims = {}, []
+    for start, end, axis, step in zip(starts, ends, axes, steps):
+        if step < 0:
+            flip_dims.append(axis)
+            start, end, step = -start - 1, -end - 1, -step
+        slices[axis] = slice(start, end, step)
+
+    pos_axes_slices = list(slices.get(a, slice(None, None)) for a in range(max(axes) + 1))
+    neg_axes_slices = list(slices.get(a, slice(None, None)) for a in range(min(axes), 0))
+    if neg_axes_slices: neg_axes_slices = [Ellipsis] + neg_axes_slices
+
+    if flip_dims: data = torch.flip(data, dims=flip_dims)
+    if pos_axes_slices: data = data[pos_axes_slices]
+    if neg_axes_slices: data = data[neg_axes_slices]
+    return data
+
+    ''' Legacy implementation
+    data, starts, ends = values[: 3]
+    axes  = values[3] if len(values) > 3 else None
+    steps = values[4] if len(values) > 4 else torch.ones_like(starts)
+    if axes is not None: axes = axes.tolist()
+    starts, ends, steps = starts.tolist(), ends.tolist(), steps.tolist()
+
     slice_args = list(zip(starts, ends, steps))
     if axes is not None and all([_ != 0 for _ in axes]):
         assert len(axes) == len(slice_args)
-        new_axes = [x if x >= 0 else data.dim() + x for x in axes]
+        new_axes = [data if data >= 0 else data.dim() + data for data in axes]
         full_axes = [i for i in range(data.dim())]
         slice_args = [slice_args[new_axes.index(i)] if i in new_axes else (None,) for i in full_axes]
 
@@ -1174,6 +1256,7 @@ def Slice_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCo
 
     output = data[slice_func]
     return output
+    '''
 
 
 def Interp_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
@@ -1411,7 +1494,7 @@ def ReduceMean_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBack
 
 
 def ReduceSum_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
-    if op.opset.is_onnx_v13():
+    if op.opset.onnx_opset_version() >= 13:
         ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=2)
         input_value, dim = values[0], None
         if len(values) > 1:
@@ -1668,16 +1751,19 @@ def ScatterND_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
     ASSERT_ALL_TENSORS_AT_CPU(op=op, values=[None, values[1], None])
 
     data, indices, updates = values
+
     output = data.clone()
-    indices = indices.long()
-    update_indices = indices.shape[:-1]
-    for idx in np.ndindex(update_indices):
-        output[tuple(indices[idx])] = updates[idx]
+    ind_dim = indices.dim()
+    # last dimension is a partial-index into data
+    indices = indices.reshape((-1, indices.shape[-1])).T.tolist()
+    # update.shape = indices.shape[0:ind_dim-1] ++ data.shape[indices.shape[-1]:data.dim()-1]
+    updates = updates.reshape((-1, *updates.shape[ind_dim - 1 :]))
+    output[indices] = updates
     return output
 
 
 def Split_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
-    if op.opset.is_onnx_v13():
+    if op.opset.onnx_opset_version() >= 13:
         ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=2)
         input_value = values[0]
         axis = op.attributes.get('axis', 0)
@@ -1807,7 +1893,7 @@ def Pad_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
     if isinstance(pads, torch.Tensor):
         assert pads.device.type == 'cpu', 'Oops'
         pads = pads.tolist()
-    pads = _onnx_padding_to_torch(pads)
+    pads = convert_onnx_pads_to_torch(pads)
 
     if mode == 'constant':
         constant_value = values[-1] if len(values) == 3 else 0
@@ -1982,6 +2068,10 @@ def Tanh_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
     output = torch.tanh(input_data)
     return output
 
+def Tan_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
+    input_data = values[0]
+    output = torch.tan(input_data)
+    return output
 
 def Pow_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
     input_data = values[0]
@@ -2979,6 +3069,7 @@ def Erf_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
     [x] = values
     return torch.erf(x) # may require a higher version pytorch
 
+
 DEFAULT_BACKEND_TABLE = {
     'Abs': Abs_forward,
     'AdaptiveAvgPool2d': AdaptiveAvgPool2d_forward,
@@ -3057,6 +3148,7 @@ DEFAULT_BACKEND_TABLE = {
     'DepthToSpace': DepthToSpace_forward,
     'Scale': Scale_forward,  # caffe op
     'Tanh': Tanh_forward,
+    'Tan': Tan_forward,
     'Pow': Pow_forward,
     'Crop': Crop_forward,  # caffe op
     'ChannelShuffle': ChannelShuffle_forward,  # caffe op
@@ -3075,5 +3167,5 @@ DEFAULT_BACKEND_TABLE = {
     'LSTM': LSTM_forward,
     'Sum': Sum_forward,
     'Elu': Elu_forward,
-    'Erf': Erf_forward
+    'Erf': Erf_forward,
 }

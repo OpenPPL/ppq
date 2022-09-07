@@ -4,14 +4,19 @@ You are not allowed to modify this 请勿修改此文件
 """
 
 import time  # for hash generation
-from abc import abstractmethod
 from enum import Enum
 from typing import Any, Iterable, List
 
 import torch
 
+from .common import EXPORT_OVERLAPPED_CONFIG
 from .storage import Serializable
 
+
+class QuantizationVisiblity(Enum):
+    FORCE_EXPORT       = 1
+    EXPOET_WHEN_ACTIVE = 2
+    INTERNAL           = 3
 
 class NetworkFramework(Enum):
     PPL     = 1
@@ -51,6 +56,7 @@ class TargetPlatform(Enum):
     TRT_INT8      = 101
     NCNN_INT8     = 102
     OPENVINO_INT8 = 103
+    TENGINE_INT8  = 104
     
     PPL_CUDA_INT8 = 201
     PPL_CUDA_INT4 = 202
@@ -73,6 +79,7 @@ class TargetPlatform(Enum):
     METAX_INT8_T = 702 # tensor wise
 
     HEXAGON_INT8 = 801
+
 
     FP32 = 0
     # SHAPE-OR-INDEX related operation
@@ -99,7 +106,7 @@ class TargetPlatform(Enum):
             cls.PPL_DSP_INT8, cls.PPL_DSP_TI_INT8, cls.QNN_DSP_INT8, cls.TRT_INT8, cls.NCNN_INT8, cls.NXP_INT8,
             cls.SNPE_INT8, cls.PPL_CUDA_INT8, cls.PPL_CUDA_INT4, cls.EXTENSION, cls.PPL_CUDA_MIX, cls.ORT_OOS_INT8,
             cls.ACADEMIC_INT4, cls.ACADEMIC_INT8, cls.ACADEMIC_MIX, cls.METAX_INT8_C, cls.METAX_INT8_T, 
-            cls.OPENVINO_INT8, cls.FPGA_INT8}
+            cls.OPENVINO_INT8, cls.FPGA_INT8, cls.TENGINE_INT8}
 
 
 class RoundingPolicy(Enum):
@@ -324,7 +331,7 @@ class QuantizationStates(Enum):
         return state in {QuantizationStates.ACTIVATED, QuantizationStates.PASSIVE, QuantizationStates.SLAVE}
 
     @ classmethod
-    def can_export(cls, state)->bool:
+    def can_export(cls, state) -> bool:
         return state not in {QuantizationStates.INITIAL, QuantizationStates.DEACTIVATED,
                              QuantizationStates.DEQUANTIZED, QuantizationStates.PASSIVE_INIT}
 
@@ -355,15 +362,15 @@ class TensorQuantizationConfig(Serializable):
     def __init__(
         self,
         policy: QuantizationPolicy,
-        rounding: RoundingPolicy,
-        num_of_bits: int,
-        quant_min: int,
-        quant_max: int,
-        scale: Any,
-        offset: Any,
-        observer_algorithm: str,
-        detail: Any = None,
-        inplace: bool = False,
+        rounding: RoundingPolicy  = RoundingPolicy.ROUND_HALF_EVEN,
+        num_of_bits: int          = 8,
+        quant_min: int            = -127,
+        quant_max: int            = 128,
+        scale: Any                = None,
+        offset: Any               = None,
+        observer_algorithm: str   = None,
+        detail: Any               = None,
+        visiblity: QuantizationVisiblity      = QuantizationVisiblity.EXPOET_WHEN_ACTIVE,
         state: QuantizationStates = QuantizationStates.INITIAL
     ):
         """Create a PPQ Tensor Quantization Configuration Instance.
@@ -393,7 +400,13 @@ class TensorQuantizationConfig(Serializable):
             detail (Any, optional): Only used by PPQ internal logic, detail is used to store some internal data,
                 you are not supposed to use it.
 
-            inplace (bool, optional): Indicates whether quantization is taken inplace(rewrite tensor value).
+            visiblity (Visiblity): visiblity is the attribute that controls export logic.
+
+            Currently, there are 3 Visiblity level in PPQ:
+            if Visiblity == FORCE_EXPORT, ppq exporter will export this TQC 
+                ignoring state check(even if current TQC has been overrlapped).
+            if Visiblity == EXPORT_WHEN_ACTIVD, ppq exporter will export this TQC only when it has been actived.
+            if Visiblity == INTERNAL, This TQC will not be exported.
 
             state (QuantizationStates, optional):
                 Defaults to QuantizationStates.INITIAL, see QuantizationStates for more detail.
@@ -411,20 +424,28 @@ class TensorQuantizationConfig(Serializable):
         self._quant_min = quant_min
         self._quant_max = quant_max
         self.observer_algorithm = observer_algorithm
-        self.inplace = inplace
         self.detail = {} if detail is None else detail
         self._father_config = self # union-find
         self._hash = self.__create_hash()
+        self._visiblity = visiblity
         super().__init__()
 
-    @ abstractmethod
-    def export(self) -> str:
-        raise Exception('Implement this first')
+    def can_export(self) -> bool:
+        if self.visiblity == QuantizationVisiblity.INTERNAL: return False
+        type_check  = isinstance(self.scale, torch.Tensor) and isinstance(self.offset, torch.Tensor)
+        valid_states = {QuantizationStates.BAKED, QuantizationStates.PASSIVE_BAKED}
+
+        if EXPORT_OVERLAPPED_CONFIG: valid_states.add(QuantizationStates.OVERLAPPED)
+        state_check = QuantizationStates.is_activated(self.state) or self.state in valid_states
+
+        if (state_check or self.visiblity == QuantizationVisiblity.FORCE_EXPORT):
+            if type_check: return True
+        return False
 
     def __eq__(self, o: object) -> bool:
         if not isinstance(o, TensorQuantizationConfig):
-            raise TypeError('Can only compare TensorQuantizationConfig object '\
-                'with another TensorQuantizationConfig object.')
+            raise TypeError('Can only compare TensorQuantizationConfig object '
+                            'with another TensorQuantizationConfig object.')
         return self._hash == o._hash
 
     def __str__(self) -> str:
@@ -495,7 +516,7 @@ class TensorQuantizationConfig(Serializable):
             self._father_config = master
             self.state = QuantizationStates.SLAVE
 
-    def __is_revisable(self):
+    def is_revisable(self):
         return (self.dominated_by == self and self.state in {
             QuantizationStates.ACTIVATED,
             QuantizationStates.DEQUANTIZED,
@@ -505,6 +526,14 @@ class TensorQuantizationConfig(Serializable):
             QuantizationStates.PASSIVE,
             QuantizationStates.FP32
         })
+
+    @ property
+    def visiblity(self) -> bool:
+        return self._visiblity
+
+    @ visiblity.setter
+    def visiblity(self, visiblity: bool):
+        self._visiblity = visiblity
 
     @ property
     def scale(self) -> torch.Tensor:
@@ -548,7 +577,7 @@ class TensorQuantizationConfig(Serializable):
 
     @ scale.setter
     def scale(self, value: Any):
-        if not self.__is_revisable():
+        if not self.is_revisable():
             raise PermissionError(
                 'Can not change scale of this tensor quantization configuration now. '
                 'It has been overlapped or has an inactive state. '
@@ -559,7 +588,7 @@ class TensorQuantizationConfig(Serializable):
 
     @ offset.setter
     def offset(self, value: Any):
-        if not self.__is_revisable():
+        if not self.is_revisable():
             raise PermissionError(
                 'Can not change offset of this tensor quantization configuration now. '
                 'It has been overlapped or has an inactive state. '
@@ -570,7 +599,7 @@ class TensorQuantizationConfig(Serializable):
 
     @ policy.setter
     def policy(self, policy: QuantizationPolicy):
-        if not self.__is_revisable():
+        if not self.is_revisable():
             raise PermissionError(
                 'Can not change policy of this tensor quantization configuration now. '
                 'It has been overlapped or has an inactive state. '
@@ -581,7 +610,7 @@ class TensorQuantizationConfig(Serializable):
 
     @ num_of_bits.setter
     def num_of_bits(self, bits: int):
-        if not self.__is_revisable():
+        if not self.is_revisable():
             raise PermissionError(
                 'Can not change num_of_bits of this tensor quantization configuration now. '
                 'It has been overlapped or has an inactive state. '
@@ -592,7 +621,7 @@ class TensorQuantizationConfig(Serializable):
 
     @ rounding.setter
     def rounding(self, policy: RoundingPolicy):
-        if not self.__is_revisable():
+        if not self.is_revisable():
             raise PermissionError(
                 'Can not change rounding of this tensor quantization configuration now. '
                 'It has been overlapped or has an inactive state. '
@@ -603,7 +632,7 @@ class TensorQuantizationConfig(Serializable):
 
     @ quant_min.setter
     def quant_min(self, min: int):
-        if not self.__is_revisable():
+        if not self.is_revisable():
             raise PermissionError(
                 'Can not change quant_min of this tensor quantization configuration now. '
                 'It has been overlapped or has an inactive state. '
@@ -614,7 +643,7 @@ class TensorQuantizationConfig(Serializable):
 
     @ quant_max.setter
     def quant_max(self, max: int):
-        if not self.__is_revisable():
+        if not self.is_revisable():
             raise PermissionError(
                 'Can not change quant_max of this tensor quantization configuration now. '
                 'It has been overlapped or has an inactive state. '
@@ -647,7 +676,6 @@ class TensorQuantizationConfig(Serializable):
             scale=scale, offset=offset,
             observer_algorithm=self.observer_algorithm,
             detail=self.detail.copy(),
-            inplace=self.inplace,
             state=self.state
         )
         if self.state == QuantizationStates.OVERLAPPED:
@@ -687,17 +715,19 @@ class ChannelwiseTensorQuantizationConfig(TensorQuantizationConfig):
 
     @ classmethod
     def convert_from_tensor_config(cls,
-        convert_from:TensorQuantizationConfig,
-        scales: Iterable,
-        offsets: Iterable,
-        channel_axis: int
+        convert_from: TensorQuantizationConfig,
+        scale: Iterable = None,
+        offset: Iterable = None,
+        channel_axis: int = 1,
     ):
+        if scale is None: scale = convert_from.scale
+        if offset is None: offset = convert_from.offset
         this = ChannelwiseTensorQuantizationConfig(
             policy=convert_from.policy,
             num_of_bits=convert_from.num_of_bits,
             quant_min=convert_from.quant_min,
             quant_max=convert_from.quant_max,
-            scale=scales, offset=offsets,
+            scale=scale, offset=offset,
             observer_algorithm=convert_from.observer_algorithm,
             detail=convert_from.detail.copy(),
             state=convert_from.state,
@@ -709,7 +739,7 @@ class ChannelwiseTensorQuantizationConfig(TensorQuantizationConfig):
     def copy(self):
         config = super().copy()
         return self.convert_from_tensor_config(
-            config, scales=config.scale, offsets=config.offset,
+            config, scale=config.scale, offset=config.offset,
             channel_axis=self.channel_axis)
 
 

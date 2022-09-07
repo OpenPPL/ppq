@@ -6,9 +6,7 @@ import torch.nn.functional as F
 from ppq.core import QuantizationProperty, QuantizationStates
 from ppq.executor import BaseGraphExecutor
 from ppq.executor.base import GLOBAL_DISPATCHING_TABLE
-from ppq.IR import (GraphCommandProcessor, Operation, QuantableOperation,
-                    Variable)
-from ppq.IR.base.graph import BaseGraph
+from ppq.IR import BaseGraph, Operation, QuantableOperation, Variable
 from ppq.IR.search import Path, SearchableGraph, TraversalCommand
 from ppq.log import NaiveLogger
 from ppq.quantization.measure import torch_mean_square_error
@@ -501,7 +499,7 @@ class SSDEqualizationPass(QuantizationOptimizationPass):
 
     def optimize(
         self,
-        processor: GraphCommandProcessor,
+        graph: BaseGraph,
         dataloader: Iterable,
         executor: BaseGraphExecutor,
         collate_fn: Callable,
@@ -529,7 +527,7 @@ class SSDEqualizationPass(QuantizationOptimizationPass):
 
         calib_steps = min(calib_steps, ceil(200 / batchsize))
 
-        all_pairs = self.collect_all_pairs(processor.graph)
+        all_pairs = self.collect_all_pairs(graph)
         if self.layer_norm:
             self.layer_weight_norm(all_pairs)
 

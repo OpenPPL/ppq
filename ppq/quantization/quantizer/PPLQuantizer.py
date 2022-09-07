@@ -5,16 +5,14 @@ from ppq.core import (PASSIVE_OPERATIONS, ChannelwiseTensorQuantizationConfig,
                       OperationQuantizationConfig, QuantizationPolicy,
                       QuantizationProperty, QuantizationStates, RoundingPolicy,
                       TargetPlatform)
-from ppq.IR import BaseGraph, GraphCommandProcessor
-from ppq.IR.base.graph import Operation, Variable
-from ppq.core.quant import TensorQuantizationConfig
+from ppq.IR import BaseGraph, Operation
 
 from .base import BaseQuantizer
 
 
 class PPLCUDAQuantizer(BaseQuantizer):
     def __init__(
-        self, graph: Union[BaseGraph, GraphCommandProcessor]
+        self, graph: BaseGraph
     ) -> Union[torch.Tensor, list, dict]:
         super().__init__(graph=graph)
         self._num_of_bits = 8
@@ -44,7 +42,7 @@ class PPLCUDAQuantizer(BaseQuantizer):
                 base_quant_config.input_quantization_config[1] = \
                     ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
                         convert_from = conv_weight_config,
-                        offsets = None, scales  = None, channel_axis = 0
+                        offset = None, scale  = None, channel_axis = 0
                     )
                 base_quant_config.input_quantization_config[1].observer_algorithm = 'Minmax'
             # first parameter must exits, for gemm layer it will be gemm_weight
@@ -59,7 +57,7 @@ class PPLCUDAQuantizer(BaseQuantizer):
                 base_quant_config.input_quantization_config[1] = \
                     ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
                         convert_from = gemm_weight_config,
-                        offsets = None, scales  = None, channel_axis = 0
+                        offset = None, scale  = None, channel_axis = 0
                     )
                 base_quant_config.input_quantization_config[1].observer_algorithm = 'Minmax'
             # if operation has bias
@@ -76,8 +74,8 @@ class PPLCUDAQuantizer(BaseQuantizer):
                 bias_config.state = QuantizationStates.PASSIVE_INIT
                 base_quant_config.input_quantization_config[-1] = \
                     ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
-                        convert_from = bias_config, offsets = None,
-                        scales = None, channel_axis = 0
+                        convert_from = bias_config, offset = None,
+                        scale = None, channel_axis = 0
                     )
                 base_quant_config.input_quantization_config[-1].observer_algorithm = 'Minmax'
 
@@ -120,40 +118,3 @@ class PPLCUDAQuantizer(BaseQuantizer):
     @ property
     def activation_fusion_types(self) -> set:
         return {'Relu', 'Clip', 'Sigmoid', 'LeakyRelu'}
-
-
-class PPLCUDAMixPrecisionQuantizer(PPLCUDAQuantizer):
-    def __init__(
-        self, graph: Union[BaseGraph, GraphCommandProcessor]
-    ) -> Union[torch.Tensor, list, dict]:
-        super().__init__(graph=graph)
-
-    def init_quantize_config(self, operation: Operation) -> OperationQuantizationConfig:
-        config = super().init_quantize_config(operation=operation)
-        if operation.platform == TargetPlatform.PPL_CUDA_INT4:
-            for cfg, var in zip(config.input_quantization_config, operation.inputs):
-                assert isinstance(cfg, TensorQuantizationConfig)
-                assert isinstance(var, Variable)
-                if cfg.state == QuantizationStates.INITIAL:
-                    cfg.num_of_bits, cfg.quant_max, cfg.quant_min = 4, 7, -8
-        return config
-
-
-class PPLCUDA_INT4_Quantizer(PPLCUDAQuantizer):
-    def __init__(
-        self, graph: Union[BaseGraph, GraphCommandProcessor]
-    ) -> Union[torch.Tensor, list, dict]:
-        super().__init__(graph=graph)
-
-    def __init__(
-        self, graph: Union[BaseGraph, GraphCommandProcessor]
-    ) -> Union[torch.Tensor, list, dict]:
-
-        super().__init__(graph=graph)
-        self._num_of_bits = 4
-        self._quant_min = - int(pow(2, self._num_of_bits - 1))
-        self._quant_max = int(pow(2, self._num_of_bits - 1) - 1)
-
-    @ property
-    def target_platform(self) -> TargetPlatform:
-        return TargetPlatform.PPL_CUDA_INT8

@@ -222,20 +222,20 @@ class OperationMeta:
 
 def convert_any_to_python_primary_type(
     x: Union[torch.Tensor, np.ndarray, int, float, list, str],
-    accepet_none: bool=True) -> Union[int, float, list, str]:
-    if x is None and accepet_none: return None
-    if x is None and not accepet_none: raise ValueError('Trying to convert an empty value.')
+    accept_none: bool=True) -> Union[int, float, list, str]:
+    if x is None and accept_none: return None
+    if x is None and not accept_none: raise ValueError('Trying to convert an empty value.')
     if isinstance(x, list) or isinstance(x, tuple): return list(x)
     elif isinstance(x, int) or isinstance(x, float): return x
     elif isinstance(x, torch.Tensor):
-        if x.numel() == 0 and accepet_none: return None
-        if x.numel() == 0 and not accepet_none: raise ValueError('Trying to convert an empty value.')
+        if x.numel() == 0 and accept_none: return None
+        if x.numel() == 0 and not accept_none: raise ValueError('Trying to convert an empty value.')
         if str(x.device) != 'cpu': x = x.cpu()
         if x.numel() == 1: return x.item()
         if x.numel()  > 1: return x.tolist()
     elif isinstance(x, np.ndarray):
-        if x.size == 0 and accepet_none: return None
-        if x.size == 0 and not accepet_none: raise ValueError('Trying to convert an empty value.')
+        if x.size == 0 and accept_none: return None
+        if x.size == 0 and not accept_none: raise ValueError('Trying to convert an empty value.')
         if x.size == 1: return x.reshape((1, )).tolist()[0]
         if x.size  > 1: return x.tolist()
     elif isinstance(x, str):
@@ -246,14 +246,14 @@ def convert_any_to_python_primary_type(
 
 def convert_any_to_numpy(
     x: Union[torch.Tensor, np.ndarray, int, float, list, tuple],
-    accepet_none: bool=True) -> np.ndarray:
-    if x is None and accepet_none: return None
-    if x is None and not accepet_none: raise ValueError('Trying to convert an empty value.')
+    accept_none: bool=True) -> np.ndarray:
+    if x is None and accept_none: return None
+    if x is None and not accept_none: raise ValueError('Trying to convert an empty value.')
     if isinstance(x, np.ndarray): return x
     elif isinstance(x, int) or isinstance(x, float): return np.array([x, ])
     elif isinstance(x, torch.Tensor):
-        if x.numel() == 0 and accepet_none: return None
-        if x.numel() == 0 and not accepet_none: raise ValueError('Trying to convert an empty value.')
+        if x.numel() == 0 and accept_none: return None
+        if x.numel() == 0 and not accept_none: raise ValueError('Trying to convert an empty value.')
         if x.numel() == 1: return convert_any_to_numpy(x.detach().cpu().item())
         if x.numel()  > 1: return x.detach().cpu().numpy()
     elif isinstance(x, list) or isinstance(x, tuple):
@@ -264,9 +264,9 @@ def convert_any_to_numpy(
 
 def convert_any_to_torch_tensor(
     x: Union[torch.Tensor, np.ndarray, int, float, list, tuple],
-    accepet_none: bool=True, dtype: torch.dtype=None, device='cpu') -> torch.Tensor:
-    if x is None and accepet_none: return None
-    if x is None and not accepet_none: raise ValueError('Trying to convert an empty value.')
+    accept_none: bool=True, dtype: torch.dtype=None, device='cpu') -> torch.Tensor:
+    if x is None and accept_none: return None
+    if x is None and not accept_none: raise ValueError('Trying to convert an empty value.')
     if isinstance(x, list) or isinstance(x, tuple):
         if all([type(element) == int for element in x]):
             if dtype is None: dtype=torch.int64
@@ -285,7 +285,7 @@ def convert_any_to_torch_tensor(
         if dtype is None:
             dtype = DataType.convert_from_numpy(x.dtype)
             dtype = DataType.to_torch(dtype)
-        return torch.tensor(x, dtype=dtype, device=device)
+        return torch.tensor(x.copy(), dtype=dtype, device=device)
     else:
         raise TypeError(f'input value {x}({type(x)}) can not be converted as torch tensor.')
 

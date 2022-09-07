@@ -44,7 +44,7 @@ class TorchMetaDataTracingHook(RuntimeHook):
         return outputs
 
 
-class TorchQuantizeDelegate(Callable):
+class TorchQuantizeDelegator(Callable):
     """Since PPQ 0.6.2, Interface TorchQuantizeDelegate is introduced to
     customize quantization logic: To be specific, you are suppose to inherit
     this class, and define your own computation logic within function __call__.
@@ -118,7 +118,7 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
         super().__init__(graph)
         
         if not graph.extension_attrib.get(IS_DISPATCHED_GRAPH, False):
-            ppq_warning('Can initilize executor with your graph, cause it has not been correctly dispatched, '
+            ppq_warning('Can not create executor with your graph, graph is not correctly dispatched, '
                         'use dispatch_graph(graph=ir, platform=platfrom, setting=setting) first.')
         
         self._runnable_graph = RunnableGraph(self._graph)
@@ -130,7 +130,7 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
 
     def register_quantize_delegate(
         self, config: TensorQuantizationConfig,
-        delegator: TorchQuantizeDelegate):
+        delegator: TorchQuantizeDelegator):
         """Since PPQ 0.6.2, Interface TorchQuantizeDelegate is introduced to
         customize quantization logic: To be specific, you are suppose to
         inherit this class, and define your own computation logic within
@@ -148,7 +148,7 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
 
         Remove delegate function by TorchExecutor.remove_quantize_delegate(c)
         """
-        if not isinstance(delegator, TorchQuantizeDelegate):
+        if not isinstance(delegator, TorchQuantizeDelegator):
             raise TypeError(
                 f'You can only register a TorchQuantizeDelegate as quantization delegator function,'
                 f' however a/an {type(delegator)} was given')
@@ -394,7 +394,6 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
 
                     if output_var.name in output_names:
                         result_collector[output_names.index(output_var.name)] = outputs[output_idx]
-
             except Exception as _:
                 raise RuntimeError(f'Error happens when dealing with operation {str(operation)}')
 

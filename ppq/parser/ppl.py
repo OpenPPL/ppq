@@ -15,18 +15,14 @@ def convert_type(platform: TargetPlatform) -> str:
     if platform == TargetPlatform.FP32: return None
     raise TypeError(f'Unsupported platform type. ({str(platform)})')
 
+
 class PPLBackendExporter(OnnxExporter):
     def export_quantization_config(self, config_path: str, graph: BaseGraph):
         var_quant_info_recorder, op_platform_recorder = {}, {}
         for operation in graph.operations.values():
             if not isinstance(operation, QuantableOperation): continue
             for config, var in operation.config_with_variable:
-                if not QuantizationStates.can_export(config.state):
-                    raise PermissionError(
-                        'Can not export quant config cause not all quantization configurations '
-                        'have been correctly initialized(or some of them has been deactivated). '
-                        f'Operation {operation.name} has an invalid quantization state({config.state}) '
-                        f'at variable {var.name}.')
+                if not config.can_export(): continue
 
                 # PATCH 2021.11.25
                 # REMOVE BIAS FROM CONFIGURATION

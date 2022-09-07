@@ -1,8 +1,13 @@
 # This file defines export functions & class of PPQ.
-from ppq.api.setting import *
+from ppq.api.setting import (ActivationQuantizationSetting, DispatchingTable,
+                             EqualizationSetting, GraphFormatSetting,
+                             LSQSetting, ParameterQuantizationSetting,
+                             QuantizationFusionSetting, QuantizationSetting,
+                             QuantizationSettingFactory, TemplateSetting)
 from ppq.core import *
-from ppq.executor import TorchExecutor, TorchQuantizeDelegate
-from ppq.IR import (BaseGraph, GraphCommand, GraphCommandProcessor,
+from ppq.executor import (BaseGraphExecutor, TorchExecutor,
+                          TorchQuantizeDelegator)
+from ppq.IR import (BaseGraph, GraphBuilder, GraphCommand, GraphExporter,
                     GraphFormatter, Operation, QuantableGraph, SearchableGraph,
                     Variable)
 from ppq.IR.deploy import RunnableGraph
@@ -17,11 +22,9 @@ from ppq.quantization.measure import (torch_cosine_similarity,
                                       torch_cosine_similarity_as_loss,
                                       torch_KL_divergence,
                                       torch_mean_square_error, torch_snr_error)
-from ppq.quantization.optim import (AdaRoundPass, BiasCorrectionPass,
-                                    ChannelSplitPass, GRUSplitPass,
-                                    InplaceQuantizationSettingPass,
+from ppq.quantization.optim import (BiasCorrectionPass, GRUSplitPass,
+                                    HorizontalLayerSplitPass,
                                     LayerwiseEqualizationPass,
-                                    MatrixFactorizationPass,
                                     MetaxGemmSplitPass, MishFusionPass,
                                     NxpInputRoundingRefinePass,
                                     NxpQuantizeFusionPass,
@@ -30,10 +33,9 @@ from ppq.quantization.optim import (AdaRoundPass, BiasCorrectionPass,
                                     PassiveParameterQuantizePass,
                                     QuantizationOptimizationPass,
                                     QuantizationOptimizationPipeline,
-                                    QuantizeFusionPass, QuantizeReducePass,
+                                    QuantizeFusionPass, QuantizeSimplifyPass,
                                     QuantizeRefinePass, RuntimeCalibrationPass,
-                                    RuntimePerlayerCalibrationPass,
-                                    SwishFusionPass, WeightSplitPass)
+                                    SwishFusionPass)
 from ppq.quantization.qfunction import BaseQuantFunction
 from ppq.quantization.qfunction.linear import (PPQLinearQuant_toInt,
                                                PPQLinearQuantFunction)

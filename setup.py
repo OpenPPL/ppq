@@ -1,5 +1,5 @@
 from setuptools import find_packages, setup
-from ppq.core.config import PPQ_CONFIG
+from ppq.core import PPQ_CONFIG
 
 def readme():
     with open('README.md', encoding='utf-8') as f:

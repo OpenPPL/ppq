@@ -107,7 +107,7 @@ class GraphFormatter(GraphCommandProcessor):
         if command.command_type == GraphCommandType.FORMAT_INT64_CONSTANT:
             return self.format_int64_constant()
         if command.command_type == GraphCommandType.REPLACE_SUB:
-            return self.replace_substarction()
+            return self.replace_substraction()
         if command.command_type == GraphCommandType.FORMAT_PARAMETERS:
             return self.format_parameter_variables()
         if command.command_type == GraphCommandType.FORMAT_CONSTANT_INPUT:
@@ -401,7 +401,7 @@ class GraphFormatter(GraphCommandProcessor):
             # pop variable from graph
             self.graph.remove_variable(var)
 
-    def replace_substarction(self) -> None:
+    def replace_substraction(self) -> None:
         substractions = []
         for operation in self.graph.operations.values():
             if operation.type == 'Sub':
@@ -575,24 +575,40 @@ class GraphMerger(GraphCommandProcessor):
             self.graph.append_variable(bias_var)
 
     def fuse_gemm(self):
-        """ Fuse MatMul + add into a singal Gemm
+        """Fuse MatMul + add into a singal Gemm
             Single Matmul will be replaced with Gemm
-        
+
         Returns:
             _type_: _description_
         """
+
+        def _is_replaceable(op: Operation) -> bool:
+            if op.inputs[0].is_parameter == False and op.inputs[1].is_parameter == False:
+                return False
+            else:
+                return True
+
         search_engine = SearchableGraph(graph=self.graph)
-        patterns = search_engine.pattern_matching(patterns=['MatMul', 'Add'], edges=[[0, 1]], exclusive=True)
+        patterns = search_engine.pattern_matching(patterns=["MatMul", "Add"], edges=[[0, 1]], exclusive=True)
         for pattern in patterns:
             matmul, add = pattern
-            matmul.type = 'Gemm'
+
+            if _is_replaceable(matmul) == False:
+                continue
+
+            matmul.type = "Gemm"
 
             matmul_out = matmul.outputs[0]
-            add_out    = add.outputs[0]
+            add_out = add.outputs[0]
 
-            assert len(add.inputs) == 2, 'Oops, seems we got some problem here.'
+            if matmul.inputs[0].is_parameter:
+                temp = matmul.inputs[0]
+                matmul.inputs[0] = matmul.inputs[1]
+                matmul.inputs[1] = temp
+
+            assert len(add.inputs) == 2, "Oops, seems we got some problem here."
             var1, var2 = add.inputs
-            bias_var   = None
+            bias_var = None
 
             if var1.source_op == matmul and var2.is_parameter:
                 bias_var = var2
@@ -601,22 +617,38 @@ class GraphMerger(GraphCommandProcessor):
                 bias_var = var1
 
             # can not find a valid bias, just skip add.
-            if bias_var is None: 
+            if bias_var is None:
                 continue
 
-            if len(bias_var.value.shape) == 1 and bias_var.value.shape[0] == matmul.parameters[0].value.shape[-1]:
-                bias_var.dest_ops.clear()
-                add.inputs.remove(bias_var)
+            if len(bias_var.value.shape) == 1:
+                if bias_var.value.shape[0] == matmul.parameters[0].value.shape[-1]:
+                    matmul.attributes["transB"] = 1
+                    weight_val = matmul.parameters[0].value
 
-                # remove bias add, move bias to matmul
-                self.graph.remove_operation(add)
-                self.graph.create_link_with_op(variable=bias_var, upstream_op=None, downstream_op=matmul)
-                self.graph.create_link_with_var(upstream_variable=matmul_out, downstream_variable=add_out)
+                    matmul.parameters[0].value = weight_val.transpose(-1, -2)
+
+                    bias_var.dest_ops.clear()
+                    add.inputs.remove(bias_var)
+
+                    # remove bias add, move bias to matmul
+                    self.graph.remove_operation(add)
+                    self.graph.create_link_with_op(variable=bias_var, upstream_op=None, downstream_op=matmul)
+                    self.graph.create_link_with_var(upstream_variable=matmul_out, downstream_variable=add_out)
+                elif bias_var.value.shape[0] == matmul.parameters[0].value.shape[-2]:
+
+                    bias_var.dest_ops.clear()
+                    add.inputs.remove(bias_var)
+                    # remove bias add, move bias to matmul
+                    self.graph.remove_operation(add)
+                    self.graph.create_link_with_op(variable=bias_var, upstream_op=None, downstream_op=matmul)
+                    self.graph.create_link_with_var(upstream_variable=matmul_out, downstream_variable=add_out)
 
         # process single gemm
         for op in self.graph.operations.values():
-            if op.type == 'MatMul':
-                op.type = 'Gemm'
+            if op.type == "MatMul":
+                if _is_replaceable(op) == False:
+                    continue
+                op.type = "Gemm"
 
 
 class GraphDecomposer(GraphCommandProcessor):
@@ -742,36 +774,33 @@ class GraphDeviceSwitcher(GraphCommandProcessor):
                 soi_ops.append(operation)
 
         for operation in soi_ops:
+            if operation.type == 'Shape': continue
             assert isinstance(operation, Operation)
             for var in operation.outputs:
                 if all([can_pass_shape(operation, op) for op in var.dest_ops]): continue
                 # else there is at least one operation needs a device converter.
 
                 if all([not can_pass_shape(operation, op) for op in var.dest_ops]):
-                    boundary_op = DeviceSwitchOP(name=var.name + '_Switcher')
+                    boundary_op = self.graph.create_operation(op_type='PPQDeviceSwitch', platform=TargetPlatform.FP32)
                     self._graph.insert_op_on_var(inserting_op=boundary_op, var=var.name)
-                    boundary_op.platform = TargetPlatform.FP32
                 else:
                     for dest_op in var.dest_ops:
                         if can_pass_shape(operation, dest_op): continue
-                        boundary_op = DeviceSwitchOP(name=operation.name + '_' + dest_op.name)
+                        boundary_op = self.graph.create_operation(op_type='PPQDeviceSwitch', platform=TargetPlatform.FP32)
                         self._graph.insert_op_between_ops(inserting_op=boundary_op, up_op=operation, down_op=dest_op)
-                        boundary_op.platform = TargetPlatform.FP32
 
             for var in operation.inputs:
                 source_op = var.source_op
 
                 if source_op is None and var.name in self.graph.inputs:
-                    boundary_op = DeviceSwitchOP(name='input_' + operation.name)
+                    boundary_op = self.graph.create_operation(op_type='PPQDeviceSwitch', platform=TargetPlatform.SHAPE_OR_INDEX)
                     self._graph.insert_op_between_var_and_op(inserting_op=boundary_op, up_var=var, down_op=operation)
-                    boundary_op.platform = TargetPlatform.SHAPE_OR_INDEX
 
                 elif (source_op is not None 
                       and source_op.platform != TargetPlatform.SHAPE_OR_INDEX 
                       and not source_op.is_soi_generator):
-                    boundary_op = DeviceSwitchOP(name=source_op.name + '_' + operation.name)
+                    boundary_op = self.graph.create_operation(op_type='PPQDeviceSwitch', platform=TargetPlatform.SHAPE_OR_INDEX)
                     self._graph.insert_op_between_ops(inserting_op=boundary_op, up_op=source_op, down_op=operation)
-                    boundary_op.platform = TargetPlatform.SHAPE_OR_INDEX
 
     def remove_switcher(self):
         """remove all switchers from current graph."""

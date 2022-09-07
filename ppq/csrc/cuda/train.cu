@@ -68,7 +68,7 @@ __host__ Tensor TensorClip_C(
     }
 
     Tensor out = at::empty_like(value);
-    _TensorClip_C<<<NUM_OF_BLOCK(NUM_OF_ELEMENT(value)),
+    _TensorClip_C<<<NUM_OF_BLOCK(NUM_OF_ELEMENT(value), CUDA_NUM_THREADS),
         CUDA_NUM_THREADS, 0, at::cuda::getCurrentCUDAStream()>>>(
         NUM_OF_ELEMENT(value), element_per_channel, num_of_channel,
         PTR<float>(value), PTR<float>(reference), PTR<float>(limit),
@@ -103,7 +103,7 @@ __host__ Tensor TensorClip_T(
     CheckTensor(limit, at::kFloat, "Limit(Expect to be FP32)");
 
     Tensor out = at::empty_like(value);
-    _TensorClip_T<<<NUM_OF_BLOCK(NUM_OF_ELEMENT(value)),
+    _TensorClip_T<<<NUM_OF_BLOCK(NUM_OF_ELEMENT(value), CUDA_NUM_THREADS),
         CUDA_NUM_THREADS, 0, at::cuda::getCurrentCUDAStream()>>>(
         NUM_OF_ELEMENT(value),
         PTR<float>(value), PTR<float>(reference), PTR<float>(limit),
@@ -158,7 +158,7 @@ __host__ Tensor RoundingLoss_LT(
     CheckTensor(offset, at::kFloat, "Offset(Expect to be FP32)");
 
     Tensor loss = at::zeros({1}, value.options());
-    _RoundingLoss_LT<<<NUM_OF_BLOCK(NUM_OF_ELEMENT(value)),
+    _RoundingLoss_LT<<<NUM_OF_BLOCK(NUM_OF_ELEMENT(value), CUDA_NUM_THREADS),
         CUDA_NUM_THREADS, 0, at::cuda::getCurrentCUDAStream()>>>(
         NUM_OF_ELEMENT(value),
         PTR<float>(value), PTR<float>(scale), PTR<float>(offset),
@@ -207,7 +207,7 @@ __host__ Tensor RoundingLoss_LT_B(
     CheckTensor(offset, at::kFloat, "Offset(Expect to be FP32)");
 
     Tensor grad_v = at::zeros_like(value);
-    _RoundingLoss_LT_B<<<NUM_OF_BLOCK(NUM_OF_ELEMENT(value)),
+    _RoundingLoss_LT_B<<<NUM_OF_BLOCK(NUM_OF_ELEMENT(value), CUDA_NUM_THREADS),
         CUDA_NUM_THREADS, 0, at::cuda::getCurrentCUDAStream()>>>(
         NUM_OF_ELEMENT(value),
         PTR<float>(value), PTR<float>(dy),
@@ -270,7 +270,7 @@ __host__ Tensor RoundingLoss_LC(
     }
 
     Tensor loss = at::zeros({1}, value.options());
-    _RoundingLoss_LC<<<NUM_OF_BLOCK(NUM_OF_ELEMENT(value)),
+    _RoundingLoss_LC<<<NUM_OF_BLOCK(NUM_OF_ELEMENT(value), CUDA_NUM_THREADS),
         CUDA_NUM_THREADS, 0, at::cuda::getCurrentCUDAStream()>>>(
         NUM_OF_ELEMENT(value), element_per_channel, num_of_channel,
         PTR<float>(value), PTR<float>(scale), PTR<float>(offset),
@@ -327,7 +327,7 @@ __host__ Tensor RoundingLoss_LC_B(
     }
 
     Tensor grad_v = at::zeros_like(value);
-    _RoundingLoss_LC_B<<<NUM_OF_BLOCK(NUM_OF_ELEMENT(value)),
+    _RoundingLoss_LC_B<<<NUM_OF_BLOCK(NUM_OF_ELEMENT(value), CUDA_NUM_THREADS),
         CUDA_NUM_THREADS, 0, at::cuda::getCurrentCUDAStream()>>>(
         NUM_OF_ELEMENT(value), element_per_channel, num_of_channel,
         PTR<float>(value), PTR<float>(dy),

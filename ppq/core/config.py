@@ -7,7 +7,7 @@ class PPQ_GLOBAL_CONFIGURATION:
         self.NAME                     = 'PPL Quantization Tool'
         
         # PPQ 的版本号
-        self.VERSION                  = '0.6.5'
+        self.VERSION                  = '0.6.5.1'
         
         # 导出图时是否导出权重（仅影响 Native 格式导出）
         self.DUMP_VALUE_WHEN_EXPORT   = True

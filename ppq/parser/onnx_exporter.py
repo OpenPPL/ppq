@@ -59,7 +59,7 @@ OPERATION_EXPORTERS = {
 def convert_value(value: Union[int, float, np.ndarray, torch.Tensor]) -> str:
     if type(value) in {int, float}: return value
     else:
-        value = convert_any_to_numpy(value, accepet_none=True)
+        value = convert_any_to_numpy(value, accept_none=True)
         if value is None: return value # SOI config has Nona as its scale and
         return value.tolist()
 
@@ -68,8 +68,8 @@ class OnnxExporter(GraphExporter):
     def __init__(self) -> None:
         super().__init__()
 
-    def export_quantization_config(
-        self, config_path: str, graph: BaseGraph):
+    def export_quantization_config(self, config_path: str, graph: BaseGraph):
+        """Export Tensor Quantization Config to File(Json)."""
 
         render_buffer = {
             'configs': {},
@@ -106,7 +106,59 @@ class OnnxExporter(GraphExporter):
         with open(file=config_path, mode='w') as file:
             json.dump(render_buffer, file, indent=4)
 
+    def export_graph(self, graph: BaseGraph) -> onnx.GraphProto:
+        """
+        Convert a PPQ IR to Onnx IR.
+        This export will only convert PPQ Op and var to onnx, all quantization configs will be skipped.
+        
+        This function will try to keep the opset version of your graph unchanged. 
+        However if the opset is not given, ppq will convert it to with the global parameter ppq.core.ONNX_EXPORT_OPSET.
+        """
+        name = graph._name
+        if not name: name = f'{PPQ_CONFIG.NAME} - v({PPQ_CONFIG.VERSION})'
+
+        # Ready to export onnx graph defination.
+        _inputs, _outputs, _initilizers, _nodes = [], [], [], []
+        for operation in graph.topological_sort():
+            _nodes.append(self.export_operation(operation))
+
+        for variable in graph.variables.values():
+            tensor_proto = self.export_var(variable)
+            if variable.name in graph.inputs:
+                _inputs.append(tensor_proto)
+            if variable.name in graph.outputs:
+                _outputs.append(tensor_proto)
+            if variable.is_parameter:
+                _initilizers.append(tensor_proto)
+
+        graph_def = helper.make_graph(
+            name=name, nodes=_nodes,
+            inputs=_inputs, outputs=_outputs,
+            initializer=_initilizers)
+
+        # if opset is missing from your graph, give it a default one.
+        if GRAPH_OPSET_ATTRIB not in graph._detail:
+            op = onnx.OperatorSetIdProto()
+            op.version = ONNX_EXPORT_OPSET
+            opsets = [op]
+        else:
+            opsets = []
+            for opset in graph._detail[GRAPH_OPSET_ATTRIB]:
+                op = onnx.OperatorSetIdProto()
+                op.domain = opset['domain']
+                op.version = opset['version']
+                opsets.append(op)
+
+        onnx_model = helper.make_model(
+            graph_def, producer_name=PPQ_CONFIG.NAME, opset_imports=opsets)
+        onnx_model.ir_version = graph._detail.get('ir_version', ONNX_VERSION)
+        return onnx_model
+
     def export_operation(self, operation: Operation) -> onnx.OperatorProto:
+        """
+        Convert PPQ Op to Onnx Operation
+        An Op consumes zero or more Tensors, and produces zero or more Tensors.
+        """
         if operation.type in OPERATION_EXPORTERS:
             exporter = OPERATION_EXPORTERS[operation.type]()
             assert isinstance(exporter, OperationExporter), (
@@ -132,6 +184,11 @@ class OnnxExporter(GraphExporter):
         return op_proto
 
     def export_var(self, variable: Variable) -> onnx.TensorProto:
+        """
+        Convert PPQ Variable to Onnx Tensor, There are 2 different types of Tensor in Onnx:
+            Variable: Represents a Tensor whose value is not known until inference-time.
+            Constant: Represents a Tensor whose value is known.
+        """
         if variable.meta is not None:
             shape = variable.meta.shape
             dtype = variable.meta.dtype.value
@@ -174,50 +231,8 @@ class OnnxExporter(GraphExporter):
             processor = GraphDeviceSwitcher(graph)
             processor.remove_switcher()
 
-        name = graph._name
-        if not name: name = f'{PPQ_CONFIG.NAME} - v({PPQ_CONFIG.VERSION})'
-
         # if a valid config path is given, export quantization config to there.
         if config_path is not None:
             self.export_quantization_config(config_path, graph)
 
-        # Ready to export onnx graph defination.
-        _inputs, _outputs, _initilizers, _nodes = [], [], [], []
-        for operation in graph.topological_sort():
-            _nodes.append(self.export_operation(operation))
-
-        for variable in graph.variables.values():
-            tensor_proto = self.export_var(variable)
-            if variable.name in graph.inputs:
-                _inputs.append(tensor_proto)
-            if variable.name in graph.outputs:
-                _outputs.append(tensor_proto)
-            if variable.is_parameter:
-                _initilizers.append(tensor_proto)
-
-        graph_def = helper.make_graph(
-            name=name,
-            nodes=_nodes,
-            inputs=_inputs,
-            outputs=_outputs,
-            initializer=_initilizers,
-        )
-
-        # force opset to 11
-        if GRAPH_OPSET_ATTRIB not in graph._detail:
-            op = onnx.OperatorSetIdProto()
-            op.version = ONNX_EXPORT_OPSET
-            opsets = [op]
-        else:
-            opsets = []
-            for opset in graph._detail[GRAPH_OPSET_ATTRIB]:
-                op = onnx.OperatorSetIdProto()
-                op.domain = opset['domain']
-                op.version = opset['version']
-                opsets.append(op)
-
-        onnx_model = helper.make_model(
-            graph_def, producer_name=PPQ_CONFIG.NAME, opset_imports=opsets)
-        onnx_model.ir_version = graph._detail.get('ir_version', ONNX_VERSION)
-        # onnx.checker.check_model(onnx_model)
-        onnx.save(onnx_model, file_path)
+        onnx.save(self.export_graph(graph=graph), file_path)

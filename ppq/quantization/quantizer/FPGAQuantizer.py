@@ -5,9 +5,7 @@ from ppq.api.setting import *
 from ppq.core import (OperationQuantizationConfig, QuantizationPolicy,
                       QuantizationProperty, QuantizationStates, RoundingPolicy,
                       TargetPlatform)
-from ppq.executor.base import BaseGraphExecutor
-from ppq.IR import BaseGraph, GraphCommandProcessor
-from ppq.IR.base.graph import Operation
+from ppq.IR import BaseGraph, Operation
 from ppq.quantization.optim import QuantizationOptimizationPipeline
 
 from .base import BaseQuantizer
@@ -16,16 +14,15 @@ from .base import BaseQuantizer
 class FPGAQuantizer(BaseQuantizer):
     def __init__(
         self,
-        graph: Union[BaseGraph, GraphCommandProcessor],
+        graph: BaseGraph,
     ) -> Union[torch.Tensor, list, dict]:
         super().__init__(graph=graph)
         self._num_of_bits = 8
         self._quant_min = - 128
         self._quant_max = + 127
 
-    def build_quant_pipeline(
-        self, setting: QuantizationSetting, executor: BaseGraphExecutor) -> QuantizationOptimizationPipeline:
-        pipeline = super().build_quant_pipeline(setting, executor)
+    def build_quant_pipeline(self, setting: QuantizationSetting) -> QuantizationOptimizationPipeline:
+        pipeline = super().build_quant_pipeline(setting)
         return pipeline
 
     def init_quantize_config(self, operation: Operation) -> OperationQuantizationConfig:

@@ -2,12 +2,11 @@
 from typing import List, Tuple
 
 import torch
-from ppq.IR.search import SearchableGraph
-from ppq.core import (PASSIVE_OPERATIONS, DataType, QuantizationStates,
-                      TensorMeta, TensorQuantizationConfig,
-                      convert_any_to_torch_tensor, ppq_warning)
+from ppq.core import (DataType, QuantizationStates, TargetPlatform, TensorMeta,
+                      TensorQuantizationConfig, convert_any_to_torch_tensor,
+                      ppq_warning)
 from ppq.IR import BaseGraph, Operation, QuantableOperation, Variable
-from ppq.core.quant import TargetPlatform
+from ppq.IR.search import SearchableGraph
 from ppq.quantization.qfunction.linear import PPQLinearQuant_toInt
 from ppq.utils.round import ppq_tensor_round
 
@@ -55,7 +54,7 @@ class ORTOOSExporter(ONNXRUNTIMExporter):
             'Gemm': 'QGemm',
             'Concat': 'Concat', # no need to convert concat.
             'LeakyRelu': 'QLinearLeakyRelu',
-            # "ReduceMean": "QLinearReduceMean", # onnx not implemented.
+             # "ReduceMean": "QLinearReduceMean", # onnx not implemented.
             'Sigmoid': 'QLinearSigmoid'}
 
     def conversion_preprocess(self, op: Operation) -> Tuple[List[Variable], List[TensorMeta]]:

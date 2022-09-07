@@ -4,7 +4,49 @@ from typing import Union
 
 import torch
 from ppq.core import RoundingPolicy
+from torch.autograd import Function
 
+class PPQTensorRoundImpl(Function):
+    @ staticmethod
+    def forward(ctx, value: torch.Tensor, 
+                policy:RoundingPolicy=RoundingPolicy.ROUND_HALF_EVEN) -> torch.Tensor:
+        """
+            reference: https://en.wikipedia.org/wiki/Rounding
+
+        Args:
+            value (torch.Tensor): [description]
+            policy (RoundingPolicy, optional): [description]. Defaults to RoundingPolicy.ROUND_HALF_EVEN.
+
+        Raises:
+            ValueError: [description]
+
+        Returns:
+            torch.Tensor: [description]
+        """
+        assert isinstance(value, torch.Tensor), 'tensor round only takes effect on torch tensor.'
+        if policy == RoundingPolicy.ROUND_HALF_EVEN:
+            # default rounding policy of torch is ROUND_TO_NEAR_EVEN
+            # try this: print(torch.Tensor([1.5, 2.5, 3.5, 4.5]).round())
+            # However it may generate unexpected results due to version difference.
+            return value.round()
+        elif policy == RoundingPolicy.ROUND_UP:
+            return value.ceil()
+        elif policy == RoundingPolicy.ROUND_HALF_TOWARDS_ZERO:
+            return torch.sign(value) * torch.ceil(value.abs() - 0.5)
+        elif policy == RoundingPolicy.ROUND_HALF_FAR_FORM_ZERO:
+            return torch.sign(value) * torch.floor(value.abs() + 0.5)
+        elif policy == RoundingPolicy.ROUND_HALF_DOWN:
+            return torch.ceil(value - 0.5)
+        elif policy == RoundingPolicy.ROUND_HALF_UP:
+            return torch.floor(value + 0.5)
+        elif policy == RoundingPolicy.ROUND_TO_NEAR_INT:
+            raise NotImplementedError(f'Torch Tensor can not use this rounding policy({policy}) try ROUND_HALF_EVEN instead.')
+        else:
+            raise ValueError('Unexpected rounding policy found.')
+
+    @ staticmethod
+    def backward(ctx, dy: torch.Tensor):
+        return dy, None
 
 def ppq_numerical_round(value: float,
     policy: RoundingPolicy=RoundingPolicy.ROUND_HALF_EVEN) -> int:
@@ -52,7 +94,8 @@ def ppq_numerical_round(value: float,
     else:
         raise ValueError('Unexpected rounding policy found.')
 
-def ppq_tensor_round(value: torch.Tensor,
+def ppq_tensor_round(
+    value: torch.Tensor,
     policy:RoundingPolicy=RoundingPolicy.ROUND_HALF_EVEN) -> torch.Tensor:
     """
         reference: https://en.wikipedia.org/wiki/Rounding
@@ -67,26 +110,7 @@ def ppq_tensor_round(value: torch.Tensor,
     Returns:
         torch.Tensor: [description]
     """
-    assert isinstance(value, torch.Tensor), 'tensor round only takes effect on torch tensor.'
-    if policy == RoundingPolicy.ROUND_HALF_EVEN:
-        # default rounding policy of torch is ROUND_TO_NEAR_EVEN
-        # try this: print(torch.Tensor([1.5, 2.5, 3.5, 4.5]).round())
-        # However it may generate unexpected results due to version difference.
-        return value.round()
-    elif policy == RoundingPolicy.ROUND_UP:
-        return value.ceil()
-    elif policy == RoundingPolicy.ROUND_HALF_TOWARDS_ZERO:
-        return torch.sign(value) * torch.ceil(value.abs() - 0.5)
-    elif policy == RoundingPolicy.ROUND_HALF_FAR_FORM_ZERO:
-        return torch.sign(value) * torch.floor(value.abs() + 0.5)
-    elif policy == RoundingPolicy.ROUND_HALF_DOWN:
-        return torch.ceil(value - 0.5)
-    elif policy == RoundingPolicy.ROUND_HALF_UP:
-        return torch.floor(value + 0.5)
-    elif policy == RoundingPolicy.ROUND_TO_NEAR_INT:
-        raise NotImplementedError(f'Torch Tensor can not use this rounding policy({policy}) try ROUND_HALF_EVEN instead.')
-    else:
-        raise ValueError('Unexpected rounding policy found.')
+    return PPQTensorRoundImpl.apply(value, policy)
 
 def ppq_round_to_power_of_2(value: Union[float, int],
     policy: RoundingPolicy=RoundingPolicy.ROUND_UP) -> float:
