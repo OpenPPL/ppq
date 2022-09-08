@@ -846,6 +846,8 @@ class BaseGraph(Serializable):
         for name in self.outputs:
             if name not in cloned.outputs:
                 raise KeyError(f'Graph Copy Error, Output {var.name} is Missing')
+        cloned._num_of_generated_op  = self._num_of_generated_op
+        cloned._num_of_generated_var = self._num_of_generated_var
         return cloned
 
 

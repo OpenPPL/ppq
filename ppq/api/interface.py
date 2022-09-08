@@ -575,7 +575,7 @@ def export_ppq_graph(
     platform: TargetPlatform,
     graph_save_to: str,
     config_save_to: str = None,
-    copy_graph: bool = False,
+    copy_graph: bool = True,
     **kwargs) -> None:
     """使用这个函数将 PPQ ir 保存到文件，同时导出 PPQ 的量化配置信息。 该函数可以将 PPQ ir 保存为不同格式的模型文件。 this
     func dumps ppq IR to file, and exports quantization setting information
