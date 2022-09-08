@@ -23,7 +23,7 @@ class TensorRTQuantizer(BaseQuantizer):
         self, operation: Operation) -> OperationQuantizationConfig:
         base_quant_config = self.create_default_quant_config(
             policy=self.quantize_policy, rounding=self.rounding_policy,
-            operation_meta=operation.meta_data, num_of_bits=self._num_of_bits,
+            op=operation, num_of_bits=self._num_of_bits,
             quant_max=self._quant_max, quant_min=self._quant_min,
             observer_algorithm='percentile'
         )

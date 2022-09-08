@@ -2,12 +2,9 @@ from typing import Any, List
 
 import numpy as np
 import torch
-from ppq.core import (DataType, TargetPlatform,
-                      convert_any_to_python_primary_type,
+from ppq.core import (DataType, convert_any_to_python_primary_type,
                       convert_any_to_torch_tensor, ppq_warning)
-from ppq.IR.quantize import DeviceSwitchOP
 from ppq.IR.search import SearchableGraph
-from ppq.scheduler import value_tracing_pattern
 
 from .base.command import (GraphCommand, GraphCommandType,
                            ReplaceOperationCommand, ReplaceVariableCommand,
@@ -285,16 +282,11 @@ class GraphFormatter(GraphCommandProcessor):
 
         for operation in constant_ops:
             assert isinstance(operation, Operation)
-            output_var = operation.outputs[0]
-
             constant_value = operation.attributes['value']
-            output_var.value = constant_value
-            # force output variable to a parameter.
+            output_var = operation.outputs[0]
             output_var._is_parameter = True
-
-            operation.outputs.clear()
-            output_var.source_op = None
-            self.graph.delete_operation(op_name=operation.name)
+            output_var.value = constant_value
+            self.graph.remove_operation(removing_op=operation)
 
     def truncate_on_var(self, var: Variable, mark_as_output: bool):
         """从一个指定位置将图截断.
@@ -448,9 +440,10 @@ class GraphFormatter(GraphCommandProcessor):
                 f'Error at Operation {op_name}, inputs[{input_idx}]')
         input_var.dest_ops.pop(input_var.dest_ops.index(operation))
         operation.inputs.pop(input_idx)
+
         if len(input_var.dest_ops) == 0:
+            self.graph.remove_operation(input_var.source_op)
             self.graph.remove_variable(input_var)
-            self.graph.delete_operation(input_var.source_op.name)
 
     def __add_constant_input(self, op: Operation, value: torch.Tensor):
         op_name = op.name
@@ -735,94 +728,3 @@ class GraphDecomposer(GraphCommandProcessor):
 
     def decompose_gru(self):
         pass
-
-
-class GraphDeviceSwitcher(GraphCommandProcessor):
-    """Graph Device Switcher insert necessary switcher operation for graph
-    split and device dispatching.
-
-    See also ppq scheduler for more information.
-
-    All SOI operations are supposed to be executed on cpu.
-        while other operations are supposed to be executed on cuda.
-        Therefore switching operation will be inserted between SOI operations and fp32(quant) operations.
-        to transfer cuda tensor to cpu tensor, vice versa.
-
-    However some operations receive SOI input(cpu tensor) naturally, such as reshape, slice, etc.
-    PPQ uses a tracing function for judging whether it is necessary to insert a
-        switcher between operations like that.
-
-    Before invoking this class, all operations must have been dispatched by a dispatcher.
-
-    Args:
-        GraphCommandProcessor ([type]): [description]
-    """
-    def insert_switcher(self):
-        """Insert all necessary switchers into current graph. Before invoking
-        this function, all operations must have been dispatched by a
-        dispatcher.
-
-        THIS IS AN NOT-REENTRANT FUNCTION!
-        """
-        def can_pass_shape(from_op: Operation, to_op: Operation) -> bool:
-            if to_op.platform == TargetPlatform.SHAPE_OR_INDEX: return True
-            else: return not value_tracing_pattern(from_where=from_op, to_where=to_op)
-
-        soi_ops = []
-        for operation in self.graph.operations.values():
-            if operation.platform == TargetPlatform.SHAPE_OR_INDEX:
-                soi_ops.append(operation)
-
-        for operation in soi_ops:
-            if operation.type == 'Shape': continue
-            assert isinstance(operation, Operation)
-            for var in operation.outputs:
-                if all([can_pass_shape(operation, op) for op in var.dest_ops]): continue
-                # else there is at least one operation needs a device converter.
-
-                if all([not can_pass_shape(operation, op) for op in var.dest_ops]):
-                    boundary_op = self.graph.create_operation(op_type='PPQDeviceSwitch', platform=TargetPlatform.FP32)
-                    self._graph.insert_op_on_var(inserting_op=boundary_op, var=var.name)
-                else:
-                    for dest_op in var.dest_ops:
-                        if can_pass_shape(operation, dest_op): continue
-                        boundary_op = self.graph.create_operation(op_type='PPQDeviceSwitch', platform=TargetPlatform.FP32)
-                        self._graph.insert_op_between_ops(inserting_op=boundary_op, up_op=operation, down_op=dest_op)
-
-            for var in operation.inputs:
-                source_op = var.source_op
-
-                if source_op is None and var.name in self.graph.inputs:
-                    boundary_op = self.graph.create_operation(op_type='PPQDeviceSwitch', platform=TargetPlatform.SHAPE_OR_INDEX)
-                    self._graph.insert_op_between_var_and_op(inserting_op=boundary_op, up_var=var, down_op=operation)
-
-                elif (source_op is not None 
-                      and source_op.platform != TargetPlatform.SHAPE_OR_INDEX 
-                      and not source_op.is_soi_generator):
-                    boundary_op = self.graph.create_operation(op_type='PPQDeviceSwitch', platform=TargetPlatform.SHAPE_OR_INDEX)
-                    self._graph.insert_op_between_ops(inserting_op=boundary_op, up_op=source_op, down_op=operation)
-
-    def remove_switcher(self):
-        """remove all switchers from current graph."""
-        removing_collection = []
-        for operation in self.graph.operations.values():
-            if operation.type == 'PPQDeviceSwitch':
-                removing_collection.append(operation)
-
-        for op in removing_collection:
-            assert isinstance(op, Operation)
-            input_var, output_var = op.inputs[0], op.outputs[0]
-            self.graph.remove_operation(removing_op=op)
-            self.graph.create_link_with_var(upstream_variable=input_var, downstream_variable=output_var)
-
-    def _acceptable_command_types(self) -> List[GraphCommandType]:
-        return [
-            GraphCommandType.INSERT_SWITCHER,
-            GraphCommandType.REMOVE_SWITCHER
-        ]
-
-    def process(self, command: GraphCommand) -> Any:
-        if command.command_type == GraphCommandType.INSERT_SWITCHER:
-            return self.insert_switcher()
-        if command.command_type == GraphCommandType.REMOVE_SWITCHER:
-            return self.remove_switcher()

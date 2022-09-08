@@ -37,7 +37,7 @@ class QNNDSPExporter(OnnxExporter):
                 # we do not support mix precision quantization for CUDA backend now.
                 # All configurations for this variable should keep identical towards each other.
 
-                if config.state == QuantizationStates.SLAVE and var.name in activation_info: continue
+                if config.state == QuantizationStates.PASSIVE and var.name in activation_info: continue
 
                 assert not isinstance(config, ChannelwiseTensorQuantizationConfig), 'QNNExporter only support'\
                     'per tensor quantization for now'

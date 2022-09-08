@@ -22,7 +22,6 @@ from ppq.core import (PPQ_CONFIG, ChannelwiseTensorQuantizationConfig,
                       QuantizationStates, TensorMeta, TensorQuantizationConfig,
                       convert_any_to_torch_tensor)
 from ppq.IR import BaseGraph
-from ppq.IR.morph import GraphDeviceSwitcher
 from ppq.IR.quantize import QuantableOperation, QuantableVariable
 from ppq.utils.round import ppq_tensor_round
 
@@ -134,11 +133,6 @@ class TensorRTExporter(ONNXRUNTIMExporter):
         ATTENTION: MUST USE TENSORRT QUANTIZER TO GENERATE A TENSORRT MODEL.
         """
         self.convert_operation_from_opset11_to_opset13(graph)
-
-        # remove switchers.
-        if not PPQ_CONFIG.EXPORT_DEVICE_SWITCHER:
-            processor = GraphDeviceSwitcher(graph)
-            processor.remove_switcher()
 
         # find all quantable operations:
         for operation in [op for op in graph.operations.values()]:

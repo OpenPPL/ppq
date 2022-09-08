@@ -154,31 +154,85 @@ class BaseQuantizer(metaclass = ABCMeta):
 
     @ staticmethod
     def create_default_quant_config(
-        operation_meta: OperationMeta, num_of_bits: int,
+        op: Operation, num_of_bits: int,
         quant_min: int, quant_max: int, observer_algorithm: str,
         policy: QuantizationPolicy, rounding: RoundingPolicy,
     ) -> OperationQuantizationConfig:
+        """
+        为你的算子创建一个默认量化信息
+        在这里 ppq 会根据算子接线器的描述，为算子创建默认量化信息
+        对于很多 onnx 算子而言，他们的部分输入都是不需要量化的:
+        
+        如 Clip 算子的三个输入 value, min, max, 大部分框架不要求量化 min, max
+        如 Reshape 算子的两个输入 value, shape, 其中 shape 不能够被量化
+        
+        算子接线器中记录了所有标准 onnx 的默认量化策略
+        该函数将使用预定义的算子量化策略初始化量化信息
+        
+        你可以在 Quantizer 中对默认量化策略进行进一步修改
+
+        Create a default quantization configuration for given op.
+        The created OQC(Op Quantization Config) is based on OpSocket.
+        
+        In fact, there are some rules or templates when creating the OQC:
+        For Clip Op which has 3 input variable, namely value, min and max
+            most framework does not require a quantization config for min and max.
+        For Reshape Op which has 2 input variable, namely value and shape
+            the input shape can never be quantized.
+        
+        Those rules are pre-defined within OpSocket, thus ppq will create
+        OQC based on underlying OpSocket of your Op.
+        
+        After the default OQC got created, you can overwrite its state in quantizer.
+        """
+        assert isinstance(op, Operation), (
+            f'Can only initialize OQC for PPQ.IR.Operation, however {type(op)} was given.')
         assert isinstance(policy, QuantizationPolicy), (
             f'Can not create quantization config - Quantization Policy Type Error.')
         assert isinstance(rounding, RoundingPolicy), (
             f'Can not create quantization config - Rounding Policy Type Error.')
-        num_of_related_vars = operation_meta.num_of_input + operation_meta.num_of_output
-        configs = [TensorQuantizationConfig(
-            policy=policy, rounding=rounding,
-            num_of_bits=num_of_bits, scale=None, offset=None,
-            quant_min=quant_min, quant_max=quant_max,
-            observer_algorithm=observer_algorithm,
-        ) for _ in range(num_of_related_vars)]
-        return OperationQuantizationConfig(
-            input_quantization_configs=configs[: operation_meta.num_of_input],
-            output_quantization_configs=configs[operation_meta.num_of_input: ],
-        )
+
+        socket = op.socket
+        input_cfgs, output_cfgs = [], []
+        for index in range(op.num_of_input):
+            state = QuantizationStates.INITIAL
+            # for those unexpected inputs and outputs
+            # ppq just initilize them as normal variable.
+            if index < len(socket.in_plat):
+                target_plat = socket.in_plat[index]
+                if target_plat == TargetPlatform.FP32:
+                    state = QuantizationStates.FP32
+                if target_plat == TargetPlatform.SOI:
+                    state = QuantizationStates.SOI
+            input_cfgs.append(TensorQuantizationConfig(
+                policy=policy, rounding=rounding,
+                num_of_bits=num_of_bits, scale=None, offset=None,
+                quant_min=quant_min, quant_max=quant_max,
+                observer_algorithm=observer_algorithm, state=state))
+
+        for index in range(op.num_of_output):
+            state = QuantizationStates.INITIAL
+            # for those unexpected inputs and outputs
+            # ppq just initilize them as normal variable.
+            if index < len(socket.out_plat):
+                target_plat = socket.out_plat[index]
+                if target_plat == TargetPlatform.FP32:
+                    state = QuantizationStates.FP32
+                if target_plat == TargetPlatform.SOI:
+                    state = QuantizationStates.SOI
+            output_cfgs.append(TensorQuantizationConfig(
+                policy=policy, rounding=rounding,
+                num_of_bits=num_of_bits, scale=None, offset=None,
+                quant_min=quant_min, quant_max=quant_max,
+                observer_algorithm=observer_algorithm, state=state))
+
+        return OperationQuantizationConfig(input_cfgs, output_cfgs)
 
     @ abstractmethod
     def init_quantize_config(self, operation: Operation) -> OperationQuantizationConfig:
         base_quant_config = self.create_default_quant_config(
             policy=self.quantize_policy, rounding=self.rounding_policy,
-            operation_meta=operation.meta_data, num_of_bits=self._num_of_bits,
+            op=operation, num_of_bits=self._num_of_bits,
             quant_max=self._quant_max, quant_min=self._quant_min,
             observer_algorithm='percentile')
         return base_quant_config
@@ -269,9 +323,6 @@ class BaseQuantizer(metaclass = ABCMeta):
 
         if setting.fusion:
             fusion_setting  = setting.fusion_setting
-            if fusion_setting.refine_quantization:
-                list_of_passes.append(QuantizeRefinePass())
-
             list_of_passes.append(QuantizeFusionPass(
                 fuse_activation=fusion_setting.fuse_activation,
                 fuse_passive_op=fusion_setting.fuse_passive_op,

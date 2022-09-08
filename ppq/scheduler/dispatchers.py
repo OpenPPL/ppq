@@ -1,3 +1,9 @@
+"""
+This File Contains Legacy Dispatchers.
+Refer to ppq.scheduler.perseus for updated implemenation.
+"""
+
+
 from typing import Dict, Set
 
 from ppq.core import TargetPlatform

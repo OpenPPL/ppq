@@ -157,16 +157,6 @@ class TraversalCommand(GraphCommand):
         WHERE   Path.length < 2
         语句将返回从 Conv 出发，到 Relu, Clip 的所有可能路径
         从中筛选出路径长度小于 2 的，并且将路径本身作为结果返回
-
-        Args:
-            query (str): [description]
-
-        Raises:
-            TypeError: [description]
-            KeyError: [description]
-
-        Returns:
-            [type]: [description]
         """
         pass
 
@@ -187,15 +177,29 @@ class PatternTree(Iterable):
         使用 edges 将节点们彼此相连从而构成树形结构
 
         patterns[0] 将被设定为树的根节点
+        
+        一个最简单的例子：
+            pattern = ['Conv', 'Conv', 'Conv'],
+            edges = [[0, 1], [1, 2], [0, 2]]
+        
+        描述了一个类似这样的树形结构:
+        
+            Conv -+- Conv -+- Conv
+                  |        |
+                  ----------
+        
+        其中第一个 Conv 是根节点，模式匹配将从根节点递归出发
+        
+        第二个例子:
+        pt = PatternTree(
+                patterns = [lambda x: x.is_computing_op, 'Softplus', 'Tanh', 'Mul']
+                edges = [[0, 1], [1, 2], [2, 3], [0, 3]])
 
-        Args:
-            patterns (List[Callable]): _description_
-            edges (List[List[int]]): _description_
+            pt create an abstract tree pattern of:
+                                            --- 'Softplus'   ---   'Tanh' --
+            lambda x: x.is_computing_op --- +                              + --- 'Mul'
+                                            ---     ---     ---    ---    --
 
-        Raises:
-            TypeError: _description_
-            TypeError: _description_
-            ValueError: _description_
         """
         for pattern in patterns:
             if not isinstance(pattern, Callable):

@@ -65,7 +65,7 @@ from .ffi import CUDA
 from .quant import (ChannelwiseTensorQuantizationConfig, NetworkFramework,
                     OperationQuantizationConfig, QuantizationPolicy,
                     QuantizationProperty, QuantizationStates, RoundingPolicy,
-                    TargetPlatform, TensorQuantizationConfig)
+                    TargetPlatform, TensorQuantizationConfig, QuantizationVisiblity)
 from .storage import (Serializable, ValueState, is_file_exist,
                       open_txt_file_from_writing)
 from typing import Any, Callable, List, Iterable, Set, Dict, Union, Text

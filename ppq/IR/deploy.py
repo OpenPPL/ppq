@@ -83,12 +83,12 @@ class RunnableGraph(GraphCommandProcessor):
             # in onnx format, some constant values are warpped with operation's attributes['value']
             # To move those constant value from device to numpy,
             # we have to move all the attributes['value'] of operation to numpy(if there is any).
-            if operator.type == 'Constant' and operator.platform != TargetPlatform.SHAPE_OR_INDEX:
+            if operator.type == 'Constant' and operator.platform != TargetPlatform.SOI:
                 operator.attributes['value'] = \
                     convert_any_to_torch_tensor(
                         operator.attributes['value'], accept_none=False).to(device)
 
-            if operator.type == 'Constant' and operator.platform == TargetPlatform.SHAPE_OR_INDEX:
+            if operator.type == 'Constant' and operator.platform == TargetPlatform.SOI:
                 value = operator.attributes['value']
                 operator.attributes['value'] = convert_any_to_torch_tensor(
                     value, accept_none=False, device='cpu')
@@ -114,7 +114,7 @@ class RunnableGraph(GraphCommandProcessor):
             platform = platforms[-1]
 
             # if all downstream operations are shape related operations, send value to cpu
-            if platform == TargetPlatform.SHAPE_OR_INDEX:
+            if platform == TargetPlatform.SOI:
                 variable.value = convert_any_to_torch_tensor(
                     variable.value, accept_none=True).to('cpu')
             else:
@@ -127,12 +127,12 @@ class RunnableGraph(GraphCommandProcessor):
                     raise PermissionError(
                         f'PPQ can not process parameter variable({variable.name})'
                         f' with multiple destinations({[op.name for op in variable.dest_ops]}), split it first.')
-                dest_op = variable.dest_ops[0]
+                dest_op  = variable.dest_ops[0]
                 dest_idx = dest_op.inputs.index(variable)
 
-                if dest_op.type in {'Squeeze', 'Unsqueeze', 'ReduceSum', 'Reshape', 'Slice', 'Gather', 'Pad', 'Resize', 
-                    'Split', 'TopK', 'Tile', 'Expand'}:
-                    if dest_idx >= 1 and len(variable.dest_ops) == 1:
-                        variable.value = convert_any_to_torch_tensor(
-                            variable.value, accept_none=True).to('cpu')
+                assert isinstance(dest_op, Operation)
+                socket = dest_op.socket
+                if socket.in_plat[dest_idx] == TargetPlatform.SOI:
+                    variable.value = convert_any_to_torch_tensor(
+                        variable.value, accept_none=True).to('cpu')
         return self

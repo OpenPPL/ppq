@@ -111,19 +111,7 @@ class ChannelwiseLinearQuantImpl(Function):
 
 def PPQLinearQuantFunction(
     tensor: torch.Tensor, config: TensorQuantizationConfig) -> torch.Tensor:
-    """
-    PPQ 核心量化函数
-
-    Args:
-        tensor (torch.Tensor): _description_
-        config (TensorQuantizationConfig): _description_
-
-    Raises:
-        ValueError: _description_
-
-    Returns:
-        torch.Tensor: _description_
-    """
+    """PPQ 核心量化函数，没啥好说的了吧，这个玩意既做 quant 也做 dequant"""
     if not QuantizationStates.is_activated(config.state): return tensor
     if not config.policy.has_property(QuantizationProperty.LINEAR):
         raise ValueError('Critical Quantization Error! Non-linear config detected.')
@@ -139,7 +127,8 @@ def PPQLinearQuantFunction(
             config.quant_min, config.quant_max, config.rounding)
 
 
-def PPQLinearQuant_toInt(tensor: torch.Tensor, config: TensorQuantizationConfig, ) -> torch.Tensor:
+def PPQLinearQuant_toInt(tensor: torch.Tensor, config: TensorQuantizationConfig) -> torch.Tensor:
+    """PPQ 核心量化函数，没啥好说的了吧，这个玩意只做 quant 不做 dequant"""
     if not config.policy.has_property(QuantizationProperty.LINEAR):
         raise ValueError('Critical Quantization Error! Non-linear config detected.')
     if config.policy.has_property(QuantizationProperty.PER_CHANNEL):

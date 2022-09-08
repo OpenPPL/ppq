@@ -82,161 +82,21 @@ def reverse_tracing_pattern(from_where: Operation, to_where: Operation) -> bool:
                             'Split', 'TopK', 'Tile', 'Expand', 'RoiAlign', 'MMCVRoiAlign'}:
         return to_where == from_where.inputs[0].source_op
     if from_where.type == 'ScatterND':
-        return to_where == from_where.inputs[0].source_op or  to_where == from_where.inputs[-1].source_op
+        return to_where == from_where.inputs[0].source_op or to_where == from_where.inputs[-1].source_op
     if from_where.type in {'NonMaxSuppression', 'Shape'}: # 'ConstantOfShape'}:
         # remove constant of shape from here can speed up.
         return False
     return True
 
 def SOI_receivers(graph: BaseGraph) -> Set[Operation]:
-    _ret_collection = set()
+    receivers = set()
     for operation in graph.operations.values():
-        if operation.type == 'Reshape':
-            # Inputs:
-            #   data (differentiable) : T
-            #       An input tensor.
-            #   shape (non-differentiable) : tensor(int64)
-            #       Specified shape for output.
-            # see also https://github.com/onnx/onnx/blob/master/docs/Operators.md#Reshape
-            _ret_collection.add(operation.inputs[-1].source_op)
+        for idx, plat in enumerate(operation.socket.in_plat):
+            if plat in {TargetPlatform.SOI, TargetPlatform.FP32}:
+               receivers.add(operation.inputs[idx].source_op)
 
-        if operation.type == 'Slice':
-            # Inputs (3 - 5)
-            #   data (differentiable) : T
-            #       Tensor of data to extract slices from.
-            #   starts (non-differentiable) : Tind
-            #       1-D tensor of starting indices of corresponding axis in `axes`
-            #   ends (non-differentiable) : Tind
-            #       1-D tensor of ending indices (exclusive) of corresponding axis in `axes`
-            #   axes (optional, non-differentiable) : Tind
-            #       1-D tensor of axes that `starts` and `ends` apply to. Negative value means
-            #       counting dimensions from the back. Accepted range is [-r, r-1] where r = rank(data).
-            #   steps (optional, non-differentiable) : Tind
-            #       1-D tensor of slice step of corresponding axis in `axes`.
-            #       Negative value means slicing backward. 'steps' cannot be 0. Defaults to 1.
-            # see also https://github.com/onnx/onnx/blob/master/docs/Changelog.md#Slice-11
-            for shape_var in operation.inputs[1: ]:
-                _ret_collection.add(shape_var.source_op)
-
-        if operation.type == 'Gather':
-            # Inputs
-            #   data (differentiable) : T
-            #       Tensor of rank r >= 1.
-            #   indices (non-differentiable) : Tind
-            #       Tensor of int32/int64 indices, of any rank q.
-            #       All index values are expected to be within bounds [-s, s-1] along axis of size s.
-            #       It is an error if any of the index values are out of bounds.
-            # see also https://github.com/onnx/onnx/blob/master/docs/Changelog.md#Gather-11
-            _ret_collection.add(operation.inputs[-1].source_op)
-
-        if operation.type == 'Pad':
-            # Inputs (2 - 3)
-            #   data : T
-            # Input tensor.
-            #   pads : tensor(int64)
-            #       Tensor of integers indicating the number of padding elements to add or remove
-            #       (if negative) at the beginning and end of each axis.
-            #       For 2D input tensor, it is the number of pixels. `pads` should be a 1D tensor of shape [2 * input_rank].
-            #       `pads` format should be: [x1_begin, x2_begin,...,x1_end, x2_end,...],
-            #        where xi_begin is the number of pad values added at the beginning of axis `i` and xi_end,
-            #       the number of pad values added at the end of axis `i`.
-            #   constant_value (optional) : T
-            #       (Optional) A scalar value to be used if the mode chosen is `constant` (by default it is 0).
-            # https://github.com/onnx/onnx/blob/master/docs/Changelog.md#Pad-11
-            if len(operation.inputs) >= 2:
-                _ret_collection.add(operation.inputs[1].source_op)
-
-        if operation.type == 'Resize':
-            # Inputs (3 - 4)
-            #   X : T1
-            #       N-D tensor
-            #   roi : T2
-            #       1-D tensor given as [start1, ..., startN, end1, ..., endN],
-            #       where N is the rank of X. The RoIs' coordinates are normalized in the coordinate system of the input image.
-            #       It only takes effect when coordinate_transformation_mode is "tf_crop_and_resize"
-            #   scales : tensor(float)
-            #       The scale array along each dimension.
-            #       It takes value greater than 0. If it's less than 1, it's sampling down,
-            #       otherwise, it's upsampling. The number of elements of 'scales' should be the same as the rank of input 'X'.
-            #       Only one of 'scales' and 'sizes' can be specified.
-            #       If 'size' is needed, the user can use an empty string as the name of 'scales' in this operator's input list.
-            #   sizes (optional) : tensor(int64)
-            #       The size of the output tensor.
-            #       The number of elements of 'sizes' should be the same as the rank of input 'X'.
-            #       Only one of 'scales' and 'sizes' can be specified.
-            # https://github.com/onnx/onnx/blob/master/docs/Changelog.md#Resize-11
-            for shape_var in operation.inputs[1: ]:
-                _ret_collection.add(shape_var.source_op)
-
-        if operation.type == 'Split':
-            # Inputs (1 - 2)
-            #   input (differentiable) : T
-            #       The tensor to split
-            #   split (optional, non-differentiable) : tensor(int64) (opset 13)
-            #       Optional length of each output.
-            #       Values should be >= 0.Sum of the values must be equal to the dim value at 'axis' specified.
-            # see also: https://github.com/onnx/onnx/blob/master/docs/Changelog.md#Split-11
-            # see also: https://github.com/onnx/onnx/blob/master/docs/Operators.md#Split
-            if len(operation.inputs) == 2:
-                _ret_collection.add(operation.inputs[-1].source_op)
-
-        if operation.type == 'TopK':
-            # Inputs: (2)
-            #   X (differentiable) : T
-            #       Tensor of shape [a_1, a_2, ..., a_n, r]
-            #   K (non-differentiable) : tensor(int64)
-            #       A 1-D tensor containing a single positive value corresponding to the number of top elements to retrieve
-            # see also: https://github.com/onnx/onnx/blob/master/docs/Operators.md#TopK-11
-            if len(operation.inputs) == 2:
-                _ret_collection.add(operation.inputs[-1].source_op)
-
-        if operation.type == 'Tile':
-            # Inputs: (2)
-            #   input : T
-            #       Input tensor of any shape.
-            #   repeats : T1
-            #       1D int64 tensor of the same length as input's dimension number, includes numbers of repeated copies along input's dimensions.
-            # see also: https://github.com/onnx/onnx/blob/master/docs/Operators.md#Tile
-            if len(operation.inputs) == 2:
-                _ret_collection.add(operation.inputs[-1].source_op)
-
-        if operation.type == 'Expand':
-            # Inputs: (2)
-            #   input : T
-            #       input (differentiable) : T
-            #   shape (non-differentiable) : tensor(int64)
-            #      A 1-D tensor indicates the shape you want to expand to, following the broadcast rule
-            # see also: https://github.com/onnx/onnx/blob/master/docs/Operators.md#Tile
-            if len(operation.inputs) == 2:
-                _ret_collection.add(operation.inputs[-1].source_op)
-
-        if operation.type == 'ConstantOfShape':
-            # Inputs: (1)
-            #   input : T
-            #       1D tensor. The shape of the expected output tensor.
-            # If empty tensor is given, the output would be a scalar. All values must be >= 0.
-            # see also: https://github.com/onnx/onnx/blob/master/docs/Operators.md#ConstantOfShape
-            _ret_collection.add(operation.inputs[-1].source_op)
-
-        if operation.type == 'RoiAlign':
-            _ret_collection.add(operation.inputs[-1].source_op)
-            _ret_collection.add(operation.inputs[-2].source_op)
-
-        if operation.type == 'MMCVRoiAlign':
-            _ret_collection.add(operation.inputs[-1].source_op)
-
-        if operation.type == 'ScatterND':
-            _ret_collection.add(operation.inputs[1].source_op)
-        
-        # FOR opset13
-        if operation.type == 'Squeeze' or operation.type == 'Unsqueeze' or operation.type == 'ReduceSum':
-            for var in operation.inputs[1:]:
-                _ret_collection.add(var.source_op)
-
-
-    # end for
-    if None in _ret_collection: _ret_collection.remove(None)
-    return _ret_collection
+    if None in receivers: receivers.remove(None)
+    return receivers
 
 def SOI_generators(graph: BaseGraph) -> Set[Operation]:
     _ret_collection = set()

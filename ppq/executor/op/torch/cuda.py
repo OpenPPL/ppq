@@ -4,7 +4,7 @@ from ppq.IR import Operation
 
 import torch
 
-from .base import ASSERT_ALL_TENSORS_AT_SAME_DEVICE, ASSERT_NUM_OF_INPUT, TorchBackendContext
+from .base import ASSERT_NUM_OF_INPUT, TorchBackendContext
 from .default import DEFAULT_BACKEND_TABLE
 
 PPL_GPU_BACKEND_TABLE = DEFAULT_BACKEND_TABLE.copy()
@@ -87,7 +87,6 @@ def AveragePool_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBac
     Returns:
         torch.Tensor: [description]
     """
-    ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
     # checker(op.attributes, input_value[0].shape[2:])
     # op_attr = preprocess_attr(op.attributes, 'Pooling')

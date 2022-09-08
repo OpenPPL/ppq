@@ -503,7 +503,7 @@ class AdaroundPass(TrainingBasedPass):
 
             # register quant delegator
             for cfg, var in op.config_with_variable:
-                if cfg.state not in {QuantizationStates.ACTIVATED, QuantizationStates.SLAVE}: continue
+                if cfg.state not in {QuantizationStates.ACTIVATED, QuantizationStates.PASSIVE}: continue
                 if var.is_parameter and cfg.state not in {QuantizationStates.PASSIVE}:
                     delegator = AdaRoundDelegator(config=cfg, var=var, steps=steps)
                     trainable_params.extend(delegator.trainable_tensors())

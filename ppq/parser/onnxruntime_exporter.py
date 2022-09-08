@@ -10,7 +10,6 @@ from ppq.core import (GRAPH_OPSET_ATTRIB, PPQ_CONFIG,
                       convert_any_to_torch_tensor, ppq_warning)
 from ppq.IR import (BaseGraph, Operation, QuantableOperation,
                     QuantableVariable, Variable)
-from ppq.IR.morph import GraphDeviceSwitcher
 from ppq.quantization.qfunction.linear import PPQLinearQuant_toInt
 from ppq.utils.round import ppq_tensor_round
 
@@ -351,8 +350,6 @@ class ONNXRUNTIMExporter(OnnxExporter):
 
             meta = var.meta
             if var.is_parameter and process_parameter:
-                # we do not want to process clip value here.
-                if op.type in {'Clip', 'Pad'}: continue                
                 assert len(var.dest_ops) == 1, (
                 f'Can not export variable {var.name}, cause it has more than 1 destination operations. '
                 'PPQ require all parameters to have only 1 destination operation.')
@@ -405,11 +402,6 @@ class ONNXRUNTIMExporter(OnnxExporter):
             BaseGraph: Processed Graph
         """
         self.convert_operation_from_opset11_to_opset13(graph)
-
-        # remove switchers.
-        if not PPQ_CONFIG.EXPORT_DEVICE_SWITCHER:
-            processor = GraphDeviceSwitcher(graph)
-            processor.remove_switcher()
 
         # mark quantable variables
         for op in [op for op in graph.operations.values()]:

@@ -4,7 +4,7 @@ from typing import Dict, List, Tuple
 import onnx
 import torch
 from onnx import helper
-from ppq.core import (COMPELING_OP_TYPES, PPQ_CONFIG,
+from ppq.core import (COMPELING_OP_TYPES, GRAPH_OPSET_ATTRIB, PPQ_CONFIG,
                       ChannelwiseTensorQuantizationConfig, DataType,
                       OperationMeta, QuantizationProperty, QuantizationStates,
                       TensorMeta, TensorQuantizationConfig,
@@ -12,8 +12,7 @@ from ppq.core import (COMPELING_OP_TYPES, PPQ_CONFIG,
 from ppq.IR import (BaseGraph, Operation, QuantableOperation,
                     QuantableVariable, Variable)
 from ppq.IR.base.command import GraphCommand, GraphCommandType
-from ppq.IR.morph import GraphDeviceSwitcher, GraphFormatter
-from ppq.core.common import GRAPH_OPSET_ATTRIB
+from ppq.IR.morph import GraphFormatter
 from ppq.utils.round import ppq_tensor_round
 
 from .onnx_exporter import OnnxExporter
@@ -261,10 +260,6 @@ class MetaxExporter(OnnxExporter):
         return compel_pairs
 
     def export(self, file_path: str, graph: BaseGraph, config_path: str = None) -> None:
-        # remove switchers.
-        if not PPQ_CONFIG.EXPORT_DEVICE_SWITCHER:
-            processor = GraphDeviceSwitcher(graph)
-            processor.remove_switcher()
 
         # if a valid config path is given, export quantization config to there.
         if config_path is not None:

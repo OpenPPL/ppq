@@ -11,7 +11,7 @@ from .util import convert_value
 
 def convert_type(platform: TargetPlatform) -> str:
     if platform == TargetPlatform.PPL_CUDA_INT8: return 'INT8'
-    if platform == TargetPlatform.SHAPE_OR_INDEX: return None
+    if platform == TargetPlatform.SOI: return None
     if platform == TargetPlatform.FP32: return None
     raise TypeError(f'Unsupported platform type. ({str(platform)})')
 
@@ -38,7 +38,7 @@ class PPLBackendExporter(OnnxExporter):
                 # we do not support mix precision quantization for CUDA backend now.
                 # All configurations for this variable should keep identical towards each other.
 
-                if config.state == QuantizationStates.SLAVE and var.name in var_quant_info_recorder: continue
+                if config.state == QuantizationStates.PASSIVE and var.name in var_quant_info_recorder: continue
                 var_quant_info_recorder[var.name] = config
 
         # ready to render config to json.

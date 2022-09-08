@@ -8,7 +8,6 @@ from ppq.executor import TorchExecutor
 from ppq.executor.base import BaseGraphExecutor, register_operation_handler
 from ppq.IR import (BaseGraph, GraphBuilder, GraphCommand, GraphCommandType,
                     GraphExporter, GraphFormatter, GraphMerger)
-from ppq.IR.morph import GraphDeviceSwitcher
 from ppq.parser import *
 from ppq.quantization.observer import PPQ_OBSERVER_TABLE, OperationObserver
 from ppq.quantization.optim.base import QuantizationOptimizationPass
@@ -677,7 +676,7 @@ def dispatch_graph(graph: BaseGraph, platform: TargetPlatform, setting: Quantiza
         f'Platform misunderstood, except one of following platform {QUANTIZER_COLLECTION.keys()}')
     quantizer = QUANTIZER_COLLECTION[platform](graph) # 初始化一个 quantizer 没有很大代价...
 
-    if str(setting.dispatcher).lower() == 'pursus':
+    if str(setting.dispatcher).lower() == 'perseus':
         dispatcher = Perseus(graph=graph)
         dispatching_table = dispatcher.dispatch()
     else:
@@ -692,7 +691,7 @@ def dispatch_graph(graph: BaseGraph, platform: TargetPlatform, setting: Quantiza
             graph=graph, quant_types=quant_types,
             quant_platform=TargetPlatform.UNSPECIFIED, # MUST BE UNSPECIFIED, 这里的意思是交由 Quantizer 决定是否量化这个算子
             fp32_platform=TargetPlatform.FP32,
-            SOI_platform=TargetPlatform.SHAPE_OR_INDEX)
+            SOI_platform=TargetPlatform.SOI)
 
     # override dispatching result with setting
     dispatching_override = setting.dispatching_table
@@ -709,9 +708,6 @@ def dispatch_graph(graph: BaseGraph, platform: TargetPlatform, setting: Quantiza
             f'Internal Error, Can not find operation {operation.name} in dispatching table.')
         operation.platform = dispatching_table[operation.name]
 
-    # insert necessary device switchers.
-    formatter = GraphDeviceSwitcher(graph)
-    formatter(GraphCommand(GraphCommandType.INSERT_SWITCHER))
     graph.set_extension_attrib(IS_DISPATCHED_GRAPH, True)
     return graph
 

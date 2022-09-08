@@ -34,8 +34,7 @@ from ppq.quantization.optim import (BiasCorrectionPass, GRUSplitPass,
                                     QuantizationOptimizationPass,
                                     QuantizationOptimizationPipeline,
                                     QuantizeFusionPass, QuantizeSimplifyPass,
-                                    QuantizeRefinePass, RuntimeCalibrationPass,
-                                    SwishFusionPass)
+                                    RuntimeCalibrationPass, SwishFusionPass)
 from ppq.quantization.qfunction import BaseQuantFunction
 from ppq.quantization.qfunction.linear import (PPQLinearQuant_toInt,
                                                PPQLinearQuantFunction)

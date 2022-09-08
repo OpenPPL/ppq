@@ -210,10 +210,6 @@ class ParameterQuantizationSetting():
 
 class QuantizationFusionSetting():
     def __init__(self) -> None:
-        # 一个你必须要启动的 Pass，修复所有算子上的定点错误
-        # This pass is necessary and curicial, fix all quantization errors with your operation.
-        self.refine_quantization = True
-
         # 一个你必须要启动的 Pass，删除无效定点。
         # PPQ 的定点过程与硬件设备一致，每一个算子都会尝试对它的输入和输出进行定点
         # 但在网络当中，当输入已经被上游算子进行了定点，则当前算子无需再对其输入进行定点
@@ -310,7 +306,7 @@ class DispatchingTable():
         self.dispatchings = {
             'YOUR OEPRATION NAME' : 'TARGET PLATFORM(INT)',
             'FP32 OPERATION NAME' : TargetPlatform.FP32.value,
-            'SOI OPERATION NAME'  : TargetPlatform.SHAPE_OR_INDEX.value,
+            'SOI OPERATION NAME'  : TargetPlatform.SOI.value,
             'DSP INT8 OPERATION NAME' : TargetPlatform.PPL_DSP_INT8.value,
             'TRT INT8 OPERATION NAME' : TargetPlatform.TRT_INT8.value,
             'NXP INT8 OPERATION NAME' : TargetPlatform.NXP_INT8.value,
@@ -330,7 +326,7 @@ class DispatchingTable():
 class QuantizationSetting():
     def __init__(self) -> None:
         # 子图切分与调度算法，可从 'pointwise', 'conservative', 'pursus', 'allin', 'pplnn' 中五选一，不区分大小写
-        self.dispatcher                      = 'pursus'
+        self.dispatcher                      = 'conservative'
 
         self.graph_format_setting            = GraphFormatSetting()
 
