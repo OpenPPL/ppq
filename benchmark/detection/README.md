@@ -27,18 +27,18 @@ python benchmark.py
 ## 测试结果
 |model|TargetPlatform|FP32 ORT|PPQ INT8|QDQ ORT INT8|RealPlatform INT8|
 |----|----|----|----|----|----|
-|resnet18|OpenVino|69.764|69.466|69.480|**69.438**|
-|resnet18|TRT|69.764|69.578|69.550|69.484|
-|resnet18|Snpe|69.764|69.278|69.266|-|
-|resnet18|Ncnn|69.764|69.132|69.064|-|
+|Retinanet|OpenVino|34.1|69.466|69.480|-|
+|Retinanet|TRT|34.1|69.578|34.1|69.484|
+|Retinanet|Snpe|34.1|69.278|69.266|-|
+|Retinanet|Ncnn|34.1|69.132|69.064|-|
 
 
 
-- [ ] coco数据集加载
-- [ ] 数据预处理
-- [ ] 模型推理
-- [ ] 模型后处理
-- [ ] map评估
+- [x] coco数据集加载
+- [x] 数据预处理
+- [x] 模型推理
+- [x] 模型后处理
+- [x] map评估
 
 目前存在的问题：
 - [x] 

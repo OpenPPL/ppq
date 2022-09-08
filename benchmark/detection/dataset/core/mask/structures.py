@@ -6,7 +6,7 @@ import mmcv
 import numpy as np
 import pycocotools.mask as maskUtils
 import torch
-# from mmcv.ops.roi_align import roi_align
+from mmcv.ops.roi_align import roi_align
 
 
 class BaseInstanceMasks(metaclass=ABCMeta):
@@ -356,9 +356,8 @@ class BitmapMasks(BaseInstanceMasks):
         if num_bbox > 0:
             gt_masks_th = torch.from_numpy(self.masks).to(device).index_select(
                 0, inds).to(dtype=rois.dtype)
-            # targets = roi_align(gt_masks_th[:, None, :, :], rois, out_shape,
-            #                     1.0, 0, 'avg', True).squeeze(1)
-            targets = None
+            targets = roi_align(gt_masks_th[:, None, :, :], rois, out_shape,
+                                1.0, 0, 'avg', True).squeeze(1)
             if binarize:
                 resized_masks = (targets >= 0.5).cpu().numpy()
             else:

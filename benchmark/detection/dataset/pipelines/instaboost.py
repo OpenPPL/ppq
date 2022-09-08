@@ -1,7 +1,7 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 import numpy as np
 
-from ..builder import PIPELINES
+from .builder import PIPELINES
 
 
 @PIPELINES.register_module()

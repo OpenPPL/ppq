@@ -17,7 +17,7 @@ from tqdm import tqdm
 
 from ppq.core import *
 # import openvino.runtime
-from trt_infer import TrtInferenceModel
+from benchmark.detection.inference.trt_infer import TrtInferenceModel
 import numpy as np
 import openvino.inference_engine as ie
 

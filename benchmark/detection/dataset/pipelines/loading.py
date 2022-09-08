@@ -6,7 +6,7 @@ import numpy as np
 import pycocotools.mask as maskUtils
 
 from ..core import BitmapMasks, PolygonMasks
-from ..builder import PIPELINES
+from .builder import PIPELINES
 
 try:
     from panopticapi.utils import rgb2id

@@ -5,7 +5,7 @@ import cv2
 import mmcv
 import numpy as np
 
-from ..builder import PIPELINES
+from .builder import PIPELINES
 from .compose import Compose
 
 _MAX_LEVEL = 10

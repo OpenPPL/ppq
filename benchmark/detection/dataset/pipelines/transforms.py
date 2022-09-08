@@ -12,7 +12,7 @@ from numpy import random
 from ..core import BitmapMasks, PolygonMasks, find_inside_bboxes
 from ..core.evaluation.bbox_overlaps import bbox_overlaps
 # from mmdet.utils import log_img_scale
-from ..builder import PIPELINES
+from .builder import PIPELINES
 
 try:
     from imagecorruptions import corrupt

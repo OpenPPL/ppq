@@ -3,7 +3,7 @@ import warnings
 
 import mmcv
 
-from ..builder import PIPELINES
+from .builder import PIPELINES
 from .compose import Compose
 
 
