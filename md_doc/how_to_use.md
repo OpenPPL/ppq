@@ -1,7 +1,7 @@
 # Usage
 This tutorial illustrates how you could jump out of the high-level API box and actually control your own
 quantization workflow by customizing your own scripts. It's assumed that you have PPQ installed successfully
-in your working environment, for the installation part, please refer to [Installation](../../README.md).
+in your working environment, for the installation part, please refer to [Installation](../README.md).
 In some degree this tutorial shows how you can build your own workflow, thus providing more flexiablity.
 
 ## CUDA Kernel for Acceleration
