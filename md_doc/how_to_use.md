@@ -84,14 +84,14 @@ from ppq.core import TargetPlatform
 
 target_platform = TargetPlatform.TRT_INT8
 ```
-please check [ppq.core](../../ppq/core/quant.py) for all supported backends, PPQ will issue a quantizer
+please check [ppq.core](../ppq/core/quant.py) for all supported backends, PPQ will issue a quantizer
 and an exporter for a specific target platform, and different target platforms might lead to completely
 different quantization schemes and exported file formats.
 
 
 ## Prepare Your Setting
 Quantization setting acts as a guider which conducts the quantization process. PPQ has provided default 
-settings for some backend platforms, see [ppq.api.setting](../../ppq/api/setting.py) for more details
+settings for some backend platforms, see [ppq.api.setting](../ppq/api/setting.py) for more details
 ```python
 from ppq import QuantizationSettingFactory
 
@@ -118,7 +118,7 @@ setting.lsq_optimization                = True    # turn on pass
 setting.lsq_optimization_setting.lr     = 1e-4    # adjust learning rate
 setting.lsq_optimization_setting.epochs = 30      # adjust number of training epochs for every block
 ```
-see [ppq.api.setting](../../ppq/api/setting.py) for more information about all supported passes and their
+see [ppq.api.setting](../ppq/api/setting.py) for more information about all supported passes and their
 applications
 
 ## Schedule Your Graph
@@ -136,7 +136,7 @@ then we can begin our quantization process using all prepared information
 
 ## Initialize An Executor
 All operations are exectuted by *TorchExecutor* instances in PPQ, and as you can see from
-[default.py](../../ppq/executor/torch/default.py), the inner operation executing logic
+[default.py](../ppq/executor/torch/default.py), the inner operation executing logic
 is implemented using pytorch
 ```python
 from ppq.executor import TorchExecutor
@@ -232,7 +232,7 @@ To deploy your model on the target backend, appropriate format of quantized mode
 parameters should be exported from the quantized PPQ IR graph. PPQ will designate different exporters for different
 target platforms. For example, if OpenPPL CUDA(*PPL_CUDA_INT8*) is the desired backend, *PPLBackendExporter* will
 export an onnx model and a json file specifying quantization parameters, for more target platforms and exporters,
-please check [interface.py](../../ppq/api/interface.py)
+please check [interface.py](../ppq/api/interface.py)
 
 Usually the chozen target platform determines the exact exporting format of the quantized IR graph, but sometimes
 you might want to export in a different format, say if you want to deploy your model on *PPL_CUDA_INT8*
