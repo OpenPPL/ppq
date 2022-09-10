@@ -25,6 +25,7 @@ def post_process(model_type,outputs,class_num):
         return results
     elif model_type == "Retinanet-wo":
         print("deal with outputs in Retinanet-wo type")
+        results = []
         for output in outputs:
             img_scale = output["scale_factor"] 
             input_size = output["img_shape"][:2] 
