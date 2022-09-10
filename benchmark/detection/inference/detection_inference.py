@@ -20,7 +20,6 @@ def onnxruntime_inference(dataloader,onnxruntime_model_path,device="cuda"):
     sess = onnxruntime.InferenceSession(path_or_bytes=onnxruntime_model_path, providers=providers)
     input_placeholder_name = sess.get_inputs()[0].name
     outputnames = [x.name for x in sess.get_outputs()]
-    outputs = []
     with torch.no_grad():
             # 将[numpy.darray]提前转为numpy.darray,提升推理速度
         model_forward_function = lambda input_tensor: sess.run(

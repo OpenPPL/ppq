@@ -1,4 +1,4 @@
-
+from .box import retinanet_postprocess
 def post_process(model_type,outputs,class_num):
     """
     将任意模型的输出转换为常规输出
@@ -23,6 +23,18 @@ def post_process(model_type,outputs,class_num):
                 result[label].append(bboxs[i])
             results.append(result)
         return results
-    elif model_type == "fasterrcnn":
-        # TODO
-        pass 
+    elif model_type == "Retinanet-wo":
+        print("deal with outputs in Retinanet-wo type")
+        for output in outputs:
+            img_scale = output["scale_factor"] 
+            input_size = output["img_shape"][:2] 
+            cls_heads,reg_heads = output["output"][:5],output["output"][5:]
+            result = [[] for _ in range(class_num)]
+            
+            scores, bboxs, labels = retinanet_postprocess(input_size,cls_heads,reg_heads)
+            bboxs,labels = bboxs[0],labels[0].int()
+            for i,label in enumerate(labels):
+                bboxs[i] = bboxs[i] / img_scale  # 进行bbox的尺寸复原
+                result[label].append(bboxs[i])
+            results.append(result)
+        return results
