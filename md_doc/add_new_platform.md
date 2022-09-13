@@ -181,7 +181,7 @@ then when PPQ executor encounters operations dispatched to ypur platform, it wil
 implementation and execute.
 
 To use PPQ to run your platform like any other in-position platforms, the last thing you need to do is to register your platform
-and corresponding quantizer in the API table [QUANTIZER_COLLECTION](../ppq/api/interface.py] so that PPQ will treat your platform
+and corresponding quantizer in the API table [QUANTIZER_COLLECTION](../ppq/api/interface.py) so that PPQ will treat your platform
 like any one else
 ```python
 QUANTIZER_COLLECTION[TargetPlatform.ACADEMIC_INT8] = ACADEMICQuantizer
