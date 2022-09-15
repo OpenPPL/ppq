@@ -245,6 +245,7 @@ class EngineBuilder:
         log.info("Building {} Engine in {}".format(precision, engine_path))
 
         inputs = [self.network.get_input(i) for i in range(self.network.num_inputs)]
+        outputs = [self.network.get_output(i) for i in range(self.network.num_outputs)]
 
         if precision == "fp16":
             if not self.builder.platform_has_fast_fp16:
@@ -264,10 +265,11 @@ class TrtInferenceModel(Object):
 
         self.context = self.engine.create_execution_context()
         self.inputs, self.outputs, self.bindings, self.stream = allocate_buffers(self.context.engine)
+        print(self.outputs)
     
     def __call__(self,input_tensor):
         self.inputs[0].host = convert_any_to_numpy(input_tensor)
-        [output] = do_inference(
+        output = do_inference(
             self.context, bindings=self.bindings, inputs=self.inputs, 
             outputs=self.outputs, stream=self.stream, batch_size=1)
-        return convert_any_to_torch_tensor(output).reshape([-1, 1000])
+        return output

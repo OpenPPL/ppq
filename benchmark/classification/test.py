@@ -35,13 +35,13 @@ target = "TRT"
 # res = model(SAMPLES)
 # print(res.shape)
 
-from Utilities.Imagenet import evaluate_trt_module_with_imagenet
+from utils.Imagenet import evaluate_trt_module_with_imagenet
 
 # evaluate_trt_module_with_imagenet(model_path=model_path,imagenet_validation_dir=cfg.VALIDATION_DIR,
 # batchsize=64,device="cuda")
 
 import cfg
-from Utilities.Imagenet import (evaluate_onnx_module_with_imagenet,
+from utils.Imagenet import (evaluate_onnx_module_with_imagenet,
                                 evaluate_ppq_module_with_imagenet,
                                 evaluate_openvino_module_with_imagenet,
                                 evaluate_trt_module_with_imagenet)

@@ -28,7 +28,7 @@ with ENABLE_CUDA_KERNEL():
         calib_dataloader = DataLoader(dataset,batch_size=cfg.CALIBRATION_BATCH_SIZE,collate_fn=collate)
 
         for platform,config in cfg.PLATFORM_CONFIGS.items():
-            config["QuanSetting"].dispatcher = "conservative"  #修改调度策略
+            config["QuanSetting"].dispatcher =  config["Dispatcher"]#修改调度策略
 
             if not os.path.exists(config["OutputPath"]):
                 os.makedirs(config["OutputPath"])
@@ -49,6 +49,7 @@ with ENABLE_CUDA_KERNEL():
             # results = post_process(model_name,outputs,cfg.CLASS_NUM)
             # dataset.results2json(results=results,outfile_prefix=f'{os.path.join(config["OutputPath"], model_name)}-PPQ-INT8')  # 结果统一保存为coco json
                 if "PPQ" in cfg.EVAL_LIST:
+                    print("inference ppq model")
                     ppq_inference2json(dataset=dataset,model_name=model_name,ppq_ir=ppq_quant_ir,
                         batch_size=input_size[0],class_num=cfg.CLASS_NUM,
                         outfile_prefix=f'{path_prefix}-PPQ-INT8',
@@ -71,23 +72,27 @@ with ENABLE_CUDA_KERNEL():
 
             
             if "FP32" in cfg.EVAL_LIST:
+                print("inference fp32 model")
                 onnxruntime_inference2json(dataset=dataset,model_name=model_name,model_path=fp32_model_path,
                     batch_size=input_size[0],class_num=cfg.CLASS_NUM,
                     outfile_prefix=f'{fp32_model_path[:-5]}',
                     device=cfg.DEVICE)
             if "ORT" in cfg.EVAL_LIST:
+                print("inference ort model")
                 onnxruntime_inference2json(dataset=dataset,model_name=model_name,model_path=f'{path_prefix}-ORT-INT8.onnx',
                     batch_size=input_size[0],class_num=cfg.CLASS_NUM,
                     outfile_prefix=f'{path_prefix}-ORT-INT8',
                     device=cfg.DEVICE)
             if "PLATFORM" in cfg.EVAL_LIST:
                 if platform  == "OpenVino":
+                    print("inference opevino model")
                     openvino_inference2json(dataset=dataset,model_name=model_name,model_path=f'{path_prefix}-{platform}-INT8.onnx',
                         batch_size=input_size[0],class_num=cfg.CLASS_NUM,
                         outfile_prefix=f'{path_prefix}-{platform}-INT8',
                         device=cfg.DEVICE)
                 elif platform  == "TRT":
-                    trt_inference2json(dataset=dataset,model_name=model_name,model_path=f'{path_prefix}-{platform}-INT8.onnx',
+                    print("inference trt model")
+                    trt_inference2json(dataset=dataset,model_name=model_name,model_path=f'{path_prefix}-{platform}-INT8.engine',
                         batch_size=input_size[0],class_num=cfg.CLASS_NUM,
                         outfile_prefix=f'{path_prefix}-{platform}-INT8',
                         device=cfg.DEVICE)
@@ -96,10 +101,10 @@ with ENABLE_CUDA_KERNEL():
             
 
             result_json_paths = [
-                f'{fp32_model_path[:-5]}.bbox.json',  #fp32 result json
+                # f'{fp32_model_path[:-5]}.bbox.json',  #fp32 result json
                 f'{path_prefix}-PPQ-INT8.bbox.json',
-                f'{path_prefix}-ORT-INT8.bbox.json',
-                f'{path_prefix}-{platform}-INT8.bbox.json'
+                # f'{path_prefix}-ORT-INT8.bbox.json',
+                # f'{path_prefix}-{platform}-INT8.bbox.json'
             ]
             maps = []
             for result_json in result_json_paths:

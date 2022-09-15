@@ -2,7 +2,6 @@
 from utils import *
 from ppq import *
 from ppq.api import *
-from Utilities.Imagenet import load_imagenet_from_directory
 import os
 import cfg
 import pandas as pd
