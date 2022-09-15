@@ -34,7 +34,7 @@ def post_process(model_type,outputs,class_num):
             cls_heads,reg_heads = output["output"][:5],output["output"][5:]
             result = [[] for _ in range(class_num)]
             
-            # print(reg_heads[0].shape[1],cls_heads[0].shape[1])
+            print(reg_heads[0].shape[1],cls_heads[0].shape[1])
             if reg_heads[0].shape[1] > cls_heads[0].shape[1]:
                 # 执行ppq后，可能出现outputs通道顺序改变的情况
                 # 正常reg_head.shape = (bs,9*4,h,w) cls_head.shape = (bs,9*80,h,w)

@@ -25,11 +25,18 @@ with ENABLE_CUDA_KERNEL():
                 input_size=input_size)
         
         # 获取校准数据集
-        calib_dataloader = DataLoader(dataset,batch_size=cfg.CALIBRATION_BATCH_SIZE,collate_fn=collate)
+        # calib_dataloader = DataLoader(dataset,batch_size=cfg.CALIBRATION_BATCH_SIZE,collate_fn=collate)
+        calib_dataloader = [dataset[i]["img"][0].unsqueeze(0) for i in range(cfg.CALIBRATION_NUM)]
 
         for platform,config in cfg.PLATFORM_CONFIGS.items():
             config["QuanSetting"].dispatcher =  config["Dispatcher"]#修改调度策略
 
+            if cfg.OPTIMIZER:
+                print("Open LSQ Optimization...")
+                config["QuanSetting"].lsq_optimization = True                                      # 启动网络再训练过程，降低量化误差
+                config["QuanSetting"].lsq_optimization_setting.steps = 512                         # 再训练步数，影响训练时间，500 步大概几分钟
+                config["QuanSetting"].lsq_optimization_setting.collecting_device = cfg.DEVICE    # 缓存数据放在那，cuda 就是放在gpu，如果显存超了你就换成 'cpu'
+            
             if not os.path.exists(config["OutputPath"]):
                 os.makedirs(config["OutputPath"])
             print(f'---------------------- PPQ Quantization Test Running with {model_name} on {platform}----------------------')
@@ -40,14 +47,14 @@ with ENABLE_CUDA_KERNEL():
             if len(cfg.DO_QUANTIZATION) > 0:
                 ppq_quant_ir = quantize_onnx_model(
                     onnx_import_file=fp32_model_path, calib_dataloader=calib_dataloader, calib_steps=cfg.CALIBRATION_NUM // cfg.CALIBRATION_BATCH_SIZE, 
-                    setting=config["QuanSetting"],input_shape=input_size, collate_fn=lambda x: x["img"][0].to(cfg.DEVICE), 
-                    platform=config["QuantPlatform"], do_quantize=True)
-            
-            # 测试集 dataloader
-            # dataloader = DataLoader(dataset,batch_size=input_size[0],collate_fn=collate)
-            # outputs = ppq_inference(dataloader=dataloader,ppq_ir = ppq_quant_ir,device = cfg.DEVICE)
-            # results = post_process(model_name,outputs,cfg.CLASS_NUM)
-            # dataset.results2json(results=results,outfile_prefix=f'{os.path.join(config["OutputPath"], model_name)}-PPQ-INT8')  # 结果统一保存为coco json
+                    setting=config["QuanSetting"],input_shape=input_size, collate_fn=lambda x: x.to(cfg.DEVICE), 
+                    platform=config["QuantPlatform"],device=cfg.DEVICE, do_quantize=True)
+
+                if cfg.ERROR_ANALYSE: 
+                    layerwise_error_analyse(graph=ppq_quant_ir, running_device=cfg.DEVICE,
+                                    interested_outputs=None,dataloader=calib_dataloader, collate_fn=lambda x: x.to(cfg.DEVICE))
+                
+                # 进行模型推理，并将结果统一保存为coco result json格式
                 if "PPQ" in cfg.EVAL_LIST:
                     print("inference ppq model")
                     ppq_inference2json(dataset=dataset,model_name=model_name,ppq_ir=ppq_quant_ir,

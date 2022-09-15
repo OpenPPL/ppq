@@ -24,6 +24,10 @@ DEVICE = "cuda"
 # DO_QUANTIZATION = ["PLATFORM"]  #是否进行量化，以及要导出的模型
 # DO_QUANTIZATION = ["ORT"] #是否进行量化，以及要导出的模型
 DO_QUANTIZATION = ["ORT"] 
+# DO_QUANTIZATION = []
+
+OPTIMIZER = True  #开启优化算法
+ERROR_ANALYSE = False  #开启误差分析
 
 # 以下的四个精度将会出现在最终的测试报告中，你可以根据需求选择是否测试
 # PF32 全精度,PPQ模拟量化精度, ORT测试精度, PLATFORM平台部署精度
@@ -47,7 +51,7 @@ PLATFORM_CONFIGS = {
         "QuanSetting": QuantizationSettingFactory.default_setting(),
         "ExportPlatform": TargetPlatform.OPENVINO_INT8,
         "OutputPath":f"{BASE_PATH}/OpenVino_output",
-        "Dispatcher":"pursus"
+        "Dispatcher":"conservative"
 
     },
     # "TRT":{

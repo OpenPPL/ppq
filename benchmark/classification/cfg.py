@@ -1,7 +1,6 @@
 from torchvision.models import resnet18,mobilenet_v2,resnext101_64x4d,vit_b_16,shufflenet_v2_x1_0,regnet_x_1_6gf
 from torchvision.models import ResNet18_Weights,MobileNet_V2_Weights,ResNeXt101_64X4D_Weights,ViT_B_16_Weights,ShuffleNet_V2_X1_0_Weights,RegNet_X_1_6GF_Weights
 from ppq import *
-import os
 
 
 # 分类模型相关配置,你可以更换torchvision的其他模型
@@ -15,13 +14,13 @@ MODELS = {
 
 # 通用的配置信息
 BATCHSIZE = 16     # 因为onnx模型输入固定，因此设置全局的batchsize
-CALIBRATION_NUM = 5120
+CALIBRATION_NUM = 512
 INPUT_SHAPE = (BATCHSIZE,3,224,224)
 DEVICE = "cuda"
 
 # 是否获取测试的fp32 onnx模型,为了节省时间只需获取一次即可
 # 但每次更改batchsize后必须将其设为True
-GET_FP32_MODEL = False  
+GET_FP32_MODEL = True 
 
 # 以下的四个精度将会出现在最终的测试报告中，你可以根据需求选择是否测试
 GET_FP32_ACC = True  # PF32 全精度

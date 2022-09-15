@@ -1,5 +1,5 @@
 # Detection Benchmark
-本仓库是一个验证ppq在**多硬件平台**上量化**目标检测模型**的性能Benchmark，测试集为MS COCO, 数据校准集来自COCO训练集采样。
+本仓库是一个验证ppq在**多硬件平台**上量化**目标检测和语义分割模型**的性能Benchmark，测试集为MS COCO, 数据校准集来自COCO训练集采样。
 
 对检测和分割模型：
 > Retinanet-end2end
@@ -14,7 +14,7 @@
 > FP32 Onnxruntime(全精度)，PPQ INT8(模拟量化精度), QDQ onnxruntime INT8(部署参考精度), TargetPlatform INT8(目标硬件推理精度) 
 
 ## 使用方法
-首先保证你已经下载MS COCO数据集，下载链接[ILSVRC2019](https://www.kaggle.com/competitions/imagenet-object-localization-challenge/data)  
+首先保证你已经下载MS COCO数据集，下载链接[MS COCO2017](https://www.kaggle.com/competitions/imagenet-object-localization-challenge/data)  
 本仓库所有需要修改的内容都只在*cfg.py*这个配置文件中.
 ```python3
 # must be modified in cfg.py
@@ -35,7 +35,7 @@ python benchmark.py
 |Retinanet-end2end|Snpe|34.1|29.5|29.6|-|
 |Retinanet-end2end|Ncnn|34.1|33.7|33.7|-|
 |Retinanet-wo|OpenVino|31.5|21.9|21.8|-|
-|Retinanet-wo|TRT|31.5|31.2|31.2|-|
+|Retinanet-wo|TRT|31.5|31.2|31.2|31.2|
 |Retinanet-wo|Snpe|31.5|22.3|22.3|-|
 |Retinanet-wo|Ncnn|31.5|31.1|31.1|-|
 
