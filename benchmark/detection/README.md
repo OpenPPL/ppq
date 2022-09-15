@@ -1,8 +1,11 @@
 # Detection Benchmark
 本仓库是一个验证ppq在**多硬件平台**上量化**目标检测模型**的性能Benchmark，测试集为MS COCO, 数据校准集来自COCO训练集采样。
 
-对5种检测模型：
-> Retinanet_fpn
+对检测和分割模型：
+> Retinanet-end2end
+> Retinanet-wo
+> MaskRCNN
+> FCN
 
 在四个平台上:
 > TensorRT(gpu), OpenVino(x86 cpu), Snpe(dsp&npu), Ncnn(arm cpu)
@@ -11,7 +14,7 @@
 > FP32 Onnxruntime(全精度)，PPQ INT8(模拟量化精度), QDQ onnxruntime INT8(部署参考精度), TargetPlatform INT8(目标硬件推理精度) 
 
 ## 使用方法
-首先保证你已经下载ImageNet数据集，下载链接[ILSVRC2019](https://www.kaggle.com/competitions/imagenet-object-localization-challenge/data)  
+首先保证你已经下载MS COCO数据集，下载链接[ILSVRC2019](https://www.kaggle.com/competitions/imagenet-object-localization-challenge/data)  
 本仓库所有需要修改的内容都只在*cfg.py*这个配置文件中.
 ```python3
 # must be modified in cfg.py
@@ -27,10 +30,14 @@ python benchmark.py
 ## 测试结果
 |model|TargetPlatform|FP32 ORT|PPQ INT8|QDQ ORT INT8|RealPlatform INT8|
 |----|----|----|----|----|----|
-|Retinanet|OpenVino|34.1|69.466|69.480|-|
-|Retinanet|TRT|34.1|69.578|34.1|69.484|
-|Retinanet|Snpe|34.1|69.278|69.266|-|
-|Retinanet|Ncnn|34.1|69.132|69.064|-|
+|Retinanet-end2end|OpenVino|34.1|19.6|19.5|19.2|
+|Retinanet-end2end|TRT|34.1|33.8|33.8|-|
+|Retinanet-end2end|Snpe|34.1|29.5|29.6|-|
+|Retinanet-end2end|Ncnn|34.1|33.7|33.7|-|
+|Retinanet-wo|OpenVino|31.5|21.9|21.8|-|
+|Retinanet-wo|TRT|31.5|31.2|31.2|-|
+|Retinanet-wo|Snpe|31.5|22.3|22.3|-|
+|Retinanet-wo|Ncnn|31.5|31.1|31.1|-|
 
 
 
