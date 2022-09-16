@@ -2,7 +2,6 @@ from tqdm import tqdm
 import onnxruntime
 from ppq import *
 import torch
-import numpy as np
 import openvino.inference_engine as ie
 from .trt_infer import TrtInferenceModel
 import re
@@ -33,7 +32,7 @@ def onnxruntime_inference(dataloader,onnxruntime_model_path,device="cuda"):
         return _inference_any_module_with_coco(model_forward_function=model_forward_function,dataloader=dataloader,device=device)
 
 # openvino 推理过程
-def openvino_inference(dataloader,openvino_model_path,device):
+def openvino_inference(dataloader,openvino_model_path,device="cpu"):
     core = ie.IECore()
     network = core.read_network(openvino_model_path)
     model_openvino = core.load_network(network, "CPU")
@@ -43,7 +42,7 @@ def openvino_inference(dataloader,openvino_model_path,device):
     return _inference_any_module_with_coco(model_forward_function=model_forward_function,dataloader=dataloader,device=device)
 
 # tensorRT 推理过程
-def trt_inference(dataloader,trt_model_path,device):
+def trt_inference(dataloader,trt_model_path,device="cuda"):
     def trt_outputs_map(outputs):
         shape_map = {
             # 记录trt每个输入应该的形状以及正确的索引

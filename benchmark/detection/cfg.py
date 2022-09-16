@@ -17,24 +17,24 @@ MODELS = {
 
 # 通用的配置信息
 CALIBRATION_NUM = 512
-CALIBRATION_BATCH_SIZE = 1  # 候选batchsizeduplicateeva
+CALIBRATION_BATCH_SIZE = 1  # 候选batchsize
 DEVICE = "cuda"
 
 
 # DO_QUANTIZATION = ["PLATFORM"]  #是否进行量化，以及要导出的模型
 # DO_QUANTIZATION = ["ORT"] #是否进行量化，以及要导出的模型
-DO_QUANTIZATION = ["ORT"] 
-# DO_QUANTIZATION = []
+# DO_QUANTIZATION = ["ORT"] 
+DO_QUANTIZATION = []
 
 OPTIMIZER = True  #开启优化算法
-ERROR_ANALYSE = False  #开启误差分析
+ERROR_ANALYSE = True  #开启误差分析
 
 # 以下的四个精度将会出现在最终的测试报告中，你可以根据需求选择是否测试
 # PF32 全精度,PPQ模拟量化精度, ORT测试精度, PLATFORM平台部署精度
 #  EVAL_LIST = ["FP32","PPQ","ORT","PLATFORM"] #测试全部精度
 # EVAL_LIST = ["PPQ","ORT"] 
-# EVAL_LIST = []
-EVAL_LIST = ["PPQ"]  # 进行评估的精度类型
+EVAL_LIST = []
+# EVAL_LIST = ["PPQ"]  # 进行评估的精度类型
 
 CLASS_NUM = 80
 
@@ -52,7 +52,6 @@ PLATFORM_CONFIGS = {
         "ExportPlatform": TargetPlatform.OPENVINO_INT8,
         "OutputPath":f"{BASE_PATH}/OpenVino_output",
         "Dispatcher":"conservative"
-
     },
     # "TRT":{
     #     "QuantPlatform": TargetPlatform.TRT_INT8,

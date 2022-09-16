@@ -21,7 +21,6 @@ import os
 import sys
 
 import numpy as np
-import pycuda.autoinit
 import pycuda.driver as cuda
 import tensorrt as trt
 from visions import Object
@@ -126,6 +125,7 @@ class HostDeviceMem(object):
 
 # Allocates all buffers required for an engine, i.e. host/device inputs/outputs.
 def allocate_buffers(engine):
+    import pycuda.autoinit
     inputs = []
     outputs = []
     bindings = []

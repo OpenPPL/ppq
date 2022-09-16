@@ -2,55 +2,72 @@
 from utils import *
 from ppq import *
 from ppq.api import *
+import cfg
 from dataset import build_dataset
-from inference import ppq_inference
-from utils import post_process
-from utils import (onnxruntime_inference2json,openvino_inference2json,
-                    trt_inference2json,ppq_inference2json)
 
 
 import os
-import cfg
 import pandas as pd
-
-from mmcv.parallel import collate
-from torch.utils.data import DataLoader
+import random
 
 
 report = []
+random.seed(0)
 with ENABLE_CUDA_KERNEL():
     for model_name in cfg.MODELS.keys():
         input_size = cfg.MODELS[model_name]["INPUT_SHAPE"]
         dataset =  build_dataset(ann_file=cfg.ANN_PATH,data_root=cfg.DATA_ROOT,
                 input_size=input_size)
         
-        # 获取校准数据集
-        # calib_dataloader = DataLoader(dataset,batch_size=cfg.CALIBRATION_BATCH_SIZE,collate_fn=collate)
-        calib_dataloader = [dataset[i]["img"][0].unsqueeze(0) for i in range(cfg.CALIBRATION_NUM)]
+        calib_dataloader = [dataset[i]["img"][0].unsqueeze(0) for i in random.sample(range(len(dataset)),cfg.CALIBRATION_NUM)]
 
         for platform,config in cfg.PLATFORM_CONFIGS.items():
-            config["QuanSetting"].dispatcher =  config["Dispatcher"]#修改调度策略
+
+            setting = config["QuanSetting"]
+            setting.dispatcher =  config["Dispatcher"] #修改调度策略
 
             if cfg.OPTIMIZER:
                 print("Open LSQ Optimization...")
-                config["QuanSetting"].lsq_optimization = True                                      # 启动网络再训练过程，降低量化误差
-                config["QuanSetting"].lsq_optimization_setting.steps = 512                         # 再训练步数，影响训练时间，500 步大概几分钟
-                config["QuanSetting"].lsq_optimization_setting.collecting_device = cfg.DEVICE    # 缓存数据放在那，cuda 就是放在gpu，如果显存超了你就换成 'cpu'
+                setting.lsq_optimization = True                                      # 启动网络再训练过程，降低量化误差
+                setting.lsq_optimization_setting.steps = cfg.CALIBRATION_NUM          # 再训练步数，影响训练时间，500 步大概几分钟
+                setting.lsq_optimization_setting.collecting_device = "cpu"   # 缓存数据放在那，cuda 就是放在gpu，如果显存超了你就换成 'cpu'
             
             if not os.path.exists(config["OutputPath"]):
                 os.makedirs(config["OutputPath"])
+                
             print(f'---------------------- PPQ Quantization Test Running with {model_name} on {platform}----------------------')
             fp32_model_path = f'{os.path.join(cfg.FP32_BASE_PATH, model_name)}-FP32.onnx'
             path_prefix = os.path.join(config["OutputPath"], model_name)
 
+            graph = load_onnx_graph(onnx_import_file = fp32_model_path)
+
             # 量化onnx模型
             if len(cfg.DO_QUANTIZATION) > 0:
-                ppq_quant_ir = quantize_onnx_model(
-                    onnx_import_file=fp32_model_path, calib_dataloader=calib_dataloader, calib_steps=cfg.CALIBRATION_NUM // cfg.CALIBRATION_BATCH_SIZE, 
-                    setting=config["QuanSetting"],input_shape=input_size, collate_fn=lambda x: x.to(cfg.DEVICE), 
-                    platform=config["QuantPlatform"],device=cfg.DEVICE, do_quantize=True)
+                ppq_quant_ir = quantize_native_model(
+                    setting=setting,                     # setting 对象用来控制标准量化逻辑
+                    model=graph,
+                    calib_dataloader=calib_dataloader,
+                    calib_steps=cfg.CALIBRATION_NUM // cfg.CALIBRATION_BATCH_SIZE,
+                    input_shape=input_size, # 如果你的网络只有一个输入，使用这个参数传参
+                    collate_fn=lambda x: x.to(cfg.DEVICE),  # collate_fn 跟 torch dataloader 的 collate fn 是一样的，用于数据预处理，
+                    platform=config["QuantPlatform"],
+                    device=cfg.DEVICE,
+                    do_quantize=True)
 
-                if cfg.ERROR_ANALYSE: 
+
+                # 测试ppq输出
+                # executor = TorchExecutor(graph=ppq_quant_ir, device=cfg.DEVICE)
+                # output = executor.forward(calib_dataloader[0].to(cfg.DEVICE))
+                # print(len(output),output[0].shape)
+
+                if cfg.ERROR_ANALYSE:
+                    print('正计算网络量化误差(SNR)，最后一层的误差应小于 0.1 以保证量化精度:')
+                    reports = graphwise_error_analyse(
+                        graph=ppq_quant_ir, running_device=cfg.DEVICE, steps=32,
+                        dataloader=calib_dataloader, collate_fn=lambda x: x.to(cfg.DEVICE))
+                    for op, snr in reports.items():
+                        if snr > 0.1: ppq_warning(f'层 {op} 的累计量化误差显著，请考虑进行优化')
+
                     layerwise_error_analyse(graph=ppq_quant_ir, running_device=cfg.DEVICE,
                                     interested_outputs=None,dataloader=calib_dataloader, collate_fn=lambda x: x.to(cfg.DEVICE))
                 
@@ -120,8 +137,8 @@ with ENABLE_CUDA_KERNEL():
                     maps.append(dict(dataset.evaluate(results_json_path=result_json))["bbox_mAP"])
                 else:
                     maps.append(None)
-            fp32_map,ppq_map,ort_map,platform_map = maps
-            report.append([model_name,platform,fp32_map,ppq_map,ort_map,platform_map])
+            # fp32_map,ppq_map,ort_map,platform_map = maps
+            # report.append([model_name,platform,fp32_map,ppq_map,ort_map,platform_map])
 
 report = pd.DataFrame(report,columns=["model","paltform","fp32_map","ppq_map","ort_map","platform_map"])
 print("-------------------测试报告如下---------------------")

@@ -34,9 +34,9 @@ python benchmark.py
 |Retinanet-end2end|TRT|34.1|33.8|33.8|-|
 |Retinanet-end2end|Snpe|34.1|29.5|29.6|-|
 |Retinanet-end2end|Ncnn|34.1|33.7|33.7|-|
-|Retinanet-wo|OpenVino|31.5|21.9|21.8|-|
+|Retinanet-wo|OpenVino|31.5|28.2|21.8|-|
 |Retinanet-wo|TRT|31.5|31.2|31.2|31.2|
-|Retinanet-wo|Snpe|31.5|22.3|22.3|-|
+|Retinanet-wo|Snpe|31.5|27.6|22.3|-|
 |Retinanet-wo|Ncnn|31.5|31.1|31.1|-|
 
 

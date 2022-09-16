@@ -19,12 +19,12 @@ from ppq.api import *
 import os
 
 # modify configuration below:
-WORKING_DIRECTORY = './benchmark'                        # choose your working directory
-TARGET_PLATFORM   = TargetPlatform.PPL_CUDA_INT8          # choose your target platform
+WORKING_DIRECTORY = '/home/geng/tinyml/ppq/benchmark/detection/calib_data'                        # choose your working directory
+TARGET_PLATFORM   = TargetPlatform.OPENVINO_INT8       # choose your target platform
 MODEL_TYPE        = NetworkFramework.ONNX                 # or NetworkFramework.CAFFE
 INPUT_LAYOUT          = 'chw'                             # input data layout, chw or hwc
-NETWORK_INPUTSHAPE    = [1, 3, 224, 224]                  # input shape of your network
-CALIBRATION_BATCHSIZE = 16                                # batchsize of calibration dataset
+NETWORK_INPUTSHAPE    = [1, 3, 480, 640]                  # input shape of your network
+CALIBRATION_BATCHSIZE = 1                                # batchsize of calibration dataset
 EXECUTING_DEVICE      = 'cuda'                            # 'cuda' or 'cpu'.
 REQUIRE_ANALYSE       = False
 DUMP_RESULT           = False
@@ -37,7 +37,7 @@ TRAINING_YOUR_NETWORK = True                              # 是否需要 Finetun
 # -------------------------------------------------------------------
 graph = None
 if MODEL_TYPE == NetworkFramework.ONNX:
-    graph = load_onnx_graph(onnx_import_file = os.path.join(WORKING_DIRECTORY, 'model.onnx'))
+    graph = load_onnx_graph(onnx_import_file = "/home/geng/tinyml/ppq/benchmark/detection/FP32_model/Retinanet-wo-FP32.onnx")
 if MODEL_TYPE == NetworkFramework.CAFFE:
     graph = load_caffe_graph(
         caffemodel_path = os.path.join(WORKING_DIRECTORY, 'model.caffemodel'),
