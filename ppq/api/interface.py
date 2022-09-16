@@ -77,7 +77,7 @@ EXPORTERS = {
     TargetPlatform.ORT_OOS_INT8:  ORTOOSExporter,
     TargetPlatform.METAX_INT8_C:  ONNXRUNTIMExporter,
     TargetPlatform.METAX_INT8_T:  ONNXRUNTIMExporter,
-    TargetPlatform.TRT_INT8:      TensorRTExporter,
+    TargetPlatform.TRT_INT8:      TensorrtExporter,
     TargetPlatform.NCNN_INT8:     NCNNExporter,
     TargetPlatform.TENGINE_INT8:  TengineExporter
 }
