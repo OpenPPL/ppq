@@ -1,6 +1,7 @@
-from dataset import CocoDataset
 from torch.utils.data import DataLoader
 import os
+from .dataset import build_dataset
+from mmcv.parallel import collate
 
 ann_file = "/home/geng/fiftyone/coco-2017/validation/labels.json"
 # dataset_type = 'CocoDataset'  # 数据集类型，这将被用来定义数据集。
@@ -27,8 +28,7 @@ test_pipeline = [
         ])
 ]
 
-from dataset import build_dataset
-from mmcv.parallel import collate
+
 dataset = build_dataset(ann_file=ann_file,data_root=data_root,input_size=input_size)
 calib_dataloader = DataLoader(dataset,batch_size=1,collate_fn=collate)
 
