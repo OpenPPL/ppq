@@ -456,7 +456,6 @@ class QuantizationSettingFactory:
     @staticmethod
     def trt_setting() -> QuantizationSetting:
         default_setting = QuantizationSetting()
-        default_setting.fusion = False
         return default_setting
 
     @ staticmethod
