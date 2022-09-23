@@ -61,7 +61,7 @@ def convert_value(value: Union[int, float, np.ndarray, torch.Tensor]) -> str:
     if type(value) in {int, float}: return value
     else:
         value = convert_any_to_numpy(value, accept_none=True)
-        if value is None: return value # SOI config has Nona as its scale and
+        if value is None: return value # SOI config has None as its scale and
         return value.tolist()
 
 
