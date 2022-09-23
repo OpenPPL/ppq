@@ -96,10 +96,7 @@ class OnnxExporter(GraphExporter):
 
                 for config, _ in operation.config_with_variable:
                     if config.dominated_by == config:
-                        if (
-                            QuantizationStates.is_activated(config.state)
-                            or config.state == QuantizationStates.OVERLAPPED
-                        ):
+                        if (config.state != QuantizationStates.SOI):
                             render_buffer['values'][config.__hash__()] = {
                                 'scale'      : convert_value(config.scale),
                                 'zero_point' : convert_value(config.offset),
