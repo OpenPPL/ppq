@@ -7,6 +7,7 @@ import torch
 from onnx import helper, numpy_helper
 from ppq.core import (GRAPH_OPSET_ATTRIB, ONNX_EXPORT_OPSET, ONNX_VERSION,
                       PPQ_CONFIG, DataType, convert_any_to_numpy, ppq_warning)
+from ppq.core.quant import QuantizationStates
 from ppq.IR import (BaseGraph, GraphExporter, Operation, OperationExporter,
                     Variable)
 from ppq.IR.morph import GraphDeviceSwitcher
@@ -95,10 +96,14 @@ class OnnxExporter(GraphExporter):
 
                 for config, _ in operation.config_with_variable:
                     if config.dominated_by == config:
-                        render_buffer['values'][config.__hash__()] = {
-                            'scale'      : convert_value(config.scale),
-                            'zero_point' : convert_value(config.offset),
-                        }
+                        if (
+                            QuantizationStates.is_activated(config.state)
+                            or config.state == QuantizationStates.OVERLAPPED
+                        ):
+                            render_buffer['values'][config.__hash__()] = {
+                                'scale'      : convert_value(config.scale),
+                                'zero_point' : convert_value(config.offset),
+                            }
 
                 render_buffer['configs'][operation.name] = op_dict
                 render_buffer['dispatchings'][operation.name] = operation.platform.name
