@@ -10,6 +10,8 @@ import os
 import pandas as pd
 import random
 
+import ctypes
+ctypes.CDLL("/home/geng/tinyml/ppq/benchmark/detection/lib/libmmdeploy_tensorrt_ops.so")
 
 report = []
 random.seed(0)
@@ -85,14 +87,19 @@ with ENABLE_CUDA_KERNEL():
                         graph = ppq_quant_ir,
                         # copy_graph=True,
                         platform=TargetPlatform.ONNXRUNTIME,
-                        graph_save_to=f'{path_prefix}-ORT-INT8.onnx')
+                        graph_save_to=f'{path_prefix}-ORT-INT8')
                         
                 if "PLATFORM" in cfg.DO_QUANTIZATION:
-                     # 导出平台模型 
+                     # 导出平台模型
+                    if platform == "TRT":
+                        config_path = f'{path_prefix}-{platform}-INT8.json'
+                    else:
+                        config_path = None
                     export_ppq_graph(
                         graph = ppq_quant_ir,
                         platform=config["ExportPlatform"],
-                        graph_save_to=f'{path_prefix}-{platform}-INT8.onnx')
+                        graph_save_to=f'{path_prefix}-{platform}-INT8',
+                        config_save_to=config_path)
 
             
             if "FP32" in cfg.EVAL_LIST:

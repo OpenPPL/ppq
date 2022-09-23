@@ -262,7 +262,7 @@ class CocoDataset(CustomDataset):
             for label in range(len(det)):
                 # bbox results
                 bboxes = det[label]
-                for i in range(bboxes.shape[0]):
+                for i in range(len(bboxes)):
                     data = dict()
                     data['image_id'] = img_id
                     data['bbox'] = self.xyxy2xywh(bboxes[i])
@@ -278,7 +278,7 @@ class CocoDataset(CustomDataset):
                 else:
                     segms = seg[label]
                     mask_score = [bbox[4] for bbox in bboxes]
-                for i in range(bboxes.shape[0]):
+                for i in range(len(bboxes)):
                     data = dict()
                     data['image_id'] = img_id
                     data['bbox'] = self.xyxy2xywh(bboxes[i])
@@ -657,7 +657,7 @@ class CocoDataset(CustomDataset):
             tmp_dir.cleanup()
         return eval_results
 
-def build_dataset(ann_file,data_root,input_size):
+def build_dataset(ann_file,data_root,input_size,keep_ratio=False):
     img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
     test_pipeline = [
@@ -667,7 +667,7 @@ def build_dataset(ann_file,data_root,input_size):
             img_scale=input_size[-1:-3:-1],  # 放缩尺度是（w,h）取最后两个元素
             flip=False,
             transforms=[
-                dict(type='Resize', keep_ratio=False),
+                dict(type='Resize', keep_ratio=keep_ratio),
                 dict(type='Normalize', **img_norm_cfg),
                 dict(type='Pad', size_divisor=32),
                 dict(type='ImageToTensor', keys=['img']),

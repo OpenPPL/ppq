@@ -259,6 +259,9 @@ class EngineBuilder:
 
 class TrtInferenceModel(Object):
     def __init__(self,model_path) -> None:
+        import ctypes
+        ctypes.CDLL("/home/geng/tinyml/ppq/benchmark/detection/lib/libmmdeploy_tensorrt_ops.so")
+        
         logger = trt.Logger(trt.Logger.INFO)
         with open(model_path, 'rb') as f, trt.Runtime(logger) as runtime:
             self.engine = runtime.deserialize_cuda_engine(f.read())

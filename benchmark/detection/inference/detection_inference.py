@@ -24,7 +24,8 @@ def onnxruntime_inference(dataloader,onnxruntime_model_path,device="cuda"):
     input_placeholder_name = sess.get_inputs()[0].name
     outputnames = [x.name for x in sess.get_outputs()]
     # 指定output的顺序，按照升序排列
-    outputnames.sort(key=lambda x:int(re.findall("\d+",x)[0]))
+    if len(outputnames) > 3:
+        outputnames.sort(key=lambda x:int(re.findall("\d+",x)[0]))
     with torch.no_grad():
             # 将[numpy.darray]提前转为numpy.darray,提升推理速度
         model_forward_function = lambda input_tensor: sess.run(
@@ -44,6 +45,9 @@ def openvino_inference(dataloader,openvino_model_path,device="cpu"):
 # tensorRT 推理过程
 def trt_inference(dataloader,trt_model_path,device="cuda"):
     def trt_outputs_map(outputs):
+        if len(outputs) < 10:
+            return outputs
+            
         shape_map = {
             # 记录trt每个输入应该的形状以及正确的索引
             3456000:((1, 720, 60, 80),0),

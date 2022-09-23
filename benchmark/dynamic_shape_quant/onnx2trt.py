@@ -1,10 +1,11 @@
 import os
 import tensorrt as trt
 
-onnx_file = "./FasterRCNN-10-FP32.onnx"
+model_path = "/home/geng/tinyml/ppq/benchmark/dynamic_shape_quant/FP32_model/Retinanet-wo-dynamic-FP32"
+onnx_file = model_path+".onnx"
 # onnx_file = "onnx_models/retinanet.onnx"
 # float_engine_file = "engines/retinanet.engine"
-float_engine_file = "./FasterRCNN-10-FP32.engine"
+float_engine_file = model_path+".engine"
 
 TRT_LOGGER = trt.Logger()
 
@@ -26,7 +27,7 @@ def build_float_engine():
     # h和w是可变的，这三个分别是min,opt,max
     # min的意思是最小可支持的尺寸,max是最大可支持的尺寸,opt在min和max之间,表示的应该是最优的h和w
     profile = builder.create_optimization_profile()
-    profile.set_shape("input", (1, 3, 200, 300), (1, 3, 800, 800), (1, 3, 3300,3300))
+    profile.set_shape("input", (1, 3, 160, 300), (1, 3, 800, 1216), (1, 3, 1220,1220))
     config.add_optimization_profile(profile)
     
     parser = trt.OnnxParser(network, TRT_LOGGER)

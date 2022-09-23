@@ -7,7 +7,7 @@ import cv2
 import torch
 import onnxruntime
 from tqdm import tqdm
-from ..dataset import build_dataset
+from dataset import build_dataset
 
 def preprocess(image):
     channel_num = image.layers  #通道数

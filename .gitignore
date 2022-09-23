@@ -13,6 +13,9 @@ __pycache__/
 **/*.pt
 /benchmark/Assets/
 **/*.json
+**/*.engine
+**/*.pb
+**/*.so
 /benchmark/classification/FP32_model
 /benchmark/classification/Ncnn_output
 /benchmark/classification/OpenVino_output
