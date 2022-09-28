@@ -5,10 +5,16 @@ This document describes the quantization deployment process of the TensorRT and 
 ## Environment setup
 
 - Docker image is recommended:
+
+```bash
 docker pull stephen222/ppq:ubuntu18.04_cuda11.4_cudnn8.4_trt8.4.1.5
+```
 
 - Create a docker container:
+
+```bash
 docker run -it --rm --ipc=host --gpus all --mount type=bind,source=your custom path,target=/workspace stephen222/ppq:ubuntu18.04_snpe1.65 /bin/bash
+```
 
 If you want to install it, we strongly suggest you install TensorRT through [tar file](https://docs.nvidia.com/deeplearning/tensorrt/archives/tensorrt-841/install-guide/index.html#installing-tar)
 
