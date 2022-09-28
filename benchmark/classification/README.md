@@ -49,4 +49,4 @@ python benchmark.py
 |ShuffleNetV2_x1_0|Snpe|69.370|68.564|68.520|-|
 |ShuffleNetV2_x1_0|Ncnn|69.370|68.748|68.768|-|
 
-*以上分类模型来源于torchvision.models,转为onnx模型推理测试。测试数据集为ImageNet(ILSVRC2019) val，所有图片都被预处理为 $224\times224$ 的尺寸，评价指标为top-1 ACC。
+*以上分类模型来源于torchvision.models,转为onnx模型推理测试。测试数据集为ImageNet(ILSVRC2019) val，所有图片都被预处理为 224\*224​ 的尺寸，评价指标为top-1 ACC。
