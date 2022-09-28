@@ -17,7 +17,7 @@ docker pull stephen222/ppq:ubuntu18.04_cuda11.4_cudnn8.4_trt8.4.1.5
 docker run -it --rm --ipc=host --gpus all --mount type=bind,source=your custom path,target=/workspace stephen222/ppq:ubuntu18.04_snpe1.65 /bin/bash
 ```
 
-### You can also install it yourself
+### Build trt environment
 
 If you want to install it, we strongly suggest you install TensorRT through [tar file](https://docs.nvidia.com/deeplearning/tensorrt/archives/tensorrt-841/install-guide/index.html#installing-tar)
 
