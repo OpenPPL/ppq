@@ -43,24 +43,24 @@ PLATFORM_CONFIGS = {
         "ExportPlatform": TargetPlatform.OPENVINO_INT8,
         "OutputPath":f"{BASE_PATH}/OpenVino_output" 
     },
-    # "TRT":{
-    #     "QuantPlatform": TargetPlatform.TRT_INT8,
-    #     "QuanSetting": QuantizationSettingFactory.trt_setting(),
-    #    "ExportPlatform": TargetPlatform.TRT_INT8,
-    #     "OutputPath":f"{BASE_PATH}/TRT_output" 
-    # },
+    "TRT":{
+        "QuantPlatform": TargetPlatform.TRT_INT8,
+        "QuanSetting": QuantizationSettingFactory.trt_setting(),
+       "ExportPlatform": TargetPlatform.TRT_INT8,
+        "OutputPath":f"{BASE_PATH}/TRT_output" 
+    },
     "Snpe":{
         "QuantPlatform": TargetPlatform.SNPE_INT8,
         "QuanSetting": QuantizationSettingFactory.dsp_setting(),
         "ExportPlatform": TargetPlatform.SNPE_INT8,
         "OutputPath":f"{BASE_PATH}/Snpe_output"  
     },
-    # "Ncnn":{
-    #     "QuantPlatform": TargetPlatform.NCNN_INT8,
-    #     "QuanSetting": QuantizationSettingFactory.ncnn_setting(),
-    #     "ExportPlatform": TargetPlatform.NCNN_INT8,
-    #     "OutputPath":f"{BASE_PATH}/Ncnn_output"  
-    # }
+    "Ncnn":{
+        "QuantPlatform": TargetPlatform.NCNN_INT8,
+        "QuanSetting": QuantizationSettingFactory.ncnn_setting(),
+        "ExportPlatform": TargetPlatform.NCNN_INT8,
+        "OutputPath":f"{BASE_PATH}/Ncnn_output"  
+    }
 }  
 
 

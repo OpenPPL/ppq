@@ -132,8 +132,6 @@ class DynamicTrtInferenceModel:
             h = math.ceil(h/2)
             w = math.ceil(w/2)
 
-        # context = self.engine.create_execution_context()
-
         inputs_alloc_buf, outputs_alloc_buf, bindings_alloc_buf, stream_alloc_buf = alloc_buf_N(self.engine,input_tensor,binding_shapes)
         inputs_alloc_buf[0].host = np.ascontiguousarray(input_tensor)
         outputs = do_inference_v2(self.engine, inputs_alloc_buf, bindings_alloc_buf, outputs_alloc_buf,stream_alloc_buf, input_tensor)
@@ -146,99 +144,3 @@ class DynamicTrtInferenceModel:
         trt_outputs[5:] = outputs[:5]
         return trt_outputs
 
-
-# with open("/home/geng/tinyml/ppq/benchmark/dynamic_input_model/images_list.txt","r") as f:
-#    img_path_list =  f.readlines()
-# img_path_list  = [x.rstrip() for x in img_path_list]
-# img_path = img_path_list[0]
-
-
-
-if __name__ == '__main__':
-
-
-    img_path = '/home/geng/fiftyone/coco-2017/validation/data/000000397133.jpg'
-
-    from PIL import Image
-    engine_path ='/home/geng/tinyml/ppq/benchmark/dynamic_shape_quant/FP32_model/Retinanet-wo-dynamic-FP32.engine'
-
-    from process import preprocess
-    img = Image.open(img_path)
-    src_data = preprocess(img,(1,3,480,640))
-    # import ctypes
-    # ctypes.CDLL("/home/geng/tinyml/ppq/benchmark/detection/lib/libmmdeploy_tensorrt_ops.so")
-
-    from dataset import build_dataset
-    from torch.utils.data import DataLoader
-    ann_file = "/home/geng/fiftyone/coco-2017/validation/labels.json"
-    data_root = '/home/geng/fiftyone/coco-2017/validation/data/'  # 数据的根路径。
-    input_size = (480,640)
-    from mmcv.parallel import collate
-    dataset = build_dataset(ann_file=ann_file,data_root=data_root,input_size=input_size)
-    dataloader = DataLoader(dataset,batch_size=1,collate_fn=collate)
-
-    input = next(iter(dataloader))["img"][0].numpy()
-    # data = inputs = np.array(src_data).astype(np.float32)[None,:,:,:]
-    print(f"input shape:{input.shape}")
-    # data = np.reshape(inputs,(1,3,400,400))
-    print("input",input)
-    print("src_data",src_data)
-    engine = load_engine(engine_path)
-
-
-    binding_shapes = {}
-    h,w = input.shape[2:]
-    h,w = h//8,w//8
-    for i in range(1,6):
-        binding_shapes[f"output{i}"] = (1,720,h,w)
-        binding_shapes[f"output{i+5}"] = (1,36,h,w)
-        h = math.ceil(h/2)
-        w = math.ceil(w/2)
-        # print(h,w)
-
-    context = engine.create_execution_context()
-
-    inputs_alloc_buf, outputs_alloc_buf, bindings_alloc_buf, stream_alloc_buf = alloc_buf_N(engine,input,binding_shapes)
-
-
-    # np.ascontiguousarray将一个内存不连续存储的数组转换为内存连续存储的数组
-    inputs_alloc_buf[0].host = np.ascontiguousarray(input)
-
-    # import pdb
-    # pdb.set_trace()
-
-    outputs = do_inference_v2(context, inputs_alloc_buf, bindings_alloc_buf, outputs_alloc_buf,stream_alloc_buf, input)
-    # trt_feature = np.asarray(trt_feature)
-
-
-    # trt_feature = trt_feature.reshape((1,16,300,300))
-    # import pdb
-    # pdb.set_trace()
-    for i in range(len(outputs)):
-        outputs[i] = outputs[i].reshape(binding_shapes[engine[i+1]])
-
-    trt_outputs = [None for _ in range(len(outputs))]
-    trt_outputs[:5] = outputs[5:]
-    trt_outputs[5:] = outputs[:5]
-
-    for o in trt_outputs:
-        print("trt_output",o.shape)  
-
-    import onnxruntime
-    import torch
-    from torch.nn.functional import mse_loss
-    onnxruntime_model_path = "/home/geng/tinyml/ppq/benchmark/dynamic_shape_quant/FP32_model/Retinanet-wo-FP32.onnx"
-    sess = onnxruntime.InferenceSession(path_or_bytes=onnxruntime_model_path, providers=['CUDAExecutionProvider'])
-    input_placeholder_name = sess.get_inputs()[0].name
-    outputnames = [x.name for x in sess.get_outputs()]
-
-    ort_outputs = sess.run(input_feed={input_placeholder_name: input},output_names=outputnames)
-    for o in ort_outputs:
-        print("ort_output",o.shape)
-    for ort_output,trt_output in zip(ort_outputs,trt_outputs):
-        print(ort_output.shape,"mse_loss",mse_loss(torch.from_numpy(ort_output),torch.from_numpy(trt_output)))
-
-    print(trt_outputs[1],ort_outputs[1])
-    print(trt_outputs[5],ort_outputs[5])    
-# [[0.77146703 0.1168441  0.11168882]]
-# (1, 3)

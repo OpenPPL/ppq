@@ -1,6 +1,10 @@
 from torch.utils.data import DataLoader
 from dataset import build_dataset
 from mmcv.parallel import collate
+"""
+这个文件演示了如何对检测模型在某个平台上推理，并评测精度。
+"""
+
 
 # 数据配置文件
 ann_file = "/home/geng/fiftyone/coco-2017/validation/labels.json"
@@ -16,10 +20,9 @@ dataloader = DataLoader(dataset,batch_size=batch_size,collate_fn=collate)
 
 # 检测模型推理模块，该模块的输出严格按照模型结构输出
 from inference import onnxruntime_inference,trt_inference
-onnxruntime_model_path = "/home/geng/tinyml/ppq/benchmark/detection/TRT_output/Retinanet-wo-TRT-INT8.engine"
+trt_model_path = "/home/geng/tinyml/ppq/benchmark/detection/TRT_output/Retinanet-wo-TRT-INT8.engine"
 dataloader = [next(iter(dataloader))]  #方便测试可以只推理了一张图
-# outputs = onnxruntime_inference(dataloader,onnxruntime_model_path)
-outputs = trt_inference(dataloader,onnxruntime_model_path)
+outputs = trt_inference(dataloader,trt_model_path)
 
 
 

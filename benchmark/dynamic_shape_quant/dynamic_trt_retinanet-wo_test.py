@@ -36,9 +36,7 @@ for x in tqdm(dataloader):
     outputs.append(img_metas)
 end = time()
 print("Inference has finished! Speed is {:.2f} FPS".format(len(dataloader)/(end-start)))
-# from inference import onnxruntime_inference
-# onnxruntime_model_path = "/home/geng/tinyml/ppq/benchmark/dynamic_shape_quant/FP32_model/Retinanet-wo-dynamic-FP32.onnx"
-# outputs = onnxruntime_inference(dataloader,onnxruntime_model_path)
+
 
 
 
@@ -53,7 +51,6 @@ from utils import post_process
 results = post_process("Retinanet-wo",outputs,80)
 dataset.results2json(results=results,outfile_prefix="/home/geng/tinyml/ppq/benchmark/dynamic_shape_quant/FP32_model/Retinanet-wo-dynamic-trt-INT8") #也可以将推理结果持久化
 
-# print(results)
 # MAP结果评估
 dataset.evaluate(results=results) # 直接使用输出结果进行测试
 # dataset.evaluate(results_json_path="Retinanet-PPQ-INT8.bbox.json") #方法2，使用持久化的推理结果进行评估    

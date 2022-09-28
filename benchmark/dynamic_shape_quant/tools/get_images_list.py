@@ -1,7 +1,9 @@
 from tqdm import tqdm
-from ..detection.dataset import build_dataset
+from ...detection.dataset import build_dataset
 from mmcv import collate
 from torch.utils.data import DataLoader
+
+# 获取coco数据集的图片列表
 
 ann_file = "/home/geng/fiftyone/coco-2017/validation/labels.json"
 data_root = '/home/geng/fiftyone/coco-2017/validation/data/'  # 数据的根路径。

@@ -3,11 +3,10 @@ import json
 import tensorrt as trt
 
 
-# 以mnasnet0_5为例
+
 model_file = "/home/geng/tinyml/ppq/benchmark/dynamic_shape_quant/FP32_model/Retinanet-wo-dynamic-"
 onnx_file =  model_file +"FP32" +".onnx"
 json_file = model_file + "INT8"+".json"
-# engine_file = "resnet18_ncnn_int8_gemm_quant.engine"
 engine_file = model_file + "INT8"+".engine"
 
 TRT_LOGGER = trt.Logger()
@@ -89,8 +88,6 @@ def build_engine(json_file):
         
 
 if __name__ == '__main__':
-    import ctypes
-    ctypes.CDLL("/home/geng/tinyml/ppq/benchmark/detection/lib/libmmdeploy_tensorrt_ops.so")
     build_engine(json_file)
     print("\033[1;32mgenerate %s\033[0m" % engine_file)
 

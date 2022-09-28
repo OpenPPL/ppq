@@ -1,5 +1,7 @@
 # # 动态ONNX推理量化测试
 # ## 1. FP32精度测试 
+import sys
+sys.path.append("../detection")
 
 import numpy as np
 from PIL import Image
@@ -8,6 +10,7 @@ import torch
 import onnxruntime
 from tqdm import tqdm
 from dataset import build_dataset
+
 
 def preprocess(image):
     channel_num = image.layers  #通道数
@@ -43,6 +46,7 @@ def preprocess(image):
     return image
 
 #  加载数据集路径
+
 with open("./images_list.txt","r") as f:
    img_path_list =  f.readlines()
 img_path_list  = [x.rstrip() for x in img_path_list]

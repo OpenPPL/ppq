@@ -8,7 +8,6 @@ import torch
 import onnxruntime
 from tqdm import tqdm
 
-
 import sys
 sys.path.append("../detection/")
 from dataset import build_dataset

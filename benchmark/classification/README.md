@@ -13,7 +13,8 @@
 ## 使用方法
 首先保证你已经下载ImageNet数据集，下载链接[ILSVRC2019](https://www.kaggle.com/competitions/imagenet-object-localization-challenge/data)  
 本仓库所有需要修改的内容都只在*cfg.py*这个配置文件中.
-```python3
+
+```python
 # must be modified in cfg.py
 BASE_PATH = "/home/geng/tinyml/ppq/benchmark/classification"  #项目目录
 VALIDATION_DIR = '/home/geng/tinyml/ppq/benchmark/Assets/Imagenet_Valid'   # ImageNet验证集目录
@@ -48,15 +49,4 @@ python benchmark.py
 |ShuffleNetV2_x1_0|Snpe|69.370|68.564|68.520|-|
 |ShuffleNetV2_x1_0|Ncnn|69.370|68.748|68.768|-|
 
-
-- [x] 完成resnet18在openvino上的前三项精度测试 
-- [x] 完成resnet18在四个平台的前三项精度测试
-- [x] 完成resnet18在TRT和OpenVino上的部署精度测试
-- [x] 完成5个模型在4个平台上的前三项精度测试
-- [x] 完成5个模型前三项测试和openvino+tensorRT部署测试
-- [ ] 完成5个模型在4个平台上的部署精度测试
-
-目前存在的问题：
-- [x] ~~OpeVino平台推理精度低。~~  已修复，opevino推理库存在问题，降低openvino版本到2021.04
-- [x] ~~shufflenetV2无法在openvino上推理。~~ 已修复，opevino推理库存在问题，降低openvino版本到2021.04
-- [X] ~~~export_ppq_graph的参数copy_graph=True时，会导致导出的openvino和ORT模型推理精度为0。目前脚本无法同时测试qdq ort和platform精度。~~~ 已修复
+*以上分类模型来源于torchvision.models,转为onnx模型推理测试。测试数据集为ImageNet(ILSVRC2019) val，所有图片都被预处理为 $224\times224$ 的尺寸，评价指标为top-1 ACC。

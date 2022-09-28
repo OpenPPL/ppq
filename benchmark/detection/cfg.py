@@ -15,8 +15,7 @@ MODELS = {
  'MaskRCNN':
     {
     'INPUT_SHAPE':(1,3,800,1216)
-    },     
-
+    }
 }
 
 # 通用的配置信息
@@ -32,9 +31,7 @@ ERROR_ANALYSE = False  #开启误差分析
 # 以下的四个精度将会出现在最终的测试报告中，你可以根据需求选择是否测试
 # PF32 全精度,PPQ模拟量化精度, ORT测试精度, PLATFORM平台部署精度
 EVAL_LIST = ["FP32","PPQ","ORT","PLATFORM"] #测试全部精度
-# # EVAL_LIST = ["PPQ","ORT"] 
-# EVAL_LIST = ["PLATFORM"]
-# # EVAL_LIST = ["PPQ"]  # 进行评估的精度类型
+EVAL_LIST = [] #不进行任何测试
 
 CLASS_NUM = 80
 

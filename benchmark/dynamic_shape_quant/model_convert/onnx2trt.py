@@ -3,8 +3,6 @@ import tensorrt as trt
 
 model_path = "/home/geng/tinyml/ppq/benchmark/dynamic_shape_quant/FP32_model/Retinanet-wo-dynamic-FP32"
 onnx_file = model_path+".onnx"
-# onnx_file = "onnx_models/retinanet.onnx"
-# float_engine_file = "engines/retinanet.engine"
 float_engine_file = model_path+".engine"
 
 TRT_LOGGER = trt.Logger()

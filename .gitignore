@@ -11,8 +11,6 @@ __pycache__/
 
 
 **/*.pt
-/benchmark/Assets/
-**/*.json
 **/*.engine
 **/*.caffemodel
 **/*.prototxt
@@ -21,5 +19,3 @@ __pycache__/
 **/*.npy
 **/*.bin
 **/*.table
-**/*.txt
-/benchmark/dynamic_shape_quant/ppq

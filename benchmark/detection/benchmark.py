@@ -10,9 +10,6 @@ import os
 import pandas as pd
 import random
 
-import ctypes
-ctypes.CDLL("/home/geng/tinyml/ppq/benchmark/detection/lib/libmmdeploy_tensorrt_ops.so")
-
 report = []
 random.seed(0)
 with ENABLE_CUDA_KERNEL():
@@ -55,12 +52,6 @@ with ENABLE_CUDA_KERNEL():
                     platform=config["QuantPlatform"],
                     device=cfg.DEVICE,
                     do_quantize=True)
-
-
-                # 测试ppq输出
-                # executor = TorchExecutor(graph=ppq_quant_ir, device=cfg.DEVICE)
-                # output = executor.forward(calib_dataloader[0].to(cfg.DEVICE))
-                # print(len(output),output[0].shape)
 
                 if cfg.ERROR_ANALYSE:
                     print('正计算网络量化误差(SNR)，最后一层的误差应小于 0.1 以保证量化精度:')
@@ -132,10 +123,10 @@ with ENABLE_CUDA_KERNEL():
             
 
             result_json_paths = [
-                # f'{fp32_model_path[:-5]}.bbox.json',  #fp32 result json
+                f'{fp32_model_path[:-5]}.bbox.json',  #fp32 result json
                 f'{path_prefix}-PPQ-INT8.bbox.json',
-                # f'{path_prefix}-ORT-INT8.bbox.json',
-                # f'{path_prefix}-{platform}-INT8.bbox.json'
+                f'{path_prefix}-ORT-INT8.bbox.json',
+                f'{path_prefix}-{platform}-INT8.bbox.json'
             ]
             maps = []
             for result_json in result_json_paths:
@@ -144,8 +135,8 @@ with ENABLE_CUDA_KERNEL():
                     maps.append(dict(dataset.evaluate(results_json_path=result_json))["bbox_mAP"])
                 else:
                     maps.append(None)
-            # fp32_map,ppq_map,ort_map,platform_map = maps
-            # report.append([model_name,platform,fp32_map,ppq_map,ort_map,platform_map])
+            fp32_map,ppq_map,ort_map,platform_map = maps
+            report.append([model_name,platform,fp32_map,ppq_map,ort_map,platform_map])
 
 report = pd.DataFrame(report,columns=["model","paltform","fp32_map","ppq_map","ort_map","platform_map"])
 print("-------------------测试报告如下---------------------")

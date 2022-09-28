@@ -17,8 +17,6 @@ def ppq_inference(dataloader,ppq_ir,device="cuda"):
 #  onnx推理过程
 def onnxruntime_inference(dataloader,onnxruntime_model_path,device="cuda"):
     providers = ['CUDAExecutionProvider'] if device == "cuda" else ['CPUExecutionProvider']
-    # providers = ['CPUExecutionProvider']  #临时修改，因为实验室显存不够了
-    # device = "cpu"
     onnxruntime.set_default_logger_severity(3)
     sess = onnxruntime.InferenceSession(path_or_bytes=onnxruntime_model_path, providers=providers)
     input_placeholder_name = sess.get_inputs()[0].name
