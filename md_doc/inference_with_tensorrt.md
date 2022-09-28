@@ -1,5 +1,5 @@
 # Deploy Model with TensorRT
-This document describes the quantization deployment process of the TensorRT and how PPQ writes quantization parameters to the onnx and convert to int8 trt engine.
+This document describes the quantization deployment process of the TensorRT and how PPQ writes quantization parameters to the onnx and convert to int8-trt engine.
 
 
 ## Environment setup
