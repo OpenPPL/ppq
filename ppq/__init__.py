@@ -1,3 +1,14 @@
+import os
+import warnings
+
+if os.path.dirname(os.path.realpath(__file__)) == os.path.join(
+    os.path.realpath(os.getcwd()), "ppq"
+):
+    message = (
+        "You are importing ppq within its own root folder ({}). "
+    )
+    warnings.warn(message.format(os.getcwd()))
+
 # This file defines export functions & class of PPQ.
 from ppq.api.setting import (ActivationQuantizationSetting, DispatchingTable,
                              EqualizationSetting, GraphFormatSetting,
