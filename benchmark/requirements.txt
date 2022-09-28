@@ -1,0 +1,12 @@
+terminaltables
+mmcv-full
+tensorrt
+pycuda
+openvino==2021.4.2
+torchvision
+pycocotools
+onnxruntime-gpu
+onnxsim
+opencv-python
+pandas
+pillow

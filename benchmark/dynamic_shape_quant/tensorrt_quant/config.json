@@ -1,0 +1,11 @@
+{
+    "onnx_file": "models/Retinanet-wo-dynamic-FP32.onnx",
+    "int8_trt_engine_file": "engines/Retinanet-wo-dynamic-INT8.engine",
+    "calibration_table": "tables/Retinanet-wo-dynamic-FP32.table",
+    "calibrate_dir": "calibrate-data",
+    "onnx_model_batchSize": 1,
+    "width": 640,
+    "height": 480,
+    "channel": 3,
+    "net-type" : "onnx"
+}
