@@ -1,6 +1,10 @@
 from .box import retinanet_postprocess
 import torch
 from tqdm import tqdm
+import pycocotools.mask as mk
+import cv2
+import numpy as np
+
 def post_process(model_type,outputs,class_num):
     """
     将任意模型的输出转换为常规输出
@@ -24,7 +28,7 @@ def post_process(model_type,outputs,class_num):
                 bboxs[i][:4] = bboxs[i][:4] / img_scale  # 进行bbox的尺寸复原
                 result[label].append(bboxs[i])
             results.append(result)
-        return results
+
     elif model_type == "Retinanet-wo":
         print("Post-process with outputs in Retinanet-wo type")
         results = []
@@ -48,4 +52,50 @@ def post_process(model_type,outputs,class_num):
                 bboxs[i][:4] = bboxs[i][:4] / img_scale  # 进行bbox的尺寸复原
                 result[label].append(bboxs[i])
             results.append(result)
-        return results
+        
+    elif model_type == "MaskRCNN":
+        print("Post-process with outputs in MaskRCNN type")
+        results = []
+        # 实例分割格式化
+        for output in tqdm(outputs):
+            img_scale = output["scale_factor"] 
+            bboxs,labels,scores,masks = output["output"]
+            result_det = [[] for _ in range(class_num)]
+            result_seg = [[] for _ in range(class_num)]
+
+            bboxs /= img_scale 
+            
+            """
+            注意opencv读取的image.size=(w,h) 而转为numpy时将变为(h,w),h代表的是y纬度,w代表的是x纬度
+            """
+            img_array_size = output["img_size"][::-1]
+
+            # seg result
+            for mask, box, label in zip(masks, bboxs, labels):
+                mask = mask[0, :, :, None]
+                # print(box)
+                int_box = [int(i) for i in box]
+                mask = cv2.resize(mask, (int_box[2]-int_box[0]+1, int_box[3]-int_box[1]+1))
+                mask = mask > 0.5
+                
+                im_mask = np.zeros((img_array_size[0], img_array_size[1]), dtype=np.uint8)
+                x_0 = min(max(int_box[0], 0),img_array_size[1]) #约束不让超出图像尺寸宽度
+                x_1 = min(int_box[2] + 1, img_array_size[1])
+                y_0 = min(max(int_box[1], 0),img_array_size[0])  #约束不让超出图像高度
+                y_1 = min(int_box[3] + 1, img_array_size[0])
+                
+                mask_y_0,mask_x_0 = 0,0
+                mask_y_1 = mask_y_0 + y_1 - y_0
+                mask_x_1 = mask_x_0 + x_1 - x_0
+                im_mask[y_0:y_1, x_0:x_1] = mask[mask_y_0 : mask_y_1, mask_x_0 : mask_x_1]  #原图尺寸的掩膜
+                
+                rle = mk.encode(np.asfortranarray(im_mask[:,:,None]))
+                result_seg[label-1].append(rle[0])
+            
+            bboxs = torch.cat((torch.from_numpy(bboxs),torch.from_numpy(scores.reshape((-1,1)))),dim=1)
+            # bbox result
+            for i,label in enumerate(labels):
+                result_det[label-1].append(bboxs[i])
+                    
+            results.append((result_det,result_seg))
+    return results

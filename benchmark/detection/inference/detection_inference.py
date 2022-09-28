@@ -16,10 +16,10 @@ def ppq_inference(dataloader,ppq_ir,device="cuda"):
 
 #  onnx推理过程
 def onnxruntime_inference(dataloader,onnxruntime_model_path,device="cuda"):
-    # providers = ['CUDAExecutionProvider'] if device == "cuda" else ['CPUExecutionProvider']
-    providers = ['CPUExecutionProvider']  #临时修改，因为实验室显存不够了
-    device = "cpu"
-
+    providers = ['CUDAExecutionProvider'] if device == "cuda" else ['CPUExecutionProvider']
+    # providers = ['CPUExecutionProvider']  #临时修改，因为实验室显存不够了
+    # device = "cpu"
+    onnxruntime.set_default_logger_severity(3)
     sess = onnxruntime.InferenceSession(path_or_bytes=onnxruntime_model_path, providers=providers)
     input_placeholder_name = sess.get_inputs()[0].name
     outputnames = [x.name for x in sess.get_outputs()]
@@ -80,6 +80,8 @@ def trt_inference(dataloader,trt_model_path,device="cuda"):
 def _inference_any_module_with_coco(model_forward_function,dataloader,device,output_map=None):
     outputs = []
     print("infering on coco dataset....")
+    from time import time
+    start = time()
     for x in tqdm(dataloader):
         input_tensor = x["img"][0].to(device)
         img_metas = x["img_metas"][0].data[0][0]
@@ -88,5 +90,7 @@ def _inference_any_module_with_coco(model_forward_function,dataloader,device,out
             output = output_map(output)
         img_metas["output"] = output
         outputs.append(img_metas)
+    end = time()
+    print("Inference has finished! Speed is {:.2f} FPS".format(len(dataloader)/(end-start)))
     return outputs
 

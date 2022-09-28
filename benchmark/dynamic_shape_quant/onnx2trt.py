@@ -27,7 +27,8 @@ def build_float_engine():
     # h和w是可变的，这三个分别是min,opt,max
     # min的意思是最小可支持的尺寸,max是最大可支持的尺寸,opt在min和max之间,表示的应该是最优的h和w
     profile = builder.create_optimization_profile()
-    profile.set_shape("input", (1, 3, 160, 300), (1, 3, 800, 1216), (1, 3, 1220,1220))
+    # profile.set_shape("input", (1, 3, 160, 300), (1, 3, 800, 1216), (1, 3, 1220,1220))
+    profile.set_shape("input", (1, 3, 150, 220), (1, 3, 480, 640), (1, 3, 650,650))
     config.add_optimization_profile(profile)
     
     parser = trt.OnnxParser(network, TRT_LOGGER)
@@ -43,7 +44,6 @@ def build_float_engine():
                 print(parser.get_error(error))
             return None
 
-    # config.set_flag(trt.BuilderFlag.INT8)
     engine = builder.build_engine(network, config)
 
     with open(float_engine_file, "wb") as f:

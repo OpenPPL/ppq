@@ -14,11 +14,12 @@ __pycache__/
 /benchmark/Assets/
 **/*.json
 **/*.engine
+**/*.caffemodel
+**/*.prototxt
 **/*.pb
 **/*.so
-/benchmark/classification/FP32_model
-/benchmark/classification/Ncnn_output
-/benchmark/classification/OpenVino_output
-/benchmark/classification/Snpe_output
-/benchmark/classification/TRT_output
+**/*.npy
+**/*.bin
+**/*.table
 **/*.txt
+/benchmark/dynamic_shape_quant/ppq
