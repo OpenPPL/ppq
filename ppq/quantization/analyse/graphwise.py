@@ -174,7 +174,7 @@ def graphwise_error_analyse(
     results = {}
     for operation in interested_op:
         assert isinstance(operation, QuantableOperation)
-        results[operation.name] = recorders[operation.name].measure
+        results[operation.name+'('+ operation.type+')'] = recorders[operation.name].measure
 
     if verbose:
         method_str = 'MEASUREMENT'

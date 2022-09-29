@@ -123,7 +123,7 @@ def layerwise_error_analyse(
     results = {}
     for operation in quantable_operations:
         assert isinstance(operation, QuantableOperation)
-        results[operation.name] = recorders[operation.name].measure
+        results[operation.name+'('+ operation.type+')'] = recorders[operation.name].measure
 
     if verbose:
         method_str = 'MEASUREMENT'
