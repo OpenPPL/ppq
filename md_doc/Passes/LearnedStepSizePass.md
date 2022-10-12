@@ -14,7 +14,7 @@ The training loss will be computed as:
 
     let: Y = WX + b
 
-    Quant(Y, scale_Y) = Qunat(W, scale_W) Quant(X, scale_X) + b
+    Quant(Y, scale_Y) = Quant(W, scale_W) Quant(X, scale_X) + b
 
     loss = loss_func(Y, Quant(Y, scale_Y)) # loss between fp output and int8 output, that is why we do not need labeled data.
 
