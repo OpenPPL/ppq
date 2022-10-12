@@ -107,15 +107,24 @@ class EqualizationHelper():
             num_of_groups = op.attributes.get('group', 1)
             if w.ndim == 3:
                 w = torch.reshape(w, (num_of_groups, w.shape[0] // num_of_groups) + w.shape[1: ])
-                w = torch.permute(w, (2, 0, 1, 3))
+                if hasattr(torch,'permute'):
+                    w = torch.permute(w, (2, 0, 1, 3))
+                else:
+                    w = w.permute((2, 0, 1, 3))
                 w = torch.reshape(w, (w.shape[0] * w.shape[1], -1))
             elif w.ndim == 4:
                 w = torch.reshape(w, (num_of_groups, w.shape[0] // num_of_groups) + w.shape[1: ])
-                w = torch.permute(w, (2, 0, 1, 3, 4))
+                if hasattr(torch,'permute'):
+                    w = torch.permute(w, (2, 0, 1, 3, 4))
+                else:
+                    w = w.permute((2, 0, 1, 3, 4))
                 w = torch.reshape(w, (w.shape[0] * w.shape[1], -1))
             elif w.ndim == 5:
                 w = torch.reshape(w, (num_of_groups, w.shape[0] // num_of_groups) + w.shape[1: ])
-                w = torch.permute(w, (2, 0, 1, 3, 4, 5))
+                if hasattr(torch,'permute'):
+                    w = torch.permute(w, (2, 0, 1, 3, 4, 5))
+                else:
+                    w = w.permute((2, 0, 1, 3, 4, 5))
                 w = torch.reshape(w, (w.shape[0] * w.shape[1], -1))
             else:
                 raise ValueError(f'Unexpected dimension of weight of {op.name}.')
