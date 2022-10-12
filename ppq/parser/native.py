@@ -16,7 +16,7 @@ class NativeExporter(GraphExporter):
         with open(file_path, 'wb') as file:
             dump_elements_to_file(file, elements=[
                 'PPQ GRAPH DEFINITION', # PPQ Signature.
-                PPQ_CONFIG.VERSION,            # PPQ Signature.
+                PPQ_CONFIG.VERSION,     # PPQ Signature.
                 graph,
             ])
 

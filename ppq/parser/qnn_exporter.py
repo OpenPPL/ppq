@@ -1,9 +1,9 @@
 import json
 
-from ppq.core import (DataType, QuantizationStates,
-                      ChannelwiseTensorQuantizationConfig)
+from ppq.core import DataType, QuantizationStates
 from ppq.IR import BaseGraph
 from ppq.IR.quantize import QuantableOperation
+from ppq.core.quant import QuantizationProperty
 
 from .onnx_exporter import OnnxExporter
 from .util import convert_value
@@ -39,8 +39,8 @@ class QNNDSPExporter(OnnxExporter):
 
                 if config.state == QuantizationStates.PASSIVE and var.name in activation_info: continue
 
-                assert not isinstance(config, ChannelwiseTensorQuantizationConfig), 'QNNExporter only support'\
-                    'per tensor quantization for now'
+                assert (not config.policy.has_property(QuantizationProperty.PER_CHANNEL), 
+                        'QNNExporter only support per tensor quantization for now')
                 info =  [{
                             'bitwidth': config.num_of_bits,
                             'max'     : convert_value(config.scale * (config.quant_max - config.offset), True, DataType.FP32),

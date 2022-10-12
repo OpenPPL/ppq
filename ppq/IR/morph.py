@@ -9,7 +9,7 @@ from ppq.IR.search import SearchableGraph
 from .base.command import (GraphCommand, GraphCommandType,
                            ReplaceOperationCommand, ReplaceVariableCommand,
                            TruncateGraphCommand)
-from .base.graph import Operation, Variable
+from .base.graph import BaseGraph, Operation, Variable
 from .processer import GraphCommandProcessor
 
 
@@ -567,6 +567,7 @@ class GraphMerger(GraphCommandProcessor):
             self.graph.append_variable(weight_var)
             self.graph.append_variable(bias_var)
 
+
     def fuse_gemm(self):
         """Fuse MatMul + add into a singal Gemm
             Single Matmul will be replaced with Gemm
@@ -642,6 +643,128 @@ class GraphMerger(GraphCommandProcessor):
                 if _is_replaceable(op) == False:
                     continue
                 op.type = "Gemm"
+
+
+    def fuse_layernorm(self, exclusive_search: bool = False):
+        """Fuse Layernormalization with pattern matching."""
+        
+        def _fuse(rm1: Operation, rm2: Operation, 
+                  eps: Operation, scale: torch.Tensor, 
+                  bias: torch.Tensor, layernorm_input_var: Variable, 
+                  layernorm_output_var: Variable) -> Operation:
+
+            if rm2.type == rm1.type == 'ReduceMean':
+                if 'axes' not in rm1.attributes: return None
+                if 'axes' not in rm2.attributes: return None
+                if rm1.attributes['axes'] != rm2.attributes['axes']: return None
+                layernorm_axis = rm1.attributes['axes']
+                if isinstance(layernorm_axis, list): 
+                    if len(layernorm_axis) != 1: return None
+                    layernorm_axis = layernorm_axis[0]
+                if not isinstance(layernorm_axis, int): return None
+            else: layernorm_axis = -1
+
+            if not eps.inputs[-1].is_parameter: return None
+            value = eps.inputs[-1].value
+            value = convert_any_to_torch_tensor(value).cpu()
+            if value.numel() != 1: return None
+            layernorm_eps = value.item()
+
+            layernorm_output_var.source_op.outputs.clear()
+            layernorm = self.graph.create_operation(
+                op_type = 'LayerNormalization',
+                attributes = {'axis': layernorm_axis, 'epsilon': layernorm_eps, 'stash_type': 0},
+                inputs = [layernorm_input_var, self.graph.create_variable(value=scale, is_parameter=True)],
+                outputs = [layernorm_output_var])
+
+            if bias is not None:
+                self.graph.create_link_with_op(
+                    variable=self.graph.create_variable(value=bias, is_parameter=True), 
+                    upstream_op=None, downstream_op=layernorm)
+            return layernorm
+
+        search_engine = SearchableGraph(graph=self.graph)
+        
+        # pattern 1:
+        #                                 ---     ---     ---      ---        ---       ---    ---    --
+        #                               |                                                              |
+        # ***(0) --- ReduceMean(1) --- Sub(2) --- Pow(3) --- ReduceMean(4) --- Add(5) --- Sqrt(6) --- Div(7) --- Mul(8) --- (Add)(9)
+        #      |                     |
+        #       ---   ---   ---   ---       
+        matches = search_engine.pattern_matching(
+            patterns=[lambda x: True, lambda x: x.type in {'ReduceMean', 'GlobalAveragePool'}, 'Sub', 'Pow', 
+                      lambda x: x.type in {'ReduceMean', 'GlobalAveragePool'}, 'Add', 'Sqrt', 'Div', 'Mul'],
+            edges=[[0, 1], [0, 2], [1, 2], [2, 3], [2, 7], [3, 4], [4, 5], [5, 6], [6, 7], [7, 8]], exclusive=exclusive_search)
+
+        for _, rm1, sub, pow, rm2, add, sqrt, div, mul in matches:
+            layernorm_ops = [rm1, sub, pow, rm2, add, sqrt, div, mul]
+
+            layernorm_scale = mul.inputs[-1].value
+            layernorm_output_var = div.outputs[0]
+            layernorm_input_var = sub.inputs[0]
+
+            # bias check
+            layernorm_bias = None
+            next_op = self.graph.get_downstream_operations(mul)
+            if len(next_op) == 1 and (next_op[0].type == 'Add'):
+                bias_op = next_op[0]
+                if bias_op.inputs[-1].is_parameter:
+                    layernorm_bias = bias_op.inputs[-1].value
+                    layernorm_output_var = bias_op.outputs[0]
+                    layernorm_ops.append(bias_op)
+
+            layernorm = _fuse(rm1=rm1, rm2=rm2, eps=add, scale=layernorm_scale, 
+                bias=layernorm_bias, layernorm_input_var=layernorm_input_var, 
+                layernorm_output_var=layernorm_output_var)
+            
+            if layernorm is not None:
+                # delete merged ops
+                for op in layernorm_ops:
+                    assert isinstance(op, Operation)
+                    for var in op.inputs + op.outputs:
+                        if var != layernorm_input_var and var != layernorm_output_var:
+                            self.graph.remove_variable(var)
+                    self.graph.remove_operation(op)
+
+        # pattern 2:
+        #  ---   ---  ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---  -- Mul(11)   ---   ---   Add(12) ---
+        #  ^                             |                                                                                ^                     ^
+        #  |                             v                                                                                |                     |
+        # ***(0) --- ReduceMean(1) --- Sub(2) --- Mul(3) --- ReduceMean(4) --- Add(5) --- Sqrt(6) --- Reciprocal(7) --- Mul(8) --- Mul(9) --- Sub(10)
+        #             |                                                                                                             |
+        #             v                                                                                                             ^
+        #             --   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---  ---  --- --
+        matches = search_engine.pattern_matching(
+            patterns=[lambda x: True, lambda x: x.type in {'ReduceMean', 'GlobalAveragePool'}, 'Sub', 
+                      'Mul', lambda x: x.type in {'ReduceMean', 'GlobalAveragePool'}, 'Add', 'Sqrt', 
+                      'Reciprocal', 'Mul', 'Mul', 
+                      'Sub', 'Mul', 'Add'],
+            edges=[[0, 1], [0, 2], [0, 11], [1, 2], [1, 9], [2, 3], [3, 4], 
+                   [4, 5], [5, 6], [6, 7], [7, 8], [8, 9], 
+                   [8, 11], [9, 10], [11, 12], [10, 12]], exclusive=exclusive_search)
+
+        for _, rm1, sub1, mul, rm2, add1, sqrt, recipro, mul2, mul3, sub2, mul4, add2 in matches:
+            layernorm_ops = [rm1, sub1, mul, rm2, add1, sqrt, recipro, mul2, mul3, sub2, mul4, add2]
+
+            # mul check
+            if not mul2.inputs[-1].is_parameter: continue
+            layernorm_scale      = mul2.inputs[-1].value
+            layernorm_output_var = add2.outputs[0]
+            layernorm_input_var  = sub1.inputs[0]
+            layernorm_bias       = sub2.inputs[0].value
+
+            layernorm = _fuse(rm1=rm1, rm2=rm2, eps=add1, scale=layernorm_scale, 
+                bias=layernorm_bias, layernorm_input_var=layernorm_input_var, 
+                layernorm_output_var=layernorm_output_var)
+
+            if layernorm is not None:
+                # delete merged ops
+                for op in layernorm_ops:
+                    assert isinstance(op, Operation)
+                    for var in op.inputs + op.outputs:
+                        if var != layernorm_input_var and var != layernorm_output_var:
+                            self.graph.remove_variable(var)
+                    self.graph.remove_operation(op)
 
 
 class GraphDecomposer(GraphCommandProcessor):

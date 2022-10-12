@@ -71,7 +71,7 @@ class CaffeOpExporter(object):
             value = var.value
             value = convert_any_to_numpy(value)
             if var.meta is not None:
-                shape = var.meta.shape
+                shape = var.shape
                 dtype = DataType.to_numpy(var.meta.dtype)
             else:
                 shape, dtype = value.shape, value.dtype
@@ -220,7 +220,7 @@ class Concat(CaffeOpExporter):
 class Softmax(CaffeOpExporter):
     def set_attr(self):
         axis = refine_value(self.op.attributes.get('axis', -1))
-        if not (axis == -1 or axis == len(self.op.inputs[0].meta.shape) - 1):
+        if not (axis == -1 or axis == len(self.op.inputs[0].shape) - 1):
             logger.warning(f'Converting to caffe Softmax, the axis={axis}, which is not the last axis. '
                            'This may result to incorrect caffe model')
         self.layer.softmax_param.axis = axis
@@ -300,7 +300,7 @@ class Add(CaffeOpExporter):
             blob = ppl_caffe_pb2.BlobProto()
             value = convert_any_to_numpy(var.value)
             if var.meta is not None:
-                shape = var.meta.shape
+                shape = var.shape
                 dtype = DataType.to_numpy(var.meta.dtype)
             else:
                 shape, dtype = value.shape, value.dtype
@@ -384,7 +384,7 @@ class Gemm(CaffeOpExporter):
         transpose_layer = None
         if refine_value(self.op.attributes.get('transA', 0)) != 0:
             A = self.op.inputs[0]
-            shape = A.meta.shape
+            shape = A.shape
             if len(shape) == 2:
                 transpose_layer = ppl_caffe_pb2.LayerParameter(type='Transpose', name=self.op.name + '_transposed')
                 transpose_layer.bottom[:] = [A.name]
@@ -514,7 +514,7 @@ class Sigmoid(CaffeOpExporter):
 class Slice(CaffeOpExporter):
     def parse(self):
         # assert (len(self.op.inputs) == 1)
-        input_shape = self.op.inputs[0].meta.shape
+        input_shape = self.op.inputs[0].shape
         starts, ends = convert_any_to_numpy(self.op.parameters[0].value), convert_any_to_numpy(self.op.parameters[1].value)
         axes = convert_any_to_numpy(self.op.parameters[2].value) if len(self.op.parameters) >= 3 else [i for i in range(len(input_shape))]
         if len(self.op.parameters) >= 4 and any(convert_any_to_numpy(self.op.parameters[3].value) != 1):

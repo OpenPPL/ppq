@@ -173,7 +173,7 @@ class TengineExporter(GraphExporter):
 
     def export_var(self, variable: Variable) -> onnx.TensorProto:
         if variable.meta is not None:
-            shape = variable.meta.shape
+            shape = variable.shape
             dtype = variable.meta.dtype.value
         else:
             shape, dtype = None, None

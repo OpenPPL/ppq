@@ -5,7 +5,7 @@ from .DSPQuantizer import PPL_DSP_Quantizer, PPL_DSP_TI_Quantizer
 from .MetaxQuantizer import MetaxChannelwiseQuantizer, MetaxTensorwiseQuantizer
 from .MyQuantizer import ExtQuantizer
 from .NXPQuantizer import NXP_Quantizer
-from .ORTQuantizer import ORT_PerChannelQuantizer, ORT_PerTensorQuantizer
+from .RKNNQuantizer import RKNN_PerChannelQuantizer, RKNN_PerTensorQuantizer
 from .PPLQuantizer import PPLCUDAQuantizer
 from .TRTQuantizer import TensorRTQuantizer
 from .FPGAQuantizer import FPGAQuantizer

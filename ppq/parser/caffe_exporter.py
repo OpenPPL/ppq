@@ -98,7 +98,7 @@ class CaffeExporter(GraphExporter):
         if all([var.value is not None for var in graph.inputs.values()]):
             inputs = {var.name: convert_any_to_torch_tensor(var.value).to(device) for var in graph.inputs.values()}
         elif all([var.meta is not None for var in graph.inputs.values()]):
-            inputs = {var.name: torch.randn(*var.meta.shape, dtype=DataType.to_torch(var.meta.dtype), device=device)\
+            inputs = {var.name: torch.randn(*var.shape, dtype=DataType.to_torch(var.meta.dtype), device=device)\
                 for var in graph.inputs.values()}
         else:
             assert len([input_shapes]) == len(graph.inputs), (
@@ -116,8 +116,8 @@ class CaffeExporter(GraphExporter):
         for name, var in graph.inputs.items():
             caffe_model.input.append(name)
             input_shape = ppl_caffe_pb2.BlobShape()
-            var.meta.shape[0] = 1
-            input_shape.dim.extend(var.meta.shape)
+            var.shape[0] = 1
+            input_shape.dim.extend(var.shape)
             caffe_model.input_shape.extend([input_shape])
 
         # export op

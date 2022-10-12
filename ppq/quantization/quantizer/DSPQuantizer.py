@@ -1,11 +1,10 @@
 from typing import Union
 
 import torch
-from ppq.api.setting import *
-from ppq.core import (PASSIVE_OPERATIONS, ChannelwiseTensorQuantizationConfig,
-                      OperationQuantizationConfig, QuantizationPolicy,
-                      QuantizationProperty, QuantizationStates, RoundingPolicy,
-                      TargetPlatform)
+from ppq.api.setting import QuantizationSetting
+from ppq.core import (PASSIVE_OPERATIONS, OperationQuantizationConfig,
+                      QuantizationPolicy, QuantizationProperty,
+                      QuantizationStates, RoundingPolicy, TargetPlatform)
 from ppq.IR import BaseGraph, Operation
 from ppq.quantization.optim import (PPLDSPTIReCalibrationPass,
                                     QuantizationOptimizationPipeline)
@@ -126,12 +125,8 @@ class PPL_DSP_TI_Quantizer(PPL_DSP_Quantizer):
                     QuantizationProperty.LINEAR +
                     QuantizationProperty.PER_CHANNEL
                 )
-                base_quant_config.input_quantization_config[1] = \
-                    ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
-                        convert_from = conv_weight_config,
-                        offset = None, scale  = None, channel_axis = 0
-                    )
-                base_quant_config.input_quantization_config[1].observer_algorithm = 'Minmax'
+                conv_weight_config.channel_axis = 0
+                conv_weight_config.observer_algorithm = 'minmax'
 
             elif operation.type == 'ConvTranspose':
                 conv_weight_config = base_quant_config.input_quantization_config[1]
@@ -140,12 +135,9 @@ class PPL_DSP_TI_Quantizer(PPL_DSP_Quantizer):
                     QuantizationProperty.LINEAR +
                     QuantizationProperty.PER_CHANNEL
                 )
-                base_quant_config.input_quantization_config[1] = \
-                    ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
-                        convert_from = conv_weight_config,
-                        offset = None, scale  = None, channel_axis = 1
-                    )
-                base_quant_config.input_quantization_config[1].observer_algorithm = 'Minmax'
+                conv_weight_config.channel_axis = 1
+                conv_weight_config.observer_algorithm = 'minmax'
+
             # first parameter must exits, for gemm layer it will be gemm_weight
             # layout: [in_dim, out_dim]
             elif operation.type == 'Gemm':
@@ -155,12 +147,9 @@ class PPL_DSP_TI_Quantizer(PPL_DSP_Quantizer):
                     QuantizationProperty.LINEAR +
                     QuantizationProperty.PER_CHANNEL
                 )
-                base_quant_config.input_quantization_config[1] = \
-                    ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
-                        convert_from = gemm_weight_config,
-                        offset = None, scale  = None, channel_axis = 0
-                    )
-                base_quant_config.input_quantization_config[1].observer_algorithm = 'Minmax'
+                gemm_weight_config.channel_axis = 0
+                gemm_weight_config.observer_algorithm = 'minmax'
+
             # if operation has bias
             # let bias be fp32 because dsp ti don't need quantization parameter of bias
             if operation.num_of_input > 2:

@@ -735,8 +735,8 @@ class LearnedStepSizePass(TrainingBasedPass):
         for op in block.rps:
             if not isinstance(op, QuantableOperation): continue
 
-            if op.is_computing_op: 
-                for var in op.inputs[1:]: 
+            if op.is_computing_op or op.type in {'Add', 'Mul'}: # 独立的 Add Mul 算子也可以训练
+                for var in op.inputs: 
                     if var.is_parameter:
                         trainable_params.append(var.value)
 

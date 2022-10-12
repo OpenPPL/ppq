@@ -9,7 +9,6 @@ from ppq.core import (GRAPH_OPSET_ATTRIB, ONNX_EXPORT_OPSET, ONNX_VERSION,
                       PPQ_CONFIG, DataType, convert_any_to_numpy, ppq_warning)
 from ppq.IR import (BaseGraph, GraphExporter, Operation, OperationExporter,
                     Variable)
-from ppq.IR.morph import GraphDeviceSwitcher
 from ppq.IR.quantize import QuantableOperation
 
 
@@ -190,7 +189,7 @@ class OnnxExporter(GraphExporter):
             Constant: Represents a Tensor whose value is known.
         """
         if variable.meta is not None:
-            shape = variable.meta.shape
+            shape = variable.shape
             dtype = variable.meta.dtype.value
         else:
             shape, dtype = None, None
@@ -208,31 +207,35 @@ class OnnxExporter(GraphExporter):
                 shape=shape)
         else:
             value = variable.value
+            raw   = False
             if isinstance(value, torch.Tensor):
                 if value.numel() == 0:
                     value = []
                 elif value.ndim >= 1:
                     value = convert_any_to_numpy(variable.value).flatten()
+                    value = value.tobytes()
+                    raw   = True
                 elif value.ndim == 0:
                     value = [value.item(), ] # it is fine for onnx, cause shape for this value will be []
             else: value = value # value is python primary type.
             tensor_proto = helper.make_tensor(
                 name=variable.name, data_type=dtype,
-                dims=shape, vals=value)
+                dims=shape, vals=value, raw=raw)
         return tensor_proto
 
-    def export(self, file_path: str, graph: BaseGraph, config_path: str = None):
+    def export(self, file_path: str, graph: BaseGraph, 
+               config_path: str = None, save_as_external_data: bool=False):
         # during export we will remove all boundary operations from graph.
         # we do not want to change the structure of original graph,
         # so there have to take a clone of it.
         # graph = graph.copy()
-        # remove switchers.
-        if not PPQ_CONFIG.EXPORT_DEVICE_SWITCHER:
-            processor = GraphDeviceSwitcher(graph)
-            processor.remove_switcher()
 
         # if a valid config path is given, export quantization config to there.
         if config_path is not None:
             self.export_quantization_config(config_path, graph)
 
-        onnx.save(self.export_graph(graph=graph), file_path)
+        size_threshold = 0 if save_as_external_data else 1024
+        onnx.save(self.export_graph(graph=graph), file_path, 
+                  size_threshold=size_threshold,
+                  save_as_external_data=save_as_external_data,
+                  all_tensors_to_one_file=(not save_as_external_data))

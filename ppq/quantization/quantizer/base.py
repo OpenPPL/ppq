@@ -293,9 +293,11 @@ class BaseQuantizer(metaclass = ABCMeta):
         assert isinstance(setting, QuantizationSetting), (
             f'PPQ needs a OptimSetting instance to initialize optimization pipeline,'
             f' however {type(setting)} was given.')
+
         if setting.advanced_optimization == True:
             ppq_warning('PPQ Advanced optimization has been removed since 0.6.5, use setting.finetune = True instead')
             ppq_warning('PPQ Advanced optimization 在 0.6.5 版本中已经被移除且不会起到任何效果，作为替代方案我们建议你使用 setting.lsq_optimization = True')
+
         if setting.matrix_factorization == True:
             ppq_warning('PPQ Matrix Factorization Pass has been removed from QuantizationSetting since 0.6.5, this pass must be called manually now.')
             ppq_warning('PPQ Matrix Factorization Pass 已经不能通过 QuantizationSetting 调用，现在你必须手动调用该优化过程')
@@ -309,16 +311,6 @@ class BaseQuantizer(metaclass = ABCMeta):
                 loss_threshold       = equalization_setting.loss_threshold,
                 layer_norm           = equalization_setting.layer_norm,
                 iteration            = equalization_setting.iteration
-            ))
-
-        if setting.channel_split:
-            channel_split_setting = setting.channel_split_setting
-            list_of_passes.append(ChannelSplitPass(
-            interested_layers = channel_split_setting.interested_layers,
-            search_directions = channel_split_setting.search_directions,
-            expand_ratio      = channel_split_setting.expand_ratio,
-            split_ratio       = channel_split_setting.split_ratio,
-            grid_aware        = channel_split_setting.grid_aware
             ))
 
         if setting.fusion:
@@ -417,6 +409,18 @@ class BaseQuantizer(metaclass = ABCMeta):
                 interested_layers    = weight_split_setting.interested_layers,
                 method               = weight_split_setting.method,
                 value_threshold      = weight_split_setting.value_threshold,
+            ))
+
+        if setting.channel_split:
+            channel_split_setting = setting.channel_split_setting
+            list_of_passes.append(ChannelwiseSplitPass(
+                optimize_level       = channel_split_setting.opt_level,
+                iterations           = channel_split_setting.iterations,
+                threshold            = channel_split_setting.value_threshold,
+                including_bias       = channel_split_setting.including_bias,
+                including_act        = channel_split_setting.including_act,
+                bias_multiplier      = channel_split_setting.bias_multiplier,
+                act_multiplier       = channel_split_setting.act_multiplier
             ))
 
         if setting.equalization:

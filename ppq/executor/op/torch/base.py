@@ -1,6 +1,6 @@
 from typing import Any, List
 
-from ppq.core import TargetPlatform
+from ppq.core import TargetPlatform, ppq_warning
 from ppq.IR import Operation
 from ppq.IR.quantize import QuantableOperation
 

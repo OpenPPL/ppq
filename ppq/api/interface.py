@@ -1,9 +1,12 @@
+import json
 import os
-from typing import Any, Callable, Iterable, List
+from typing import Any, Callable, Iterable, List, Union
 
 import torch
-from ppq.core import (NetworkFramework, TargetPlatform, empty_ppq_cache,
-                      ppq_warning)
+from ppq.api.setting import (DispatchingTable, QuantizationSetting,
+                             QuantizationSettingFactory)
+from ppq.core import (PPQ_CONFIG, NetworkFramework, TargetPlatform,
+                      empty_ppq_cache, ppq_warning)
 from ppq.executor import TorchExecutor
 from ppq.executor.base import BaseGraphExecutor, register_operation_handler
 from ppq.IR import (BaseGraph, GraphBuilder, GraphCommand, GraphCommandType,
@@ -18,17 +21,14 @@ from ppq.quantization.quantizer import (ACADEMIC_INT4_Quantizer,
                                         MetaxChannelwiseQuantizer,
                                         MetaxTensorwiseQuantizer,
                                         NCNNQuantizer, NXP_Quantizer,
-                                        OpenvinoQuantizer,
-                                        ORT_PerChannelQuantizer,
-                                        ORT_PerTensorQuantizer,
-                                        PPL_DSP_Quantizer,
+                                        OpenvinoQuantizer, PPL_DSP_Quantizer,
                                         PPL_DSP_TI_Quantizer, PPLCUDAQuantizer,
-                                        TensorRTQuantizer, TengineQuantizer)
+                                        RKNN_PerChannelQuantizer,
+                                        RKNN_PerTensorQuantizer,
+                                        TengineQuantizer, TensorRTQuantizer)
 from ppq.scheduler import DISPATCHER_TABLE, GraphDispatcher
 from ppq.scheduler.perseus import Perseus
 from torch.utils.data import DataLoader
-
-from .setting import *
 
 QUANTIZER_COLLECTION = {
     TargetPlatform.PPL_DSP_INT8: PPL_DSP_Quantizer,
@@ -38,10 +38,9 @@ QUANTIZER_COLLECTION = {
     TargetPlatform.TRT_INT8:     TensorRTQuantizer,
     TargetPlatform.NCNN_INT8:    NCNNQuantizer,
     TargetPlatform.NXP_INT8:     NXP_Quantizer,
-    TargetPlatform.ORT_OOS_INT8: ORT_PerTensorQuantizer,
+    TargetPlatform.RKNN_INT8:    RKNN_PerTensorQuantizer,
     TargetPlatform.METAX_INT8_C: MetaxChannelwiseQuantizer,
     TargetPlatform.METAX_INT8_T: MetaxTensorwiseQuantizer,
-    # TargetPlatform.ORT_OOS_INT8: ORT_PerChannelQuantizer,
     TargetPlatform.PPL_CUDA_INT8: PPLCUDAQuantizer,
     TargetPlatform.EXTENSION:     ExtQuantizer,
     TargetPlatform.ACADEMIC_INT8: ACADEMICQuantizer,
@@ -71,8 +70,7 @@ EXPORTERS = {
     TargetPlatform.CAFFE:         CaffeExporter,
     TargetPlatform.NATIVE:        NativeExporter,
     TargetPlatform.EXTENSION:     ExtensionExporter,
-    # TargetPlatform.ORT_OOS_INT8:  ONNXRUNTIMExporter,
-    TargetPlatform.ORT_OOS_INT8:  ORTOOSExporter,
+    TargetPlatform.RKNN_INT8:     ONNXRUNTIMExporter,
     TargetPlatform.METAX_INT8_C:  ONNXRUNTIMExporter,
     TargetPlatform.METAX_INT8_T:  ONNXRUNTIMExporter,
     TargetPlatform.TRT_INT8:      TensorRTExporter,
@@ -94,7 +92,7 @@ EXPORTING_POSTFIX = {
     TargetPlatform.CAFFE:         '.caffemodel',
     TargetPlatform.NATIVE:        '.native',
     TargetPlatform.EXTENSION:     '.ext',
-    TargetPlatform.ORT_OOS_INT8:  '.onnx',
+    TargetPlatform.RKNN_INT8:     '.onnx',
     TargetPlatform.METAX_INT8_C:  '.onnx',
     TargetPlatform.METAX_INT8_T:  '.onnx',
     TargetPlatform.TENGINE_INT8:  '.onnx',
@@ -269,8 +267,9 @@ def quantize_onnx_model(
         setting = QuantizationSettingFactory.default_setting()
 
     ppq_ir = load_onnx_graph(onnx_import_file=onnx_import_file)
-    ppq_ir = dispatch_graph(graph=ppq_ir, platform=platform, setting=setting)
-
+    ppq_ir = dispatch_graph(graph=ppq_ir, platform=platform, 
+                            dispatcher=setting.dispatcher, dispatching_table=setting.dispatching_table)
+    
     if inputs is None:
         dummy_input = torch.zeros(size=input_shape, device=device, dtype=input_dtype)
     else: dummy_input = inputs
@@ -447,7 +446,9 @@ def quantize_caffe_model(
                         from_framework=NetworkFramework.CAFFE)
 
     ppq_ir = format_graph(ppq_ir)
-    ppq_ir = dispatch_graph(ppq_ir, platform, setting)
+    ppq_ir = dispatch_graph(ppq_ir, platform, 
+                            dispatcher=setting.dispatcher, 
+                            dispatching_table=setting.dispatching_table)
 
     if inputs is None:
         dummy_input = torch.zeros(size=input_shape, device=device, dtype=input_dtype)
@@ -543,7 +544,8 @@ def quantize_native_model(
 
     if setting is None:
         setting = QuantizationSettingFactory.default_setting()
-    ppq_ir = dispatch_graph(graph=model, platform=platform, setting=setting)
+    ppq_ir = dispatch_graph(graph=model, platform=platform, 
+                            dispatcher=setting.dispatcher, dispatching_table=setting.dispatching_table)
 
     if inputs is None:
         dummy_input = torch.zeros(size=input_shape, device=device, dtype=input_dtype)
@@ -661,7 +663,10 @@ def format_graph(graph: BaseGraph) -> BaseGraph:
     return graph
 
 
-def dispatch_graph(graph: BaseGraph, platform: TargetPlatform, setting: QuantizationSetting) -> BaseGraph:
+def dispatch_graph(
+    graph: BaseGraph, platform: TargetPlatform, 
+    dispatcher: Union[str, GraphDispatcher] = 'conservative', 
+    dispatching_table: DispatchingTable = None) -> BaseGraph:
     """这个函数执行图切分与调度，你的计算图将被切分成一系列子图，并被调度到不同设备上。 
     调度的逻辑分为自动控制的部分以及手动覆盖的部分，你可以使用 QuantizationSetting 来向这个函数传递手动调度表 从而覆盖 PPQ 的调度逻辑。
 
@@ -672,43 +677,49 @@ def dispatch_graph(graph: BaseGraph, platform: TargetPlatform, setting: Quantiza
     A dispatching table can be passed via QuantizationSetting to override
         the default dispatching logic of ppq dispatcher manually.
     """
+    dispatching_override = dispatching_table
     assert platform in QUANTIZER_COLLECTION, (
         f'Platform misunderstood, except one of following platform {QUANTIZER_COLLECTION.keys()}')
     quantizer = QUANTIZER_COLLECTION[platform](graph) # 初始化一个 quantizer 没有很大代价...
 
-    if str(setting.dispatcher).lower() == 'perseus':
-        dispatcher = Perseus(graph=graph)
-        dispatching_table = dispatcher.dispatch()
+    if isinstance(dispatcher, str):
+        dispatcher = dispatcher.lower()
+        if dispatcher not in DISPATCHER_TABLE:
+            raise ValueError(f'Can not found dispatcher type "{dispatcher}", check your input again.')
+        dispatcher = DISPATCHER_TABLE[dispatcher](graph)
     else:
-        if str(setting.dispatcher).lower() not in DISPATCHER_TABLE:
-            raise ValueError(f'Can not found dispatcher type "{setting.dispatcher}", check your input again.')
-        dispatcher = DISPATCHER_TABLE[str(setting.dispatcher).lower()]()
-        assert isinstance(dispatcher, GraphDispatcher)
-        assert isinstance(quantizer, BaseQuantizer)
-        quant_types = quantizer.quant_operation_types
+        if not isinstance(dispatcher, GraphDispatcher):
+            raise TypeError('Parameter "dispachter" of function ppq.api.dispatch_graph must be String or GraphDispatcher, '
+                            f'however {type(dispatcher)} was given.')
+        dispatcher = dispatcher
 
-        dispatching_table = dispatcher.dispatch(
-            graph=graph, quant_types=quant_types,
-            quant_platform=TargetPlatform.UNSPECIFIED, # MUST BE UNSPECIFIED, 这里的意思是交由 Quantizer 决定是否量化这个算子
-            fp32_platform=TargetPlatform.FP32,
-            SOI_platform=TargetPlatform.SOI)
+    assert isinstance(dispatcher, GraphDispatcher)
+    assert isinstance(quantizer, BaseQuantizer)
+    quant_types = quantizer.quant_operation_types
+    dispatching_table = dispatcher.dispatch(
+        graph=graph, quant_types=quant_types,
+        quant_platform=TargetPlatform.UNSPECIFIED, # MUST BE UNSPECIFIED, 这里的意思是交由 Quantizer 决定是否量化这个算子
+        fp32_platform=TargetPlatform.FP32,
+        SOI_platform=TargetPlatform.SOI)
 
-    # override dispatching result with setting
-    dispatching_override = setting.dispatching_table
-    for opname, platform in dispatching_override.dispatchings.items():
-        if opname not in graph.operations: continue
-        assert isinstance(platform, int), (
-            f'Your dispatching table contains a invalid setting of operation {opname}, '
-            'All platform setting given in dispatching table is expected given as int, '
-            f'however {type(platform)} was given.')
-        dispatching_table[opname] = TargetPlatform(platform)
+    # override dispatching result
+    if dispatching_override is not None:
+        if not isinstance(dispatching_override, DispatchingTable):
+            raise TypeError('Parameter "dispatching_table" of function ppq.api.dispatch_graph must be DispatchingTable, '
+                            f'however {type(dispatching_override)} was given.')
+
+        for opname, platform in dispatching_override.dispatchings.items():
+            if opname not in graph.operations: continue
+            assert isinstance(platform, int), (
+                f'Your dispatching table contains a invalid setting of operation {opname}, '
+                'All platform setting given in dispatching table is expected given as int, '
+                f'however {type(platform)} was given.')
+            dispatching_table[opname] = TargetPlatform(platform)
 
     for operation in graph.operations.values():
         assert operation.name in dispatching_table, (
             f'Internal Error, Can not find operation {operation.name} in dispatching table.')
         operation.platform = dispatching_table[operation.name]
-
-    graph.set_extension_attrib(IS_DISPATCHED_GRAPH, True)
     return graph
 
 
@@ -1059,6 +1070,13 @@ def register_calibration_observer(algorithm: str, observer: type):
     PPQ_OBSERVER_TABLE[algorithm] = observer
 
 
+def create_quantizer(platform: TargetPlatform) -> BaseQuantizer:
+    """Return a quantizer related to your platform. """
+    if platform not in QUANTIZER_COLLECTION:
+        raise KeyError(f'Target Platform {platform} has no responsible quantizer for now.')
+    return QUANTIZER_COLLECTION[platform]
+
+
 __all__ = ['load_graph', 'load_onnx_graph', 'load_caffe_graph',
            'dispatch_graph', 'dump_torch_to_onnx', 'quantize_onnx_model',
            'quantize_torch_model', 'quantize_caffe_model', 'load_native_graph',
@@ -1066,4 +1084,4 @@ __all__ = ['load_graph', 'load_onnx_graph', 'load_caffe_graph',
            'UnbelievableUserFriendlyQuantizationSetting', 'manop',
            'quantize_native_model', 'ENABLE_CUDA_KERNEL', 'DISABLE_CUDA_KERNEL',
            'register_network_quantizer', 'register_network_parser', 
-           'register_network_exporter', 'register_operation_handler']
+           'register_network_exporter', 'register_operation_handler', 'create_quantizer']

@@ -87,7 +87,7 @@ class QuantizeSimplifyPass(QuantizationOptimizationPass):
 
                 input_config = downstream_op.config.input_quantization_config[dest_idx]
                 if source_op.platform == downstream_op.platform:
-                    if input_config.state == QuantizationStates.INITIAL:
+                    if input_config.state == QuantizationStates.INITIAL and input_config.is_same_scheme(source_config):
                         input_config.dominated_by = source_config
 
 
@@ -281,7 +281,7 @@ class QuantAlignmentPass(QuantizationOptimizationPass):
     The way to align TQC is simple, code like:
         tqc1.set_master(master=tqc2)
     Will make tqc1 and tqc2 share the same quantization parameters as tqc1 has, and change the
-    state of tqc2 to be QuantizationState.SLAVE
+    state of tqc2 to be QuantizationState.PASSIVE
 
     If we access the scale of tqc2, PPQ will return its master TQC's scale instead, so does offset.
 
@@ -293,27 +293,36 @@ class QuantAlignmentPass(QuantizationOptimizationPass):
             
             Alignment method for elementwise ops.
             
+            PPQ Supports 3 types alignment method:
+                namely 'Align to Large', 'Align to Output', 'None'.
+            
             All elementwise ops are listed in ppq.core.common.py
 
-    * concat_merge_method(bool)
+    * concat_merge_method(Set[str])
 
             Alignment method for concat-like ops.
             
+            PPQ Supports 3 types alignment method:
+                namely 'Align to Large', 'Align to Output', 'None'.
+            
             All concat-like ops are listed in ppq.core.common.py
 
-    # averagepool_method(bool)
+    * averagepool_method(Set[str])
 
             Alignment method for pooling-like ops.
+
+            PPQ Supports 3 types alignment method:
+                namely 'Align to Large', 'Align to Output', 'None'.
             
             All pooling-like ops are listed in ppq.core.common.py
 
-    # force_overlap(bool)
+    * force_overlap(bool)
 
             TQC alignment might cause serious cascade effect.
             
             For subgraph like this:
             
-            Conv1 ---     
+            Conv1 ---
                     + --- Add1
             Conv2 ---
                     + --- Conv3

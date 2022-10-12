@@ -2,6 +2,7 @@ from typing import Callable, Iterable
 
 import torch
 import torchvision
+
 from ppq import (BaseGraph, QuantizationOptimizationPass,
                  QuantizationOptimizationPipeline, QuantizationSetting,
                  TargetPlatform, TorchExecutor)
@@ -11,7 +12,8 @@ from ppq.IR.quantize import QuantableOperation
 from ppq.IR.search import SearchableGraph
 from ppq.quantization.optim import (ParameterQuantizePass,
                                     PassiveParameterQuantizePass,
-                                    QuantAlignmentPass, QuantizeSimplifyPass,
+                                    QuantAlignmentPass,
+                                    QuantizeSimplifyPass,
                                     RuntimeCalibrationPass)
 from ppq.quantization.quantizer import TensorRTQuantizer
 

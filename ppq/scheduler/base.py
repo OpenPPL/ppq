@@ -1,4 +1,4 @@
-from abc import abstractstaticmethod
+from abc import abstractmethod
 from typing import Dict, List, Set
 from ppq.IR import BaseGraph, Operation
 from ppq.core import TargetPlatform
@@ -16,41 +16,10 @@ class GraphDispatcher:
         if operation is classified as shape-or-index related operation, then its execution will be taken with cpu.
         if operation is sent to a fp32 platform, then its inputs and outputs shall never be quantized.
     """
-    @ staticmethod
-    @ abstractstaticmethod
-    def dispatch(self, graph: BaseGraph, quant_types: List[str],
-                 quant_platform: TargetPlatform,
-                 fp32_platform: TargetPlatform,
-                 SOI_platform: TargetPlatform, **kwargs
-                 ) -> Dict[str, TargetPlatform]:
+    @ abstractmethod
+    def dispatch(self, **kwargs) -> Dict[str, TargetPlatform]:
         """Graph Dispatcher splits a graph into parts, each part of graph will
         be sent to a specific platform for further execution and quantization.
-
-        There are 3 default platform during dispatching:
-            quant_platform - all quantable parts of graph will be dispatched to this platform
-            SOI_platform   - Aka. Shape or Index related operations will be dispatched to this platform.
-            fp32_platform  - there are some operations receiving results from both quant_platform and SOI_platform,
-                they will be dispatched to fp32_platform.
-
-        ATTENTION: Quantization follows this dispatching,
-            and only the operations within quantable platform will be quantized in the future.
-
-        Args:
-            graph (BaseGraph): graph object which going to be dispatched by this dispatcher.
-
-            quant_types(Set[str]): all quantable types for given platforms.
-
-            quant_platform (TargetPlatform):
-                platform object where quantable parts will goes to.
-
-            SOI_platform (TargetPlatform):
-                platform object where SOI parts will goes to.
-
-            fp32_platform (TargetPlatform):
-                platform object where remaining parts will goes to.
-
-        Returns:
-            Dict[str, TargetPlatform]: [description]
         """
         raise NotImplementedError('Impl this first.')
 

@@ -4,8 +4,7 @@ from typing import Dict, List, Tuple
 import onnx
 import torch
 from onnx import helper
-from ppq.core import (COMPELING_OP_TYPES, GRAPH_OPSET_ATTRIB, PPQ_CONFIG,
-                      ChannelwiseTensorQuantizationConfig, DataType,
+from ppq.core import (COMPELING_OP_TYPES, GRAPH_OPSET_ATTRIB, PPQ_CONFIG, DataType,
                       OperationMeta, QuantizationProperty, QuantizationStates,
                       TensorMeta, TensorQuantizationConfig,
                       convert_any_to_torch_tensor, ppq_legacy)
@@ -68,7 +67,6 @@ class MetaxExporter(OnnxExporter):
             tensor = ppq_tensor_round((tensor / scale), config.rounding) + offset
             tensor = torch.clamp(tensor, config.quant_min, config.quant_max)
         else:
-            assert isinstance(config, ChannelwiseTensorQuantizationConfig)
             shape = [1 if axis != config.channel_axis else -1 for axis in range(tensor.ndim)]
             scale, offset = scale.view(shape), offset.view(shape)
             tensor = ppq_tensor_round((tensor / scale), config.rounding) + offset
@@ -165,11 +163,11 @@ class MetaxExporter(OnnxExporter):
             if op.type == 'QuantizeLinear' and op.inputs[0].source_op is not None:
                 input_var = op.inputs[0]
                 op.meta_data.input_metas[0] = input_var.meta
-                op.meta_data.output_metas[0].shape = input_var.meta.shape
+                op.meta_data.output_metas[0].shape = input_var.shape
                 op.meta_data.output_metas[0].dtype = op.meta_data.input_metas[2].dtype
                 dequant_op = op.outputs[0].dest_ops[0]
                 dequant_op.meta_data.input_metas[0] = op.meta_data.output_metas[0]
-                dequant_op.meta_data.output_metas[0].shape = input_var.meta.shape
+                dequant_op.meta_data.output_metas[0].shape = input_var.shape
                 dequant_op.meta_data.output_metas[0].dtype = dequant_op.meta_data.input_metas[1].dtype
             # must be input
             elif op.type == 'QuantizeLinear' and op.inputs[0].value is None:

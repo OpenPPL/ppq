@@ -1,7 +1,7 @@
 from abc import ABCMeta, abstractmethod
 from typing import Callable, Dict, List, Union
 
-from ppq.core import OperationMeta, TargetPlatform, TensorQuantizationConfig
+from ppq.core import TargetPlatform, TensorQuantizationConfig
 from ppq.executor.op import (DEFAULT_BACKEND_TABLE, EXTENSION_BACKEND_TABLE,
                              NXP_BACKEND_TABLE, PPL_DSP_BACKEND_TABLE,
                              PPL_GPU_BACKEND_TABLE, ONNX_BACKEND_TABLE, 
@@ -26,7 +26,7 @@ GLOBAL_DISPATCHING_TABLE[TargetPlatform.PPL_DSP_TI_INT8] = PPL_DSP_BACKEND_TABLE
 GLOBAL_DISPATCHING_TABLE[TargetPlatform.NXP_INT8]      = NXP_BACKEND_TABLE
 GLOBAL_DISPATCHING_TABLE[TargetPlatform.SOI]           = DEFAULT_BACKEND_TABLE
 
-GLOBAL_DISPATCHING_TABLE[TargetPlatform.ORT_OOS_INT8]  = ONNX_BACKEND_TABLE
+GLOBAL_DISPATCHING_TABLE[TargetPlatform.RKNN_INT8]     = DEFAULT_BACKEND_TABLE
 GLOBAL_DISPATCHING_TABLE[TargetPlatform.METAX_INT8_C]  = DEFAULT_BACKEND_TABLE
 GLOBAL_DISPATCHING_TABLE[TargetPlatform.METAX_INT8_T]  = DEFAULT_BACKEND_TABLE
 GLOBAL_DISPATCHING_TABLE[TargetPlatform.ACADEMIC_INT4] = ACADEMIC_BACKEND_TABLE
@@ -64,9 +64,8 @@ class RuntimeHook(metaclass=ABCMeta):
     Args:
         metaclass ([type], optional): [description]. Defaults to ABCMeta.
     """
-    def __init__(self, operation: Operation, operation_meta: OperationMeta = None) -> None:
+    def __init__(self, operation: Operation, **kwargs) -> None:
         self._hook_to = operation
-        self._op_meta = operation_meta
 
     def pre_forward_hook(self, inputs: list, **kwargs) -> list:
         """user-customized pre-processing procedure of input data.
@@ -98,10 +97,10 @@ class QuantOPRuntimeHook(RuntimeHook, metaclass=ABCMeta):
     Args:
         metaclass ([type], optional): [description]. Defaults to ABCMeta.
     """
-    def __init__(self, operation: QuantableOperation, operation_meta: OperationMeta = None) -> None:
+    def __init__(self, operation: QuantableOperation, **kwargs) -> None:
         if not isinstance(operation, QuantableOperation):
             raise TypeError(f'You are trying to bind a QuantRuntimeHook to a non-quantized operation {operation}.')
-        super().__init__(operation, operation_meta)
+        super().__init__(operation)
 
     def pre_forward_hook(
         self,

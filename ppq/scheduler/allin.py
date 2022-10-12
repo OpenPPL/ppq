@@ -10,16 +10,16 @@ class AllinDispatcher(GraphDispatcher):
     dispatch to a specific platform for further execution and quantization.
     ATTENTION: this dispatcher will enable all ops in quant_types to quant_platform.
     """
+    def __init__(self, graph: BaseGraph) -> None:
+        super().__init__()
+        self.graph = graph
 
-    @staticmethod
     def dispatch(
-        graph: BaseGraph,
-        quant_types: Set[str],
+        self, quant_types: Set[str],
         quant_platform: TargetPlatform,
         fp32_platform: TargetPlatform,
-        SOI_platform: TargetPlatform,
-        **kwargs,
-    ) -> Dict[str, TargetPlatform]:
+        SOI_platform: TargetPlatform, **kwargs
+        ) -> Dict[str, TargetPlatform]:
         """
             We assume all ops in origin model can be quant.
             This is suitable for some npu platform.
@@ -35,6 +35,7 @@ class AllinDispatcher(GraphDispatcher):
         Returns:
             Dict[str, TargetPlatform]: [description]
         """
+        graph = self.graph
 
         dispatching_table = {}
         for op in graph.operations.values():

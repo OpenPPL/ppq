@@ -4,7 +4,6 @@ from typing import Iterable, List, Tuple
 
 import torch
 from ppq.core import (NUM_OF_CHECKPOINT_FETCHS, PPQ_CONFIG,
-                      ChannelwiseTensorQuantizationConfig,
                       QuantizationProperty, QuantizationStates, RoundingPolicy,
                       TensorQuantizationConfig)
 from ppq.executor import TorchQuantizeDelegator
@@ -392,7 +391,6 @@ class LSQDelegator(TorchQuantizeDelegator):
                 scale = scale * grad_scale + (scale - scale * grad_scale).detach()
 
             if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
-                assert isinstance(config, ChannelwiseTensorQuantizationConfig)
                 shape = [1 if axis != config.channel_axis else -1 for axis in range(tensor.ndim)]
                 scale = scale.view(shape)
                 offset = offset.view(shape)
@@ -407,8 +405,6 @@ class LSQDelegator(TorchQuantizeDelegator):
             if not config.policy.has_property(QuantizationProperty.LINEAR):
                 raise ValueError('Critical Quantization Error! Non-linear config detected.')
             if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
-                assert isinstance(config, ChannelwiseTensorQuantizationConfig), (
-                    'Critical Quantization Error! Except a ChannelwiseTensorQuantizationConfig.')
                 return CuLSQ_C.apply(
                     tensor, config.scale, config.offset, config.channel_axis,
                     config.quant_min, config.quant_max, config.rounding)

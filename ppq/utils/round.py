@@ -114,6 +114,20 @@ def ppq_tensor_round(
 
 def ppq_round_to_power_of_2(value: Union[float, int],
     policy: RoundingPolicy=RoundingPolicy.ROUND_UP) -> float:
+    """
+    Round a given value to Integer, under Power-of-2 restrction.
+
+    ### Formula:
+    ppq_round_to_power_of_2(x) = sign * float(pow(2, round(log2(sign * value), policy=policy)))
+        where sign is +1 or -1
+
+    Args:
+        value (Union[float, int]): _description_
+        policy (RoundingPolicy, optional): _description_. Defaults to RoundingPolicy.ROUND_UP.
+
+    Returns:
+        float: _description_
+    """
     if value == 0: return 0
     sign = 1 if value >= 0 else -1
     assert isinstance(value, float) or isinstance(value, int), \

@@ -3,11 +3,10 @@ from typing import Dict, List
 import onnx
 import torch
 from onnx import helper
-from ppq.core import (GRAPH_OPSET_ATTRIB, PPQ_CONFIG,
-                      ChannelwiseTensorQuantizationConfig, DataType,
-                      OperationMeta, QuantizationProperty, QuantizationStates,
-                      TensorMeta, TensorQuantizationConfig,
-                      convert_any_to_torch_tensor, ppq_warning)
+from ppq.core import (GRAPH_OPSET_ATTRIB, PPQ_CONFIG, DataType, OperationMeta,
+                      QuantizationProperty, QuantizationStates, TensorMeta,
+                      TensorQuantizationConfig, convert_any_to_torch_tensor,
+                      ppq_warning)
 from ppq.IR import (BaseGraph, Operation, QuantableOperation,
                     QuantableVariable, Variable)
 from ppq.quantization.qfunction.linear import PPQLinearQuant_toInt
@@ -105,7 +104,6 @@ class ONNXRUNTIMExporter(OnnxExporter):
         created = graph.create_operation(op_type='QuantizeLinear', attributes={})
 
         if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
-            assert isinstance(config, ChannelwiseTensorQuantizationConfig)
             created.attributes['axis'] = config.channel_axis
 
         # PATCH 20220803, OPSET 13 REQUIRES AXIS = 0
@@ -142,7 +140,6 @@ class ONNXRUNTIMExporter(OnnxExporter):
         created = graph.create_operation(op_type='DequantizeLinear', attributes={})
 
         if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
-            assert isinstance(config, ChannelwiseTensorQuantizationConfig)
             created.attributes['axis'] = config.channel_axis
 
         # PATCH 20220803, OPSET 13 REQUIRES AXIS = 0
@@ -419,7 +416,8 @@ class ONNXRUNTIMExporter(OnnxExporter):
 
         return self.remove_duplicated_quant_op(graph)
 
-    def export(self, file_path: str, graph: BaseGraph, config_path: str = None) -> None:
+    def export(self, file_path: str, graph: BaseGraph, config_path: str = None, 
+               save_as_external_data: bool = False) -> None:
         graph = self.prepare_graph(graph)
 
         # if a valid config path is given, export quantization config to there.
@@ -471,4 +469,7 @@ class ONNXRUNTIMExporter(OnnxExporter):
             graph_def, producer_name=PPQ_CONFIG.NAME, opset_imports=opsets)
         onnx_model.ir_version = 7
         # onnx.checker.check_model(onnx_model)
-        onnx.save(onnx_model, file_path)
+        size_threshold = 0 if save_as_external_data else 1024
+        onnx.save(onnx_model, file_path, size_threshold=size_threshold,
+                  save_as_external_data=save_as_external_data,
+                  all_tensors_to_one_file=(not save_as_external_data))

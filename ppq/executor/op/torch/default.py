@@ -2020,15 +2020,83 @@ def LeakyRelu_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
 
 
 def LayerNorm_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
-    if len(values) != 3:
-        raise ValueError('Unsupported LayerNorm without affine')
+    """
+    This is layer normalization defined in ONNX as function. 
+    The overall computation can be split into two stages. 
+    The first stage is standardization, which makes the normalized elements have zero mean and unit variances. 
+    The computation required by standardization can be described by the following equations. 
+    Mean = ReduceMean<axes=normalized_axes>(X) D = Sub(X, Mean) DD = Mul(Diff, Diff) 
+    Var = ReduceMean<axes=normalized_axes>(DD) VarEps = Add(Var, epsilon) 
+    StdDev = Sqrt(VarEps) InvStdDev = Reciprocal(StdDev) 
+    Normalized = Mul(D, InvStdDev) where normalized_axes is [axis, ..., rank of X - 1]. 
+    
+    The variables Var and StdDev stand for variance and standard deviation, respectively. 
+    The second output is Mean and the last one is InvStdDev. Depending on stash_type attribute, 
+    the actual computation must happen in different floating-point precision. 
+    
+    For example, if stash_type is 1, this operator casts all input variables to 32-bit float, perform the computation, 
+    and finally cast Normalized back to the original type of X. 
+    
+    The second stage then scales and shifts the outcome of the first stage using
+        NormalizedScaled = Mul(Normalized, Scale) 
+        Y = Add(NormalizedScaled, B) 
+    The second stage doesn't depends on stash_type. All equations are in this syntax. 
+    
+    The same variable (i.e., input, output, and attribute) uses the same name in the equations above and this operator's definition. 
+    Let d[i] indicate the i-th dimension of X. If X's shape is [d[0], ..., d[axis-1], d[axis], ..., d[rank-1]], 
+    the shape of Mean and InvStdDev is [d[0], ..., d[axis-1], 1, ..., 1]. Y and X have the same shape.
+
+    Version
+    This version of the operator has been available since version 17 of the default ONNX operator set.
+
+    Attributes
+        axis : int (default is -1)
+            The first normalization dimension. If rank(X) is r, axis' allowed range is [-r, r]. 
+            Negative value means counting dimensions from the back.
+
+        epsilon : float (default is 1e-05)
+            The epsilon value to use to avoid division by zero.
+
+        stash_type : int (default is 1)
+            Type of Mean and InvStdDev. 
+            This also specifies stage one's computation precision.
+
+    Inputs (2 - 3)
+        X : T
+            Tensor to be normalized.
+        
+        Scale : T
+            Scale tensor.
+        
+        B (optional) : T
+            Bias tensor.
+    
+    Outputs (1 - 3)
+        Y : T
+            Normalized tensor.
+    
+        Mean (optional) : U
+            Saved mean used during training to speed up gradient computation
+        
+        InvStdDev (optional) : U
+            Saved inverse standard deviation used during training to speed up gradient computation.
+
+    """
+    ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=2, max_num_of_input=3)
     values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
 
-    input_data, weight, bias = values
-    eps = op.attributes.get('epsilon', 1e-5)
-    normalized_shape = weight.shape
+    x, weight = values[0], values[1]
+    if len(values) == 3: bias = values[-1]
+    else: bias = None
 
-    output = F.layer_norm(input_data, normalized_shape, weight, bias, eps)
+    eps  = op.attributes.get('epsilon', 1e-5)
+    axis = op.attributes.get('axis', -1)
+
+    if axis != -1 and axis != x.ndim - 1:
+        raise ValueError('Unsupported Layernorm axis. We will implement it soon.')
+    
+    normalized_shape = weight.shape
+    output = F.layer_norm(x, normalized_shape, weight, bias, eps)
     return output
 
 
@@ -3359,7 +3427,8 @@ DEFAULT_BACKEND_TABLE = {
     'GlobalAveragePool': AveragePool_forward,
     'GlobalMaxPool': MaxPool2d_forward,
     'Greater': Greater_forward,
-    'LayerNorm': LayerNorm_forward,
+    'LayerNorm': LayerNorm_forward, # mmdepoly op
+    'LayerNormalization': LayerNorm_forward,
     'LeakyRelu': LeakyRelu_forward,
     'Less': Less_forward,
     'LogSoftmax': LogSoftmax_forward,

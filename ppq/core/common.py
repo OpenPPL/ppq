@@ -2,6 +2,10 @@
 # PPQ System configuration
 # You can modify following codes for your own purpose.
 
+MAX_RECURSION_DEPTH = 5000
+import sys
+sys.setrecursionlimit(MAX_RECURSION_DEPTH)
+
 # Observer 中，最小 scale 限制，所有小于该值的 scale 将被该值覆盖
 OBSERVER_MIN_SCALE = 1e-8
 # Observer 中，最小 scale 的手动覆盖属性

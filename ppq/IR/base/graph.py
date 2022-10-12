@@ -103,7 +103,7 @@ class Variable(Serializable):
         if self.meta is not None:
             return self.meta.shape
         else: return None
-    
+
     @ shape.setter
     def shape(self, new_shape: List[Union[Text, int, None]]):
         if self.meta is None:
@@ -334,7 +334,7 @@ class BaseGraph(Serializable):
             return sort_ret
         else:
             raise RuntimeError(
-                'Topological Sort failed. Some operation can not be sorted (might due to circular reference).\n' + \
+                'Topological Sort failed. Some operation can not be sorted (might due to circular reference).\n'
                 ''.join(str(self.operations[op_name]) + '\n' for op_name in visited if visited[op_name] == False)
             )
 

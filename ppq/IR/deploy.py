@@ -108,10 +108,9 @@ class RunnableGraph(GraphCommandProcessor):
 
             # check all destination operations platform are same.
             platforms = [op.platform for op in variable.dest_ops]
-            if not all([_ == platforms[0] for _ in platforms]):
-                raise TypeError(f'Not all down-steram operations for var {variable} '
-                                'share a same target platform, split this variable first.')
-            platform = platforms[-1]
+            if all([_ == platforms[0] for _ in platforms]) and platforms[0] == TargetPlatform.SOI:
+                platform = TargetPlatform.SOI
+            else: platform = TargetPlatform.UNSPECIFIED
 
             # if all downstream operations are shape related operations, send value to cpu
             if platform == TargetPlatform.SOI:

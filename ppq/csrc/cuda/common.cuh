@@ -140,3 +140,66 @@ float DequantizeScalar(
      */
     return (value - offset) * scale;
 }
+
+union FPConvertHelper {
+    float value;
+    uint32_t data;
+};
+
+template<typename Dtype, typename Stype, typename Otype>
+__device__ __inline__
+float QuantizeScalarFloating(
+    const Dtype value, const Stype scale, const Otype offset,
+    const int exponent, const int mantissa,
+    const float clip_min, const float clip_max, 
+    const Rounding rounding){
+    /**
+     * PPQ Quantization Function implementation.
+     * This function convert an float value to low-precision float
+     */
+
+    FPConvertHelper helper; FPConvertHelper rounding_helper;
+    helper.value = static_cast<float>(value) / static_cast<float>(scale);
+
+    // Following code will Split float32 into sign, exp, mantissa
+    /* IEEE 754 Standard: 1 bit sign, 8 bit exponent, 23 bit mantissa */
+
+    /* In binary 10000000 00000000 00000000 00000000 = 0x80000000 in Hex */
+    /* In binary 01111111 10000000 00000000 00000000 = 0x7F800000 in Hex */
+    /* In binary 00000000 01111111 11111111 11111111 = 0x007FFFFF in Hex */
+
+    uint32_t fp32_sign    = helper.data & 0x80000000;
+    int32_t fp32_exp      = helper.data & 0x7F800000;
+    int32_t fp32_mantissa = helper.data & 0x007FFFFF;
+	int32_t exponent_min  = -(1 << exponent) + 1;
+
+    // Following code will process Float underflow
+    /* Float underflow means fp32_exp is smaller than exponent_min         */
+    /* Where exponent_min is the minimum exponent value of quantized float. */
+    /* For FP8 E4M3, the minimum exponent value should be -15.             */
+
+    /* Following formula will enlarge exponent part    */
+    /* fp32_exp += 1, fp32_mantissa >>= 1             */
+    /* Hopefully, we can simply do this by fp32 *= 2  */
+	if ((fp32_exp - 127) < exponent_min){
+		uint32_t shift = (exponent_min - fp32_exp + 127);
+		fp32_exp       += shift;
+		fp32_mantissa >>= shift;
+	}
+
+    /* high precision mantissa convert to low precision mantissa requires rounding                         */
+    /* Here we apply a tricky method to round mantissa:                                                    */
+    /* We create another float, which sign = 0, exponent = 127, mantissa = fp32_mantissa << (23 - mantissa) */
+    /* Then we directly round this float to int, result here is what we want, you can prove it by yourself */
+    rounding_helper.data = (fp32_mantissa << (23 - mantissa) & 0x007FFFFF) + 0x3F800000;
+    uint32_t round_bit = _round2int(rounding_helper.value, rounding);
+
+    // process mantissa
+    fp32_mantissa = (fp32_mantissa >> (23 - mantissa) + round_bit) << (23 - mantissa);
+    helper.data = fp32_sign + fp32_mantissa + fp32_exp;
+
+    // process overflow
+    if (helper.value >= clip_max) return clip_max;
+    if (helper.value <= clip_min) return clip_min;
+    return helper.value + offset;
+}

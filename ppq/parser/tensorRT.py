@@ -17,8 +17,7 @@
 from typing import Dict
 
 import torch
-from ppq.core import (PPQ_CONFIG, ChannelwiseTensorQuantizationConfig,
-                      DataType, OperationMeta, QuantizationProperty,
+from ppq.core import (DataType, OperationMeta, QuantizationProperty,
                       QuantizationStates, TensorMeta, TensorQuantizationConfig,
                       convert_any_to_torch_tensor)
 from ppq.IR import BaseGraph
@@ -83,7 +82,6 @@ class TensorRTExporter(ONNXRUNTIMExporter):
         graph.create_link_with_op(graph.create_variable(value=offset, is_parameter=True), upstream_op=None, downstream_op=dq_op)
 
         if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
-            assert isinstance(config, ChannelwiseTensorQuantizationConfig)
             qt_op.attributes['axis'] = config.channel_axis
             dq_op.attributes['axis'] = config.channel_axis
 
@@ -171,9 +169,11 @@ class TensorRTExporter(ONNXRUNTIMExporter):
         return graph
 
     def export(self, file_path: str, graph: BaseGraph,
-               config_path: str = None, input_shapes: Dict[str, list] = None) -> None:
+               config_path: str = None, input_shapes: Dict[str, list] = None,
+               save_as_external_data: bool = False) -> None:
         # step 1, export onnx file.
-        super().export(file_path=file_path, graph=graph, config_path=None)
+        super().export(file_path=file_path, graph=graph, 
+                       config_path=None, save_as_external_data=save_as_external_data)
 
         # step 2, convert onnx file to tensorRT engine.
         try:
@@ -188,7 +188,7 @@ class TensorRTExporter(ONNXRUNTIMExporter):
         # step 3, build profile input shape
         # Notice that for each input you should give 3 shapes: (min shape), (opt shape), (max shape)
         if input_shapes is None:
-            input_shapes = {input_var.name: [input_var.meta.shape, input_var.meta.shape, input_var.meta.shape]
+            input_shapes = {input_var.name: [input_var.shape, input_var.shape, input_var.shape]
                             for input_var in graph.inputs.values()}
 
         with trt.Builder(TRT_LOGGER) as builder, builder.create_network(flags=network_flags) as network, trt.OnnxParser(network, TRT_LOGGER) as parser:

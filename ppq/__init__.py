@@ -12,7 +12,6 @@ from ppq.IR import (BaseGraph, GraphBuilder, GraphCommand, GraphExporter,
                     Variable)
 from ppq.IR.deploy import RunnableGraph
 from ppq.IR.quantize import QuantableOperation, QuantableVariable
-from ppq.IR.search import SearchableGraph
 from ppq.log import NaiveLogger
 from ppq.quantization.analyse import (graphwise_error_analyse,
                                       layerwise_error_analyse,
@@ -35,9 +34,12 @@ from ppq.quantization.optim import (BiasCorrectionPass, GRUSplitPass,
                                     QuantizationOptimizationPipeline,
                                     QuantizeFusionPass, QuantizeSimplifyPass,
                                     RuntimeCalibrationPass, SwishFusionPass)
-from ppq.quantization.qfunction import BaseQuantFunction
-from ppq.quantization.qfunction.linear import (PPQLinearQuant_toInt,
-                                               PPQLinearQuantFunction)
+from ppq.quantization.qfunction import (BaseQuantFunction,
+                                        PPQDyamicLinearQuantFunction,
+                                        PPQFloatingQuantFunction,
+                                        PPQLinearQuant_toInt,
+                                        PPQLinearQuantFunction,
+                                        PPQuantFunction, PPQuantFunction_toInt)
 from ppq.quantization.quantizer import (BaseQuantizer, NXP_Quantizer,
                                         PPL_DSP_Quantizer, PPLCUDAQuantizer,
                                         TensorRTQuantizer)

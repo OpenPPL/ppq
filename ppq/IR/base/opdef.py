@@ -810,7 +810,7 @@ def Where_Socket(op: OperationBase) -> OpSocket:
             Tensor of shape equal to the broadcasted shape of condition, X, and Y.
     """
     CHECK_OPSET(op=op, min_version_supported=9, max_version_supported=16)
-    in_plat  = [TargetPlatform.UNSPECIFIED, TargetPlatform.SOI, TargetPlatform.SOI]
+    in_plat  = [TargetPlatform.UNSPECIFIED, TargetPlatform.FP32, TargetPlatform.FP32]
     return OpSocket(
         op=op, in_plat=in_plat[: op.num_of_input], 
         links=[VLink(in_idx=0, out_idx=0)])
@@ -959,4 +959,5 @@ DEFAULT_SOCKET_TABLE = {
     'Xor': Logical_Socket,
     'Or': Logical_Socket,
     'And': Logical_Socket,
+    'Erf': DEFAULT_SOCKET_CREATOR
 }

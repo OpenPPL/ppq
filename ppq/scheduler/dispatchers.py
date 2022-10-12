@@ -30,10 +30,12 @@ class AggresiveDispatcher(GraphDispatcher):
     ATTENTION: this dispatcher will insert necessary DeviceSwitch operations
         between shape-or-index operations and others.
     """
-    @staticmethod
+    def __init__(self, graph: BaseGraph) -> None:
+        super().__init__()
+        self.graph = graph
+        
     def dispatch(
-        graph: BaseGraph, quant_types: Set[str],
-        quant_platform: TargetPlatform,
+        self, quant_platform: TargetPlatform,
         fp32_platform: TargetPlatform,
         SOI_platform: TargetPlatform,
         **kwargs
@@ -70,7 +72,7 @@ class AggresiveDispatcher(GraphDispatcher):
         Returns:
             Dict[str, TargetPlatform]: [description]
         """
-
+        graph = self.graph
         recivers, generators = SOI_receivers(graph), SOI_generators(graph)
         search_engine, SOI_operations, FP32_operations = SearchableGraph(graph), set(recivers), set()
 
@@ -150,9 +152,12 @@ class ConservativeDispatcher(GraphDispatcher):
     ATTENTION: this dispatcher will insert necessary DeviceSwitch operations
         between shape-or-index operations and others.
     """
-    @staticmethod
+    def __init__(self, graph: BaseGraph) -> None:
+        super().__init__()
+        self.graph = graph
+
     def dispatch(
-        graph: BaseGraph, quant_types: Set[str],
+        self, quant_types: Set[str],
         quant_platform: TargetPlatform,
         fp32_platform: TargetPlatform,
         SOI_platform: TargetPlatform, **kwargs
@@ -189,6 +194,7 @@ class ConservativeDispatcher(GraphDispatcher):
         Returns:
             Dict[str, TargetPlatform]: [description]
         """
+        graph = self.graph
         recivers, generators = SOI_receivers(graph), SOI_generators(graph)
         search_engine, SOI_operations = SearchableGraph(graph), set(recivers)
 
@@ -287,9 +293,12 @@ class PPLNNDispatcher(GraphDispatcher):
     ATTENTION: this dispatcher will insert necessary DeviceSwitch operations
         between shape-or-index operations and others.
     """
-    @staticmethod
+    def __init__(self, graph: BaseGraph) -> None:
+        super().__init__()
+        self.graph = graph
+
     def dispatch(
-        graph: BaseGraph, quant_types: Set[str],
+        self, quant_types: Set[str],
         quant_platform: TargetPlatform,
         fp32_platform: TargetPlatform,
         SOI_platform: TargetPlatform, **kwargs
@@ -326,6 +335,7 @@ class PPLNNDispatcher(GraphDispatcher):
         Returns:
             Dict[str, TargetPlatform]: [description]
         """
+        graph = self.graph
         recivers, generators = SOI_receivers(graph), SOI_generators(graph)
         search_engine, SOI_operations = SearchableGraph(graph), set(recivers)
 
@@ -422,9 +432,12 @@ class PointDispatcher(ConservativeDispatcher):
     ATTENTION: this dispatcher will insert necessary DeviceSwitch operations
         between shape-or-index operations and others.
     """
-    @staticmethod
+    def __init__(self, graph: BaseGraph) -> None:
+        super().__init__()
+        self.graph = graph
+
     def dispatch(
-        graph: BaseGraph, quant_types: Set[str],
+        self, quant_types: Set[str],
         quant_platform: TargetPlatform,
         fp32_platform: TargetPlatform,
         SOI_platform: TargetPlatform, **kwargs
@@ -461,6 +474,8 @@ class PointDispatcher(ConservativeDispatcher):
         Returns:
             Dict[str, TargetPlatform]: [description]
         """
+        graph = self.graph
+
         dispatch_table = ConservativeDispatcher.dispatch(
             graph=graph, quant_types=quant_types, quant_platform=quant_platform, 
             fp32_platform=fp32_platform, SOI_platform=SOI_platform, kwargs=kwargs)

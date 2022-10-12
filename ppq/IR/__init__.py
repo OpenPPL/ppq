@@ -7,5 +7,5 @@ from .morph import GraphFormatter, GraphMerger, GraphReplacer
 from .processer import DefaultGraphProcessor, GraphCommandProcessor
 from .quantize import (QuantableGraph, QuantableOperation,
                        QuantableVariable)
-from .search import (Path, PatternTree, SearchableGraph, TraversalCommand,
-                     TreePatternMatcher)
+from .search import (Path, GraphPattern, SearchableGraph, TraversalCommand,
+                     PatternMatchHelper)

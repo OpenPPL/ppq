@@ -8,9 +8,8 @@ from ppq.core import (CUDA, OBSERVER_KL_COMPUTING_DEVICE,
                       OBSERVER_MIN_SCALE_MANUL_OVERRIDE,
                       OBSERVER_MSE_COMPUTE_INTERVAL, OBSERVER_MSE_HIST_BINS,
                       OBSERVER_PERCENTILE, OBSERVER_PERCENTILE_MANUL_OVERRIDE,
-                      OBSERVER_WARNING, PPQ_CONFIG,
-                      ChannelwiseTensorQuantizationConfig,
-                      QuantizationProperty, QuantizationStates, RoundingPolicy,
+                      OBSERVER_WARNING, PPQ_CONFIG, QuantizationProperty,
+                      QuantizationStates, RoundingPolicy,
                       TensorQuantizationConfig, convert_any_to_numpy,
                       ppq_quant_param_computing_function, ppq_warning)
 from ppq.IR import Variable
@@ -75,9 +74,6 @@ class TorchMinMaxObserver(BaseTensorObserver):
                 self._min_val_collector.append(value.min().reshape(shape=[1, ]))
                 self._max_val_collector.append(value.max().reshape(shape=[1, ]))
             elif self._quant_cfg.policy.has_property(QuantizationProperty.PER_CHANNEL):
-                assert isinstance(self._quant_cfg, ChannelwiseTensorQuantizationConfig), \
-                    'Your quantization config has PER_CHANNEL while it is not a '\
-                    'ChannelwiseTensorQuantizationConfig instance.'
                 channel_axis = self._quant_cfg.channel_axis
                 channelwise_view = value.transpose(dim0=0, dim1=channel_axis).unsqueeze(-1)
                 channelwise_view = torch.flatten(channelwise_view, start_dim=1)
@@ -313,9 +309,6 @@ class TorchPercentileObserver(BaseTensorObserver):
                     self._percentile_collector.append(CUDA.Quantile(value, self._percentile).view(1, -1))
             elif self._quant_cfg.policy.has_property(QuantizationProperty.PER_CHANNEL):
                 raise PermissionError('Percentile observer can not deal with per channel quantization.')
-                assert isinstance(self._quant_cfg, ChannelwiseTensorQuantizationConfig), (
-                    'Your quantization config has PER_CHANNEL while it is not a '
-                    'ChannelwiseTensorQuantizationConfig instance.')
                 channel_axis = self._quant_cfg.channel_axis
                 channelwise_view = value.transpose(dim0=0, dim1=channel_axis)
                 channelwise_view = torch.flatten(channelwise_view, start_dim=1)

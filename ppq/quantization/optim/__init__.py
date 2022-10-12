@@ -2,9 +2,9 @@ from .baking import ParameterBakingPass
 from .base import (QuantizationOptimizationPass,
                    QuantizationOptimizationPipeline)
 from .calibration import PPLDSPTIReCalibrationPass, RuntimeCalibrationPass
-from .equalization import LayerwiseEqualizationPass
+from .equalization import ChannelwiseSplitPass, LayerwiseEqualizationPass
 from .extension import ExtensionPass
-from .legacy import AdaroundPass, ChannelSplitPass
+from .legacy import AdaroundPass
 from .morph import (GRUSplitPass, HorizontalLayerSplitPass, MetaxGemmSplitPass,
                     NCNNFormatGemmPass, NXPResizeModeChangePass)
 from .parameters import ParameterQuantizePass, PassiveParameterQuantizePass

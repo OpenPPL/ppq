@@ -1,8 +1,7 @@
 from typing import Union
 
 import torch
-from ppq.core import (ChannelwiseTensorQuantizationConfig,
-                      OperationQuantizationConfig, QuantizationPolicy,
+from ppq.core import (OperationQuantizationConfig, QuantizationPolicy,
                       QuantizationProperty, QuantizationStates, RoundingPolicy,
                       TargetPlatform)
 from ppq.IR import BaseGraph, Operation
@@ -25,8 +24,7 @@ class TensorRTQuantizer(BaseQuantizer):
             policy=self.quantize_policy, rounding=self.rounding_policy,
             op=operation, num_of_bits=self._num_of_bits,
             quant_max=self._quant_max, quant_min=self._quant_min,
-            observer_algorithm='percentile'
-        )
+            observer_algorithm='percentile')
 
         if operation.type in {'Conv', 'ConvTranspose', 'Gemm', 'MatMul'}:
             base_quant_config.output_quantization_config[0].state = QuantizationStates.FP32
@@ -43,12 +41,8 @@ class TensorRTQuantizer(BaseQuantizer):
                         QuantizationProperty.LINEAR +
                         QuantizationProperty.PER_CHANNEL
                     )
-                    base_quant_config.input_quantization_config[1] = \
-                        ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
-                            convert_from = conv_weight_config,
-                            offset = None, scale  = None, channel_axis = 0
-                        )
-                    base_quant_config.input_quantization_config[1].observer_algorithm = 'Minmax'
+                    conv_weight_config.channel_axis = (1 if operation.type == 'ConvTranspose' else 0)
+                    conv_weight_config.observer_algorithm = 'minmax'
             # first parameter must exits, for gemm layer it will be gemm_weight
             # layout: [in_dim, out_dim]
             elif operation.type in {'Gemm', 'MatMul'}:
@@ -59,12 +53,8 @@ class TensorRTQuantizer(BaseQuantizer):
                         QuantizationProperty.LINEAR +
                         QuantizationProperty.PER_CHANNEL
                     )
-                    base_quant_config.input_quantization_config[1] = \
-                        ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
-                            convert_from = gemm_weight_config,
-                            offset = None, scale  = None, channel_axis = 0
-                        )
-                    base_quant_config.input_quantization_config[1].observer_algorithm = 'Minmax'
+                    gemm_weight_config.channel_axis = 0
+                    gemm_weight_config.observer_algorithm = 'minmax'
             # if operation has bias
             if operation.num_of_input > 2:
                 bias_config = base_quant_config.input_quantization_config[-1]

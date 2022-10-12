@@ -1,10 +1,10 @@
 from typing import Union
 
 import torch
-from ppq.api.setting import *
-from ppq.core import (OperationQuantizationConfig, QuantizationPolicy,
-                      QuantizationProperty, QuantizationStates, RoundingPolicy,
-                      TargetPlatform)
+from ppq.api.setting import QuantizationSetting
+from ppq.core import (PASSIVE_OPERATIONS, OperationQuantizationConfig,
+                      QuantizationPolicy, QuantizationProperty,
+                      QuantizationStates, RoundingPolicy, TargetPlatform)
 from ppq.IR import BaseGraph, Operation
 from ppq.quantization.optim import QuantizationOptimizationPipeline
 

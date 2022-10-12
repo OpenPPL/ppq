@@ -73,7 +73,6 @@ class Perseus(GraphDispatcher):
 
         super().__init__()
 
-
     def solve_transitive_closure(
         self, sources: List[Operation], 
         recursive: bool = True) -> Set[Operation]:
@@ -186,9 +185,8 @@ class Perseus(GraphDispatcher):
             ep_expr=None, direction='up')
         return fanin
 
-    def dispatch(self, 
-                 in_plat: List[TargetPlatform] = None, 
-                 out_plat: List[TargetPlatform] = None) -> Dict[str, TargetPlatform]:
+    def dispatch(self, in_plat: List[TargetPlatform] = None, 
+                 out_plat: List[TargetPlatform] = None, **kwargs) -> Dict[str, TargetPlatform]:
         """对当前图执行默认算子调度逻辑
 
         在 Onnx 定义的神经网络中存在两类数据：
