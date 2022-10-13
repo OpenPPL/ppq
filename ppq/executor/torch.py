@@ -296,6 +296,10 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
         output_names:List[str] = None,
         hooks: Dict[str, RuntimeHook] = None,
     ) -> List[torch.Tensor]:
+        # get calibation of batch
+        if isinstance(inputs, torch.Tensor):
+            self._executing_context.calib_batch = inputs.shape[0]
+
         # processing with different input format
         if isinstance(inputs, dict):
             # directly feed value into variables

@@ -7,6 +7,8 @@ import torch
 class TorchBackendContext:
     def __init__(self, executing_device: str) -> None:
         self.executing_device = executing_device
+        # The calib_batch defaults to 1, which can be adjusted flexibly according to calibration data
+        self.calib_batch = 1
 
 def ASSERT_ALL_TENSORS_AT_CPU(op: Operation, values: List[torch.Tensor], force_convert: bool = False):
     """Dynamic Shape Platform Operations Process with shape related tensors,

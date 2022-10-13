@@ -651,7 +651,9 @@ def Reshape_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackend
     ASSERT_ALL_TENSORS_AT_CPU(op=op, values=[None, values[-1]])
     if 'allowzero' in op.attributes: raise NotImplemented('Not implemented yet.')
     data, shape = values
-    shape = [shape[i] if shape[i] != 0 else data.shape[i] for i in range(len(shape))]
+    shape = [shape[i].item() if shape[i] != 0 else data.shape[i] for i in range(len(shape))]
+    if shape == [1,-1]:
+        shape = [ctx.calib_batch, -1]
     return data.reshape(shape)
 
 
