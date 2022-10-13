@@ -82,6 +82,7 @@ class QuantizationOptimizationPipeline(Container, Iterable):
             max_name_length = max([len(name) for name in names])
 
         for optim_pass in self._pipeline:
+            print("\033[1;32mrunning %s\033[0m" % optim_pass.__str__)
             if not isinstance(optim_pass, QuantizationOptimizationPass):
                 raise TypeError(f'Quantization Optimization Pipeline object only suppose to contain optimization passes only, '
                      f'while {str(optim_pass)}({type(optim_pass)}) was found.')
