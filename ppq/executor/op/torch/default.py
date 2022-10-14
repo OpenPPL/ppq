@@ -651,7 +651,21 @@ def Reshape_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackend
     ASSERT_ALL_TENSORS_AT_CPU(op=op, values=[None, values[-1]])
     if 'allowzero' in op.attributes: raise NotImplemented('Not implemented yet.')
     data, shape = values
+
+    # get the batch of input tensor
+    batch = data.shape[0]
+
+    # Avoid the element 0 in the shape that comes with onnx, such as [0,-1]
     shape = [shape[i] if shape[i] != 0 else data.shape[i] for i in range(len(shape))]
+
+    # If the element in shape is a tensor, convert it to a value, for example,
+    # convert [1, tensor(-1)] to [1, -1]
+    shape = [shape[i].item() if hasattr(shape[i], 'item') else shape[i] for i in range(len(shape))]
+
+    if shape == [1,-1] and batch != shape[0]:
+        ppq_warning(f'Multi-batch optimization for calibration, change [1, -1] to {[batch,-1]}.')
+        shape[0] = batch
+
     return data.reshape(shape)
 
 
