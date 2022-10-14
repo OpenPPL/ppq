@@ -173,10 +173,6 @@ class Operation(OperationBase, Serializable):
         return len(self.parameters)
 
     @ property
-    def is_computing_op(self) -> bool:
-        return self.type in COMPUTING_OP
-
-    @ property
     def is_linear_activation(self) -> bool:
         return self.type in LINEAR_ACTIVATIONS
 
@@ -192,17 +188,6 @@ class Operation(OperationBase, Serializable):
         for var in self.outputs:
             down_ops.extend(var.dest_ops)
         return all([op is None for op in up_ops]) or len(down_ops) == 0
-    @ property
-    def num_of_input(self) -> int:
-        return len(self.inputs)
-
-    @ property
-    def num_of_output(self) -> int:
-        return len(self.outputs)
-
-    @ property
-    def num_of_parameter(self) -> int:
-        return len([var for var in self.inputs if var.is_parameter])
 
     def __hash__(self) -> int:
         return self._name.__hash__()
@@ -216,13 +201,6 @@ class Operation(OperationBase, Serializable):
         state['_input_vars'] = [var.name for var in self.inputs]
         state['_output_vars'] = [var.name for var in self.outputs]
         return state
-
-    def set_extension_attrib(self, attrib: str, value: Any):
-        self._detail[attrib] = value
-
-    @ property
-    def extension_attrib(self):
-        return self._detail
 
     def copy(self):
         clone = Operation(
