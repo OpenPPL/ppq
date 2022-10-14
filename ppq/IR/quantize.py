@@ -241,13 +241,8 @@ class QuantableVariable(Variable):
         else: clone._fp32_value = self._fp32_value
         return clone
 
-
 class DeviceSwitchOP(Operation):
-    """DeviceSwitch is a PPQ internal operation. This operation is inserted at
-    platform's boundary for transferring data between devices.
-
-    Args:
-        Operation ([type]): [description]
+    """This Class has been removed since PPQ 0.6.6
     """
     def __init__(self, name: str,
                  inputs: List[Variable] = None,
@@ -257,8 +252,6 @@ class DeviceSwitchOP(Operation):
             name=name, op_type='PPQDeviceSwitch',
             platform=TargetPlatform.UNSPECIFIED,
             inputs=inputs, outputs=outputs)
-
-
 class QuantableGraph(GraphCommandProcessor):
     def process(self, command: GraphCommand) -> Any:
         if command.command_type == GraphCommandType.QUANTIZE_OPERATION:

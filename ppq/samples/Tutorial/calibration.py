@@ -2,10 +2,9 @@ from typing import Iterable
 
 import torch
 import torchvision
-from ppq import QuantableOperation, TargetPlatform, graphwise_error_analyse
-from ppq.api import quantize_torch_model
-from ppq.api.interface import (ENABLE_CUDA_KERNEL, dispatch_graph,
-                               dump_torch_to_onnx, load_onnx_graph, quantize_native_model)
+from ppq import TargetPlatform, graphwise_error_analyse
+from ppq.api.interface import (ENABLE_CUDA_KERNEL, dump_torch_to_onnx,
+                               load_onnx_graph, quantize_native_model)
 from ppq.api.setting import QuantizationSettingFactory
 
 # ------------------------------------------------------------

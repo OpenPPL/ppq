@@ -10,13 +10,15 @@ from typing import Any, Iterable, List
 import torch
 
 from .common import EXPORT_OVERLAPPED_CONFIG
+from .defs import ppq_warning
 from .storage import Serializable
 
 
-class QuantizationVisiblity(Enum):
+class QuantizationVisibility(Enum):
     FORCE_EXPORT       = 1
     EXPOET_WHEN_ACTIVE = 2
     INTERNAL           = 3
+
 
 class NetworkFramework(Enum):
     PPL     = 1
@@ -54,6 +56,7 @@ class TargetPlatform(Enum):
         Quantizer then dispatches them towards desired platform through its quantization logic.
     """
     TRT_INT8      = 101
+    TRT_FP8       = 105
     NCNN_INT8     = 102
     OPENVINO_INT8 = 103
     TENGINE_INT8  = 104
@@ -64,7 +67,7 @@ class TargetPlatform(Enum):
     PPL_CUDA_MIX  = 204
 
     PPL_DSP_INT8  = 301
-    SNPE_INT8 = 302
+    SNPE_INT8     = 302
     PPL_DSP_TI_INT8 = 303
     QNN_DSP_INT8  = 304
 
@@ -73,17 +76,20 @@ class TargetPlatform(Enum):
     NXP_INT8  = 501
     FPGA_INT8 = 502
 
-    ORT_OOS_INT8 = 601
+    RKNN_INT8 = 601
 
     METAX_INT8_C = 701 # channel wise
     METAX_INT8_T = 702 # tensor wise
-
-    HEXAGON_INT8 = 801
-
+    
+    HEXAGON_INT8  = 801
+    GRAPHCORE_FP8 = 901
 
     FP32 = 0
-    # SHAPE-OR-INDEX related operation
-    SHAPE_OR_INDEX = -1
+    FP16 = 1
+    BF16 = 2
+    FP8  = 3
+    # SHAPE-OR-INDEX
+    SOI = -1
     # initial state
     UNSPECIFIED   = -2
     # boundary op
@@ -96,17 +102,13 @@ class TargetPlatform(Enum):
     # THIS IS A DUUMY PLATFORM JUST FOR CREATING YOUR OWN EXTENSION.
     EXTENSION     = -10086
 
-    ACADEMIC_INT8 = 10081
-    ACADEMIC_INT4 = 10082
-    ACADEMIC_MIX  = 10083
-
     @ classmethod
     def is_quantized_platform(cls, platform) -> bool:
         return platform in {
             cls.PPL_DSP_INT8, cls.PPL_DSP_TI_INT8, cls.QNN_DSP_INT8, cls.TRT_INT8, cls.NCNN_INT8, cls.NXP_INT8,
-            cls.SNPE_INT8, cls.PPL_CUDA_INT8, cls.PPL_CUDA_INT4, cls.EXTENSION, cls.PPL_CUDA_MIX, cls.ORT_OOS_INT8,
-            cls.ACADEMIC_INT4, cls.ACADEMIC_INT8, cls.ACADEMIC_MIX, cls.METAX_INT8_C, cls.METAX_INT8_T, 
-            cls.OPENVINO_INT8, cls.FPGA_INT8, cls.TENGINE_INT8}
+            cls.SNPE_INT8, cls.PPL_CUDA_INT8, cls.PPL_CUDA_INT4, cls.EXTENSION, cls.PPL_CUDA_MIX, cls.RKNN_INT8,
+            cls.METAX_INT8_C, cls.METAX_INT8_T, cls.OPENVINO_INT8, cls.FPGA_INT8, cls.TENGINE_INT8, 
+            cls.FP8, cls.GRAPHCORE_FP8, cls.TRT_FP8}
 
 
 class RoundingPolicy(Enum):
@@ -142,34 +144,37 @@ class QuantizationProperty(Enum):
     During simulating, executor will quantize tensor corresponding to its QuantizationPolicy.
         (QuantizationPolicy is included by TensorQuantizationConfig)
 
-    There are 7 different quantization property(s) supported by PPQ now.
+    There are 8 different quantization property(s) supported by PPQ now.
 
         PER_TENSOR: Also known as per-layer quantization, which mean all parameters of this layer share the same scale and offset.
             (For Convulution layer and Gemm layer which has bias, bias layer will be negative quantized, they do not have a valid scale)
 
         PER_CHANNEL: parameters are quantized alone channel axis, each channel has a stand-alone scale and offset.
 
-        LINEAR: Indicates a linear quantization, follow formula: quant(x) = clip(round(x / scale))
+        LINEAR: Linear quantization, follow formula: quant(x) = clip(round(x / scale))
 
-        EXPONENTIAL: Indicates an exponential quantization, not yet used.
+        FLOATING: Low precision float quantization, FP8, BF16, FP16.
 
-        SYMMETRICAL: Indicates a symmetrical quantization, offset is deactivated in this mode.
+        SYMMETRICAL: Symmetrical quantization, offset is deactivated in this mode.
 
-        ASYMMETRICAL: Indicates an asymmetrical quantization, offset is activated in this mode.
+        ASYMMETRICAL: Asymmetrical quantization, offset is activated in this mode.
 
-        POWER_OF_2: Indicates a power-of-2 quantization, scale must be pow(2, k) in this mode.
+        POWER_OF_2: Power-of-2 quantization, scale must be pow(2, k) in this mode.
 
-    ATTENTION: Not all combinations of all 7 QuantizationProperty are valid, see QuantizationPolicy.__check_valid
+        DYNAMIC: Dynamic Activation Quantization, scale is computed on the fly.
+
+    ATTENTION: Not all combinations of all 8 QuantizationProperty are valid, see QuantizationPolicy.__check_valid
     ATTENTION: QuantizationPolicy is read-only, user can only assign its value when created, the only interface of
         QuantizationPolicy is function QuantizationPolicy.has_property.
     """
     PER_TENSOR   = 0x00000001
     PER_CHANNEL  = 0x00000002
     LINEAR       = 0x00000004
-    EXPONENTIAL  = 0x00000008
+    FLOATING     = 0x00000008
     SYMMETRICAL  = 0x00000010
     ASYMMETRICAL = 0x00000020
     POWER_OF_2   = 0x00000040
+    DYNAMIC      = 0x00000080
 
     def __or__(self, other: int) -> int:
         return self.value + other
@@ -207,24 +212,26 @@ class QuantizationPolicy:
     During simulating, executor will quantize tensor corresponding to its QuantizationPolicy.
         (QuantizationPolicy is included by TensorQuantizationConfig)
 
-    There are 7 different quantization property(s) supported by PPQ now.
+    There are 8 different quantization property(s) supported by PPQ now.
 
         PER_TENSOR: Also known as per-layer quantization, which mean all parameters of this layer share the same scale and offset.
             (For Convulution layer and Gemm layer which has bias, bias layer will be negative quantized, they do not have a valid scale)
 
         PER_CHANNEL: parameters are quantized alone channel axis, each channel has a stand-alone scale and offset.
 
-        LINEAR: Indicates a linear quantization, follow formula: quant(x) = clip(round(x / scale))
+        LINEAR: Linear quantization, follow formula: quant(x) = clip(round(x / scale))
 
-        EXPONENTIAL: Indicates an exponential quantization, not yet used.
+        EXPONENTIAL: Exponential quantization, not yet used.
 
-        SYMMETRICAL: Indicates a symmetrical quantization, offset is deactivated in this mode.
+        SYMMETRICAL: Symmetrical quantization, offset is deactivated in this mode.
 
-        ASYMMETRICAL: Indicates an asymmetrical quantization, offset is activated in this mode.
+        ASYMMETRICAL: Asymmetrical quantization, offset is activated in this mode.
 
-        POWER_OF_2: Indicates a power-of-2 quantization, scale must be pow(2, k) in this mode.
+        POWER_OF_2: Power-of-2 quantization, scale must be pow(2, k) in this mode.
 
-    ATTENTION: Not all combinations of all 7 QuantizationProperty are valid, see QuantizationPolicy.__check_valid
+        DYNAMIC: Dynamic Activation Quantization, scale is computed on the fly.
+
+    ATTENTION: Not all combinations of all 8 QuantizationProperty are valid, see QuantizationPolicy.__check_valid
     ATTENTION: QuantizationPolicy is read-only, user can only assign its value when created, the only interface of
         QuantizationPolicy is function QuantizationPolicy.has_property.
     """
@@ -239,21 +246,44 @@ class QuantizationPolicy:
     def has_property(self, property: QuantizationProperty) -> bool:
         return (self._policy & property.value) != 0
 
+    def __eq__(self, o: object) -> bool:
+        if not isinstance(o, QuantizationPolicy):
+            raise TypeError('Can only compare QuantizationPolicy object '
+                            'with another QuantizationPolicy object.')
+        return self._policy == o._policy
+
     @ classmethod
     def __check_valid(cls, policy):
         return policy in {
+            # Standard Int Quantization
             QuantizationProperty.ASYMMETRICAL | QuantizationProperty.LINEAR | QuantizationProperty.PER_CHANNEL,
             QuantizationProperty.ASYMMETRICAL | QuantizationProperty.LINEAR | QuantizationProperty.PER_TENSOR,
-            QuantizationProperty.ASYMMETRICAL | QuantizationProperty.EXPONENTIAL | QuantizationProperty.PER_CHANNEL,
-            QuantizationProperty.ASYMMETRICAL | QuantizationProperty.EXPONENTIAL | QuantizationProperty.PER_TENSOR,
             QuantizationProperty.SYMMETRICAL | QuantizationProperty.LINEAR | QuantizationProperty.PER_CHANNEL,
             QuantizationProperty.SYMMETRICAL | QuantizationProperty.LINEAR | QuantizationProperty.PER_TENSOR,
-            QuantizationProperty.SYMMETRICAL | QuantizationProperty.EXPONENTIAL | QuantizationProperty.PER_CHANNEL,
-            QuantizationProperty.SYMMETRICAL | QuantizationProperty.EXPONENTIAL | QuantizationProperty.PER_TENSOR,
             QuantizationProperty.ASYMMETRICAL | QuantizationProperty.LINEAR | QuantizationProperty.PER_TENSOR | QuantizationProperty.POWER_OF_2,
             QuantizationProperty.SYMMETRICAL | QuantizationProperty.LINEAR | QuantizationProperty.PER_TENSOR | QuantizationProperty.POWER_OF_2,
             QuantizationProperty.ASYMMETRICAL | QuantizationProperty.LINEAR | QuantizationProperty.PER_CHANNEL | QuantizationProperty.POWER_OF_2,
             QuantizationProperty.SYMMETRICAL | QuantizationProperty.LINEAR | QuantizationProperty.PER_CHANNEL | QuantizationProperty.POWER_OF_2,
+            
+            # Low Precision Float Quantization
+            QuantizationProperty.SYMMETRICAL | QuantizationProperty.FLOATING | QuantizationProperty.PER_CHANNEL,
+            QuantizationProperty.SYMMETRICAL | QuantizationProperty.FLOATING | QuantizationProperty.PER_TENSOR,
+            QuantizationProperty.ASYMMETRICAL | QuantizationProperty.FLOATING | QuantizationProperty.PER_CHANNEL,
+            QuantizationProperty.ASYMMETRICAL | QuantizationProperty.FLOATING | QuantizationProperty.PER_TENSOR,
+            QuantizationProperty.SYMMETRICAL | QuantizationProperty.FLOATING | QuantizationProperty.PER_CHANNEL | QuantizationProperty.POWER_OF_2,
+            QuantizationProperty.SYMMETRICAL | QuantizationProperty.FLOATING | QuantizationProperty.PER_TENSOR | QuantizationProperty.POWER_OF_2,
+            QuantizationProperty.ASYMMETRICAL | QuantizationProperty.FLOATING | QuantizationProperty.PER_CHANNEL | QuantizationProperty.POWER_OF_2,
+            QuantizationProperty.ASYMMETRICAL | QuantizationProperty.FLOATING | QuantizationProperty.PER_TENSOR | QuantizationProperty.POWER_OF_2,
+
+            # Dynamic Activation Quantization
+            QuantizationProperty.SYMMETRICAL | QuantizationProperty.LINEAR | QuantizationProperty.PER_TENSOR | QuantizationProperty.DYNAMIC,
+            QuantizationProperty.ASYMMETRICAL | QuantizationProperty.LINEAR | QuantizationProperty.PER_TENSOR | QuantizationProperty.DYNAMIC,
+            QuantizationProperty.SYMMETRICAL | QuantizationProperty.LINEAR | QuantizationProperty.PER_CHANNEL | QuantizationProperty.DYNAMIC,
+            QuantizationProperty.ASYMMETRICAL | QuantizationProperty.LINEAR | QuantizationProperty.PER_CHANNEL | QuantizationProperty.DYNAMIC,
+            QuantizationProperty.SYMMETRICAL | QuantizationProperty.LINEAR | QuantizationProperty.PER_TENSOR | QuantizationProperty.DYNAMIC | QuantizationProperty.POWER_OF_2,
+            QuantizationProperty.ASYMMETRICAL | QuantizationProperty.LINEAR | QuantizationProperty.PER_TENSOR | QuantizationProperty.DYNAMIC | QuantizationProperty.POWER_OF_2,
+            QuantizationProperty.SYMMETRICAL | QuantizationProperty.LINEAR | QuantizationProperty.PER_CHANNEL | QuantizationProperty.DYNAMIC | QuantizationProperty.POWER_OF_2,
+            QuantizationProperty.ASYMMETRICAL | QuantizationProperty.LINEAR | QuantizationProperty.PER_CHANNEL | QuantizationProperty.DYNAMIC | QuantizationProperty.POWER_OF_2,
         }
 
     def to_dict(self) -> dict:
@@ -308,7 +338,7 @@ class QuantizationStates(Enum):
         ACTIVATE: means corresponding tensor is ready to be quantized with its configuration.
 
         PASSIVE: means corresponding tensor is ready to be quantized with its configuration.
-            (however its configuration is not stand alone, it still depends on someone else.)
+            (however its configuration is not stand alone, its scale and offset depends on someone else.)
 
         BAKED: means corresponding tensor has been pre-quantized, its value can directly
             go forward without quantization.
@@ -316,19 +346,18 @@ class QuantizationStates(Enum):
     INITIAL     = 1   # 量化参数刚刚被初始化，当前 config 不生效，数据不能被使用
     BAKED       = 2   # 只针对参数量化，表示参数已经被静态量化，当前 config 不生效，数据可以直接使用
     OVERLAPPED  = 3   # 只针对activation量化，表示数据流的量化由其他 config 管理，当前 config 不生效
-    SLAVE       = 4   # 只针对activation量化，表示当前数据流处于强制联合定点，当前 config 生效
     DEACTIVATED = 5   # 表示当前 config 不生效
     ACTIVATED   = 6   # 表示当前 config 生效
     DEQUANTIZED = 7   # 表示当前 config 处于解量化状态，解量化是 PPQ 的一个系统操作
     SOI         = 8   # 表示这一路输入与 Shape or index 相关，不量化
-    PASSIVE     = 9   # 表示这一路输入被动量化，如 bias, clip value 等
+    PASSIVE     = 9   # 表示这一路输入被动量化，如 bias, clip value 等，被动量化参数使用其他 TQC 的量化信息完成量化
     PASSIVE_INIT = 10  # 表示这一路输入被动量化，并且刚刚初始化不能被使用
     PASSIVE_BAKED = 11 # 被动量化且静态量化，当前config不生效，数据可以直接使用
-    FP32        = 12   # 表示这一路输入直接为FP32浮点数
+    FP32          = 12 # 表示这一路输入直接为FP32浮点数
 
     @ classmethod
     def is_activated(cls, state)->bool:
-        return state in {QuantizationStates.ACTIVATED, QuantizationStates.PASSIVE, QuantizationStates.SLAVE}
+        return state in {QuantizationStates.ACTIVATED, QuantizationStates.PASSIVE}
 
     @ classmethod
     def can_export(cls, state) -> bool:
@@ -366,11 +395,13 @@ class TensorQuantizationConfig(Serializable):
         num_of_bits: int          = 8,
         quant_min: int            = -127,
         quant_max: int            = 128,
+        exponent_bits: int        = 0,
         scale: Any                = None,
         offset: Any               = None,
         observer_algorithm: str   = None,
         detail: Any               = None,
-        visiblity: QuantizationVisiblity      = QuantizationVisiblity.EXPOET_WHEN_ACTIVE,
+        channel_axis: int         = None,
+        visiblity: QuantizationVisibility = QuantizationVisibility.EXPOET_WHEN_ACTIVE,
         state: QuantizationStates = QuantizationStates.INITIAL
     ):
         """Create a PPQ Tensor Quantization Configuration Instance.
@@ -381,7 +412,11 @@ class TensorQuantizationConfig(Serializable):
 
             rounding (RoundingPolicy): Rounding policy used in quantization.
 
-            num_of_bits (int): Quantization bits. (2 < num_of_bits < 32)
+            num_of_bits (int): Quantization fraction bits. (2 < num_of_bits < 32)
+            
+            exponent_bits (int): Quantization exponent bits. (0 < num_of_bits < 8)
+                For Int8 Quantization, num_of_bits = 8 and exponent_bits = 0
+                For FP8 Quantization, num_of_bits = 4 and exponent_bits = 4
 
             quant_min (int): An integer value represents the upper bound(inclusive) of quantized value.
 
@@ -400,6 +435,8 @@ class TensorQuantizationConfig(Serializable):
             detail (Any, optional): Only used by PPQ internal logic, detail is used to store some internal data,
                 you are not supposed to use it.
 
+            channel_axis (int, optional): Only used in PER_CHANNEL quantization, channel index.
+        
             visiblity (Visiblity): visiblity is the attribute that controls export logic.
 
             Currently, there are 3 Visiblity level in PPQ:
@@ -414,8 +451,11 @@ class TensorQuantizationConfig(Serializable):
 
         assert num_of_bits <= 32, 'Cannot quantize a tensor with more than 32 bits.'
         assert num_of_bits >= 2, 'Cannot quantize a tensor with less than 2 bits.'
-
+        assert exponent_bits <= 8, 'Cannot quantize a tensor with more than 8 bits exponent(fp32 overflow).'
+        assert exponent_bits >= 0, 'Cannot quantize a tensor with less than 0 bits exponent.'
+        
         self._policy = policy
+        self._exponent_bits = exponent_bits
         self._num_of_bits = num_of_bits
         self._scale = scale
         self._offset = offset
@@ -423,22 +463,23 @@ class TensorQuantizationConfig(Serializable):
         self._rounding = rounding
         self._quant_min = quant_min
         self._quant_max = quant_max
+        self._channel_axis = channel_axis
         self.observer_algorithm = observer_algorithm
         self.detail = {} if detail is None else detail
-        self._father_config = self # union-find
+        self._dominator = self # union-find
         self._hash = self.__create_hash()
         self._visiblity = visiblity
         super().__init__()
 
     def can_export(self) -> bool:
-        if self.visiblity == QuantizationVisiblity.INTERNAL: return False
+        if self.visiblity == QuantizationVisibility.INTERNAL: return False
         type_check  = isinstance(self.scale, torch.Tensor) and isinstance(self.offset, torch.Tensor)
         valid_states = {QuantizationStates.BAKED, QuantizationStates.PASSIVE_BAKED}
 
         if EXPORT_OVERLAPPED_CONFIG: valid_states.add(QuantizationStates.OVERLAPPED)
         state_check = QuantizationStates.is_activated(self.state) or self.state in valid_states
 
-        if (state_check or self.visiblity == QuantizationVisiblity.FORCE_EXPORT):
+        if (state_check or self.visiblity == QuantizationVisibility.FORCE_EXPORT):
             if type_check: return True
         return False
 
@@ -460,6 +501,18 @@ class TensorQuantizationConfig(Serializable):
 
     def __hash__(self) -> int:
         return self._hash
+
+    def is_same_scheme(self, o: object) -> bool:
+        if not isinstance(o, TensorQuantizationConfig):
+            raise TypeError('Can only compare TensorQuantizationConfig object '
+                            'with another TensorQuantizationConfig object.')
+        return (self.quant_max == o.quant_max and 
+                self.quant_min == o.quant_min and 
+                self.policy == o.policy and 
+                self.num_of_bits == o.num_of_bits and
+                self.exponent_bits == o.exponent_bits and
+                self.channel_axis == o.channel_axis and
+                self.rounding == o.rounding)
 
     @ property
     def dominated_by(self):
@@ -484,37 +537,47 @@ class TensorQuantizationConfig(Serializable):
 
         ATTENTION: This configuration is invalid when self.dominated_by != self.
         """
-        if self._father_config == self:
+        if self._dominator == self:
             return self
         else:
-            root = self._father_config.dominated_by
-            self._father_config = root
+            root = self._dominator.dominated_by
+            self._dominator = root
             return root
 
     @ dominated_by.setter
     def dominated_by(self, o):
         assert isinstance(o, TensorQuantizationConfig), (
             'Can only set this attribute with another tensor config.')
+        if o._hash == self._hash:
+            raise ValueError('Error with TQC.dominated_by = o: o must not equal to TQC its self.')
         root, dominator = self.dominated_by, o.dominated_by
         assert isinstance(root, TensorQuantizationConfig)
         if dominator != root:
-            root._father_config = dominator
-            self._father_config = dominator
+            root._dominator = dominator
+            self._dominator = dominator
             root.state = QuantizationStates.OVERLAPPED
             self.state = QuantizationStates.OVERLAPPED
 
-    def set_master(self, master, recursive: bool = False):
-        assert isinstance(master, TensorQuantizationConfig), (
-            'Can only set this attribute with another tensor config.')
-        assert master.state in {QuantizationStates.ACTIVATED, QuantizationStates.OVERLAPPED, QuantizationStates.SLAVE}, (
-            f'Quantization State of master must be ACTIVATED or SLAVE, however {master.state.name} was given.')
-        if recursive:
-            root = self.dominated_by
-            root.state = QuantizationStates.SLAVE
-            root._father_config = master
+    @ property
+    def master_by(self):
+        if self._dominator == self:
+            return self
         else:
-            self._father_config = master
-            self.state = QuantizationStates.SLAVE
+            root = self._dominator.dominated_by
+            self._dominator = root
+            return root
+
+    @ master_by.setter
+    def master_by(self, master):
+        if not isinstance(master, TensorQuantizationConfig):
+            raise TypeError(f'Error with TQC.master_by(o): o must be another Tensor Quantization Config, '
+                            f'however {type(master)} was given.')
+        if master._hash == self._hash:
+            raise ValueError('Error with TQC.dominated_by = o: o must not equal to TQC its self.')
+        self._dominator = master
+        if master.scale is not None and master.offset is not None:
+            self.state   = QuantizationStates.PASSIVE
+        else: self.state = QuantizationStates.PASSIVE_INIT
 
     def is_revisable(self):
         return (self.dominated_by == self and self.state in {
@@ -522,9 +585,9 @@ class TensorQuantizationConfig(Serializable):
             QuantizationStates.DEQUANTIZED,
             QuantizationStates.DEACTIVATED,
             QuantizationStates.INITIAL,
-            QuantizationStates.PASSIVE_INIT,
+            QuantizationStates.FP32,
             QuantizationStates.PASSIVE,
-            QuantizationStates.FP32
+            QuantizationStates.PASSIVE_INIT
         })
 
     @ property
@@ -547,33 +610,36 @@ class TensorQuantizationConfig(Serializable):
 
     @ property
     def policy(self) -> QuantizationPolicy:
-        if self.dominated_by == self: return self._policy
-        else: return self.dominated_by.policy
+        return self._policy
 
     @ property
     def num_of_bits(self) -> int:
-        if self.dominated_by == self: return self._num_of_bits
-        else: return self.dominated_by.num_of_bits
+        return self._num_of_bits
 
     @ property
     def rounding(self) -> RoundingPolicy:
-        if self.dominated_by == self: return self._rounding
-        else: return self.dominated_by.rounding
+        return self._rounding
 
     @ property
     def quant_min(self) -> int:
-        if self.dominated_by == self: return self._quant_min
-        else: return self.dominated_by.quant_min
+        return self._quant_min
 
     @ property
     def quant_max(self) -> int:
-        if self.dominated_by == self: return self._quant_max
-        else: return self.dominated_by.quant_max
+        return self._quant_max
 
     @ property
-    def delegate(self) -> int:
-        if self.dominated_by == self: return self._quant_max
-        else: return self.dominated_by.quant_max
+    def exponent_bits(self) -> int:
+        return self._exponent_bits
+
+    @ property
+    def mantissa_bits(self) -> int:
+        # there is one bit for sign.
+        return self.num_of_bits - self._exponent_bits - 1
+    
+    @ property
+    def channel_axis(self) -> int:
+        return self._channel_axis
 
     @ scale.setter
     def scale(self, value: Any):
@@ -599,58 +665,39 @@ class TensorQuantizationConfig(Serializable):
 
     @ policy.setter
     def policy(self, policy: QuantizationPolicy):
-        if not self.is_revisable():
-            raise PermissionError(
-                'Can not change policy of this tensor quantization configuration now. '
-                'It has been overlapped or has an inactive state. '
-                'Due to it is not a active config, any change of this configuration is not allowed.'
-            )
-        else:
-            self._policy = policy
+        self._policy = policy
 
     @ num_of_bits.setter
     def num_of_bits(self, bits: int):
-        if not self.is_revisable():
-            raise PermissionError(
-                'Can not change num_of_bits of this tensor quantization configuration now. '
-                'It has been overlapped or has an inactive state. '
-                'Due to it is not a active config, any change of this configuration is not allowed.'
-            )
-        else:
-            self._num_of_bits = bits
+        self._num_of_bits = bits
 
     @ rounding.setter
     def rounding(self, policy: RoundingPolicy):
-        if not self.is_revisable():
-            raise PermissionError(
-                'Can not change rounding of this tensor quantization configuration now. '
-                'It has been overlapped or has an inactive state. '
-                'Due to it is not a active config, any change of this configuration is not allowed.'
-            )
-        else:
-            self._rounding = policy
+        self._rounding = policy
 
     @ quant_min.setter
     def quant_min(self, min: int):
-        if not self.is_revisable():
-            raise PermissionError(
-                'Can not change quant_min of this tensor quantization configuration now. '
-                'It has been overlapped or has an inactive state. '
-                'Due to it is not a active config, any change of this configuration is not allowed.'
-            )
-        else:
-            self._quant_min = min
+        self._quant_min = min
 
     @ quant_max.setter
     def quant_max(self, max: int):
-        if not self.is_revisable():
+        self._quant_max = max
+
+    @ exponent_bits.setter
+    def exponent_bits(self, bits: int):
+        if not self.policy.has_property(QuantizationProperty.FLOATING):
             raise PermissionError(
-                'Can not change quant_max of this tensor quantization configuration now. '
-                'It has been overlapped or has an inactive state. '
-                'Due to it is not a active config, any change of this configuration is not allowed.'
-            )
-        else:
-            self._quant_max = max
+                'Can not change property: exponent bits for this TQC. '
+                'self.policy.has_property(QuantizationProperty.FLOATING) == False.')
+        self._exponent_bits = bits
+
+    @ channel_axis.setter
+    def channel_axis(self, channel_axis: int):
+        if not self.policy.has_property(QuantizationProperty.PER_CHANNEL):
+            raise PermissionError(
+                'Can not change property: quantization channel axis for this TQC. '
+                'self.policy.has_property(QuantizationProperty.PER_CHANNEL) == False.')
+        self._channel_axis = channel_axis
 
     def copy(self):
         """Create a tensor config from this one, keep policy and state
@@ -665,7 +712,7 @@ class TensorQuantizationConfig(Serializable):
             else: scale = self.scale
         if self.offset is not None:
             if isinstance(self.offset, torch.Tensor):
-                offset = self.scale.clone()
+                offset = self.offset.clone()
             else: offset = self.offset
         config = TensorQuantizationConfig(
             policy=self.policy,
@@ -676,40 +723,34 @@ class TensorQuantizationConfig(Serializable):
             scale=scale, offset=offset,
             observer_algorithm=self.observer_algorithm,
             detail=self.detail.copy(),
-            state=self.state
+            state=self.state,
+            exponent_bits=self.exponent_bits,
+            channel_axis=self.channel_axis
         )
         if self.state == QuantizationStates.OVERLAPPED:
-            config._father_config = self._father_config
+            config._dominator = self._dominator
         return config
 
 
 class ChannelwiseTensorQuantizationConfig(TensorQuantizationConfig):
-    """ChannelwiseTensorQuantizationConfig is a special case for tensor
-    quantization configuration.
-
-    Comparing with per-tensor quantization configuration, pre-channel quantization has a property
-        "channel_axis" to indicate a channel axis where quantization takes effects.
-
-    Along this axis, all tensor values will be quantized with a sharing scale and offset,
-        and all scales and offsets form all channels will be stored by this configuration.
-
-    see the definition of TensorQuantizationConfig for more detail.
-    """
+    """ Legacy Class Since PPQ 0.6.6, Use TensorQuantizationConfig Instead. """
     def __init__(self,
         policy: QuantizationPolicy, rounding:RoundingPolicy,
-        num_of_bits: int, quant_min: int, quant_max: int,
+        num_of_bits: int, exponent_bits: int, 
+        quant_min: int, quant_max: int,
         scale: Any, offset: Any, observer_algorithm: str,
         state: QuantizationStates, channel_axis: int, detail: dict = {}
     ):
+        ppq_warning('ChannelwiseTensorQuantizationConfig is now obsolescent(Since PPQ 0.6.6), '
+                    'use TensorQuantizationConfig Instead.')
         if policy.has_property(QuantizationProperty.PER_TENSOR):
-            raise TypeError('Can not assign QuantizationProperty.PER_TENSOR policy '\
-                'to a Channel-wise Tensor Quantization Config instance.'
-            )
+            raise TypeError('Can not assign QuantizationProperty.PER_TENSOR policy '
+                'to a Channel-wise Tensor Quantization Config instance.')
         super().__init__(
             policy=policy, num_of_bits=num_of_bits,
             quant_min=quant_min, quant_max=quant_max, scale=scale, offset=offset,
             observer_algorithm=observer_algorithm, detail=detail, state=state,
-            rounding=rounding
+            rounding=rounding, exponent_bits=exponent_bits
         )
         self.channel_axis = channel_axis
 
@@ -732,7 +773,8 @@ class ChannelwiseTensorQuantizationConfig(TensorQuantizationConfig):
             detail=convert_from.detail.copy(),
             state=convert_from.state,
             channel_axis=channel_axis,
-            rounding=convert_from.rounding
+            rounding=convert_from.rounding,
+            exponent_bits=convert_from.exponent_bits
         )
         return this
 

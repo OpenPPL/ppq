@@ -1,15 +1,16 @@
 from math import ceil
 from typing import Callable, Dict, Iterable, List
 
-from ppq.core import (ChannelwiseTensorQuantizationConfig, QuantizationStates,
-                      QuantizationPolicy, QuantizationProperty,
-                      TensorQuantizationConfig, empty_ppq_cache)
+import torch
+from ppq.core import (QuantizationPolicy, QuantizationProperty,
+                      QuantizationStates, TensorQuantizationConfig,
+                      empty_ppq_cache)
 from ppq.executor import BaseGraphExecutor, RuntimeHook
 from ppq.IR import BaseGraph, QuantableOperation
 from ppq.quantization.observer import (CalibrationHook, OperationObserver,
-                                       TensorObserverFactroy, TorchMinMaxObserver,
-                                       TorchHistObserver, TorchMSEObserver)
-import torch
+                                       TensorObserverFactroy,
+                                       TorchHistObserver, TorchMinMaxObserver,
+                                       TorchMSEObserver)
 from tqdm import tqdm
 
 from .base import QuantizationOptimizationPass
@@ -283,7 +284,7 @@ class PPLDSPTIReCalibrationPass(RuntimeCalibrationPass):
                 master_operation = downstream_ops[0]
                 master_var = downstream_ops[0].outputs[0]
 
-            master_cfg_per_channel = ChannelwiseTensorQuantizationConfig(
+            master_cfg_per_channel = TensorQuantizationConfig(
                 policy=QuantizationPolicy(
                     QuantizationProperty.SYMMETRICAL +
                     QuantizationProperty.LINEAR +

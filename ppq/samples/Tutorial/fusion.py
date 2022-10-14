@@ -12,7 +12,7 @@ from ppq.IR.quantize import QuantableOperation
 from ppq.IR.search import SearchableGraph
 from ppq.quantization.optim import (ParameterQuantizePass,
                                     PassiveParameterQuantizePass,
-                                    QuantAlignmentPass, QuantizeRefinePass,
+                                    QuantAlignmentPass,
                                     QuantizeSimplifyPass,
                                     RuntimeCalibrationPass)
 from ppq.quantization.quantizer import TensorRTQuantizer
@@ -81,7 +81,6 @@ class MyFusion(QuantizationOptimizationPass):
 class MyQuantizer(TensorRTQuantizer):
     def build_quant_pipeline(self, setting: QuantizationSetting) -> QuantizationOptimizationPipeline:
         return QuantizationOptimizationPipeline([
-            QuantizeRefinePass(),
             QuantizeSimplifyPass(),
             ParameterQuantizePass(),
             MyFusion(name='My Optimization Procedure'),

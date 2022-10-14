@@ -4,16 +4,14 @@ from typing import Dict, List, Tuple
 import onnx
 import torch
 from onnx import helper
-from ppq.core import (COMPELING_OP_TYPES, PPQ_CONFIG,
-                      ChannelwiseTensorQuantizationConfig, DataType,
+from ppq.core import (COMPELING_OP_TYPES, GRAPH_OPSET_ATTRIB, PPQ_CONFIG, DataType,
                       OperationMeta, QuantizationProperty, QuantizationStates,
                       TensorMeta, TensorQuantizationConfig,
                       convert_any_to_torch_tensor, ppq_legacy)
 from ppq.IR import (BaseGraph, Operation, QuantableOperation,
                     QuantableVariable, Variable)
 from ppq.IR.base.command import GraphCommand, GraphCommandType
-from ppq.IR.morph import GraphDeviceSwitcher, GraphFormatter
-from ppq.core.common import GRAPH_OPSET_ATTRIB
+from ppq.IR.morph import GraphFormatter
 from ppq.utils.round import ppq_tensor_round
 
 from .onnx_exporter import OnnxExporter
@@ -69,7 +67,6 @@ class MetaxExporter(OnnxExporter):
             tensor = ppq_tensor_round((tensor / scale), config.rounding) + offset
             tensor = torch.clamp(tensor, config.quant_min, config.quant_max)
         else:
-            assert isinstance(config, ChannelwiseTensorQuantizationConfig)
             shape = [1 if axis != config.channel_axis else -1 for axis in range(tensor.ndim)]
             scale, offset = scale.view(shape), offset.view(shape)
             tensor = ppq_tensor_round((tensor / scale), config.rounding) + offset
@@ -166,11 +163,11 @@ class MetaxExporter(OnnxExporter):
             if op.type == 'QuantizeLinear' and op.inputs[0].source_op is not None:
                 input_var = op.inputs[0]
                 op.meta_data.input_metas[0] = input_var.meta
-                op.meta_data.output_metas[0].shape = input_var.meta.shape
+                op.meta_data.output_metas[0].shape = input_var.shape
                 op.meta_data.output_metas[0].dtype = op.meta_data.input_metas[2].dtype
                 dequant_op = op.outputs[0].dest_ops[0]
                 dequant_op.meta_data.input_metas[0] = op.meta_data.output_metas[0]
-                dequant_op.meta_data.output_metas[0].shape = input_var.meta.shape
+                dequant_op.meta_data.output_metas[0].shape = input_var.shape
                 dequant_op.meta_data.output_metas[0].dtype = dequant_op.meta_data.input_metas[1].dtype
             # must be input
             elif op.type == 'QuantizeLinear' and op.inputs[0].value is None:
@@ -261,10 +258,6 @@ class MetaxExporter(OnnxExporter):
         return compel_pairs
 
     def export(self, file_path: str, graph: BaseGraph, config_path: str = None) -> None:
-        # remove switchers.
-        if not PPQ_CONFIG.EXPORT_DEVICE_SWITCHER:
-            processor = GraphDeviceSwitcher(graph)
-            processor.remove_switcher()
 
         # if a valid config path is given, export quantization config to there.
         if config_path is not None:

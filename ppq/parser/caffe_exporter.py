@@ -9,7 +9,6 @@ from ppq.core import (PPQ_CONFIG, DataType, QuantizationProperty,
                       TensorQuantizationConfig, convert_any_to_torch_tensor)
 from ppq.executor.torch import TorchExecutor
 from ppq.IR import BaseGraph, GraphExporter
-from ppq.IR.morph import GraphDeviceSwitcher
 from ppq.IR.quantize import QuantableOperation, QuantableVariable
 from ppq.log import NaiveLogger
 
@@ -23,7 +22,7 @@ logger = NaiveLogger.get_logger('PPQ')
 def convert_type(platform: TargetPlatform) -> str:
     if platform == TargetPlatform.PPL_CUDA_INT8: return 'INT8'
     if platform == TargetPlatform.PPL_DSP_INT8: return 'INT8'
-    if platform == TargetPlatform.SHAPE_OR_INDEX: return None
+    if platform == TargetPlatform.SOI: return None
     if platform == TargetPlatform.FP32: return None
     raise TypeError(f'Unsupported platform type. ({str(platform)})')
 
@@ -57,7 +56,7 @@ class CaffeExporter(GraphExporter):
                 # we do not support mix precision quantization for CUDA backend now.
                 # All configurations for this variable should keep identical towards each other.
 
-                if config.state == QuantizationStates.SLAVE and var.name in var_quant_info_recorder: continue
+                if config.state == QuantizationStates.PASSIVE and var.name in var_quant_info_recorder: continue
                 var_quant_info_recorder[var.name] = config
 
         # ready to render config to json.
@@ -94,17 +93,12 @@ class CaffeExporter(GraphExporter):
             json.dump(exports, file, indent=4)
 
     def prepare_model(self, graph: BaseGraph, input_shapes: List[List[int]]):
-        # remove device switcher if necessary
-        if not PPQ_CONFIG.EXPORT_DEVICE_SWITCHER:
-            processor = GraphDeviceSwitcher(graph)
-            processor.remove_switcher()
-
         # trace model for exporting.
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
         if all([var.value is not None for var in graph.inputs.values()]):
             inputs = {var.name: convert_any_to_torch_tensor(var.value).to(device) for var in graph.inputs.values()}
         elif all([var.meta is not None for var in graph.inputs.values()]):
-            inputs = {var.name: torch.randn(*var.meta.shape, dtype=DataType.to_torch(var.meta.dtype), device=device)\
+            inputs = {var.name: torch.randn(*var.shape, dtype=DataType.to_torch(var.meta.dtype), device=device)\
                 for var in graph.inputs.values()}
         else:
             assert len([input_shapes]) == len(graph.inputs), (
@@ -122,8 +116,8 @@ class CaffeExporter(GraphExporter):
         for name, var in graph.inputs.items():
             caffe_model.input.append(name)
             input_shape = ppl_caffe_pb2.BlobShape()
-            var.meta.shape[0] = 1
-            input_shape.dim.extend(var.meta.shape)
+            var.shape[0] = 1
+            input_shape.dim.extend(var.shape)
             caffe_model.input_shape.extend([input_shape])
 
         # export op
@@ -197,7 +191,7 @@ class SNPECaffeExporter(CaffeExporter):
                 # Simply override recorder is acceptable here,
                 # we do not support mix precision quantization for CUDA backend now.
                 # All configurations for this variable should keep identical towards each other.
-                if config.state == QuantizationStates.SLAVE and var.name in var_quant_info_recorder: continue
+                if config.state == QuantizationStates.PASSIVE and var.name in var_quant_info_recorder: continue
                 var_quant_info_recorder[var.name] = config
 
         # ready to render config to json.

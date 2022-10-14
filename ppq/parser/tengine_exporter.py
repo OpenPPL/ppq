@@ -16,7 +16,6 @@ from ppq.core import (
     ppq_warning,
 )
 from ppq.IR import BaseGraph, GraphExporter, Operation, OperationExporter, Variable
-from ppq.IR.morph import GraphDeviceSwitcher
 from ppq.IR.quantize import QuantableOperation
 from ppq.core.quant import QuantizationStates
 
@@ -174,7 +173,7 @@ class TengineExporter(GraphExporter):
 
     def export_var(self, variable: Variable) -> onnx.TensorProto:
         if variable.meta is not None:
-            shape = variable.meta.shape
+            shape = variable.shape
             dtype = variable.meta.dtype.value
         else:
             shape, dtype = None, None
@@ -216,10 +215,6 @@ class TengineExporter(GraphExporter):
         # we do not want to change the structure of original graph,
         # so there have to take a clone of it.
         # graph = graph.copy()
-        # remove switchers.
-        if not PPQ_CONFIG.EXPORT_DEVICE_SWITCHER:
-            processor = GraphDeviceSwitcher(graph)
-            processor.remove_switcher()
 
         name = graph._name
         if not name:

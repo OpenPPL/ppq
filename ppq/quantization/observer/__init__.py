@@ -10,13 +10,15 @@ from .base import BaseTensorObserver
 from .order import TorchIsotoneObserver
 from .range import (TorchHistObserver, TorchMinMaxObserver, TorchMSEObserver,
                     TorchPercentileObserver)
+from .floating import TemporaryFloatingObserver
 
 PPQ_OBSERVER_TABLE = {
     'minmax': TorchMinMaxObserver,
     'kl': TorchHistObserver,
     'percentile': TorchPercentileObserver,
     'mse': TorchMSEObserver,
-    'isotone': TorchIsotoneObserver
+    'isotone': TorchIsotoneObserver,
+    'floating': TemporaryFloatingObserver
 }
 
 

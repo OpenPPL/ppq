@@ -12,8 +12,8 @@ from ppq.log import NaiveLogger
 from ppq.quantization.measure import torch_mean_square_error
 from ppq.quantization.observer import CalibrationHook, OperationObserver
 from ppq.quantization.observer.range import TorchHistObserver
-from ppq.quantization.qfunction import BaseQuantFunction
-from ppq.quantization.qfunction.linear import PPQLinearQuantFunction
+from ppq.quantization.qfunction import (BaseQuantFunction,
+                                        PPQLinearQuantFunction)
 from tqdm import tqdm
 
 from .base import QuantizationOptimizationPass

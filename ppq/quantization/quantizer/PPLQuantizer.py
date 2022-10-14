@@ -1,10 +1,9 @@
 from typing import Union
 
 import torch
-from ppq.core import (PASSIVE_OPERATIONS, ChannelwiseTensorQuantizationConfig,
-                      OperationQuantizationConfig, QuantizationPolicy,
-                      QuantizationProperty, QuantizationStates, RoundingPolicy,
-                      TargetPlatform)
+from ppq.core import (PASSIVE_OPERATIONS, OperationQuantizationConfig,
+                      QuantizationPolicy, QuantizationProperty,
+                      QuantizationStates, RoundingPolicy, TargetPlatform)
 from ppq.IR import BaseGraph, Operation
 
 from .base import BaseQuantizer
@@ -22,7 +21,7 @@ class PPLCUDAQuantizer(BaseQuantizer):
     def init_quantize_config(self, operation: Operation) -> OperationQuantizationConfig:
         base_quant_config = self.create_default_quant_config(
             policy=self.quantize_policy, rounding=self.rounding_policy,
-            operation_meta=operation.meta_data, num_of_bits=self._num_of_bits,
+            op=operation, num_of_bits=self._num_of_bits, exponent_bits=0,
             quant_max=self._quant_max, quant_min=self._quant_min,
             observer_algorithm='percentile')
 
@@ -39,12 +38,8 @@ class PPLCUDAQuantizer(BaseQuantizer):
                     QuantizationProperty.LINEAR +
                     QuantizationProperty.PER_CHANNEL
                 )
-                base_quant_config.input_quantization_config[1] = \
-                    ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
-                        convert_from = conv_weight_config,
-                        offset = None, scale  = None, channel_axis = 0
-                    )
-                base_quant_config.input_quantization_config[1].observer_algorithm = 'Minmax'
+                conv_weight_config.channel_axis = (1 if operation.type == 'ConvTranspose' else 0)
+                conv_weight_config.observer_algorithm = 'minmax'
             # first parameter must exits, for gemm layer it will be gemm_weight
             # layout: [in_dim, out_dim]
             elif operation.type in {'Gemm'}:
@@ -54,12 +49,8 @@ class PPLCUDAQuantizer(BaseQuantizer):
                     QuantizationProperty.LINEAR +
                     QuantizationProperty.PER_CHANNEL
                 )
-                base_quant_config.input_quantization_config[1] = \
-                    ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
-                        convert_from = gemm_weight_config,
-                        offset = None, scale  = None, channel_axis = 0
-                    )
-                base_quant_config.input_quantization_config[1].observer_algorithm = 'Minmax'
+                gemm_weight_config.channel_axis = 0
+                gemm_weight_config.observer_algorithm = 'minmax'
             # if operation has bias
             if operation.num_of_input > 2:
                 bias_config = base_quant_config.input_quantization_config[-1]
@@ -72,12 +63,8 @@ class PPLCUDAQuantizer(BaseQuantizer):
                 bias_config.quant_max = int(pow(2, bias_config.num_of_bits - 1)) - 1
                 bias_config.quant_min = - int(pow(2, bias_config.num_of_bits - 1)) + 1
                 bias_config.state = QuantizationStates.PASSIVE_INIT
-                base_quant_config.input_quantization_config[-1] = \
-                    ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
-                        convert_from = bias_config, offset = None,
-                        scale = None, channel_axis = 0
-                    )
-                base_quant_config.input_quantization_config[-1].observer_algorithm = 'Minmax'
+                bias_config.channel_axis = 0
+                bias_config.observer_algorithm = 'minmax'
 
         if operation.type in PASSIVE_OPERATIONS:
             # Those op are not active op.

@@ -3,14 +3,12 @@ from typing import Dict, List
 import onnx
 import torch
 from onnx import helper
-from ppq.core import (GRAPH_OPSET_ATTRIB, PPQ_CONFIG,
-                      ChannelwiseTensorQuantizationConfig, DataType,
-                      OperationMeta, QuantizationProperty, QuantizationStates,
-                      TensorMeta, TensorQuantizationConfig,
-                      convert_any_to_torch_tensor, ppq_warning)
+from ppq.core import (GRAPH_OPSET_ATTRIB, PPQ_CONFIG, DataType, OperationMeta,
+                      QuantizationProperty, QuantizationStates, TensorMeta,
+                      TensorQuantizationConfig, convert_any_to_torch_tensor,
+                      ppq_warning)
 from ppq.IR import (BaseGraph, Operation, QuantableOperation,
                     QuantableVariable, Variable)
-from ppq.IR.morph import GraphDeviceSwitcher
 from ppq.quantization.qfunction.linear import PPQLinearQuant_toInt
 from ppq.utils.round import ppq_tensor_round
 
@@ -25,7 +23,7 @@ class QDQHelper():
         if not TQC.can_export(): return False
         meta_check = bounded_var.meta is not None
 
-        if TQC.num_of_bits == 8:
+        if TQC.num_of_bits == 8 and TQC.policy.has_property(QuantizationProperty.LINEAR):
             if TQC.policy.has_property(QuantizationProperty.ASYMMETRICAL):
                 range_check = (TQC.quant_max <= 255 and TQC.quant_min >= 0)
             else: range_check = (TQC.quant_max <= 127 and TQC.quant_min >= -128)
@@ -96,75 +94,167 @@ class ONNXRUNTIMExporter(OnnxExporter):
         self, graph: BaseGraph, var: QuantableVariable,
         config: TensorQuantizationConfig, related_op: Operation,
         meta: TensorMeta = None) -> Operation:
-        if meta is None: meta = var.meta
-        offset_dtype, value_dtype = self.infer_qtype(config)
-        scale  = convert_any_to_torch_tensor(config.scale.clone(), dtype=torch.float32)
-        offset = ppq_tensor_round(config.offset.clone()).type(offset_dtype)
+        """
+        Insert a Quantize Node on given variable, according to given TensorQuantizationConfig.
+        There is two basic type of Quantize Node: QuantizeLinear and QuantizeFloating.
+        """
+        
+        if config.policy.has_property(QuantizationProperty.LINEAR):
+            # Following code will export Linear Quantization Config
+            # That is for FP32 -> INT
+            if meta is None: meta = var.meta
+            offset_dtype, value_dtype = self.infer_qtype(config)
+            scale  = convert_any_to_torch_tensor(config.scale.clone(), dtype=torch.float32)
+            offset = ppq_tensor_round(config.offset.clone()).type(offset_dtype)
 
-        s_var = graph.create_variable(name=None, value=scale, is_parameter=True)
-        z_var = graph.create_variable(name=None, value=offset, is_parameter=True)
-        created = graph.create_operation(op_type='QuantizeLinear', attributes={})
+            s_var = graph.create_variable(name=None, value=scale, is_parameter=True)
+            z_var = graph.create_variable(name=None, value=offset, is_parameter=True)
+            created = graph.create_operation(op_type='QuantizeLinear', attributes={})
 
-        if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
-            assert isinstance(config, ChannelwiseTensorQuantizationConfig)
-            created.attributes['axis'] = config.channel_axis
+            if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
+                created.attributes['axis'] = config.channel_axis
 
-        # PATCH 20220803, OPSET 13 REQUIRES AXIS = 0
-        if config.policy.has_property(QuantizationProperty.PER_TENSOR):
-            created.attributes['axis'] = 0
+            # PATCH 20220803, OPSET 13 REQUIRES AXIS = 0
+            if config.policy.has_property(QuantizationProperty.PER_TENSOR):
+                created.attributes['axis'] = 0
 
-        if related_op is not None and var in related_op.inputs:
-            graph.insert_op_between_var_and_op(created, up_var=var, down_op=related_op)
-        else: graph.insert_op_on_var(created, var=var.name)
+            if related_op is not None and var in related_op.inputs:
+                graph.insert_op_between_var_and_op(created, up_var=var, down_op=related_op)
+            else: graph.insert_op_on_var(created, var=var.name)
 
-        graph.create_link_with_op(variable=s_var, upstream_op=None, downstream_op=created)
-        graph.create_link_with_op(variable=z_var, upstream_op=None, downstream_op=created)
+            graph.create_link_with_op(variable=s_var, upstream_op=None, downstream_op=created)
+            graph.create_link_with_op(variable=z_var, upstream_op=None, downstream_op=created)
 
-        meta = OperationMeta(
-        input_metas    = [TensorMeta(dtype=DataType.FP32, shape=meta.shape),
-                          TensorMeta(dtype=DataType.FP32, shape=config.scale.shape),
-                          TensorMeta(dtype=DataType.convert_from_torch(offset_dtype), shape=config.offset.shape)],
-        output_metas   = [TensorMeta(dtype=DataType.convert_from_torch(value_dtype), shape=meta.shape)],
-        operation_name = created.name, operation_type=created.type, executing_order=-1)
-        created.meta_data = meta
-        return created
+            meta = OperationMeta(
+            input_metas    = [TensorMeta(dtype=DataType.FP32, shape=meta.shape),
+                              TensorMeta(dtype=DataType.FP32, shape=config.scale.shape),
+                              TensorMeta(dtype=DataType.convert_from_torch(offset_dtype), shape=config.offset.shape)],
+            output_metas   = [TensorMeta(dtype=DataType.convert_from_torch(value_dtype), shape=meta.shape)],
+            operation_name = created.name, operation_type=created.type, executing_order=-1)
+            created.meta_data = meta
+            return created
+        
+        elif config.policy.has_property(QuantizationProperty.FLOATING):
+            # Following code will export Linear Quantization Config
+            # That is for FP32 -> FP8
+            if meta is None: meta = var.meta
+            scale  = convert_any_to_torch_tensor(config.scale.clone(), dtype=torch.float32)
+            offset = convert_any_to_torch_tensor(config.offset.clone(), dtype=torch.float32)
+
+            s_var = graph.create_variable(name=None, value=scale, is_parameter=True)
+            z_var = graph.create_variable(name=None, value=offset, is_parameter=True)
+            created = graph.create_operation(
+                op_type='QuantizeFloating', 
+                attributes={
+                    'min': config.quant_min, 
+                    'max': config.quant_max, 
+                    'exponent': config.exponent_bits, 
+                    'mantissa': config.mantissa_bits})
+
+            if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
+                created.attributes['axis'] = config.channel_axis
+
+            if related_op is not None and var in related_op.inputs:
+                graph.insert_op_between_var_and_op(created, up_var=var, down_op=related_op)
+            else: graph.insert_op_on_var(created, var=var.name)
+
+            graph.create_link_with_op(variable=s_var, upstream_op=None, downstream_op=created)
+            graph.create_link_with_op(variable=z_var, upstream_op=None, downstream_op=created)
+
+            meta = OperationMeta(
+            input_metas    = [TensorMeta(dtype=DataType.FP32, shape=meta.shape),
+                              TensorMeta(dtype=DataType.FP32, shape=config.scale.shape),
+                              TensorMeta(dtype=DataType.FP32, shape=config.offset.shape)],
+            output_metas   = [TensorMeta(dtype=DataType.FP32, shape=meta.shape)],
+            operation_name = created.name, operation_type=created.type, executing_order=-1)
+            created.meta_data = meta
+            return created
+        
+        else:
+            raise TypeError(
+                f'PPQ Can not export quantization information with variable {var.name}, '
+                'Unexpected Quantization property.')
 
     def insert_dequant_on_variable(
         self, graph: BaseGraph, var: QuantableVariable,
         config: TensorQuantizationConfig, related_op: Operation,
         meta: TensorMeta = None) -> Operation:
-        if meta is None: meta = var.meta
-        offset_dtype, value_dtype = self.infer_qtype(config)
-        scale  = convert_any_to_torch_tensor(config.scale.clone(), dtype=torch.float32)
-        offset = ppq_tensor_round(config.offset.clone()).type(offset_dtype)
+        """
+        Insert a DeQuantize Node on given variable, according to given TensorQuantizationConfig.
+        There is two basic type of DeQuantize Node: DeQuantizeLinear and DeQuantizeFloating.
+        """
+        if config.policy.has_property(QuantizationProperty.LINEAR):
+            if meta is None: meta = var.meta
+            offset_dtype, value_dtype = self.infer_qtype(config)
+            scale  = convert_any_to_torch_tensor(config.scale.clone(), dtype=torch.float32)
+            offset = ppq_tensor_round(config.offset.clone()).type(offset_dtype)
 
-        s_var = graph.create_variable(name=None, value=scale.clone(), is_parameter=True)
-        z_var = graph.create_variable(name=None, value=offset.clone(), is_parameter=True)
-        created = graph.create_operation(op_type='DequantizeLinear', attributes={})
+            s_var = graph.create_variable(name=None, value=scale.clone(), is_parameter=True)
+            z_var = graph.create_variable(name=None, value=offset.clone(), is_parameter=True)
+            created = graph.create_operation(op_type='DequantizeLinear', attributes={})
 
-        if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
-            assert isinstance(config, ChannelwiseTensorQuantizationConfig)
-            created.attributes['axis'] = config.channel_axis
+            if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
+                created.attributes['axis'] = config.channel_axis
 
-        # PATCH 20220803, OPSET 13 REQUIRES AXIS = 0
-        if config.policy.has_property(QuantizationProperty.PER_TENSOR):
-            created.attributes['axis'] = 0
+            # PATCH 20220803, OPSET 13 REQUIRES AXIS = 0
+            if config.policy.has_property(QuantizationProperty.PER_TENSOR):
+                created.attributes['axis'] = 0
 
-        if var in related_op.inputs:
-            graph.insert_op_between_var_and_op(created, up_var=var, down_op=related_op)
-        else: graph.insert_op_on_var(created, var=var.name)
+            if var in related_op.inputs:
+                graph.insert_op_between_var_and_op(created, up_var=var, down_op=related_op)
+            else: graph.insert_op_on_var(created, var=var.name)
 
-        graph.create_link_with_op(variable=s_var, upstream_op=None, downstream_op=created)
-        graph.create_link_with_op(variable=z_var, upstream_op=None, downstream_op=created)
+            graph.create_link_with_op(variable=s_var, upstream_op=None, downstream_op=created)
+            graph.create_link_with_op(variable=z_var, upstream_op=None, downstream_op=created)
 
-        dq_meta = OperationMeta(
-        input_metas    = [TensorMeta(dtype=DataType.convert_from_torch(value_dtype), shape=meta.shape),
-                          TensorMeta(dtype=DataType.FP32, shape=config.scale.shape),
-                          TensorMeta(dtype=DataType.convert_from_torch(offset_dtype), shape=config.offset.shape)],
-        output_metas   = [TensorMeta(dtype=DataType.FP32, shape=meta.shape)],
-        operation_name = created.name, operation_type=created.type, executing_order=-1)
-        created.meta_data = dq_meta
-        return created
+            dq_meta = OperationMeta(
+            input_metas    = [TensorMeta(dtype=DataType.convert_from_torch(value_dtype), shape=meta.shape),
+                              TensorMeta(dtype=DataType.FP32, shape=config.scale.shape),
+                              TensorMeta(dtype=DataType.convert_from_torch(offset_dtype), shape=config.offset.shape)],
+            output_metas   = [TensorMeta(dtype=DataType.FP32, shape=meta.shape)],
+            operation_name = created.name, operation_type=created.type, executing_order=-1)
+            created.meta_data = dq_meta
+            return created
+
+        elif config.policy.has_property(QuantizationProperty.FLOATING):
+            if meta is None: meta = var.meta
+            scale  = convert_any_to_torch_tensor(config.scale.clone(), dtype=torch.float32)
+            offset = convert_any_to_torch_tensor(config.offset.clone(), dtype=torch.float32)
+
+            s_var = graph.create_variable(name=None, value=scale.clone(), is_parameter=True)
+            z_var = graph.create_variable(name=None, value=offset.clone(), is_parameter=True)
+            created = graph.create_operation(
+                op_type='DequantizeFloating', 
+                attributes={
+                    'min': config.quant_min, 
+                    'max': config.quant_max, 
+                    'exponent': config.exponent_bits, 
+                    'mantissa': config.mantissa_bits})
+
+            if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
+                created.attributes['axis'] = config.channel_axis
+
+            if var in related_op.inputs:
+                graph.insert_op_between_var_and_op(created, up_var=var, down_op=related_op)
+            else: graph.insert_op_on_var(created, var=var.name)
+
+            graph.create_link_with_op(variable=s_var, upstream_op=None, downstream_op=created)
+            graph.create_link_with_op(variable=z_var, upstream_op=None, downstream_op=created)
+
+            dq_meta = OperationMeta(
+            input_metas    = [TensorMeta(dtype=DataType.FP32, shape=meta.shape),
+                              TensorMeta(dtype=DataType.FP32, shape=config.scale.shape),
+                              TensorMeta(dtype=DataType.FP32, shape=config.offset.shape)],
+            output_metas   = [TensorMeta(dtype=DataType.FP32, shape=meta.shape)],
+            operation_name = created.name, operation_type=created.type, executing_order=-1)
+            created.meta_data = dq_meta
+            return created
+
+        else:
+
+            raise TypeError(
+                f'PPQ Can not export quantization information with variable {var.name}, '
+                'Unexpected Quantization property.')
 
     def remove_activation_ops(self, graph: BaseGraph) -> BaseGraph:
         """For Asymmetric Quantization Policy, Activations like Relu & Clip can
@@ -351,8 +441,6 @@ class ONNXRUNTIMExporter(OnnxExporter):
 
             meta = var.meta
             if var.is_parameter and process_parameter:
-                # we do not want to process clip value here.
-                if op.type in {'Clip', 'Pad'}: continue                
                 assert len(var.dest_ops) == 1, (
                 f'Can not export variable {var.name}, cause it has more than 1 destination operations. '
                 'PPQ require all parameters to have only 1 destination operation.')
@@ -372,7 +460,7 @@ class ONNXRUNTIMExporter(OnnxExporter):
 
                 self.insert_dequant_on_variable(
                     graph=graph, var=var, config=config, related_op=op, meta=meta)
-                if quant_param_to_int:
+                if quant_param_to_int and config.policy.has_property(QuantizationProperty.LINEAR):
                     var.value = PPQLinearQuant_toInt(tensor=var.value, config=config)
 
             elif (not var.is_parameter) and process_activation:
@@ -406,11 +494,6 @@ class ONNXRUNTIMExporter(OnnxExporter):
         """
         self.convert_operation_from_opset11_to_opset13(graph)
 
-        # remove switchers.
-        if not PPQ_CONFIG.EXPORT_DEVICE_SWITCHER:
-            processor = GraphDeviceSwitcher(graph)
-            processor.remove_switcher()
-
         # mark quantable variables
         for op in [op for op in graph.operations.values()]:
             if not isinstance(op, QuantableOperation): continue
@@ -427,7 +510,8 @@ class ONNXRUNTIMExporter(OnnxExporter):
 
         return self.remove_duplicated_quant_op(graph)
 
-    def export(self, file_path: str, graph: BaseGraph, config_path: str = None) -> None:
+    def export(self, file_path: str, graph: BaseGraph, config_path: str = None, 
+               save_as_external_data: bool = False) -> None:
         graph = self.prepare_graph(graph)
 
         # if a valid config path is given, export quantization config to there.
@@ -479,4 +563,7 @@ class ONNXRUNTIMExporter(OnnxExporter):
             graph_def, producer_name=PPQ_CONFIG.NAME, opset_imports=opsets)
         onnx_model.ir_version = 7
         # onnx.checker.check_model(onnx_model)
-        onnx.save(onnx_model, file_path)
+        size_threshold = 0 if save_as_external_data else 1024
+        onnx.save(onnx_model, file_path, size_threshold=size_threshold,
+                  save_as_external_data=save_as_external_data,
+                  all_tensors_to_one_file=(not save_as_external_data))

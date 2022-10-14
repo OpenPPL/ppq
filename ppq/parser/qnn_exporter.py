@@ -1,7 +1,6 @@
 import json
 
-from ppq.core import (DataType, QuantizationStates,
-                      ChannelwiseTensorQuantizationConfig)
+from ppq.core import DataType, QuantizationProperty, QuantizationStates
 from ppq.IR import BaseGraph
 from ppq.IR.quantize import QuantableOperation
 
@@ -37,10 +36,10 @@ class QNNDSPExporter(OnnxExporter):
                 # we do not support mix precision quantization for CUDA backend now.
                 # All configurations for this variable should keep identical towards each other.
 
-                if config.state == QuantizationStates.SLAVE and var.name in activation_info: continue
+                if config.state == QuantizationStates.PASSIVE and var.name in activation_info: continue
 
-                assert not isinstance(config, ChannelwiseTensorQuantizationConfig), 'QNNExporter only support'\
-                    'per tensor quantization for now'
+                assert (not config.policy.has_property(QuantizationProperty.PER_CHANNEL), 
+                        'QNNExporter only support per tensor quantization for now')
                 info =  [{
                             'bitwidth': config.num_of_bits,
                             'max'     : convert_value(config.scale * (config.quant_max - config.offset), True, DataType.FP32),

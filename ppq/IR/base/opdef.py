@@ -1,53 +1,209 @@
-# This file defines all opsocket for standard onnx operation.
+from abc import ABCMeta, abstractproperty
+from typing import Any, Dict, List
 
-from ppq.core import ONNX_DOMAIN, STRICT_OPSET_CHECKING, ppq_warning
-from ppq.IR import Operation
+from ppq.core import (CAFFE_DOMAIN, COMPUTING_OP, DEFAULT_OPSET_DOMAIN,
+                      DEFAULT_OPSET_VERSION, ONNX_DOMAIN, OperationMeta,
+                      STRICT_OPSET_CHECKING, TargetPlatform)
 
-from .opsocket import OpSocket, VProperty, VLink
+
+class Opset():
+    def __init__(self, domain: str = DEFAULT_OPSET_DOMAIN, version: int = DEFAULT_OPSET_VERSION) -> None:
+        """Open Neural Network Exchange (ONNX) is an open ecosystem that empowers AI developers 
+            to choose the right tools as their project evolves. 
+        
+        ONNX provides an open source format for AI models, both deep learning and traditional ML. 
+        It defines an extensible computation graph model, as well as definitions of
+            built-in operators and standard data types. 
+        Currently we focus on the capabilities needed for inferencing (scoring).
+        
+        PPQ IR is built based on ONNX defination.
+
+        Args:
+            domain (str, optional): _description_. Defaults to DEFAULT_OPSET_DOMAIN.
+            version (int, optional): _description_. Defaults to DEFAULT_OPSET_VERSION.
+        """
+        self.domain  = domain
+        self.version = version
+
+    def is_onnx_v13(self):
+        return self.domain == ONNX_DOMAIN and self.version == 13
+
+    def is_onnx_v11(self):
+        return self.domain == ONNX_DOMAIN and self.version == 11
+
+    def onnx_opset_version(self) -> int:
+        if self.domain == ONNX_DOMAIN: return self.version
+        else: return -1   
+
+    def is_onnx(self):
+        return self.domain == ONNX_DOMAIN
+    
+    def is_caffe(self):
+        return self.domain == CAFFE_DOMAIN
 
 
-def CEHCK_TYPE(op: Operation, t: str):
+class OperationBase(metaclass=ABCMeta):
+    def __init__(self,
+                 name: str, op_type: str,
+                 attributes: Dict[str, Any],
+                 opset = None,
+                 platform: TargetPlatform=TargetPlatform.UNSPECIFIED) -> None:
+        self._name = name
+        self._type = op_type
+        self._attributes = attributes
+        self._platform = platform
+        self._meta = None
+        self._input_vars  = []
+        self._output_vars = []
+        self._detail = {}
+        if opset is None:
+            self._opset = Opset()
+        else: self._opset = opset
+
+    @ abstractproperty
+    def inputs(self) -> List[Any]: pass
+
+    @ abstractproperty
+    def outputs(self) -> List[Any]: pass
+
+    @ abstractproperty
+    def parameters(self) -> List[Any]: pass
+
+    @ property
+    def name(self) -> str:
+        return self._name
+
+    @ property
+    def type(self) -> str:
+        return self._type
+
+    @ type.setter
+    def type(self, type: str):
+        self._type = type
+
+    @ property
+    def opset(self) -> Opset:
+        return self._opset
+
+    @ opset.setter
+    def opset(self, opset: Opset):
+        self._opset = opset
+
+    @ property
+    def attributes(self) -> Dict[str, Any]:
+        return self._attributes
+
+    @ property
+    def platform(self) -> TargetPlatform:
+        return self._platform
+
+    @ platform.setter
+    def platform(self, platform: TargetPlatform):
+        self._platform = platform
+
+    @ property
+    def num_of_input(self) -> int:
+        return len(self._input_vars)
+
+    @ property
+    def num_of_output(self) -> int:
+        return len(self._output_vars)
+
+    @ property
+    def meta_data(self) -> OperationMeta:
+        return self._meta
+
+    @ meta_data.setter
+    def meta_data(self, meta: OperationMeta) -> OperationMeta:
+        self._meta = meta
+
+    @ property
+    def inputs(self) -> List[object]:
+        return self._input_vars
+
+    @ property
+    def outputs(self) -> List[object]:
+        return self._output_vars
+
+    @ property
+    def is_computing_op(self) -> bool:
+        return self.type in COMPUTING_OP
+
+    def set_extension_attrib(self, attrib: str, value: Any):
+        self._detail[attrib] = value
+
+    @ property
+    def extension_attrib(self):
+        return self._detail
+
+    def __hash__(self) -> int:
+        return self._name.__hash__()
+
+
+class VLink:
+    def __init__(self, in_idx: int, out_idx: int) -> None:
+        if not isinstance(in_idx, int):
+            raise TypeError(f'Can not create vlink with input_idx {in_idx}, '
+                            'only int value is acceptable here.')
+        if not isinstance(out_idx, int):
+            raise TypeError(f'Can not create vlink with output_idx {out_idx}, '
+                            'only int value is acceptable here.')
+        self.in_idx  = in_idx
+        self.out_idx = out_idx
+
+
+class OpSocket:
+    def __init__(
+        self, op: OperationBase,
+        in_plat: List[TargetPlatform] = None,
+        out_plat: List[TargetPlatform] = None,
+        links: List[VLink] = None) -> None:
+
+        self.in_plat = in_plat
+        if in_plat is None:
+            self.in_plat  = [TargetPlatform.UNSPECIFIED for _ in range(op.num_of_input)]
+
+        self.out_plat = out_plat
+        if out_plat is None:
+            self.out_plat = [TargetPlatform.UNSPECIFIED for _ in range(op.num_of_output)]
+
+        self.links = links
+        if self.links is None:
+            self.links = []
+            for i in range(op.num_of_input):
+                for j in range(op.num_of_output):
+                    self.links.append(VLink(i, j))
+
+
+def CEHCK_TYPE(op: OperationBase, t: str):
     pass
+
 
 def CHECK_OPSET(min_version_supported: int, 
                 max_version_supported: int, 
-                op: Operation, 
+                op: OperationBase, 
                 strict_check: bool = STRICT_OPSET_CHECKING):
+    if not strict_check: return
     opset = op.opset
     if opset.domain != ONNX_DOMAIN:
-        if not strict_check:
-            ppq_warning(
-                f'Unrecognizable opset was found, '
-                f'can not generate dispatching scheme with op {op.name}, '
-                'cause it might not be a standard onnx operation.')
-            return 
-        else:
-            raise TypeError(
-                f'Unrecognizable opset was found, '
-                f'can not generate dispatching scheme with op {op.name}, '
-                'cause it might not be a standard onnx operation.')
-    
+        raise TypeError(
+            f'Unrecognizable opset was found, '
+            f'can not generate dispatching scheme with op {op.name}, '
+            'cause it might not be a standard onnx operation.')
+
     if opset.version > max_version_supported or opset.version < min_version_supported:
-        if not strict_check:
-            ppq_warning(
-                f'opset version is not supported, '
-                f'can not generate dispatching scheme with op {op.name}({op.type}), '
-                f'currently we support only [{min_version_supported, max_version_supported}], '
-                f'however {opset.version} was given.')
-            return 
-        else:
-            raise TypeError(
-                f'opset version is not supported, '
-                f'can not generate dispatching scheme with op {op.name}({op.type}), '
-                f'currently we support only [{min_version_supported, max_version_supported}], '
-                f'however {opset.version} was given.')
+        raise TypeError(
+            f'opset version is not supported, '
+            f'can not generate dispatching scheme with op {op.name}({op.type}), '
+            f'currently we support only [{min_version_supported, max_version_supported}], '
+            f'however {opset.version} was given.')
 
 
-def DEFAULT_SOCKET_CREATOR(op: Operation) -> OpSocket:
+def DEFAULT_SOCKET_CREATOR(op: OperationBase) -> OpSocket:
     return OpSocket(op=op)
 
 
-def Reshape_Socket(op: Operation) -> OpSocket:
+def Reshape_Socket(op: OperationBase) -> OpSocket:
     """
     From Opset 5 - 13:
     
@@ -64,44 +220,10 @@ def Reshape_Socket(op: Operation) -> OpSocket:
     """
     CEHCK_TYPE(op=op, t='Reshape')
     CHECK_OPSET(op=op, min_version_supported=5, max_version_supported=13)
-    return OpSocket(op=op, cls_input=[VProperty.VALUE, VProperty.SOI], links=[VLink(input_idx=0, output_idx=0)])
+    return OpSocket(op=op, in_plat=[TargetPlatform.UNSPECIFIED, TargetPlatform.SOI], links=[VLink(in_idx=0, out_idx=0)])
 
 
-def Slice_Socket(op: Operation) -> OpSocket:
-    """
-    From Opset 1 - 13:
-    
-    Inputs (3 - 5)
-        data (differentiable) : T
-            Tensor of data to extract slices from.
-            
-        starts (non-differentiable) : Tind
-            1-D tensor of starting indices of corresponding axis in `axes`
-            
-        ends (non-differentiable) : Tind
-            1-D tensor of ending indices (exclusive) of corresponding axis in `axes`
-            
-        axes (optional, non-differentiable) : Tind
-            1-D tensor of axes that `starts` and `ends` apply to. 
-            Negative value means counting dimensions from the back.
-            Accepted range is [-r, r-1] where r = rank(data). 
-            Behavior is undefined if an axis is repeated.
-            
-        steps (optional, non-differentiable) : Tind
-            1-D tensor of slice step of corresponding axis in `axes`. 
-            Negative value means slicing backward. 'steps' cannot be 0. Defaults to 1s.
-    Outputs
-        output (differentiable) : T
-            Sliced data tensor.
-    """
-    CEHCK_TYPE(op=op, t='Slice')
-    CHECK_OPSET(op=op, min_version_supported=1, max_version_supported=13)
-    return OpSocket(
-        op=op, cls_input=[VProperty.VALUE] + [VProperty.SOI for _ in range(op.num_of_input - 1)], 
-        links=[VLink(input_idx=0, output_idx=0)])
-
-
-def Pad_Socket(op: Operation) -> OpSocket:
+def Pad_Socket(op: OperationBase) -> OpSocket:
     """
     From Opset 1 - 13:
     
@@ -127,13 +249,13 @@ def Pad_Socket(op: Operation) -> OpSocket:
     """
     CEHCK_TYPE(op=op, t='Pad')
     CHECK_OPSET(op=op, min_version_supported=1, max_version_supported=13)
-    cls_input = [VProperty.VALUE, VProperty.SOI, VProperty.ATTRIB]
+    in_plat = [TargetPlatform.UNSPECIFIED, TargetPlatform.SOI, TargetPlatform.SOI]
     return OpSocket(
-        op=op, cls_input=cls_input[: op.num_of_input], 
-        links=[VLink(input_idx=0, output_idx=0)])
+        op=op, in_plat=in_plat[: op.num_of_input], 
+        links=[VLink(in_idx=0, out_idx=0)])
 
 
-def Gather_Socket(op: Operation) -> OpSocket:
+def Gather_Socket(op: OperationBase) -> OpSocket:
     """
     From Opset 1 - 13:
     
@@ -153,11 +275,11 @@ def Gather_Socket(op: Operation) -> OpSocket:
     CEHCK_TYPE(op=op, t='Gather')
     CHECK_OPSET(op=op, min_version_supported=1, max_version_supported=13)
     return OpSocket(
-        op=op, cls_input=[VProperty.VALUE] + [VProperty.SOI for _ in range(op.num_of_input - 1)], 
-        links=[VLink(input_idx=0, output_idx=0)])
+        op=op, in_plat=[TargetPlatform.UNSPECIFIED, TargetPlatform.FP32], 
+        links=[VLink(in_idx=0, out_idx=0)])
 
 
-def Resize_Socket(op: Operation) -> OpSocket:
+def Resize_Socket(op: OperationBase) -> OpSocket:
     """
     From Opset 11 - 13:
     
@@ -187,13 +309,13 @@ def Resize_Socket(op: Operation) -> OpSocket:
     """
     CEHCK_TYPE(op=op, t='Resize')
     CHECK_OPSET(op=op, min_version_supported=10, max_version_supported=13, strict_check=True)
-    cls_input = [VProperty.VALUE, VProperty.SOI, VProperty.ATTRIB, VProperty.SOI]
+    in_plat = [TargetPlatform.UNSPECIFIED, TargetPlatform.SOI, TargetPlatform.SOI, TargetPlatform.SOI]
     return OpSocket(
-        op=op, cls_input=cls_input[: op.num_of_input], 
-        links=[VLink(input_idx=0, output_idx=0)])
+        op=op, in_plat=in_plat[: op.num_of_input], 
+        links=[VLink(in_idx=0, out_idx=0)])
 
 
-def Split_Socket(op: Operation) -> OpSocket:
+def Split_Socket(op: OperationBase) -> OpSocket:
     """
     From Opset 1 - 13:
     
@@ -211,13 +333,13 @@ def Split_Socket(op: Operation) -> OpSocket:
     """
     CEHCK_TYPE(op=op, t='Split')
     CHECK_OPSET(op=op, min_version_supported=1, max_version_supported=13)
-    cls_input = [VProperty.VALUE, VProperty.SOI]
+    in_plat = [TargetPlatform.UNSPECIFIED, TargetPlatform.SOI]
     return OpSocket(
-        op=op, cls_input=cls_input[: op.num_of_input], 
-        links=[VLink(input_idx=0, output_idx=0)])
+        op=op, in_plat=in_plat[: op.num_of_input], 
+        links=[VLink(in_idx=0, out_idx=0)])
 
 
-def Topk_Socket(op: Operation) -> OpSocket:
+def Topk_Socket(op: OperationBase) -> OpSocket:
     """
     From Opset 1 - 11:
     
@@ -237,16 +359,16 @@ def Topk_Socket(op: Operation) -> OpSocket:
             Tensor of shape [a_1, a_2, ..., a_{axis-1}, k, a_{axis+1}, ... a_n] 
             containing the corresponding input tensor indices for the top K values.
     """
-    CEHCK_TYPE(op=op, t='Topk')
+    CEHCK_TYPE(op=op, t='TopK')
     CHECK_OPSET(op=op, min_version_supported=1, max_version_supported=11)
-    cls_input  = [VProperty.VALUE, VProperty.SOI]
-    cls_output = [VProperty.VALUE, VProperty.SOI]
+    in_plat  = [TargetPlatform.UNSPECIFIED, TargetPlatform.SOI]
+    out_plat = [TargetPlatform.UNSPECIFIED, TargetPlatform.FP32]
     return OpSocket(
-        op=op, cls_input=cls_input[: op.num_of_input],
-        cls_output = cls_output, links=[VLink(input_idx=0, output_idx=0)])
+        op=op, in_plat=in_plat[: op.num_of_input],
+        out_plat = out_plat, links=[VLink(in_idx=0, out_idx=0)])
 
 
-def Tile_Socket(op: Operation) -> OpSocket:
+def Tile_Socket(op: OperationBase) -> OpSocket:
     """
     From Opset 1 - 13:
         
@@ -265,13 +387,13 @@ def Tile_Socket(op: Operation) -> OpSocket:
     """
     CEHCK_TYPE(op=op, t='Tile')
     CHECK_OPSET(op=op, min_version_supported=1, max_version_supported=13)
-    cls_input  = [VProperty.VALUE, VProperty.SOI, VProperty.SOI]
+    in_plat  = [TargetPlatform.UNSPECIFIED, TargetPlatform.SOI, TargetPlatform.SOI]
     return OpSocket(
-        op=op, cls_input=cls_input[: op.num_of_input],
-        links=[VLink(input_idx=0, output_idx=0)])
+        op=op, in_plat=in_plat[: op.num_of_input],
+        links=[VLink(in_idx=0, out_idx=0)])
 
 
-def Expand_Socket(op: Operation) -> OpSocket:
+def Expand_Socket(op: OperationBase) -> OpSocket:
     """
     From Opset 8 - 13:
         
@@ -288,13 +410,13 @@ def Expand_Socket(op: Operation) -> OpSocket:
     """
     CEHCK_TYPE(op=op, t='Expand')
     CHECK_OPSET(op=op, min_version_supported=8, max_version_supported=13)
-    cls_input  = [VProperty.VALUE, VProperty.SOI]
+    in_plat  = [TargetPlatform.UNSPECIFIED, TargetPlatform.SOI]
     return OpSocket(
-        op=op, cls_input=cls_input[: op.num_of_input],
-        links=[VLink(input_idx=0, output_idx=0)])
+        op=op, in_plat=in_plat[: op.num_of_input],
+        links=[VLink(in_idx=0, out_idx=0)])
 
 
-def RoiAlign_Socket(op: Operation) -> OpSocket:
+def RoiAlign_Socket(op: OperationBase) -> OpSocket:
     """
     From Opset 10 - 16:
         
@@ -319,23 +441,23 @@ def RoiAlign_Socket(op: Operation) -> OpSocket:
     """
     CEHCK_TYPE(op=op, t='RoiAlign')
     CHECK_OPSET(op=op, min_version_supported=10, max_version_supported=16)
-    cls_input = [VProperty.VALUE, VProperty.SOI, VProperty.SOI]
+    in_plat = [TargetPlatform.UNSPECIFIED, TargetPlatform.FP32, TargetPlatform.SOI]
     return OpSocket(
-        op=op, cls_input=cls_input[: op.num_of_input],
-        links=[VLink(input_idx=0, output_idx=0)])
+        op=op, in_plat=in_plat[: op.num_of_input],
+        links=[VLink(in_idx=0, out_idx=0)])
 
 
-def GridSampler_Socket(op: Operation) -> OpSocket:
+def GridSampler_Socket(op: OperationBase) -> OpSocket:
     """
     From MMCV
     """
-    cls_input = [VProperty.VALUE, VProperty.SOI]
+    in_plat = [TargetPlatform.UNSPECIFIED, TargetPlatform.FP32]
     return OpSocket(
-        op=op, cls_input=cls_input[: op.num_of_input],
-        links=[VLink(input_idx=0, output_idx=0)])
+        op=op, in_plat=in_plat[: op.num_of_input],
+        links=[VLink(in_idx=0, out_idx=0)])
 
 
-def Clip_Socket(op: Operation) -> OpSocket:
+def Clip_Socket(op: OperationBase) -> OpSocket:
     """
     From Opset 1 - 13:
         
@@ -357,13 +479,13 @@ def Clip_Socket(op: Operation) -> OpSocket:
     """
     CEHCK_TYPE(op=op, t='Clip')
     CHECK_OPSET(op=op, min_version_supported=1, max_version_supported=13)
-    cls_input = [VProperty.VALUE, VProperty.ATTRIB, VProperty.ATTRIB]
+    in_plat = [TargetPlatform.UNSPECIFIED, TargetPlatform.FP32, TargetPlatform.FP32]
     return OpSocket(
-        op=op, cls_input=cls_input[: op.num_of_input],
-        links=[VLink(input_idx=0, output_idx=0)])
+        op=op, in_plat=in_plat[: op.num_of_input],
+        links=[VLink(in_idx=0, out_idx=0)])
 
 
-def ConstantOfShape_Socket(op: Operation) -> OpSocket:
+def ConstantOfShape_Socket(op: OperationBase) -> OpSocket:
     """
     From Opset 9 - 9:
         
@@ -380,13 +502,13 @@ def ConstantOfShape_Socket(op: Operation) -> OpSocket:
     """
     CEHCK_TYPE(op=op, t='ConstantOfShape')
     CHECK_OPSET(op=op, min_version_supported=1, max_version_supported=13)
-    cls_input = [VProperty.SOI]
+    in_plat = [TargetPlatform.SOI]
     return OpSocket(
-        op=op, cls_input=cls_input[: op.num_of_input],
+        op=op, in_plat=in_plat[: op.num_of_input],
         links=[])
 
 
-def GatherElements_Socket(op: Operation) -> OpSocket:
+def GatherElements_Socket(op: OperationBase) -> OpSocket:
     """
     From Opset 11 - 13:
         
@@ -405,13 +527,13 @@ def GatherElements_Socket(op: Operation) -> OpSocket:
     """
     CEHCK_TYPE(op=op, t='GatherElements')
     CHECK_OPSET(op=op, min_version_supported=11, max_version_supported=13)
-    cls_input = [VProperty.VALUE, VProperty.SOI]
+    in_plat = [TargetPlatform.UNSPECIFIED, TargetPlatform.FP32]
     return OpSocket(
-        op=op, cls_input=cls_input[: op.num_of_input],
-        links=[VLink(input_idx=0, output_idx=0)])
+        op=op, in_plat=in_plat[: op.num_of_input],
+        links=[VLink(in_idx=0, out_idx=0)])
 
 
-def GatherND_Socket(op: Operation) -> OpSocket:
+def GatherND_Socket(op: OperationBase) -> OpSocket:
     """
     From Opset 11 - 13:
         
@@ -429,13 +551,13 @@ def GatherND_Socket(op: Operation) -> OpSocket:
     """
     CEHCK_TYPE(op=op, t='GatherND')
     CHECK_OPSET(op=op, min_version_supported=11, max_version_supported=13)
-    cls_input = [VProperty.VALUE, VProperty.SOI]
+    in_plat = [TargetPlatform.UNSPECIFIED, TargetPlatform.FP32]
     return OpSocket(
-        op=op, cls_input=cls_input[: op.num_of_input],
-        links=[VLink(input_idx=0, output_idx=0)])
+        op=op, in_plat=in_plat[: op.num_of_input],
+        links=[VLink(in_idx=0, out_idx=0)])
 
 
-def NonMaxSuppression_Socket(op: Operation) -> OpSocket:
+def NonMaxSuppression_Socket(op: OperationBase) -> OpSocket:
     """
     From Opset 10 - 13:
         
@@ -465,13 +587,13 @@ def NonMaxSuppression_Socket(op: Operation) -> OpSocket:
     """
     CEHCK_TYPE(op=op, t='NonMaxSuppression')
     CHECK_OPSET(op=op, min_version_supported=10, max_version_supported=13)
-    cls_input = [VProperty.VALUE, VProperty.ATTRIB, VProperty.SOI, VProperty.ATTRIB, VProperty.ATTRIB]
+    in_plat = [TargetPlatform.UNSPECIFIED, TargetPlatform.FP32, TargetPlatform.SOI, TargetPlatform.SOI, TargetPlatform.SOI]
     return OpSocket(
-        op=op, cls_input=cls_input[: op.num_of_input],
+        op=op, in_plat=in_plat[: op.num_of_input],
         links=[])
 
 
-def NonZero_Socket(op: Operation) -> OpSocket:
+def NonZero_Socket(op: OperationBase) -> OpSocket:
     """
     From Opset 9 - 13:
         
@@ -484,14 +606,14 @@ def NonZero_Socket(op: Operation) -> OpSocket:
             output
     """
     CHECK_OPSET(op=op, min_version_supported=9, max_version_supported=13)
-    cls_input  = [VProperty.VALUE]
-    cls_output = [VProperty.SOI]
+    in_plat  = [TargetPlatform.UNSPECIFIED]
+    out_plat = [TargetPlatform.FP32]
     return OpSocket(
-        op=op, cls_input=cls_input[: op.num_of_input], 
-        cls_output=cls_output, links=[])
+        op=op, in_plat=in_plat[: op.num_of_input], 
+        out_plat=out_plat, links=[])
 
 
-def Range_Socket(op: Operation) -> OpSocket:
+def Range_Socket(op: OperationBase) -> OpSocket:
     """
     From Opset 11 - 13:
         
@@ -510,13 +632,13 @@ def Range_Socket(op: Operation) -> OpSocket:
             A 1-D tensor with same type as the inputs containing generated range of values.
     """
     CHECK_OPSET(op=op, min_version_supported=9, max_version_supported=13)
-    cls_input  = [VProperty.ATTRIB, VProperty.ATTRIB, VProperty.ATTRIB]
+    in_plat  = [TargetPlatform.SOI, TargetPlatform.SOI, TargetPlatform.SOI]
     return OpSocket(
-        op=op, cls_input=cls_input[: op.num_of_input], 
+        op=op, in_plat=in_plat[: op.num_of_input], 
         links=[])
 
 
-def ScatterElements_Socket(op: Operation) -> OpSocket:
+def ScatterElements_Socket(op: OperationBase) -> OpSocket:
     """
     From Opset 11 - 16:
         
@@ -537,13 +659,13 @@ def ScatterElements_Socket(op: Operation) -> OpSocket:
             Tensor of rank r >= 1 (same rank as input).
     """
     CHECK_OPSET(op=op, min_version_supported=11, max_version_supported=16)
-    cls_input  = [VProperty.VALUE, VProperty.SOI, VProperty.VALUE]
+    in_plat  = [TargetPlatform.UNSPECIFIED, TargetPlatform.FP32, TargetPlatform.UNSPECIFIED]
     return OpSocket(
-        op=op, cls_input=cls_input[: op.num_of_input], 
-        links=[VLink(input_idx=0, output_idx=0), VLink(input_idx=2, output_idx=0)])
+        op=op, in_plat=in_plat[: op.num_of_input], 
+        links=[VLink(in_idx=0, out_idx=0), VLink(in_idx=2, out_idx=0)])
 
 
-def ScatterND_Socket(op: Operation) -> OpSocket:
+def ScatterND_Socket(op: OperationBase) -> OpSocket:
     """
     From Opset 11 - 16:
         
@@ -562,13 +684,13 @@ def ScatterND_Socket(op: Operation) -> OpSocket:
             Tensor of rank r >= 1.
     """
     CHECK_OPSET(op=op, min_version_supported=11, max_version_supported=16)
-    cls_input  = [VProperty.VALUE, VProperty.SOI, VProperty.VALUE]
+    in_plat  = [TargetPlatform.UNSPECIFIED, TargetPlatform.FP32, TargetPlatform.UNSPECIFIED]
     return OpSocket(
-        op=op, cls_input=cls_input[: op.num_of_input], 
-        links=[VLink(input_idx=0, output_idx=0), VLink(input_idx=2, output_idx=0)])
+        op=op, in_plat=in_plat[: op.num_of_input], 
+        links=[VLink(in_idx=0, out_idx=0), VLink(in_idx=2, out_idx=0)])
 
 
-def Shape_Socket(op: Operation) -> OpSocket:
+def Shape_Socket(op: OperationBase) -> OpSocket:
     """
     From Opset 1 - 16:
         
@@ -581,14 +703,14 @@ def Shape_Socket(op: Operation) -> OpSocket:
             Shape of the input tensor
     """
     CHECK_OPSET(op=op, min_version_supported=1, max_version_supported=16)
-    cls_input  = [VProperty.VALUE]
-    cls_output = [VProperty.SOI]
+    in_plat  = [TargetPlatform.UNSPECIFIED]
+    out_plat = [TargetPlatform.SOI]
     return OpSocket(
-        op=op, cls_input=cls_input[: op.num_of_input], 
-        cls_output=cls_output, links=[])
+        op=op, in_plat=in_plat[: op.num_of_input], 
+        out_plat=out_plat, links=[])
 
 
-def Slice_Socket(op: Operation) -> OpSocket:
+def Slice_Socket(op: OperationBase) -> OpSocket:
     """
     From Opset 1 - 16:
 
@@ -615,35 +737,37 @@ def Slice_Socket(op: Operation) -> OpSocket:
             Sliced data tensor.
     """
     CHECK_OPSET(op=op, min_version_supported=1, max_version_supported=13)
-    cls_input  = [VProperty.VALUE, VProperty.ATTRIB, VProperty.ATTRIB, VProperty.ATTRIB, VProperty.ATTRIB]
+    in_plat  = [TargetPlatform.UNSPECIFIED, TargetPlatform.SOI, TargetPlatform.SOI, TargetPlatform.SOI, TargetPlatform.SOI]
     return OpSocket(
-        op=op, cls_input=cls_input[: op.num_of_input], 
-        links=[VLink(input_idx=0, output_idx=0)])
+        op=op, in_plat=in_plat[: op.num_of_input], 
+        links=[VLink(in_idx=0, out_idx=0)])
 
 
-def Squeeze_Socket(op: Operation) -> OpSocket:
+def Squeeze_Socket(op: OperationBase) -> OpSocket:
     """
     From Opset 1 - 13:
 
     Inputs (1 - 2)
         data (differentiable) : T
             Tensors with at least max(dims) dimensions.
-    
+
         axes (optional, non-differentiable) : tensor(int64)
-            List of integers indicating the dimensions to squeeze. Negative value means counting dimensions from the back. Accepted range is [-r, r-1] where r = rank(data).
+            List of integers indicating the dimensions to squeeze. 
+            Negative value means counting dimensions from the back. 
+            Accepted range is [-r, r-1] where r = rank(data).
     
     Outputs
         squeezed (differentiable) : T
             Reshaped tensor with same data as input.
     """
     CHECK_OPSET(op=op, min_version_supported=1, max_version_supported=13)
-    cls_input  = [VProperty.VALUE, VProperty.SOI]
+    in_plat  = [TargetPlatform.UNSPECIFIED, TargetPlatform.SOI]
     return OpSocket(
-        op=op, cls_input=cls_input[: op.num_of_input], 
-        links=[VLink(input_idx=0, output_idx=0)])
+        op=op, in_plat=in_plat[: op.num_of_input], 
+        links=[VLink(in_idx=0, out_idx=0)])
 
 
-def Unsqueeze_Socket(op: Operation) -> OpSocket:
+def Unsqueeze_Socket(op: OperationBase) -> OpSocket:
     """
     From Opset 1 - 13:
 
@@ -661,13 +785,13 @@ def Unsqueeze_Socket(op: Operation) -> OpSocket:
             Reshaped tensor with same data as input.
     """
     CHECK_OPSET(op=op, min_version_supported=1, max_version_supported=13)
-    cls_input  = [VProperty.VALUE, VProperty.SOI]
+    in_plat  = [TargetPlatform.UNSPECIFIED, TargetPlatform.SOI]
     return OpSocket(
-        op=op, cls_input=cls_input[: op.num_of_input], 
-        links=[VLink(input_idx=0, output_idx=0)])
+        op=op, in_plat=in_plat[: op.num_of_input], 
+        links=[VLink(in_idx=0, out_idx=0)])
 
 
-def Where_Socket(op: Operation) -> OpSocket:
+def Where_Socket(op: OperationBase) -> OpSocket:
     """
     From Opset 9 - 16:
 
@@ -686,13 +810,13 @@ def Where_Socket(op: Operation) -> OpSocket:
             Tensor of shape equal to the broadcasted shape of condition, X, and Y.
     """
     CHECK_OPSET(op=op, min_version_supported=9, max_version_supported=16)
-    cls_input  = [VProperty.VALUE, VProperty.SOI, VProperty.SOI]
+    in_plat  = [TargetPlatform.UNSPECIFIED, TargetPlatform.FP32, TargetPlatform.FP32]
     return OpSocket(
-        op=op, cls_input=cls_input[: op.num_of_input], 
-        links=[VLink(input_idx=0, output_idx=0)])
+        op=op, in_plat=in_plat[: op.num_of_input], 
+        links=[VLink(in_idx=0, out_idx=0)])
 
 
-def Logical_Socket(op: Operation) -> OpSocket:
+def Logical_Socket(op: OperationBase) -> OpSocket:
     """
     From Opset 1 - 16:
 
@@ -708,14 +832,14 @@ def Logical_Socket(op: Operation) -> OpSocket:
             Result tensor.
     """
     CHECK_OPSET(op=op, min_version_supported=12, max_version_supported=16)
-    cls_input  = [VProperty.VALUE, VProperty.VALUE]
-    cls_output = [VProperty.LOGICAL]
+    in_plat  = [TargetPlatform.UNSPECIFIED, TargetPlatform.UNSPECIFIED]
+    out_plat = [TargetPlatform.FP32]
     return OpSocket(
-        op=op, cls_input=cls_input[: op.num_of_input], 
-        cls_output=cls_output, links=[])
+        op=op, in_plat=in_plat[: op.num_of_input], 
+        out_plat=out_plat, links=[])
 
 
-def Onehot_Socket(op: Operation) -> OpSocket:
+def Onehot_Socket(op: OperationBase) -> OpSocket:
     """
     Inputs
         indices (non-differentiable) : T1
@@ -734,11 +858,11 @@ def Onehot_Socket(op: Operation) -> OpSocket:
         OpSocket: _description_
     """
     CHECK_OPSET(op=op, min_version_supported=12, max_version_supported=16)
-    cls_input  = [VProperty.SOI, VProperty.SOI, VProperty.SOI]
-    cls_output = [VProperty.SOI]
+    in_plat  = [TargetPlatform.SOI, TargetPlatform.SOI, TargetPlatform.SOI]
+    out_plat = [TargetPlatform.SOI]
     return OpSocket(
-        op=op, cls_input=cls_input[: op.num_of_input], 
-        cls_output=cls_output, links=[])
+        op=op, in_plat=in_plat[: op.num_of_input], 
+        out_plat=out_plat, links=[])
 
 
 DEFAULT_SOCKET_TABLE = {
@@ -835,4 +959,5 @@ DEFAULT_SOCKET_TABLE = {
     'Xor': Logical_Socket,
     'Or': Logical_Socket,
     'And': Logical_Socket,
+    'Erf': DEFAULT_SOCKET_CREATOR
 }

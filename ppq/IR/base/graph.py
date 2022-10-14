@@ -1,118 +1,14 @@
-from abc import ABCMeta, abstractmethod, abstractproperty
+from abc import abstractmethod
 from collections import deque
 from typing import Any, Dict, List, Text, Union
 
 import torch
-from ppq.core import (CAFFE_DOMAIN, COMPUTING_OP, DEFAULT_OPSET_DOMAIN,
-                      DEFAULT_OPSET_VERSION, LINEAR_ACTIVATIONS, ONNX_DOMAIN,
-                      SOI_OP, NetworkFramework, OperationMeta, Serializable,
+from ppq.core import (LINEAR_ACTIVATIONS, NetworkFramework, Serializable,
                       SingletonMeta, TargetPlatform, TensorMeta,
                       convert_any_to_torch_tensor, ppq_warning)
 
-
-class Opset():
-    def __init__(self, domain: str = DEFAULT_OPSET_DOMAIN, version: int = DEFAULT_OPSET_VERSION) -> None:
-        """Open Neural Network Exchange (ONNX) is an open ecosystem that empowers AI developers 
-            to choose the right tools as their project evolves. 
-        
-        ONNX provides an open source format for AI models, both deep learning and traditional ML. 
-        It defines an extensible computation graph model, as well as definitions of
-            built-in operators and standard data types. 
-        Currently we focus on the capabilities needed for inferencing (scoring).
-        
-        PPQ IR is built based on ONNX defination.
-
-        Args:
-            domain (str, optional): _description_. Defaults to DEFAULT_OPSET_DOMAIN.
-            version (int, optional): _description_. Defaults to DEFAULT_OPSET_VERSION.
-        """
-        self.domain  = domain
-        self.version = version
-
-    def is_onnx_v13(self):
-        return self.domain == ONNX_DOMAIN and self.version == 13
-
-    def is_onnx_v11(self):
-        return self.domain == ONNX_DOMAIN and self.version == 11
-
-    def onnx_opset_version(self) -> int:
-        if self.domain == ONNX_DOMAIN: return self.version
-        else: return -1   
-
-    def is_onnx(self):
-        return self.domain == ONNX_DOMAIN
-    
-    def is_caffe(self):
-        return self.domain == CAFFE_DOMAIN
-
-
-class OperationBase(metaclass=ABCMeta):
-    def __init__(self,
-                 name: str, op_type: str,
-                 attributes: Dict[str, Any],
-                 opset = None,
-                 platform: TargetPlatform=TargetPlatform.UNSPECIFIED) -> None:
-        self._name = name
-        self._type = op_type
-        self._attributes = attributes
-        self._platform = platform
-        self._meta = None
-        self._detail = {}
-        if opset is None:
-            self._opset = Opset()
-        else: self._opset = opset
-
-    @ abstractproperty
-    def inputs(self) -> List[Any]: pass
-
-    @ abstractproperty
-    def outputs(self) -> List[Any]: pass
-
-    @ abstractproperty
-    def parameters(self) -> List[Any]: pass
-
-    @ property
-    def name(self) -> str:
-        return self._name
-
-    @ property
-    def type(self) -> str:
-        return self._type
-
-    @ type.setter
-    def type(self, type: str):
-        self._type = type
-
-    @ property
-    def opset(self) -> Opset:
-        return self._opset
-
-    @ opset.setter
-    def opset(self, opset: Opset):
-        self._opset = opset
-
-    @ property
-    def attributes(self) -> Dict[str, Any]:
-        return self._attributes
-
-    @ property
-    def platform(self) -> TargetPlatform:
-        return self._platform
-
-    @ platform.setter
-    def platform(self, platform: TargetPlatform):
-        self._platform = platform
-
-    @ property
-    def meta_data(self) -> OperationMeta:
-        return self._meta
-
-    @ meta_data.setter
-    def meta_data(self, meta: OperationMeta) -> OperationMeta:
-        self._meta = meta
-
-    def __hash__(self) -> int:
-        return self._name.__hash__()
+from .opdef import (DEFAULT_SOCKET_CREATOR, DEFAULT_SOCKET_TABLE,
+                    OperationBase, Opset, OpSocket)
 
 
 class Variable(Serializable):
@@ -124,6 +20,8 @@ class Variable(Serializable):
         self._dest_ops = [] if dest_ops is None else dest_ops
         self._source_op = None if source_op is None else source_op
         self._is_parameter = is_parameter
+        self._shape = None
+        self._dtype = None
 
     @ property
     def is_parameter(self) -> bool:
@@ -207,7 +105,7 @@ class Variable(Serializable):
         if self.meta is not None:
             return self.meta.shape
         else: return None
-    
+
     @ shape.setter
     def shape(self, new_shape: List[Union[Text, int, None]]):
         if self.meta is None:
@@ -250,6 +148,15 @@ class Operation(OperationBase, Serializable):
         self._output_vars   = [] if outputs is None else outputs
 
     @ property
+    def socket(self) -> OpSocket:
+        if self.type in DEFAULT_SOCKET_TABLE:
+            return DEFAULT_SOCKET_TABLE[self.type](self)
+        else: 
+            ppq_warning(f'Can not initilize OpSocket for {self.name}, OpType {self.type} is not supported. '
+                        'You are recommend to register a opsocket for it first.')
+            return DEFAULT_SOCKET_CREATOR(self)
+
+    @ property
     def inputs(self) -> List[Variable]:
         return self._input_vars
 
@@ -270,8 +177,12 @@ class Operation(OperationBase, Serializable):
         return self.type in COMPUTING_OP
 
     @ property
-    def is_soi_generator(self) -> bool:
-        return self.type in SOI_OP
+    def is_linear_activation(self) -> bool:
+        return self.type in LINEAR_ACTIVATIONS
+
+    @ property
+    def num_of_parameter(self) -> int:
+        return len([var for var in self.inputs if var.is_parameter])
 
     @ property
     def is_boundary(self) -> bool:
@@ -281,11 +192,6 @@ class Operation(OperationBase, Serializable):
         for var in self.outputs:
             down_ops.extend(var.dest_ops)
         return all([op is None for op in up_ops]) or len(down_ops) == 0
-
-    @ property
-    def is_linear_activation(self) -> bool:
-        return self.type in LINEAR_ACTIVATIONS
-
     @ property
     def num_of_input(self) -> int:
         return len(self.inputs)
@@ -349,7 +255,7 @@ class BaseGraph(Serializable):
     Args:
         Serializable ([type]): [description]
     """
-    def __init__(self, name: str, built_from: NetworkFramework) -> None:
+    def __init__(self, name: str, built_from: NetworkFramework = NetworkFramework.NATIVE) -> None:
         super().__init__()
         self._operations    = {}
         self._variables     = {}
@@ -384,54 +290,6 @@ class BaseGraph(Serializable):
     @ property
     def extension_attrib(self):
         return self._detail
-
-    def delete_operation(self, op_name: str, cascade: bool = False, force_delete: bool = False):
-        # legacy function since ppq 0.6.4
-        # do not use, use graph.remove_variable instead.
-        if not isinstance(op_name, str):
-            raise TypeError(f'This function needs a operation name as parameter, '\
-                f'while {type(op_name)} was given')
-        if op_name not in self.operations: return
-        operation = self.operations[op_name]
-        if len(operation.outputs) != 0 and not cascade and not force_delete:
-            raise PermissionError(f'It is not safe to delete operation {op_name}, '\
-                f'cause it still has output variable(s) {[str(output_var) for output_var in operation.outputs]}')
-        for input_var in operation.inputs:
-            dest_idx = input_var.dest_ops.index(operation)
-            input_var.dest_ops.pop(dest_idx)
-            # once variable is isolated, delete it.
-            if len(input_var.dest_ops) == 0 and input_var.name not in self.outputs:
-                self.remove_variable(input_var)
-        self.operations.pop(operation.name)
-
-        if cascade:
-            for output_var in operation.outputs:
-                for cascade_op in output_var.dest_ops:
-                    self.delete_operation(cascade_op.name, cascade=True, force_delete=force_delete)
-
-    def delete_variable(self, var_name: str, force_delete: bool = False):
-        # legacy function since ppq 0.6.4
-        # do not use, use graph.remove_variable instead.
-        if not isinstance(var_name, str):
-            raise TypeError(f'This function need a variable name to delete variable from graph, '\
-                f'while {type(var_name)} was given')
-        if var_name in self.inputs or var_name in self.outputs:
-            raise PermissionError('Can not delete graph input and output variables.')
-        if var_name not in self.variables:
-            raise KeyError(f'Variable {var_name} not in current graph.')
-        variable = self.variables[var_name]
-        if len(variable.dest_ops) != 0 and not force_delete:
-            raise PermissionError(f'It is not safe to delete variable {variable}, '\
-                f'cause it still has output operation(s) {[dest_op.name for dest_op in variable.dest_ops]}')
-        if variable.source_op is not None and len(variable.source_op.outputs) != 1 and not force_delete:
-            raise PermissionError(
-                f'It is not safe to delete variable {variable}, Cause its source operation {variable.source_op.name} '
-                'has more than 1 output, this deletion will change output order.')
-        source_op = variable.source_op
-        if source_op is not None:
-            output_idx = source_op.outputs.index(variable)
-            source_op.outputs.pop(output_idx)
-        self.variables.pop(variable.name)
 
     def append_operation(self, operation: Operation):
         if not isinstance(operation, Operation):
@@ -500,7 +358,7 @@ class BaseGraph(Serializable):
             return sort_ret
         else:
             raise RuntimeError(
-                'Topological Sort failed. Some operation can not be sorted (might due to circular reference).\n' + \
+                'Topological Sort failed. Some operation can not be sorted (might due to circular reference).\n'
                 ''.join(str(self.operations[op_name]) + '\n' for op_name in visited if visited[op_name] == False)
             )
 
@@ -991,7 +849,7 @@ class BaseGraph(Serializable):
                         assert isinstance(op, QuantableOperation), (
                             'Graph Copy Error, Unexpected Master Operation Type.')
                         for mcfg, mvar in op.config_with_variable:
-                            if mvar.name == var.name: cfg._father_config = mcfg
+                            if mvar.name == var.name: cfg._dominator = mcfg
 
         # recreate input, output
         for name in self.inputs:
@@ -1012,6 +870,8 @@ class BaseGraph(Serializable):
         for name in self.outputs:
             if name not in cloned.outputs:
                 raise KeyError(f'Graph Copy Error, Output {var.name} is Missing')
+        cloned._num_of_generated_op  = self._num_of_generated_op
+        cloned._num_of_generated_var = self._num_of_generated_var
         return cloned
 
 
