@@ -100,7 +100,7 @@ class MyQuantizer(BaseQuantizer):
 # ------------------------------------------------------------
 register_network_quantizer(MyQuantizer, TargetPlatform.EXTENSION)
 
-with ENABLE_CUDA_KERNEL():
+if 1:
     # ------------------------------------------------------------
     # 以 TargetPlatform.EXTENSION 作为目标平台调用量化器
     # ------------------------------------------------------------

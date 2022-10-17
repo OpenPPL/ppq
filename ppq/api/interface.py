@@ -76,7 +76,7 @@ EXPORTERS = {
     TargetPlatform.ORT_OOS_INT8:  ORTOOSExporter,
     TargetPlatform.METAX_INT8_C:  ONNXRUNTIMExporter,
     TargetPlatform.METAX_INT8_T:  ONNXRUNTIMExporter,
-    TargetPlatform.TRT_INT8:      TensorrtExporter,
+    TargetPlatform.TRT_INT8:      TensorRTExporter,
     TargetPlatform.NCNN_INT8:     NCNNExporter,
     TargetPlatform.TENGINE_INT8:  TengineExporter
 }
@@ -357,9 +357,9 @@ def quantize_torch_model(
                    The quantized IR, containing all information needed for backend execution
     """
     # dump pytorch model to onnx
-    dump_torch_to_onnx(model=model, onnx_export_file=onnx_export_file,
-        input_shape=input_shape, input_dtype=input_dtype,
-        inputs=inputs, device=device)
+    # dump_torch_to_onnx(model=model, onnx_export_file=onnx_export_file,
+    #     input_shape=input_shape, input_dtype=input_dtype,
+    #     inputs=inputs, device=device)
 
     return quantize_onnx_model(onnx_import_file=onnx_export_file,
         calib_dataloader=calib_dataloader, calib_steps=calib_steps, collate_fn=collate_fn,

@@ -93,13 +93,20 @@ class TorchMinMaxObserver(BaseTensorObserver):
         device = self._max_val_collector[-1].device
 
         if self._quant_cfg.policy.has_property(QuantizationProperty.PER_TENSOR):
+            min_val = torch.min(torch.cat(self._min_val_collector, dim=0)).cpu().item()
+            max_val = torch.max(torch.cat(self._max_val_collector, dim=0)).cpu().item()
+
             scale, offset = minmax_to_scale_offset(
-                min_val = torch.min(torch.cat(self._min_val_collector, dim=0)).cpu().item(),
-                max_val = torch.max(torch.cat(self._max_val_collector, dim=0)).cpu().item(),
+                min_val = min_val,
+                max_val = max_val,
                 config=self._quant_cfg)
             self._quant_cfg.scale  = torch.tensor([scale], dtype=torch.float32, device=device).squeeze(0)
             self._quant_cfg.offset = torch.tensor([offset], dtype=torch.float32, device=device).squeeze(0)
             self._quant_cfg.state = QuantizationStates.ACTIVATED
+            self._quant_cfg.float_min = torch.tensor([min_val], dtype=torch.float32, device=device).squeeze(0)
+            self._quant_cfg.float_max = torch.tensor([max_val], dtype=torch.float32, device=device).squeeze(0)   
+            if self._watch_on._name == "features_1_block_0_2":
+                print("features_1_block_0_2", self._quant_cfg.float_min, self._quant_cfg.float_max, scale, offset)   
 
         elif self._quant_cfg.policy.has_property(QuantizationProperty.PER_CHANNEL):
             min_vals = torch.min(torch.cat(self._min_val_collector, dim=-1), dim=-1, keepdim=False)[0].cpu().numpy()
@@ -117,6 +124,10 @@ class TorchMinMaxObserver(BaseTensorObserver):
             self._quant_cfg.scale  = torch.tensor(scales, dtype=torch.float32, device=device)
             self._quant_cfg.offset = torch.tensor(offsets, dtype=torch.float32, device=device)
             self._quant_cfg.state = QuantizationStates.ACTIVATED
+            self._quant_cfg.float_min = torch.tensor([min_vals], dtype=torch.float32, device=device).squeeze(0)
+            self._quant_cfg.float_max = torch.tensor([max_vals], dtype=torch.float32, device=device).squeeze(0)  
+            if self._watch_on._name == "features_1_block_0_2":
+                print("features_1_block_0_2", self._quant_cfg.float_min, self._quant_cfg.float_max, scale, offset)                      
         else:
             raise TypeError('Min-max Observer only work with per-tensor or per-channel quantize policy.')
 
@@ -169,52 +180,7 @@ class TorchHistObserver(TorchMinMaxObserver):
         self, histogram: torch.Tensor, hist_bins: int, hist_scale: float,
         config: TensorQuantizationConfig, computing_device: str = OBSERVER_KL_COMPUTING_DEVICE,
         scale_threshold: float=OBSERVER_MIN_SCALE
-    ) -> Tuple[float, int]:
-        """
-        PPQ core quant parameter computing method - Histogram to scale & offset
-
-        With a pre-defined histogram,
-        this function will automatically search best clip value
-        to minimize KL divergence between quantized result and fp32 input.
-
-        only work for per-tensor symmetrical quantization policy for now.
-        see also https://on-demand.gputechconf.com/gtc/2017/presentation/s7310-8-bit-inference-with-tensorrt.pdf
-
-        Args:
-            histogram (torch.Tensor): histogram records activation's statistics.
-            hist_bins (int): how many bins are included in histogram(also known as histogram length)
-            hist_scale (float): histogram step size. it can be solved by histogram.max_val / histogram.bins
-            config (TensorQuantizationConfig): quantization config.
-            computing_device (str, optional): computing device. Defaults to 'cpu'.
-
-        Raises:
-            ValueError: given quantization config is invalid.
-
-        Returns:
-            Tuple[float, int]: scale(fp32) and offset(int).
-        """
-        if config.policy.has_property(QuantizationProperty.ASYMMETRICAL):
-            raise PermissionError('KL observer is not designed for ASYMMETRICAL quantization')
-        
-        if OBSERVER_MIN_SCALE_MANUL_OVERRIDE in config.detail:
-            scale_threshold = config.detail[OBSERVER_MIN_SCALE_MANUL_OVERRIDE]
-
-        # move histogram to cpu, speedup computation.
-        histogram = histogram.to(computing_device).float()
-
-        # compute symmtrical kl-divergence.
-        # Here is a simple example: reference distribution P consisting of 8 bins, we want to quantize into 2 bins:
-        # P = [ 1, 0, 2, 3, 5, 3, 1, 7]
-        # we merge into 2 bins (8 / 2 = 4 consecutive bins are merged into one bin)
-        # [1 + 0 + 2 + 3 , 5 + 3 + 1 + 7] = [6, 16]
-        # then proportionally expand back to 8 bins, we preserve empty bins from the original distribution P:
-        # Q = [ 6/3, 0, 6/3, 6/3, 16/4, 16/4, 16/4, 16/4] = [ 2, 0, 2, 2, 4, 4, 4, 4]
-        # now we should normalize both distributions, after that we can compute KL_divergence
-        # P /= sum(P) Q /= sum(Q)
-        # result = KL_divergence(P, Q)
-        # see also
-        # https://github.com/NVIDIA/TensorRT/blob/3835424af081db4dc8cfa3ff3c9f4a8b89844421/tools/pytorch-quantization/pytorch_quantization/calib/histogram.py#L147
-
+    ):
         losses, quant_bins = [], 2 ** (config.num_of_bits - 1)
 
         # following code is curcial, do not move
@@ -223,7 +189,7 @@ class TorchHistObserver(TorchMinMaxObserver):
 
         hist_sum = torch.sum(histogram)
         for bin_range in range(quant_bins, hist_bins + quant_bins - 1, quant_bins):
-            p_hist = torch.zeros(size=(bin_range, ), dtype=torch.float, device=computing_device)
+            p_hist = torch.zeros(size=(bin_range, ), dtype=torch.float, device=computing_device) # 128 bings
             p_hist[: bin_range].copy_(histogram[: bin_range])
             p_hist[bin_range - 1] += torch.sum(histogram[bin_range: ])
             p_hist = p_hist / hist_sum
@@ -274,13 +240,15 @@ class TorchHistObserver(TorchMinMaxObserver):
             self._hist_scale = hist_range / self._hist_bins
             self._phase = 'Collating Hist'
         elif self._phase == 'Collating Hist':
-            device = self._hist.device
+            device = self._hist.device            
             scale, offset = self.hist_to_scale_offset(
                 histogram=self._hist, hist_bins=self._hist_bins,
                 hist_scale=self._hist_scale, config=self._quant_cfg, computing_device=device)
             self._quant_cfg.scale  = torch.tensor([scale], dtype=torch.float32, device=device).squeeze(0)
             self._quant_cfg.offset = torch.tensor([offset], dtype=torch.float32, device=device).squeeze(0)
             self._quant_cfg.state = QuantizationStates.ACTIVATED
+            self._quant_cfg.float_min = torch.tensor([self._min], dtype=torch.float32, device=device).squeeze(0)
+            self._quant_cfg.float_max = torch.tensor([self._max], dtype=torch.float32, device=device).squeeze(0)
 
 
 class TorchPercentileObserver(BaseTensorObserver):

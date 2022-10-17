@@ -61,6 +61,7 @@ class PPLBackendExporter(OnnxExporter):
                 'dominator'  : config.dominated_by.__hash__()
             }
 
+
         for op in graph.operations.values():
             if convert_type(op.platform) is not None:
                 op_platform_recorder[op.name] = {

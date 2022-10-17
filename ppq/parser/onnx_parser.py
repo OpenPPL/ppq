@@ -59,11 +59,8 @@ class OnnxParser(GraphBuilder):
         """Remove inplace layer in netdef If the names of bottom and top are same,
         it means the computation of this layer is in place."""
         def new_name(_name):
-            if _name == '': 
-                return ''
-            elif _name not in total_write_times or current_write_times:
-                return _name  
-            elif current_write_times[_name] == total_write_times[_name]:
+            if _name == '': return ''
+            if current_write_times[_name] == total_write_times[_name]:
                 return _name
             else:
                 return f'{_name}_ver{current_write_times[_name]}'
@@ -169,5 +166,5 @@ class OnnxParser(GraphBuilder):
             graph, graph_inputs=inputs, graph_outputs=outputs,
             op_inputs=op_inputs_dict, op_outputs=op_outputs_dict)
         graph = self.initialize_params(graph, initializer)
-        self.de_inplace(graph)
+        # self.de_inplace(graph)
         return self.refine_graph(graph)

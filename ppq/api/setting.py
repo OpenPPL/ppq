@@ -271,7 +271,7 @@ class LSQSetting():
         self.collecting_device      = 'cuda'
         
         # num of training steps, please adjust it to your needs
-        self.steps                  = 500
+        self.steps                  = 5000
         
         # is scale trainable
         self.is_scale_trainable     = True

@@ -3,6 +3,7 @@
 You are not allowed to modify this 请勿修改此文件
 """
 
+from builtins import min
 import time  # for hash generation
 from enum import Enum
 from typing import Any, Iterable, List
@@ -366,6 +367,8 @@ class TensorQuantizationConfig(Serializable):
         num_of_bits: int          = 8,
         quant_min: int            = -127,
         quant_max: int            = 128,
+        float_min: float          = 0,
+        float_max: float          = 0,        
         scale: Any                = None,
         offset: Any               = None,
         observer_algorithm: str   = None,
@@ -423,6 +426,8 @@ class TensorQuantizationConfig(Serializable):
         self._rounding = rounding
         self._quant_min = quant_min
         self._quant_max = quant_max
+        self._float_min = float_min
+        self._float_max = float_max        
         self.observer_algorithm = observer_algorithm
         self.detail = {} if detail is None else detail
         self._father_config = self # union-find
@@ -571,6 +576,16 @@ class TensorQuantizationConfig(Serializable):
         else: return self.dominated_by.quant_max
 
     @ property
+    def float_min(self) -> Any:
+        if self.dominated_by == self: return self._float_min
+        else: return self.dominated_by.float_min
+
+    @ property
+    def float_max(self) -> Any:
+        if self.dominated_by == self: return self._float_max
+        else: return self.dominated_by.float_max
+
+    @ property
     def delegate(self) -> int:
         if self.dominated_by == self: return self._quant_max
         else: return self.dominated_by.quant_max
@@ -596,6 +611,28 @@ class TensorQuantizationConfig(Serializable):
             )
         else:
             self._offset = value
+
+    @ float_min.setter
+    def float_min(self, value: Any):
+        if not self.is_revisable():
+            raise PermissionError(
+                'Can not change scale of this tensor quantization configuration now. '
+                'It has been overlapped or has an inactive state. '
+                'Due to it is not a active config, any change of this configuration is not allowed.'
+            )
+        else:
+            self._float_min = value
+
+    @ float_max.setter
+    def float_max(self, value: Any):
+        if not self.is_revisable():
+            raise PermissionError(
+                'Can not change scale of this tensor quantization configuration now. '
+                'It has been overlapped or has an inactive state. '
+                'Due to it is not a active config, any change of this configuration is not allowed.'
+            )
+        else:
+            self._float_max = value
 
     @ policy.setter
     def policy(self, policy: QuantizationPolicy):
@@ -699,7 +736,8 @@ class ChannelwiseTensorQuantizationConfig(TensorQuantizationConfig):
         policy: QuantizationPolicy, rounding:RoundingPolicy,
         num_of_bits: int, quant_min: int, quant_max: int,
         scale: Any, offset: Any, observer_algorithm: str,
-        state: QuantizationStates, channel_axis: int, detail: dict = {}
+        float_min: Any, float_max: Any,
+        state: QuantizationStates, channel_axis: int, detail: dict = {},
     ):
         if policy.has_property(QuantizationProperty.PER_TENSOR):
             raise TypeError('Can not assign QuantizationProperty.PER_TENSOR policy '\
@@ -708,6 +746,7 @@ class ChannelwiseTensorQuantizationConfig(TensorQuantizationConfig):
         super().__init__(
             policy=policy, num_of_bits=num_of_bits,
             quant_min=quant_min, quant_max=quant_max, scale=scale, offset=offset,
+            float_min=float_min, float_max=float_max,
             observer_algorithm=observer_algorithm, detail=detail, state=state,
             rounding=rounding
         )
@@ -727,6 +766,8 @@ class ChannelwiseTensorQuantizationConfig(TensorQuantizationConfig):
             num_of_bits=convert_from.num_of_bits,
             quant_min=convert_from.quant_min,
             quant_max=convert_from.quant_max,
+            float_max=convert_from.float_min,
+            float_min=convert_from.float_max,
             scale=scale, offset=offset,
             observer_algorithm=convert_from.observer_algorithm,
             detail=convert_from.detail.copy(),

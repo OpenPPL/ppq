@@ -20,7 +20,7 @@ from ppq import *
 from ppq.api import *
 from tqdm import tqdm
 
-QUANT_PLATFROM = TargetPlatform.TRT_INT8
+QUANT_PLATFROM = TargetPlatform.OPENVINO_INT8
 MODEL          = 'model.onnx'
 INPUT_SHAPE    = [1, 3, 224, 224]
 SAMPLES        = [torch.rand(size=INPUT_SHAPE) for _ in range(256)] # rewirte this to use real data.
@@ -33,7 +33,7 @@ REQUIRE_ANALYSE  = True
 # -------------------------------------------------------------------
 # 下面向你展示了常用参数调节选项：
 # -------------------------------------------------------------------
-QS.lsq_optimization = FINETUNE                                  # 启动网络再训练过程，降低量化误差
+QS.lsq_optimization = False                                  # 启动网络再训练过程，降低量化误差
 QS.lsq_optimization_setting.steps = 500                         # 再训练步数，影响训练时间，500 步大概几分钟
 QS.lsq_optimization_setting.collecting_device = 'cuda'          # 缓存数据放在那，cuda 就是放在 gpu，如果显存超了你就换成 'cpu'
 
@@ -55,7 +55,7 @@ print(f'NETWORK INPUTSHAPE   : {INPUT_SHAPE}')
 
 # ENABLE CUDA KERNEL 会加速量化效率 3x ~ 10x，但是你如果没有装相应编译环境的话是编译不了的
 # 你可以尝试安装编译环境，或者在不启动 CUDA KERNEL 的情况下完成量化：移除 with ENABLE_CUDA_KERNEL(): 即可
-with ENABLE_CUDA_KERNEL():
+if 1:
     qir = quantize_onnx_model(
         onnx_import_file=MODEL, calib_dataloader=SAMPLES, calib_steps=128, setting=QS,
         input_shape=INPUT_SHAPE, collate_fn=lambda x: x.to(EXECUTING_DEVICE), 
@@ -83,8 +83,8 @@ with ENABLE_CUDA_KERNEL():
 
     print('网络量化结束，正在生成目标文件:')
     export_ppq_graph(
-        graph=qir, platform=QUANT_PLATFROM,
-        graph_save_to = 'model_int8.onnx')
+        graph=qir, platform=TargetPlatform.ONNX,
+        graph_save_to = 'model_int8.onnx', config_save_to='model_int8.json')
 
     # -------------------------------------------------------------------
     # 记录一下输入输出的名字，onnxruntime 跑的时候需要提供这些名字

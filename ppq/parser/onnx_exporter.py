@@ -7,7 +7,6 @@ import torch
 from onnx import helper, numpy_helper
 from ppq.core import (GRAPH_OPSET_ATTRIB, ONNX_EXPORT_OPSET, ONNX_VERSION,
                       PPQ_CONFIG, DataType, convert_any_to_numpy, ppq_warning)
-from ppq.core.quant import QuantizationStates
 from ppq.IR import (BaseGraph, GraphExporter, Operation, OperationExporter,
                     Variable)
 from ppq.IR.morph import GraphDeviceSwitcher
@@ -61,8 +60,10 @@ def convert_value(value: Union[int, float, np.ndarray, torch.Tensor]) -> str:
     if type(value) in {int, float}: return value
     else:
         value = convert_any_to_numpy(value, accept_none=True)
-        if value is None: return value # SOI config has None as its scale and
-        return value.tolist()
+        if value is None: return value # SOI config has Nona as its scale and
+        value = value.tolist()
+        if len(value) == 1: return value[0]
+        else: return value
 
 
 class OnnxExporter(GraphExporter):
@@ -73,37 +74,33 @@ class OnnxExporter(GraphExporter):
         """Export Tensor Quantization Config to File(Json)."""
 
         render_buffer = {
-            'configs': {},
-            'dispatchings' : {},
-            'values': {}
         }
 
         # Render quantization config.
         for operation in graph.operations.values():
+            # print("optype", operation.type)
             if isinstance(operation, QuantableOperation):
-                op_dict = {
-                    var.name: {
-                        'bit_width'  : config.num_of_bits,
-                        'policy'     : config.policy.to_dict(),
-                        'state'      : config.state.name,
-                        'quant_min'  : config.quant_min,
-                        'quant_max'  : config.quant_max,
-                        'hash'       : config.__hash__(),
-                        'dominator'  : config.dominated_by.__hash__()
-                    }
-                    for config, var in operation.config_with_variable
-                }
+                for config, var in operation.config_with_variable:
+                    name = var.name
+                    if name == operation.outputs[0].name:
+                        if name == "features_1_block_0_1":
+                            print(type(config))
+                            print(config)
+                            print("config", config.scale)
+                            print("config.state", config.state)
+                            print("config.float_max", config._float_max)
+                            print("config.float_min", config._float_min)
 
-                for config, _ in operation.config_with_variable:
-                    if config.dominated_by == config:
-                        if (config.state != QuantizationStates.SOI):
-                            render_buffer['values'][config.__hash__()] = {
-                                'scale'      : convert_value(config.scale),
-                                'zero_point' : convert_value(config.offset),
-                            }
 
-                render_buffer['configs'][operation.name] = op_dict
-                render_buffer['dispatchings'][operation.name] = operation.platform.name
+                        render_buffer[operation.name] = {
+                            'bitwidth'   : 8,
+                            'scale'      : convert_value(config.scale),
+                            'max'        : convert_value(config._float_max),
+                            'min'        : convert_value(config._float_min),
+                        }
+                        
+                        # if operation.type == "Relu":
+                        #     render_buffer[name]['min'] = 0
 
         with open(file=config_path, mode='w') as file:
             json.dump(render_buffer, file, indent=4)

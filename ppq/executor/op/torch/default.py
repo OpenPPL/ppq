@@ -2206,6 +2206,8 @@ def HardSwish_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
     [value] = values
     return F.hardswish(value)
 
+def Dropout_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
+    return values
 
 def GRU_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
     """Computes an one-layer GRU. This operator is usually supported via some
@@ -3158,6 +3160,7 @@ DEFAULT_BACKEND_TABLE = {
     'CaffeArgMax': CaffeArgMax_forward,  # caffe op
     'HardSigmoid': HardSigmoid_forward,
     'HardSwish': HardSwish_forward,
+    'Dropout': Dropout_forward,
     'Neg': Neg_forward,
     'GRU': GRU_forward,
     'PPQDeviceSwitch': PPQDeviceSwitch_forward,

@@ -17,7 +17,7 @@ from Utilities.Imagenet import (evaluate_mmlab_module_with_imagenet,
 """
 
 CFG_DEVICE = 'cuda'                            # 一个神奇的字符串，用来确定执行设备
-CFG_BATCHSIZE = 64                             # 测试与calib时的 batchsize
+CFG_BATCHSIZE = 128                             # 测试与calib时的 batchsize
 CFG_INPUT_SHAPE = (CFG_BATCHSIZE, 3, 224, 224) # 用来确定模型输入的尺寸，好像 imagenet 都是这个尺寸
 CFG_VALIDATION_DIR = 'Assets/Imagenet_Valid'   # 用来读取 validation dataset
 CFG_TRAIN_DIR = 'Assets/Imagenet_Train'        # 用来读取 train dataset，注意该集合将被用来 calibrate 你的模型
@@ -25,57 +25,63 @@ CFG_PLATFORM = TargetPlatform.PPL_CUDA_INT8    # 用来指定目标平台
 CFG_DUMP_PATH = 'Output/'                      # 所有模型保存的路径名
 QUANT_SETTING = QuantizationSettingFactory.default_setting() # 用来指定量化配置
 QUANT_SETTING.lsq_optimization = True
+QUANT_SETTING.quantize_activation_setting.calib_algorithm = 'kl'
 
-with ENABLE_CUDA_KERNEL():
+if 1:
     if __name__ == '__main__':
         for model_builder, model_name in (
-            # (torchvision.models.alexnet, 'alexnet'),
-            (torchvision.models.inception_v3, 'inception_v3'),
-
-            (torchvision.models.mnasnet0_5, 'mnasnet0_5'),
-            (torchvision.models.mnasnet1_0, 'mnasnet1_0'),
-
-            (torchvision.models.squeezenet1_0, 'squeezenet1_0'),
-            # (torchvision.models.squeezenet1_1, 'squeezenet1_1'),
-            (torchvision.models.shufflenet_v2_x1_0, 'shufflenet_v2_x1_0'),
-            (torchvision.models.resnet18, 'resnet18'),
-            (torchvision.models.resnet34, 'resnet34'),
-            (torchvision.models.resnet50, 'resnet50'),
-            # (torchvision.models.resnext50_32x4d, 'resnext50_32x4d'),
-
-            # (torchvision.models.wide_resnet50_2, 'wide_resnet50_2'),
-            (torchvision.models.googlenet, 'googlenet'),
-
-            (torchvision.models.vgg11, 'vgg11'),
-            # (torchvision.models.vgg16, 'vgg16'),
-
-            (torchvision.models.mobilenet.mobilenet_v2, 'mobilenet_v2'),
+            (torchvision.models.mobilenet.mobilenet_v3_large, 'mobilenet_v3_large'),
+            # (torchvision.models.resnet18, 'resnet18'),
         ):
             print(f'---------------------- PPQ Quantization Test Running with {model_name} ----------------------')
             model = model_builder(pretrained=True).to(CFG_DEVICE)
 
             dataloader = load_imagenet_from_directory(
                 directory=CFG_TRAIN_DIR, batchsize=CFG_BATCHSIZE,
-                shuffle=False, subset=5120, require_label=False,
+                shuffle=False, subset=1280, require_label=False,
+                num_of_workers=8)
+
+            dataloader_test = load_imagenet_from_directory(
+                directory=CFG_TRAIN_DIR, batchsize=CFG_BATCHSIZE,
+                shuffle=False, subset=1280, require_label=True,
                 num_of_workers=8)
 
             ppq_quant_ir = quantize_torch_model(
                 model=model, calib_dataloader=dataloader, input_shape=CFG_INPUT_SHAPE,
-                calib_steps=5120 // CFG_BATCHSIZE, collate_fn=lambda x: x.to(CFG_DEVICE), verbose=1,
+                calib_steps=1280 // CFG_BATCHSIZE, collate_fn=lambda x: x.to(CFG_DEVICE), verbose=1,
                 device=CFG_DEVICE, platform=CFG_PLATFORM, setting=QUANT_SETTING)
-                
+
+            for op in ppq_quant_ir.operations.values():
+                if isinstance(op, QuantableOperation):
+                    op.dequantize()
+
             ppq_int8_report = evaluate_ppq_module_with_imagenet(
                 model=ppq_quant_ir, imagenet_validation_dir=CFG_VALIDATION_DIR,
-                batchsize=CFG_BATCHSIZE, device=CFG_DEVICE, verbose=True)
+                batchsize=CFG_BATCHSIZE, device=CFG_DEVICE, verbose=True,
+                imagenet_validation_loader=dataloader_test)
+
+            # reports = graphwise_error_analyse(
+            #     graph=ppq_quant_ir, running_device='cpu', steps=32,
+            #     dataloader=dataloader)
+            # for op, snr in reports.items():
+            #     if snr > 0.1: ppq_warning(f'层 {op} 的累计量化误差显著，请考虑进行优化')
+
+            # layerwise_error_analyse(graph=ppq_quant_ir, running_device=CFG_DEVICE,
+            #                         interested_outputs=None,
+            #                         dataloader=dataloader, collate_fn=lambda x: x.to(CFG_DEVICE))
 
             export_ppq_graph(
-                graph=ppq_quant_ir, 
-                platform=TargetPlatform.ONNXRUNTIME,
-                graph_save_to=f'{os.path.join(CFG_DUMP_PATH, model_name)}.onnx')
+                graph=ppq_quant_ir, platform=TargetPlatform.ONNX,
+                graph_save_to = 'model_int8.onnx', config_save_to='model_int8.json')
+
+            # export_ppq_graph(
+            #     graph=ppq_quant_ir, 
+            #     platform=TargetPlatform.ONNXRUNTIME,
+            #     graph_save_to=f'{os.path.join(CFG_DUMP_PATH, model_name)}.onnx')
             
-            evaluate_onnx_module_with_imagenet(
-                onnxruntime_model_path=f'{os.path.join(CFG_DUMP_PATH, model_name)}.onnx', 
-                imagenet_validation_dir=CFG_VALIDATION_DIR, batchsize=CFG_BATCHSIZE, 
-                device=CFG_DEVICE)
+            # evaluate_onnx_module_with_imagenet(
+            #     onnxruntime_model_path=f'{os.path.join(CFG_DUMP_PATH, model_name)}.onnx', 
+            #     imagenet_validation_dir=CFG_VALIDATION_DIR, batchsize=CFG_BATCHSIZE, 
+            #     device=CFG_DEVICE)
     else:
         raise Exception('You may not import this file.')

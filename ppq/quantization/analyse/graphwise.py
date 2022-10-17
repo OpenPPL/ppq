@@ -171,7 +171,7 @@ def graphwise_error_analyse(
 
         if idx >= steps: break
 
-    results = {}
+    results = results_printer = {}
     for operation in interested_op:
         assert isinstance(operation, QuantableOperation)
         results[operation.name+'('+ operation.type+')'] = recorders[operation.name].measure
