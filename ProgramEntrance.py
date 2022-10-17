@@ -146,7 +146,10 @@ with ENABLE_CUDA_KERNEL():
         layerwise_error_analyse(graph=quantized, running_device=EXECUTING_DEVICE,
                                 interested_outputs=None,
                                 dataloader=dataloader, collate_fn=lambda x: x.to(EXECUTING_DEVICE))
-
+    def collect_data(data):
+        img = data
+        return img.cuda()
+    graphwise_error_analyse(quantized, 'cuda', dataloader, collect_data, 'cosine', steps=32)
     # -------------------------------------------------------------------
     # 使用 export_ppq_graph 函数来导出量化后的模型
     # PPQ 会根据你所选择的导出平台来修改模型格式，请知悉：

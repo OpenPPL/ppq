@@ -36,8 +36,7 @@ QUANTIZER_COLLECTION = {
     TargetPlatform.PPL_DSP_TI_INT8: PPL_DSP_TI_Quantizer,
     TargetPlatform.SNPE_INT8:    PPL_DSP_Quantizer,
     TargetPlatform.QNN_DSP_INT8: PPL_DSP_Quantizer,
-    # TargetPlatform.TRT_INT8:     TensorRTQuantizer,
-    TargetPlatform.TRT_INT8:      TensorrtExporter,
+    TargetPlatform.TRT_INT8:     TensorRTQuantizer,
     TargetPlatform.NCNN_INT8:    NCNNQuantizer,
     TargetPlatform.NXP_INT8:     NXP_Quantizer,
     TargetPlatform.ORT_OOS_INT8: ORT_PerTensorQuantizer,
@@ -100,6 +99,7 @@ EXPORTING_POSTFIX = {
     TargetPlatform.METAX_INT8_C:  '.onnx',
     TargetPlatform.METAX_INT8_T:  '.onnx',
     TargetPlatform.TENGINE_INT8:  '.onnx',
+    TargetPlatform.TRT_INT8:      '.onnx'
 }
 
 def load_graph(file_path: str, from_framework: NetworkFramework=NetworkFramework.ONNX, **kwargs) -> BaseGraph:

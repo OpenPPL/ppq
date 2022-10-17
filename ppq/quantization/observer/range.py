@@ -274,10 +274,10 @@ class TorchHistObserver(TorchMinMaxObserver):
             self._hist_scale = hist_range / self._hist_bins
             self._phase = 'Collating Hist'
         elif self._phase == 'Collating Hist':
+            device = self._hist.device
             scale, offset = self.hist_to_scale_offset(
                 histogram=self._hist, hist_bins=self._hist_bins,
-                hist_scale=self._hist_scale, config=self._quant_cfg)
-            device = self._hist.device
+                hist_scale=self._hist_scale, config=self._quant_cfg, computing_device=device)
             self._quant_cfg.scale  = torch.tensor([scale], dtype=torch.float32, device=device).squeeze(0)
             self._quant_cfg.offset = torch.tensor([offset], dtype=torch.float32, device=device).squeeze(0)
             self._quant_cfg.state = QuantizationStates.ACTIVATED

@@ -105,7 +105,8 @@ class TensorRTQuantizer(BaseQuantizer):
             'GlobalMaxPool', 'GlobalAveragePool', 'Softmax',
             'Mul', 'Add', 'Max', 'Sub', 'Div', 'Reshape',
             'LeakyRelu', 'Concat', 'Sigmoid', 'Interp',
-            'ReduceMean', 'Transpose', 'Slice', 'Flatten'
+            'ReduceMean', 'Transpose', 'Slice', 'Flatten',
+            'HardSwish', 'HardSigmoid'
         }
 
     @ property

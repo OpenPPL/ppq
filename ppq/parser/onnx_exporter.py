@@ -7,6 +7,7 @@ import torch
 from onnx import helper, numpy_helper
 from ppq.core import (GRAPH_OPSET_ATTRIB, ONNX_EXPORT_OPSET, ONNX_VERSION,
                       PPQ_CONFIG, DataType, convert_any_to_numpy, ppq_warning)
+from ppq.core.quant import QuantizationStates
 from ppq.IR import (BaseGraph, GraphExporter, Operation, OperationExporter,
                     Variable)
 from ppq.IR.morph import GraphDeviceSwitcher
@@ -60,7 +61,7 @@ def convert_value(value: Union[int, float, np.ndarray, torch.Tensor]) -> str:
     if type(value) in {int, float}: return value
     else:
         value = convert_any_to_numpy(value, accept_none=True)
-        if value is None: return value # SOI config has Nona as its scale and
+        if value is None: return value # SOI config has None as its scale and
         return value.tolist()
 
 
@@ -95,10 +96,11 @@ class OnnxExporter(GraphExporter):
 
                 for config, _ in operation.config_with_variable:
                     if config.dominated_by == config:
-                        render_buffer['values'][config.__hash__()] = {
-                            'scale'      : convert_value(config.scale),
-                            'zero_point' : convert_value(config.offset),
-                        }
+                        if (config.state != QuantizationStates.SOI):
+                            render_buffer['values'][config.__hash__()] = {
+                                'scale'      : convert_value(config.scale),
+                                'zero_point' : convert_value(config.offset),
+                            }
 
                 render_buffer['configs'][operation.name] = op_dict
                 render_buffer['dispatchings'][operation.name] = operation.platform.name

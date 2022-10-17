@@ -55,7 +55,7 @@ PPQ 被设计为一个灵活而全面的神经网络离线量化工具，我们�
 | `TensorRT` |  |  |  |  |
 | 使用 Torch2trt 加速你的网络 | pytorch | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/TensorRT/Example_Torch2trt.py) | [link](https://www.bilibili.com/video/BV1AU4y127Uo) |
 | TensorRT 量化训练 | TensorRT | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/TensorRT/Example_QAT.py) | [link](https://www.bilibili.com/video/BV1AU4y127Uo) |
-| TensorRT 后训练量化(PPQ) | TensorRT | onnx | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/TensorRT/Example_PTQ.py) | [link](https://www.bilibili.com/video/BV1AU4y127Uo) |
+| TensorRT 后训练量化(PPQ) | TensorRT | onnx | [link](https://github.com/openppl-public/ppq/blob/master/md_doc/inference_with_tensorrt.md) |  |
 | TensorRT fp32 部署 | TensorRT | onnx | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/TensorRT/Example_Fp32.py) | [link](https://www.bilibili.com/video/BV1AU4y127Uo) |
 | TensorRT 性能比较 | TensorRT | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/TensorRT/Example_Benchmark.py) | [link](https://www.bilibili.com/video/BV1AU4y127Uo) |
 | TensorRT Profiler | TensorRT | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/TensorRT/Example_Profiling.py) | [link](https://www.bilibili.com/video/BV1AU4y127Uo) |
@@ -120,23 +120,37 @@ ATTENTION: Make sure your Python version is >= 3.6.0. PPL Quantization Tool is w
         * Add your c++ compiler to Windows PATH Environment, if you are using Visual Studio, it should be something like "C:\Program Files\Microsoft Visual Studio\2019\Community\VC\Tools\MSVC\14.16.27023\bin\Hostx86\x86"
         * Update pytorch to 1.10+.
 
+#### There are three ways to install ppq
+
 * Install PPQ from source:
 
-1. Run following code with your terminal(For windows user, use command line instead).
+Run following code with your terminal(For windows user, use command line instead).
 
 ```bash
 git clone https://github.com/openppl-public/ppq.git
 cd ppq
 pip install -r requirements.txt
 python setup.py install
+export PYTHONPATH=${PWD}:${PYTHONPATH}
 ```
 
-2. Wait for Python finish its installation and pray for bug free.
+* Install PPQ from our docker image:
+
+```bash
+docker pull stephen222/ppq:ubuntu18.04_cuda11.4_cudnn8.4_trt8.4.1.5
+
+docker run -it --rm --ipc=host --gpus all --mount type=bind,source=your custom path,target=/workspace stephen222/ppq:ubuntu18.04_cuda11.4_cudnn8.4_trt8.4.1.5 /bin/bash
+
+git clone https://github.com/openppl-public/ppq.git
+cd ppq
+export PYTHONPATH=${PWD}:${PYTHONPATH}
+```
 
 * Install PPQ from Pip:
 
-1. pre-built wheels are maintained in [PPQ](https://pypi.org/project/ppq/), you could simply install ppq with the following command(You should notice that install from pypi might get an outdated version ...)
-
+**Note that this installation method currently does not support tensorrt write parameter quantization, we haven't updated yet**.
+Wait for Python finish its installation and pray for bug free.
+pre-built wheels are maintained in [PPQ](https://pypi.org/project/ppq/), you could simply install ppq with the following command(**You should notice that install from pypi might get an outdated version ...**.)
 ```bash
 python3 -m pip install ppq
 ```

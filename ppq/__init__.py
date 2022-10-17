@@ -1,3 +1,14 @@
+import os
+import warnings
+
+if os.path.dirname(os.path.realpath(__file__)) == os.path.join(
+    os.path.realpath(os.getcwd()), "ppq"
+):
+    message = (
+        "You are importing ppq within its own root folder ({}). "
+    )
+    warnings.warn(message.format(os.getcwd()))
+
 # This file defines export functions & class of PPQ.
 from ppq.api.setting import (ActivationQuantizationSetting, DispatchingTable,
                              EqualizationSetting, GraphFormatSetting,
@@ -47,3 +58,5 @@ from ppq.scheduler import (AggresiveDispatcher, ConservativeDispatcher,
 from ppq.scheduler.perseus import Perseus
 from ppq.utils.round import (ppq_numerical_round, ppq_round_to_power_of_2,
                              ppq_tensor_round)
+import ppq
+print("\033[1;32musing ppq: %s\033[0m" % ppq.__path__)
