@@ -71,13 +71,6 @@ with ENABLE_CUDA_KERNEL():
     for op in ir.operations.values():
         if op.type == 'LayerNormPlugin':
             QS.dispatching_table.append(operation=op.name, platform=TargetPlatform.TRT_INT8)
-
-    # 这个网络是 opset 13 的， 先转换一些不支持的算子...
-    for op in ir.operations.values():
-        if op.type in {'Unsqueeze', 'Squeeze', 'ReduceSum'}:
-            axes = op.inputs[1].value
-            ir.remove_variable(removing_var=op.inputs[1])
-            op.attributes['axes'] = axes.tolist()
     
     qir = quantize_native_model(
         model=ir, calib_dataloader=SAMPLES, calib_steps=32, 
