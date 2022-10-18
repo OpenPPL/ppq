@@ -9,6 +9,7 @@ from ppq.IR.morph import GraphDeviceSwitcher
 from .caffe_exporter import CaffeExporter
 from .onnx_exporter import OnnxExporter
 from .util import convert_value
+from ppq.core import ppq_warning
 
 class TensorrtExporter(GraphExporter):
     def export_quantization_config(self, config_path: str, graph: BaseGraph):
@@ -36,8 +37,8 @@ class TensorrtExporter(GraphExporter):
 
             else:
                 if not hasattr(op, 'config'):
-                    print("\033[1;32mThis op does not write quantization parameters: %s\033[0m" % op.name)
-                    sys.exit(1)
+                    ppq_warning(f'This op does not write quantization parameters: {op.name}.')
+                    continue
                 else:
                     output_cfg = op.config.output_quantization_config[0]
                     trt_range_output = output_cfg.scale.item() * (output_cfg.quant_max - output_cfg.quant_min) / 2
