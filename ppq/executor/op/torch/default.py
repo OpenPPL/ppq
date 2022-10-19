@@ -666,6 +666,13 @@ def Reshape_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackend
         ppq_warning(f'Multi-batch optimization for calibration, change [1, -1] to {[batch,-1]}.')
         shape[0] = batch
 
+    if batch != shape[0]:
+        old_shape = shape.copy()
+        shape[0] = batch
+        new_shape = shape
+        ppq_warning(f'Multi-batch optimization for calibration, change {old_shape} to {new_shape}.')     
+        
+        
     return data.reshape(shape)
 
 
