@@ -36,9 +36,9 @@ If you want to install it, we strongly suggest you install TensorRT through [tar
 
 **Steps**:
 
-- Please refer to the script ProgramEntrance.py
+- Please refer to the script `ProgramEntrance.py`.
 - WORKING_DIRECTORY is the directory where you store data and models, and the quantized results will also be exported to this directory.
-- Create the folder WORKING_DIRECTORY , e.g. `working`, and create the folder `data` in the WORKING_DIRECTORY folder to store data, data can be `.bin` files or `.npy` files arranged in (1,c,h,w) format.
+- Create the folder WORKING_DIRECTORY , e.g. `working`, and create the folder `data` in the WORKING_DIRECTORY folder to store data, data can be `.bin` files or `.npy` files arranged in (1,c,h,w) format.(Note that the data must be preprocessed)
 - Change the name of your model to `model.onnx`, then put it in the WORKING_DIRECTORY folder.
 - TargetPlatform should select `TargetPlatform.TRT_INT8`.
 - MODEL_TYPE choose `NetworkFramework.ONNX`.
