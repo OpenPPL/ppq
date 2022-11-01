@@ -347,6 +347,10 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
                 operation_runtime_hook = hooks[operation.name] if (hooks is not None) and (operation.name in hooks) else None
                 inputs = [var.value for var in operation.inputs]
 
+                for index,var in enumerate(inputs):
+                    if inputs[index].dtype == torch.float64:
+                        inputs[index] = inputs[index].float()
+
                 # if operation is an QuantableOperation, we have to quant its inputs and outputs at first.
                 if isinstance(operation, QuantableOperation):
                     input_configs = [_ for _ in operation.config.input_quantization_config]
