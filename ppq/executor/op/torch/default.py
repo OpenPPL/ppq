@@ -652,26 +652,38 @@ def Reshape_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackend
     if 'allowzero' in op.attributes: raise NotImplemented('Not implemented yet.')
     data, shape = values
 
+    # If the element in shape is a tensor, convert it to a value, for example,
+    # convert [1, tensor(-1)] to [1, -1]
+    shape = [shape[i].item() if hasattr(shape[i], 'item') else shape[i] for i in range(len(shape))]
+
+    # Avoid the element 0 in the shape that comes with onnx, such as [0,-1]
+    if 0 in shape:
+        old_shape = shape.copy()
+        shape = [shape[i] if shape[i] != 0 else data.shape[i] for i in range(len(shape))]
+        new_shape = shape
+        ppq_warning(f'Replaced 0 with shape in input tensor, change {old_shape} to {new_shape}.') 
+
+
+    # Solve bad cases like this: [-1,  2]
+    if shape == [-1, 2]:
+        return data.reshape(shape)
+
     # get the batch of input tensor
     batch = data.shape[0]
 
     # Avoid the element 0 in the shape that comes with onnx, such as [0,-1]
     shape = [shape[i] if shape[i] != 0 else data.shape[i] for i in range(len(shape))]
 
-    # If the element in shape is a tensor, convert it to a value, for example,
-    # convert [1, tensor(-1)] to [1, -1]
-    shape = [shape[i].item() if hasattr(shape[i], 'item') else shape[i] for i in range(len(shape))]
-
     if shape == [1,-1] and batch != shape[0]:
-        ppq_warning(f'Multi-batch optimization for calibration, change [1, -1] to {[batch,-1]}.')
         shape[0] = batch
+        ppq_warning(f'Multi-batch optimization for calibration, change [1, -1] to {[batch,-1]}.')
+        
 
     if batch != shape[0]:
         old_shape = shape.copy()
         shape[0] = batch
         new_shape = shape
         ppq_warning(f'Multi-batch optimization for calibration, change {old_shape} to {new_shape}.')     
-        
         
     return data.reshape(shape)
 
