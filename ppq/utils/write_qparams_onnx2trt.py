@@ -29,7 +29,6 @@ def setDynamicRange(network, json_file):
             tensor_min = -abs(value)
             input_tensor.dynamic_range = (tensor_min, tensor_max)
 
-
     for i in range(network.num_layers):
         layer = network.get_layer(i)
 
@@ -37,12 +36,13 @@ def setDynamicRange(network, json_file):
             tensor = layer.get_output(output_index)
 
             if act_quant.__contains__(tensor.name):
+                print("\033[1;32mWrite quantization parameters:%s\033[0m" % tensor.name)
                 value = act_quant[tensor.name]
                 tensor_max = abs(value)
                 tensor_min = -abs(value)
                 tensor.dynamic_range = (tensor_min, tensor_max)
             else:
-                print("\033[1;32m%s\033[0m" % tensor.name)
+                print("\033[1;31mNo quantization parameters are written: %s\033[0m" % tensor.name)
 
 
 def build_engine(onnx_file, json_file, engine_file):

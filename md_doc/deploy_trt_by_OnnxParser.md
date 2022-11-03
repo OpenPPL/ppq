@@ -1,5 +1,5 @@
 # Deploy Model with TensorRT
-This document describes the quantization deployment process of the TensorRT and how PPQ writes quantization parameters to the onnx and convert to int8-trt engine.
+This document describes the quantization deployment process of the TensorRT and how PPQ writes quantization parameters to the tensorrt engine.
 
 
 ## Environment setup
@@ -32,26 +32,36 @@ If you want to install it, we strongly suggest you install TensorRT through [tar
   source ~/.bashrc
   ```
 
+## Prepare data and models to quantify your network
 
-## Quantize Your Network
-as we have specified in [how_to_use](./how_to_use.md), we should prepare our calibration dataloader, confirm
-the target platform on which we want to deploy our model(*TargetPlatform.TRT_INT8* in this case), load our
-simplified model, initialize quantizer and executor, and then run the quantization process
+**Steps**:
+
+- Please refer to the script `ProgramEntrance.py`.
+- WORKING_DIRECTORY is the directory where you store data and models, and the quantized results will also be exported to this directory.
+- Create the folder WORKING_DIRECTORY , e.g. `working`, and create the folder `data` in the WORKING_DIRECTORY folder to store data, data can be `.bin` files or `.npy` files arranged in (1,c,h,w) format.(Note that the data must be preprocessed)
+- Change the name of your model to `model.onnx`, then put it in the WORKING_DIRECTORY folder.
+- TargetPlatform should select `TargetPlatform.TRT_INT8`.
+- MODEL_TYPE choose `NetworkFramework.ONNX`.
+- NETWORK_INPUTSHAPE fill in the shape of the data, e.g. `[1, 3, 224, 224]`.
+- CALIBRATION_BATCHSIZE is the batch during optimization, it is recommended to set it to 16 or 32 if your computing platform has enough computing power, otherwise, it can also be set to 1.
+- If the last layer of your model is a plugin operator, such as `yolo`, `nms`, etc., please add the following code to the `ProgramEntrance.py` script. The following code uses `yolo` as an example. These three shapes: [1, 36, 19, 19]，[1, 36, 38, 38], [1, 36, 76, 76] correspond to the three outputs of the model.
+
+```bash
+def happyforward(*args, **kwards):
+    return torch.zeros([1, 36, 19, 19]).cuda(), torch.zeros([1, 36, 38, 38]).cuda(), torch.zeros([1, 36, 76, 76]).cuda()
+register_operation_handler(happyforward, 'yolo', platform=TargetPlatform.FP32)
+```
+- Other parameters are default.
+- Run script `python ProgramEntrance.py`
+- After the script is executed, you will get 3 files in your working directory, `quantized.onnx`, `quant_cfg.json`, `quantized.wts`.
+- `quantized.onnx` is is better for quantization that is used to deploy.
+- `quant_cfg.json` contains quantization parameters.
+- `quantized.wts` contains quantized weight parameters, if you want to deploy with trt.OnnxParser, please ignore it. But if you want to deploy with the api that comes with tensorrt, please refer to [Define the model directly using the TensorRT API](https://github.com/openppl-public/ppq/tree/master/md_doc/deploy_trt_by_api.md). 
 
 
 **Note**:
 
 - If you want to quantify a dynamic onnx model, you firstly need to change its inputs and outputs to static.
-
-
-**Steps**:
-
-- Please refer to the script ProgramEntrance.py, just change the variable TARGET_PLATFORM to TargetPlatform.TRT_INT8
-- Create a working directory, e.g. `working`, then create the `data` folder in the working directory as the quantitative dataset path, change the name of the onnx model to model.onnx store it in the working directory.
-- Run script `python ProgramEntrance.py`
-- After the script is executed, you will get two files in your working directory, `quantized.onnx`, `quant_cfg.json`
-- If you want to quantify a dynamic onnx model, you can change `quantized.onnx` to static 
-- Finally, follow the steps below to write the quantization parameters `quant_cfg.json` into the onnx model `quantized.onnx`.
 
 
 ## Convert and Quantify your model
@@ -151,3 +161,5 @@ if __name__ == '__main__':
     trt_feature = np.asarray(trt_feature)
     print(trt_feature)
 ```
+
+## If there is a bad case of the model accuracy dropping, please submit an issue in the ppq community

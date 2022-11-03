@@ -49,7 +49,7 @@ register_operation_handler(
 quant_setting = QuantizationSettingFactory.default_setting()
 
 # For pytorch user, just dump your network to disk with onnx first
-unquantized = load_onnx_graph(file_path='Output/onnx.model')
+unquantized = load_onnx_graph(onnx_import_file='Output/onnx.model')
 
 # Load training data for creating a calibration dataloader.
 calibration_dataset = load_calibration_dataset()
