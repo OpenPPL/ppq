@@ -11,9 +11,33 @@ class PPQTestScheme():
 
 TEST_SCHEMES = [
     PPQTestScheme(
+        name = 'Tengine',
+        quant_platform=TargetPlatform.TENGINE_INT8, 
+        export_platform=TargetPlatform.TENGINE_INT8, 
+        setting=QuantizationSettingFactory.pplcuda_setting()),
+
+    PPQTestScheme(
+        name = 'TRT FP8',
+        quant_platform=TargetPlatform.TRT_FP8, 
+        export_platform=TargetPlatform.TRT_FP8, 
+        setting=QuantizationSettingFactory.default_setting()),
+
+    PPQTestScheme(
+        name = 'TRT INT8',
+        quant_platform=TargetPlatform.TRT_INT8, 
+        export_platform=TargetPlatform.TRT_INT8, 
+        setting=QuantizationSettingFactory.default_setting()),
+    
+    PPQTestScheme(
         name = 'Sensetime Caffe[DSP INT8]',
         quant_platform=TargetPlatform.PPL_DSP_INT8, 
-        export_platform=TargetPlatform.CAFFE, 
+        export_platform=TargetPlatform.PPL_DSP_INT8, 
+        setting=QuantizationSettingFactory.dsp_setting()),
+    
+    PPQTestScheme(
+        name = 'Sensetime Caffe[DSP INT8]',
+        quant_platform=TargetPlatform.SNPE_INT8, 
+        export_platform=TargetPlatform.SNPE_INT8, 
         setting=QuantizationSettingFactory.dsp_setting()),
 
     PPQTestScheme(
@@ -21,17 +45,29 @@ TEST_SCHEMES = [
         quant_platform=TargetPlatform.PPL_CUDA_INT8, 
         export_platform=TargetPlatform.PPL_CUDA_INT8, 
         setting=QuantizationSettingFactory.pplcuda_setting()),
+
+    PPQTestScheme(
+        name = 'Sensetime PPL[GPU INT8 - ONNX RUNTIME EXPORT]',
+        quant_platform=TargetPlatform.PPL_CUDA_INT8, 
+        export_platform=TargetPlatform.ONNXRUNTIME, 
+        setting=QuantizationSettingFactory.pplcuda_setting()),
     
     PPQTestScheme(
         name = 'ONNX RUNTIME[MetaX INT8]',
-        quant_platform=TargetPlatform.PPL_CUDA_INT8, 
+        quant_platform=TargetPlatform.METAX_INT8_T, 
+        export_platform=TargetPlatform.ONNXRUNTIME, 
+        setting=QuantizationSettingFactory.pplcuda_setting()),
+
+    PPQTestScheme(
+        name = 'ONNX RUNTIME[MetaX INT8 Channelwise]',
+        quant_platform=TargetPlatform.METAX_INT8_C, 
         export_platform=TargetPlatform.ONNXRUNTIME, 
         setting=QuantizationSettingFactory.pplcuda_setting()),
 
     PPQTestScheme(
         name = 'ONNX RUNTIME OP ORITNETD[INT8]',
-        quant_platform=TargetPlatform.ORT_OOS_INT8, 
-        export_platform=TargetPlatform.ORT_OOS_INT8, 
+        quant_platform=TargetPlatform.RKNN_INT8, 
+        export_platform=TargetPlatform.RKNN_INT8, 
         setting=QuantizationSettingFactory.pplcuda_setting()),
 
     PPQTestScheme(
@@ -45,4 +81,5 @@ TEST_SCHEMES = [
         quant_platform=TargetPlatform.PPL_CUDA_INT8, 
         export_platform=TargetPlatform.NATIVE, 
         setting=QuantizationSettingFactory.pplcuda_setting()),
+    
 ]

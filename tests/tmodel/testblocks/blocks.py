@@ -1,3 +1,4 @@
+from turtle import forward
 import torch
 
 class TestBlock1(torch.nn.Module):
@@ -270,3 +271,119 @@ class TestBlock19(torch.nn.Module):
         x = self.conv2(x)
         x = self.conv3(x)
         return x
+
+class TestBlock20(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv1 = torch.nn.Conv2d(in_channels=3, out_channels=3, kernel_size=1, padding=1)
+        self.conv2 = torch.nn.Conv2d(in_channels=3, out_channels=3, kernel_size=3, dilation=2, padding=1)
+        self.conv3 = torch.nn.Conv2d(in_channels=3, out_channels=3, kernel_size=3, dilation=2, padding=1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.conv1(x)
+        x = x[0].unsqueeze(0)
+        x = self.conv2(x)
+        x = self.conv3(x)
+        return x
+    
+class TestBlock21(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv1 = torch.nn.Conv2d(in_channels=3, out_channels=12, kernel_size=1, padding=1)
+        self.conv2 = torch.nn.Conv2d(in_channels=6, out_channels=3, kernel_size=3, dilation=1, padding=1)
+        self.conv3 = torch.nn.Conv2d(in_channels=6, out_channels=3, kernel_size=3, dilation=1, padding=1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.conv1(x)
+        x1 = self.conv2(x[:, :6])
+        x2 = self.conv3(x[:, 6:])
+        return x1 + x2
+
+class TestBlock22(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv1 = torch.nn.Conv2d(in_channels=3, out_channels=16, kernel_size=3, stride=2)
+        self.bn1   = torch.nn.BatchNorm2d(num_features=16)
+        self.relu  = torch.nn.ReLU()
+        self.conv2 = torch.nn.Conv2d(in_channels=16, out_channels=16, kernel_size=3, stride=1, padding=1)
+        self.bn2   = torch.nn.BatchNorm2d(num_features=16)
+        self.relu6 = torch.nn.ReLU6()
+        self.conv3 = torch.nn.Conv2d(in_channels=16, out_channels=16, kernel_size=3, stride=1, padding=1)
+        self.bn3   = torch.nn.BatchNorm2d(num_features=16)
+        self.sigmoid = torch.nn.Sigmoid()
+        self.avgpool = torch.nn.AvgPool2d(kernel_size=3)
+        self.maxpool = torch.nn.MaxPool2d(kernel_size=3)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.bn1(self.relu(self.conv1(x)))
+        y = self.relu6(self.bn2(self.conv2(x)))
+        z = self.sigmoid(self.bn3(self.conv3(x)))
+        x = torch.cat([x, y, z], dim=1)
+        x = self.maxpool(self.avgpool(x))
+        return x
+
+class TestBlock23(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv1 = torch.nn.Conv1d(in_channels=3, out_channels=16, kernel_size=3, stride=2)
+        self.bn1   = torch.nn.BatchNorm1d(num_features=16)
+        self.relu  = torch.nn.ReLU()
+        self.conv2 = torch.nn.Conv1d(in_channels=16, out_channels=16, kernel_size=3, stride=1, padding=1)
+        self.bn2   = torch.nn.BatchNorm1d(num_features=16)
+        self.relu6 = torch.nn.ReLU6()
+        self.conv3 = torch.nn.Conv1d(in_channels=16, out_channels=16, kernel_size=3, stride=1, padding=1)
+        self.bn3   = torch.nn.BatchNorm1d(num_features=16)
+        self.sigmoid = torch.nn.Sigmoid()
+        self.avgpool = torch.nn.AvgPool1d(kernel_size=3)
+        self.maxpool = torch.nn.MaxPool1d(kernel_size=3)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.bn1(self.relu(self.conv1(x)))
+        y = self.relu6(self.bn2(self.conv2(x)))
+        z = self.sigmoid(self.bn3(self.conv3(x)))
+        x = torch.cat([x, y, z], dim=1)
+        x = self.maxpool(self.avgpool(x))
+        return x
+
+class TestBlock24(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv1 = torch.nn.Conv3d(in_channels=3, out_channels=16, kernel_size=3, stride=2)
+        self.bn1   = torch.nn.BatchNorm3d(num_features=16)
+        self.relu  = torch.nn.ReLU()
+        self.conv2 = torch.nn.Conv3d(in_channels=16, out_channels=16, kernel_size=3, stride=1, padding=1)
+        self.bn2   = torch.nn.BatchNorm3d(num_features=16)
+        self.relu6 = torch.nn.ReLU6()
+        self.conv3 = torch.nn.Conv3d(in_channels=16, out_channels=16, kernel_size=3, stride=1, padding=1)
+        self.bn3   = torch.nn.BatchNorm3d(num_features=16)
+        self.sigmoid = torch.nn.Sigmoid()
+        self.avgpool = torch.nn.AvgPool3d(kernel_size=3)
+        self.maxpool = torch.nn.MaxPool3d(kernel_size=3)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.bn1(self.relu(self.conv1(x)))
+        y = self.relu6(self.bn2(self.conv2(x)))
+        z = self.sigmoid(self.bn3(self.conv3(x)))
+        x = torch.cat([x, y, z], dim=1)
+        x = self.maxpool(self.avgpool(x))
+        return x
+
+
+class TestBlock25(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.bn1 = torch.nn.BatchNorm2d(num_features=3)
+        self.relu1 = torch.nn.ReLU()
+        self.bn2 = torch.nn.BatchNorm2d(num_features=3)
+        self.relu2 = torch.nn.ReLU()
+        self.bn3 = torch.nn.BatchNorm2d(num_features=3)
+        self.relu3 = torch.nn.ReLU()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.bn1(x)
+        x = self.relu1(x)
+        y = self.bn2(x)
+        z = self.relu2(x)
+        u = self.bn3(z)
+        v = self.relu3(y)
+        return x + y + z + u + v
