@@ -555,7 +555,7 @@ class BaseGraph(Serializable):
             variable.dest_ops.append(downstream_op)
             downstream_op.inputs.append(variable)
             ppq_warning(f'You are trying to link variable with operation, '
-                        f'however Variable {variable.name} has already linked with downstream op {downstream_op.name}')
+                          f'however Variable {variable.name} has already linked with downstream op {downstream_op.name}')
 
     def create_link_with_var(self, upstream_variable: Variable, downstream_variable: Variable):
         """connect upstream_variable.source_op with
@@ -611,7 +611,8 @@ class BaseGraph(Serializable):
 
         # remove operation from its input variables
         for input_var in removing_op.inputs:
-            input_var.dest_ops.remove(removing_op)
+            if removing_op in input_var.dest_ops:
+                input_var.dest_ops.remove(removing_op)
         removing_op.inputs.clear()
 
         self.operations.pop(removing_op.name)

@@ -332,7 +332,7 @@ class PatternMatchHelper:
         for operation in graph.operations.values():
             root_idx = node_order[0]
             if pattern.node_patterns[root_idx](operation):
-                matched_patterns.append([operation])
+                matched_patterns.append([operation] + [None for _ in range(len(node_order) - 1)])
 
         for idx in node_order[1: ]:
             node_candidates, next_generation = [], []
@@ -362,7 +362,9 @@ class PatternMatchHelper:
                             exclusive_check = False
 
                     if link_check and duplicated_check and exclusive_check:
-                        next_generation.append(matched_pattern + [operation])
+                        generated = matched_pattern.copy()
+                        generated[idx] = operation
+                        next_generation.append(generated)
  
             matched_patterns = next_generation
             if len(matched_patterns) > max_candidates:
@@ -374,15 +376,14 @@ class PatternMatchHelper:
         if exclusive:
             filtered = []
             for matched_pattern in matched_patterns:
+                check_flag = True
                 for idx, operation in enumerate(matched_pattern):
                     if len(pattern.output_table[idx]) != 0:
-                        if all([op in matched_pattern for op in graph.get_downstream_operations(operation)]):
-                            filtered.append(matched_pattern)
+                        if not all([op in matched_pattern for op in graph.get_downstream_operations(operation)]):
+                            check_flag = False
+                if check_flag:
+                    filtered.append(matched_pattern)
             matched_patterns = filtered
-        
-        # matched pattern are listed in topological order, reorder them to pattern order.
-        for idx, matched_pattern in enumerate(matched_patterns):
-            matched_patterns[idx] = [matched_pattern[re] for re in pattern.argsort_order]
         return matched_patterns
 
 
