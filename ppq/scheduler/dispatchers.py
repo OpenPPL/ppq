@@ -35,9 +35,10 @@ class AggresiveDispatcher(GraphDispatcher):
         self.graph = graph
         
     def dispatch(
-        self, quant_platform: TargetPlatform,
-        fp32_platform: TargetPlatform,
-        SOI_platform: TargetPlatform,
+        self, 
+        quant_platform: TargetPlatform = TargetPlatform.UNSPECIFIED,
+        fp32_platform: TargetPlatform = TargetPlatform.FP32,
+        SOI_platform: TargetPlatform = TargetPlatform.SOI,
         **kwargs
         ) -> Dict[str, TargetPlatform]:
         """Graph Dispatcher splits a graph into parts, each part of graph will
@@ -158,9 +159,9 @@ class ConservativeDispatcher(GraphDispatcher):
 
     def dispatch(
         self, quant_types: Set[str],
-        quant_platform: TargetPlatform,
-        fp32_platform: TargetPlatform,
-        SOI_platform: TargetPlatform, **kwargs
+        quant_platform: TargetPlatform = TargetPlatform.UNSPECIFIED,
+        fp32_platform: TargetPlatform = TargetPlatform.FP32,
+        SOI_platform: TargetPlatform = TargetPlatform.SOI, **kwargs
         ) -> Dict[str, TargetPlatform]:
         """Graph Dispatcher splits a graph into parts, each part of graph will
         be sent to a specific platform for further execution and quantization.
@@ -299,9 +300,9 @@ class PPLNNDispatcher(GraphDispatcher):
 
     def dispatch(
         self, quant_types: Set[str],
-        quant_platform: TargetPlatform,
-        fp32_platform: TargetPlatform,
-        SOI_platform: TargetPlatform, **kwargs
+        quant_platform: TargetPlatform = TargetPlatform.UNSPECIFIED,
+        fp32_platform: TargetPlatform = TargetPlatform.FP32,
+        SOI_platform: TargetPlatform = TargetPlatform.SOI, **kwargs
         ) -> Dict[str, TargetPlatform]:
         """Graph Dispatcher splits a graph into parts, each part of graph will
         be sent to a specific platform for further execution and quantization.
@@ -438,9 +439,9 @@ class PointDispatcher(ConservativeDispatcher):
 
     def dispatch(
         self, quant_types: Set[str],
-        quant_platform: TargetPlatform,
-        fp32_platform: TargetPlatform,
-        SOI_platform: TargetPlatform, **kwargs
+        quant_platform: TargetPlatform = TargetPlatform.UNSPECIFIED,
+        fp32_platform: TargetPlatform = TargetPlatform.FP32,
+        SOI_platform: TargetPlatform = TargetPlatform.SOI, **kwargs
         ) -> Dict[str, TargetPlatform]:
         """Graph Dispatcher splits a graph into parts, each part of graph will
         be sent to a specific platform for further execution and quantization.

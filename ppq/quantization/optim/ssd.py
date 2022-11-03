@@ -5,7 +5,7 @@ import torch
 import torch.nn.functional as F
 from ppq.core import QuantizationProperty, QuantizationStates
 from ppq.executor import BaseGraphExecutor
-from ppq.executor.base import GLOBAL_DISPATCHING_TABLE
+from ppq.executor.base import OPERATION_FORWARD_TABLE
 from ppq.IR import BaseGraph, Operation, QuantableOperation, Variable
 from ppq.IR.search import Path, SearchableGraph, TraversalCommand
 from ppq.log import NaiveLogger
@@ -405,7 +405,7 @@ class SSDEqualizationPass(QuantizationOptimizationPass):
             else:
                 inputs_quant = inputs
 
-            f = GLOBAL_DISPATCHING_TABLE[op.platform][op.type]
+            f = OPERATION_FORWARD_TABLE[op.platform][op.type]
             outputs = f(op, inputs_quant)
             outputs = outputs if isinstance(outputs, (list, tuple)) else [outputs]
 

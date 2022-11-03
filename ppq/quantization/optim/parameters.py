@@ -186,7 +186,7 @@ class ParameterQuantizePass(QuantizationOptimizationPass):
                 # deactivate non-parameter variable quantization just for now
                 if not var.is_parameter:
                     state_records[config] = config.state
-                    config.state = QuantizationStates.DEQUANTIZED
+                    config.state = QuantizationStates.FP32
                 elif self._method is not None:
                     # override quantizer's setting if necessary
                     config.observer_algorithm = self._method

@@ -67,6 +67,6 @@ for operation in quantized.operations.values():
             if var.is_parameter and cfg.state == QuantizationStates.BAKED:
                 print(f'Variable {var.name} is pre-baked, simply overriding its state takes no effects.')
             else:
-                # once state is changed to DEACTIVATED
+                # once state is changed to FP32
                 # executor will skip this quantization during executing.
-                cfg.state = QuantizationStates.DEACTIVATED
+                cfg.state = QuantizationStates.FP32

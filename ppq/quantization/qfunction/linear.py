@@ -173,9 +173,17 @@ class ChannelwiseDynamicLinearQuantImpl(Function):
         return dy, None
 
 def PPQDyamicLinearQuantFunction(tensor: torch.Tensor, config: TensorQuantizationConfig) -> torch.Tensor:
-    """PPQ 动态量化函数
+    """
+    Dynamic Linear Quantization Function(PPQ 动态量化函数).
+    
+    When calling this method, we firstly solve a scale & offset setting by min-max observer.
+    
+    Then we applys ordinary Linear Quantization Function with solved setting.
+    
+    If there is a pre-defined scale & offset within given config, they will be dropped without warning.
     
     动态量化函数将在执行量化之前统计出 tensor 的 min - max, 而后计算出 scale & offset 并完成量化
+    
     此时 TQC 中的 scale 与 offset 将被忽略
     """
     if not QuantizationStates.is_activated(config.state): return tensor

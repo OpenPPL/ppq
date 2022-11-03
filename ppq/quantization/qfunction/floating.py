@@ -19,7 +19,7 @@ class TensorwiseFloatingQuantImpl(Function):
     """
     @ staticmethod
     def forward(ctx, tensor: torch.Tensor, scales: torch.Tensor, offsets: torch.Tensor,
-                mantissa_bits: int, exponet_bits: int,
+                exponet_bits: int, mantissa_bits: int,
                 quant_min: float, quant_max: float,
                 rounding: RoundingPolicy) -> torch.Tensor:
 

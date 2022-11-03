@@ -17,7 +17,7 @@ class GraphDispatcher:
         if operation is sent to a fp32 platform, then its inputs and outputs shall never be quantized.
     """
     @ abstractmethod
-    def dispatch(self, **kwargs) -> Dict[str, TargetPlatform]:
+    def dispatch(self, quant_types: Set[str], **kwargs) -> Dict[str, TargetPlatform]:
         """Graph Dispatcher splits a graph into parts, each part of graph will
         be sent to a specific platform for further execution and quantization.
         """

@@ -16,9 +16,9 @@ class AllinDispatcher(GraphDispatcher):
 
     def dispatch(
         self, quant_types: Set[str],
-        quant_platform: TargetPlatform,
-        fp32_platform: TargetPlatform,
-        SOI_platform: TargetPlatform, **kwargs
+        quant_platform: TargetPlatform = TargetPlatform.UNSPECIFIED,
+        fp32_platform: TargetPlatform = TargetPlatform.FP32,
+        SOI_platform: TargetPlatform = TargetPlatform.SOI, **kwargs
         ) -> Dict[str, TargetPlatform]:
         """
             We assume all ops in origin model can be quant.

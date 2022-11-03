@@ -3,8 +3,8 @@ from collections import deque
 from typing import Any, Dict, List, Text, Union
 
 import torch
-from ppq.core import (LINEAR_ACTIVATIONS, NetworkFramework, Serializable,
-                      SingletonMeta, TargetPlatform, TensorMeta,
+from ppq.core import (LINEAR_ACTIVATIONS, DataType, NetworkFramework,
+                      Serializable, SingletonMeta, TargetPlatform, TensorMeta,
                       convert_any_to_torch_tensor, ppq_warning)
 
 from .opdef import (DEFAULT_SOCKET_CREATOR, DEFAULT_SOCKET_TABLE,
@@ -123,6 +123,17 @@ class Variable(Serializable):
             if dest_op.meta_data is not None:
                 dest_op.meta_data.input_metas[dest_idx].shape = new_shape
 
+    @ property
+    def dtype(self) -> DataType:
+        """ Return tensor shape of this variable
+        It is modifiable when current variable is not a paramter.
+        """
+        if self.value is not None: 
+            return self.value.dtype
+        if self.meta is not None:
+            return self.meta.dtype
+        else: return DataType.NONETYPE
+
     def copy(self, copy_value: bool = False):
         if not copy_value or self.value is None:
             return Variable(name=self.name, value=self.value, is_parameter=self.is_parameter)
@@ -152,8 +163,6 @@ class Operation(OperationBase, Serializable):
         if self.type in DEFAULT_SOCKET_TABLE:
             return DEFAULT_SOCKET_TABLE[self.type](self)
         else: 
-            ppq_warning(f'Can not initilize OpSocket for {self.name}, OpType {self.type} is not supported. '
-                        'You are recommend to register a opsocket for it first.')
             return DEFAULT_SOCKET_CREATOR(self)
 
     @ property
@@ -210,6 +219,7 @@ class Operation(OperationBase, Serializable):
             platform=self.platform, 
             opset=self.opset)
         clone.meta_data = self.meta_data.copy()
+        clone._detail = self._detail.copy()
         return clone
 
 
@@ -261,6 +271,13 @@ class BaseGraph(Serializable):
     @ property
     def outputs(self) -> Dict[str, Variable]:
         return self._graph_outputs
+
+    def parameters(self) -> List[torch.Tensor]:
+        parameters = []
+        for var in self.variables.values():
+            if var.is_parameter: 
+                parameters.append(var.value)
+        return parameters
 
     def set_extension_attrib(self, attrib: str, value: Any):
         self._detail[attrib] = value
@@ -534,8 +551,11 @@ class BaseGraph(Serializable):
         if downstream_op is not None and variable not in downstream_op.inputs:
             variable.dest_ops.append(downstream_op)
             downstream_op.inputs.append(variable)
-        else: ppq_warning(f'You are trying to link variable with operation, '
-                          f'however Variable {variable.name} has already linked with downstream op {downstream_op.name}')
+        else: 
+            variable.dest_ops.append(downstream_op)
+            downstream_op.inputs.append(variable)
+            ppq_warning(f'You are trying to link variable with operation, '
+                        f'however Variable {variable.name} has already linked with downstream op {downstream_op.name}')
 
     def create_link_with_var(self, upstream_variable: Variable, downstream_variable: Variable):
         """connect upstream_variable.source_op with
@@ -850,6 +870,7 @@ class BaseGraph(Serializable):
                 raise KeyError(f'Graph Copy Error, Output {var.name} is Missing')
         cloned._num_of_generated_op  = self._num_of_generated_op
         cloned._num_of_generated_var = self._num_of_generated_var
+        cloned._detail = self._detail.copy()
         return cloned
 
 

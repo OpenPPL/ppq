@@ -138,7 +138,7 @@ class QuantableOperation(Operation):
                 var.value = convert_any_to_torch_tensor(var.value, device=None)
                 var.value = convert_any_to_torch_tensor(var.stored_value, device=var.value.device)
                 var.stored_value = stored_value
-            quant_config.state = QuantizationStates.DEQUANTIZED
+            quant_config.state = QuantizationStates.FP32
         self._dequantized = True
         return self
 

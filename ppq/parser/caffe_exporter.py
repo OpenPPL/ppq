@@ -47,10 +47,7 @@ class CaffeExporter(GraphExporter):
                         continue
 
                 if config.state in {
-                    QuantizationStates.SOI,
-                    QuantizationStates.DEACTIVATED,
-                    QuantizationStates.DEQUANTIZED,
-                    QuantizationStates.FP32
+                    QuantizationStates.FP32,
                 }: continue
                 # Simply override recorder is acceptable here,
                 # we do not support mix precision quantization for CUDA backend now.
@@ -164,6 +161,7 @@ class CaffeExporter(GraphExporter):
         self.dump_to_file(caffe_model = caffe_model,
             caffe_proto = caffe_proto, file_path = file_path)
 
+
 class SNPECaffeExporter(CaffeExporter):
     def export_quantization_config(self, config_path: str, graph: BaseGraph):
         var_quant_info_recorder = {}
@@ -183,10 +181,7 @@ class SNPECaffeExporter(CaffeExporter):
                         continue
 
                 if config.state in {
-                    QuantizationStates.SOI,
-                    QuantizationStates.DEACTIVATED,
-                    QuantizationStates.DEQUANTIZED,
-                    QuantizationStates.FP32
+                    QuantizationStates.FP32,
                 }: continue
                 # Simply override recorder is acceptable here,
                 # we do not support mix precision quantization for CUDA backend now.

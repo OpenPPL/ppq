@@ -9,20 +9,20 @@ from ppq.IR import BaseGraph, Operation
 from .base import BaseQuantizer
 
 
-class GraphCoreFP8Quantizer(BaseQuantizer):
+class GraphCoreQuantizer(BaseQuantizer):
     def __init__(
         self, graph: BaseGraph
     ) -> Union[torch.Tensor, list, dict]:
         super().__init__(graph=graph)
         self._num_of_bits    = 8
-        self._exponenet_bits = 4
+        self._exponent_bits  = 4
         self._quant_min      = - 448.0
         self._quant_max      = + 448.0
 
     def init_quantize_config(self, operation: Operation) -> OperationQuantizationConfig:
         base_quant_config = self.create_default_quant_config(
             policy=self.quantize_policy, rounding=self.rounding_policy,
-            op=operation, num_of_bits=self._num_of_bits, exponent_bits=self._exponenet_bits,
+            op=operation, num_of_bits=self._num_of_bits, exponent_bits=self._exponent_bits,
             quant_max=self._quant_max, quant_min=self._quant_min, observer_algorithm='floating')
 
         # 一些特殊的算子需要更复杂的量化逻辑，我们在下面的代码中对量化信息进行调整
@@ -104,20 +104,20 @@ class GraphCoreFP8Quantizer(BaseQuantizer):
 
 
 
-class TensorRTFP8Quantizer(BaseQuantizer):
+class TensorRTQuantizer_FP8(BaseQuantizer):
     def __init__(
         self, graph: BaseGraph
     ) -> Union[torch.Tensor, list, dict]:
         super().__init__(graph=graph)
         self._num_of_bits    = 8
-        self._exponenet_bits = 4
+        self._exponent_bits = 4
         self._quant_min      = - 448.0
         self._quant_max      = + 448.0
 
     def init_quantize_config(self, operation: Operation) -> OperationQuantizationConfig:
         base_quant_config = self.create_default_quant_config(
             policy=self.quantize_policy, rounding=self.rounding_policy,
-            op=operation, num_of_bits=self._num_of_bits, exponent_bits=self._exponenet_bits,
+            op=operation, num_of_bits=self._num_of_bits, exponent_bits=self._exponent_bits,
             quant_max=self._quant_max, quant_min=self._quant_min, observer_algorithm='floating')
 
         # 一些特殊的算子需要更复杂的量化逻辑，我们在下面的代码中对量化信息进行调整

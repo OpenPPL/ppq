@@ -19,6 +19,15 @@ class BaseQuantizer(metaclass = ABCMeta):
         graph: BaseGraph,
         verbose: bool = True
     ) -> None:
+        """
+
+        Args:
+            graph (BaseGraph): _description_
+            verbose (bool, optional): _description_. Defaults to True.
+
+        Raises:
+            TypeError: _description_
+        """
         if not isinstance(graph, BaseGraph):
             raise TypeError(f'To initialize a Quantizer, a BaseGraph instance is needed.'\
                 f' While {type(graph)} was givne, if your graph is maintained by GraphCommandProcessor, '\
@@ -89,19 +98,24 @@ class BaseQuantizer(metaclass = ABCMeta):
         if platform is not None: converting_operation.platform = platform
         else: platform = converting_operation.platform
 
-        # create quantize config and convert operation.
-        self._processor(QuantizeOperationCommand(
-            op_name=op_name, target_platform=platform,
-            config=self.init_quantize_config(operation=converting_operation)
-        ))
+        # if platform == TargetPlatform.UNSPECIFIED we can skip its quantization when type is not supported.
+        if platform == TargetPlatform.UNSPECIFIED and converting_operation.type not in self.quant_operation_types:
+            return self._graph.operations[op_name]
+
+        if TargetPlatform.is_quantized_platform(platform):
+            # create quantize config and convert operation.
+            self._processor(QuantizeOperationCommand(
+                op_name=op_name, target_platform=platform,
+                config=self.init_quantize_config(operation=converting_operation)
+            ))
         return self._graph.operations[op_name]
 
     @ staticmethod
     def create_default_quant_config(
-        op: Operation, num_of_bits: int, exponent_bits: int,
+        op: Operation, num_of_bits: int,
         quant_min: Union[int, float], quant_max: Union[int, float], 
         observer_algorithm: str, policy: QuantizationPolicy, 
-        rounding: RoundingPolicy,
+        rounding: RoundingPolicy, exponent_bits: int = 0,
     ) -> OperationQuantizationConfig:
         """
         为你的算子创建一个默认量化信息
@@ -164,7 +178,7 @@ class BaseQuantizer(metaclass = ABCMeta):
                 if target_plat == TargetPlatform.FP32:
                     state = QuantizationStates.FP32
                 if target_plat == TargetPlatform.SOI:
-                    state = QuantizationStates.SOI
+                    state = QuantizationStates.FP32
             input_cfgs.append(TensorQuantizationConfig(
                 policy=policy, rounding=rounding,
                 num_of_bits=num_of_bits, scale=None, offset=None,
@@ -180,7 +194,7 @@ class BaseQuantizer(metaclass = ABCMeta):
                 if target_plat == TargetPlatform.FP32:
                     state = QuantizationStates.FP32
                 if target_plat == TargetPlatform.SOI:
-                    state = QuantizationStates.SOI
+                    state = QuantizationStates.FP32
             output_cfgs.append(TensorQuantizationConfig(
                 policy=policy, rounding=rounding, num_of_bits=num_of_bits, scale=None, offset=None,
                 exponent_bits=exponent_bits, quant_min=quant_min, quant_max=quant_max,
@@ -236,10 +250,6 @@ class BaseQuantizer(metaclass = ABCMeta):
         assert isinstance(setting, QuantizationSetting), (
             f'PPQ needs a OptimSetting instance to initialize optimization pipeline,'
             f' however {type(setting)} was given.')
-
-        if setting.advanced_optimization == True:
-            ppq_warning('PPQ Advanced optimization has been removed since 0.6.5, use setting.finetune = True instead')
-            ppq_warning('PPQ Advanced optimization 在 0.6.5 版本中已经被移除且不会起到任何效果，作为替代方案我们建议你使用 setting.lsq_optimization = True')
 
         if setting.matrix_factorization == True:
             ppq_warning('PPQ Matrix Factorization Pass has been removed from QuantizationSetting since 0.6.5, this pass must be called manually now.')

@@ -9,30 +9,18 @@ from ppq.IR import BaseGraph, Operation, QuantableOperation
 
 import torch
 
-GLOBAL_DISPATCHING_TABLE = {platform:{} for platform in TargetPlatform}
-GLOBAL_DISPATCHING_TABLE[TargetPlatform.FP32]          = DEFAULT_BACKEND_TABLE
-GLOBAL_DISPATCHING_TABLE[TargetPlatform.TRT_INT8]      = PPL_GPU_BACKEND_TABLE
-GLOBAL_DISPATCHING_TABLE[TargetPlatform.NCNN_INT8]     = DEFAULT_BACKEND_TABLE
-GLOBAL_DISPATCHING_TABLE[TargetPlatform.TENGINE_INT8]  = DEFAULT_BACKEND_TABLE
-GLOBAL_DISPATCHING_TABLE[TargetPlatform.FPGA_INT8]     = DEFAULT_BACKEND_TABLE
+OPERATION_FORWARD_TABLE = {platform: DEFAULT_BACKEND_TABLE.copy() for platform in TargetPlatform}
 
-GLOBAL_DISPATCHING_TABLE[TargetPlatform.PPL_CUDA_INT8] = PPL_GPU_BACKEND_TABLE
-GLOBAL_DISPATCHING_TABLE[TargetPlatform.PPL_CUDA_INT4] = PPL_GPU_BACKEND_TABLE
+OPERATION_FORWARD_TABLE[TargetPlatform.TRT_INT8]      = PPL_GPU_BACKEND_TABLE
+OPERATION_FORWARD_TABLE[TargetPlatform.PPL_CUDA_INT8] = PPL_GPU_BACKEND_TABLE
+OPERATION_FORWARD_TABLE[TargetPlatform.PPL_CUDA_INT4] = PPL_GPU_BACKEND_TABLE
 
-GLOBAL_DISPATCHING_TABLE[TargetPlatform.UNSPECIFIED]   = DEFAULT_BACKEND_TABLE
-GLOBAL_DISPATCHING_TABLE[TargetPlatform.PPL_DSP_INT8]  = PPL_DSP_BACKEND_TABLE
-GLOBAL_DISPATCHING_TABLE[TargetPlatform.PPL_DSP_TI_INT8] = PPL_DSP_BACKEND_TABLE
-GLOBAL_DISPATCHING_TABLE[TargetPlatform.NXP_INT8]      = NXP_BACKEND_TABLE
-GLOBAL_DISPATCHING_TABLE[TargetPlatform.SOI]           = DEFAULT_BACKEND_TABLE
+OPERATION_FORWARD_TABLE[TargetPlatform.PPL_DSP_INT8]    = PPL_DSP_BACKEND_TABLE
+OPERATION_FORWARD_TABLE[TargetPlatform.PPL_DSP_TI_INT8] = PPL_DSP_BACKEND_TABLE
+OPERATION_FORWARD_TABLE[TargetPlatform.NXP_INT8]      = NXP_BACKEND_TABLE
 
-GLOBAL_DISPATCHING_TABLE[TargetPlatform.RKNN_INT8]     = DEFAULT_BACKEND_TABLE
-GLOBAL_DISPATCHING_TABLE[TargetPlatform.METAX_INT8_C]  = DEFAULT_BACKEND_TABLE
-GLOBAL_DISPATCHING_TABLE[TargetPlatform.METAX_INT8_T]  = DEFAULT_BACKEND_TABLE
-GLOBAL_DISPATCHING_TABLE[TargetPlatform.GRAPHCORE_FP8] = DEFAULT_BACKEND_TABLE
-GLOBAL_DISPATCHING_TABLE[TargetPlatform.TRT_FP8]       = DEFAULT_BACKEND_TABLE
+OPERATION_FORWARD_TABLE[TargetPlatform.EXTENSION]     = EXTENSION_BACKEND_TABLE
 
-GLOBAL_DISPATCHING_TABLE[TargetPlatform.EXTENSION]     = EXTENSION_BACKEND_TABLE
-GLOBAL_DISPATCHING_TABLE[TargetPlatform.OPENVINO_INT8] = DEFAULT_BACKEND_TABLE
 
 def register_operation_handler(handler: Callable, operation_type: str, platform: TargetPlatform):
     """Regitser a custimized function as operation handler.
@@ -52,9 +40,9 @@ def register_operation_handler(handler: Callable, operation_type: str, platform:
         ValueError: _description_
         ValueError: _description_
     """
-    if platform not in GLOBAL_DISPATCHING_TABLE:
+    if platform not in OPERATION_FORWARD_TABLE:
         raise ValueError('Unknown Platform detected, Please check your platform setting.')
-    GLOBAL_DISPATCHING_TABLE[platform][operation_type] = handler
+    OPERATION_FORWARD_TABLE[platform][operation_type] = handler
 
 
 class RuntimeHook(metaclass=ABCMeta):

@@ -108,7 +108,7 @@ class TargetPlatform(Enum):
             cls.PPL_DSP_INT8, cls.PPL_DSP_TI_INT8, cls.QNN_DSP_INT8, cls.TRT_INT8, cls.NCNN_INT8, cls.NXP_INT8,
             cls.SNPE_INT8, cls.PPL_CUDA_INT8, cls.PPL_CUDA_INT4, cls.EXTENSION, cls.PPL_CUDA_MIX, cls.RKNN_INT8,
             cls.METAX_INT8_C, cls.METAX_INT8_T, cls.OPENVINO_INT8, cls.FPGA_INT8, cls.TENGINE_INT8, 
-            cls.FP8, cls.GRAPHCORE_FP8, cls.TRT_FP8}
+            cls.FP8, cls.GRAPHCORE_FP8, cls.TRT_FP8, cls.UNSPECIFIED}
 
 
 class RoundingPolicy(Enum):
@@ -266,14 +266,14 @@ class QuantizationPolicy:
             QuantizationProperty.SYMMETRICAL | QuantizationProperty.LINEAR | QuantizationProperty.PER_CHANNEL | QuantizationProperty.POWER_OF_2,
             
             # Low Precision Float Quantization
-            QuantizationProperty.SYMMETRICAL | QuantizationProperty.FLOATING | QuantizationProperty.PER_CHANNEL,
-            QuantizationProperty.SYMMETRICAL | QuantizationProperty.FLOATING | QuantizationProperty.PER_TENSOR,
-            QuantizationProperty.ASYMMETRICAL | QuantizationProperty.FLOATING | QuantizationProperty.PER_CHANNEL,
-            QuantizationProperty.ASYMMETRICAL | QuantizationProperty.FLOATING | QuantizationProperty.PER_TENSOR,
+            # QuantizationProperty.SYMMETRICAL | QuantizationProperty.FLOATING | QuantizationProperty.PER_CHANNEL,
+            # QuantizationProperty.SYMMETRICAL | QuantizationProperty.FLOATING | QuantizationProperty.PER_TENSOR,
+            # QuantizationProperty.ASYMMETRICAL | QuantizationProperty.FLOATING | QuantizationProperty.PER_CHANNEL,
+            # QuantizationProperty.ASYMMETRICAL | QuantizationProperty.FLOATING | QuantizationProperty.PER_TENSOR,
             QuantizationProperty.SYMMETRICAL | QuantizationProperty.FLOATING | QuantizationProperty.PER_CHANNEL | QuantizationProperty.POWER_OF_2,
             QuantizationProperty.SYMMETRICAL | QuantizationProperty.FLOATING | QuantizationProperty.PER_TENSOR | QuantizationProperty.POWER_OF_2,
-            QuantizationProperty.ASYMMETRICAL | QuantizationProperty.FLOATING | QuantizationProperty.PER_CHANNEL | QuantizationProperty.POWER_OF_2,
-            QuantizationProperty.ASYMMETRICAL | QuantizationProperty.FLOATING | QuantizationProperty.PER_TENSOR | QuantizationProperty.POWER_OF_2,
+            # QuantizationProperty.ASYMMETRICAL | QuantizationProperty.FLOATING | QuantizationProperty.PER_CHANNEL | QuantizationProperty.POWER_OF_2,
+            # QuantizationProperty.ASYMMETRICAL | QuantizationProperty.FLOATING | QuantizationProperty.PER_TENSOR | QuantizationProperty.POWER_OF_2,
 
             # Dynamic Activation Quantization
             QuantizationProperty.SYMMETRICAL | QuantizationProperty.LINEAR | QuantizationProperty.PER_TENSOR | QuantizationProperty.DYNAMIC,
@@ -303,7 +303,7 @@ class QuantizationStates(Enum):
 
     ATTENTION: Changes of QuantizationState will greatly affect execution result.
 
-    For a TensorQuantizationConfig instance, there are 11 available quantization states now.
+    For a TensorQuantizationConfig instance, there are 9 available quantization states now.
     Only when state is ACTIVATED or NEGATIVE, corresponding tensor will be quantized during the execution.
 
     Here we give a brief description of each quantization state:
@@ -316,24 +316,12 @@ class QuantizationStates(Enum):
             For padding value and clip value, it shares the same scale with its input.
         Those parameters will have a PASSIVE_INIT state when created.
 
-        ATTENTION: if there is any quantization configuration with INITIAL or PASSIVE_INIT state, PPQ will refuse
-            to deploy your model and an error will be thrown.
-            This inspection will be ignored when PPQ.core.config.DEBUG set as True.
-
         OVERLAPPED: state OVERLAPPED means there is someone else takes control of current tensor,
         and overlapped tensor quantization configuration will be ignored by optimization algorithms and executor.
 
         Graph fusion always generate overlapped quantization, for a typical conv - relu fusion,
         the output quantization of convolution will be overlapped by the output tensor of relu.
         State OVERLAPPED cares only about quantization behaviour that cross layers.
-
-        DEACTIVATED: state DEACTIVATED is related with "dequantize" function, once an operation is dequantized,
-        all related tensor configurations will be replaced as DEACTIVATED, so that skipping all quantization during
-        execution.
-
-        SOI: whenever a tensor quantization configuration holds SOI state,
-            it will be never quantized and will not be included into any optimization algorithm.
-        it means underlying tensor is SOI-related tensor, and it can not be quantized.
 
         ACTIVATE: means corresponding tensor is ready to be quantized with its configuration.
 
@@ -343,17 +331,19 @@ class QuantizationStates(Enum):
         BAKED: means corresponding tensor has been pre-quantized, its value can directly
             go forward without quantization.
     """
-    INITIAL     = 1   # 量化参数刚刚被初始化，当前 config 不生效，数据不能被使用
-    BAKED       = 2   # 只针对参数量化，表示参数已经被静态量化，当前 config 不生效，数据可以直接使用
-    OVERLAPPED  = 3   # 只针对activation量化，表示数据流的量化由其他 config 管理，当前 config 不生效
-    DEACTIVATED = 5   # 表示当前 config 不生效
-    ACTIVATED   = 6   # 表示当前 config 生效
-    DEQUANTIZED = 7   # 表示当前 config 处于解量化状态，解量化是 PPQ 的一个系统操作
-    SOI         = 8   # 表示这一路输入与 Shape or index 相关，不量化
-    PASSIVE     = 9   # 表示这一路输入被动量化，如 bias, clip value 等，被动量化参数使用其他 TQC 的量化信息完成量化
-    PASSIVE_INIT = 10  # 表示这一路输入被动量化，并且刚刚初始化不能被使用
-    PASSIVE_BAKED = 11 # 被动量化且静态量化，当前config不生效，数据可以直接使用
-    FP32          = 12 # 表示这一路输入直接为FP32浮点数
+    INITIAL       = 1 # 量化参数刚刚被初始化，当前 config 不生效，数据不能被使用
+    ACTIVATED     = 4 # 表示当前 config 生效
+    BAKED         = 2 # 只针对参数量化，表示参数已经被静态量化，当前 config 不生效，数据可以直接使用
+    OVERLAPPED    = 3 # 表示这一路输入不量化，当前量化信息被父量化信息所覆盖
+
+    PASSIVE_INIT  = 6 # 表示这一路输入被动量化，并且刚刚初始化不能被使用
+    PASSIVE       = 5 # 表示这一路输入被动量化，如 bias, clip value 等，被动量化参数使用其他 TQC 的量化信息完成量化
+    PASSIVE_BAKED = 7 # 被动量化且静态量化，当前config不生效，数据可以直接使用
+    FP32          = 8 # 表示这一路输入不量化
+    
+    SOI           = -1 # Legacy State
+    DEQUANTIZED   = -2 # Legacy State
+    DEACTIVED     = -3 # Legacy State
 
     @ classmethod
     def is_activated(cls, state)->bool:
@@ -361,32 +351,144 @@ class QuantizationStates(Enum):
 
     @ classmethod
     def can_export(cls, state) -> bool:
-        return state not in {QuantizationStates.INITIAL, QuantizationStates.DEACTIVATED,
-                             QuantizationStates.DEQUANTIZED, QuantizationStates.PASSIVE_INIT}
+        return state not in {QuantizationStates.INITIAL, QuantizationStates.FP32, 
+                             QuantizationStates.PASSIVE_INIT, QuantizationStates.SOI, 
+                             QuantizationStates.DEQUANTIZED, QuantizationStates.DEACTIVED}
 
 
 class TensorQuantizationConfig(Serializable):
-    """TensorQuantizationConfig, as known as tensor quantization configuration,
-    is the most important data structure in PPQ system.
+    """
+    ## TensorQuantizationConfig(Tensor 量化控制结构体)
 
-    PPQ generates quantization configuration for all tensors that need to be quantized, and control their
-        quantization logic via this abstraction. As a basic building block of PPQ quantization system, tensor
-        quantization is designed to store and manage all quantization related information like:
+    PPQ 使用量化控制结构体描述量化行为，该结构体被定义在 ppq.core.quant 中。
+    截止 PPQ 0.6.6 版本，该结构体由 15 项不同的属性组成。本文将向你介绍这一核心数据结构体的设计构想。
 
-        Quantization policy, rounding policy, quantization bits, scale, offset, quantization state, etc.
+    ### QuantizationPolicy 量化策略
+    
+    在 TensorQuantizationConfig 当中，首当其冲地内容是 TQC.policy，这是一个 QuantizationPolicy 对象。
+    policy 属性用于描述量化的规则，一个完整的量化策略是由多个量化属性(QuantizationProperty)组合完成的；
+    在 PPQ 中目前我们支持 8 种不同的量化属性，你可以使用以下属性来组合形成自定义的量化规则:
+        - PER_TENSOR: 以 Tensor 为单位完成量化，每个 Tensor 使用一个 scale 和 offset 信息。
+        - PER_CHANNEL: 以 Channel 为单位完成量化，每个 Channel 使用一个 scale 和 offset 信息。
+        - LINEAR: 线性量化，通常的 INT8, INT16 皆属于线性量化，在线性量化的表示中不存在指数位。
+        - FLOATING: 浮点量化，包括 FP8 E4M3, FP8 E5M2, FP16, BF16 等格式，在浮点量化中数据由底数和指数两部分组成。
+        - SYMMETRICAL: 对称量化，在量化计算中不启用 offset。
+        - ASYMMETRICAL: 非对称量化，在量化计算中启用 offset 完成量化偏移。
+        - POWER_OF_2: 限制 scale 取值必须为 2 的整数次幂，这一量化行为多见于端侧以及浮点量化。
+        - DYNAMIC: 启用动态量化策略，对于每一批次的数据，scale 与 offset 都将被动态地计算更新。
 
-    ATTENTION: tensor(or variable in PPQ) might have more than one quantization configuration, since
-        PPQ is designed as an operation-oriented quantization system, so to say tensor quantization configurations
-        are created operation by operation. Considering a pattern conv - conv, both the upstream convolution layer
-        and the downstream convolution layer will hold a tensor quantization configuration of the middle variable.
-        Duplicated quantization configuration will be disabled by optimization pass later.
+    下图解释了浮点量化与线性量化的区别：
 
-    PPQ is designed as an operation-oriented quantization system, literally all tensor quantization configurations
-        are managed by operations, through you can access their image by variable instance.
-        (see the definition of PPQ.IR.quant.QuantableVariable for more information)
+    ![image](https://user-images.githubusercontent.com/43309460/199235366-1e83ed97-0731-4e1d-abeb-b7121e3d2a94.png)
 
-    You are supposed to change tensor quantization configuration during optimization passes, this abstraction
-        is widely tested among various platforms, it shall satisfy most of your quantization demands.
+    ### 线性量化与相关属性
+
+    线性量化允许与下列属性进行组合：
+
+        QuantizationProperty.ASYMMETRICAL | QuantizationProperty.LINEAR | QuantizationProperty.PER_CHANNEL,
+        QuantizationProperty.ASYMMETRICAL | QuantizationProperty.LINEAR | QuantizationProperty.PER_TENSOR,
+        QuantizationProperty.SYMMETRICAL | QuantizationProperty.LINEAR | QuantizationProperty.PER_CHANNEL,
+        QuantizationProperty.SYMMETRICAL | QuantizationProperty.LINEAR | QuantizationProperty.PER_TENSOR,
+        QuantizationProperty.ASYMMETRICAL | QuantizationProperty.LINEAR | QuantizationProperty.PER_TENSOR | QuantizationProperty.POWER_OF_2,
+        QuantizationProperty.SYMMETRICAL | QuantizationProperty.LINEAR | QuantizationProperty.PER_TENSOR | QuantizationProperty.POWER_OF_2,
+        QuantizationProperty.ASYMMETRICAL | QuantizationProperty.LINEAR | QuantizationProperty.PER_CHANNEL | QuantizationProperty.POWER_OF_2,
+        QuantizationProperty.SYMMETRICAL | QuantizationProperty.LINEAR | QuantizationProperty.PER_CHANNEL | QuantizationProperty.POWER_OF_2,
+
+    在线性量化中，量化函数的计算方法为：
+
+    - Unscaled FP32 = (FP32 / scale) - offset
+    - INT8 = Clip(Round(Unscale FP32), quant_min, quant_max)
+    - Dequantized FP32 = (INT8 + offset) * scale
+
+    其中 Round 函数行为由 TQC.rounding(RoundingPolicy) 属性确定，PPQ 支持 7 种不同的取整策略，其中 ROUND_HALF_EVEN 是最常见的取整策略，
+    关于取整策略的详细讨论可以参考 https://en.wikipedia.org/wiki/Rounding
+
+    quant_min, quant_max 分别由 TQC.quant_min, TQC.quant_max 属性确定，对于线性量化而言他们是整数，通常为[-128, 127]
+
+    ### 浮点量化与相关属性
+
+    浮点量化允许与下列属性进行组合：
+
+        QuantizationProperty.SYMMETRICAL | QuantizationProperty.FLOATING | QuantizationProperty.PER_CHANNEL | QuantizationProperty.POWER_OF_2,
+        QuantizationProperty.SYMMETRICAL | QuantizationProperty.FLOATING | QuantizationProperty.PER_TENSOR | QuantizationProperty.POWER_OF_2,
+
+    在浮点量化中，量化函数的计算方法为：
+
+    - Unscaled FP32 = (FP32 / scale)
+    - FP8 = Convert(Unscale FP32, quant_min, quant_max)
+    - Dequantized FP32 = FP8 * scale
+
+    其中 Convert 函数行为复杂，其转换过程分为三种不同的情况：
+    - 当 Unscaled FP32 大于 quant_max，或者小于 quant_min，则直接进行截断
+    - 当 Unscaled FP32 幅值大于 FP8 能够表达的最小值，此时需要移去多余的底数位，并对底数进行四舍五入
+    - 当 Unscaled FP32 数据小于规范化 FP8 能够表达的最小值，此时浮点下溢出，此时我们计算 FP8 = Round(Unscaled FP32 / FP8_min) * FP8_min
+
+    其中 FP8_min 是非规格化 FP8 能够表达的最小值。
+
+    quant_min, quant_max 分别由 TQC.quant_min, TQC.quant_max 属性确定，对于浮点量化而言他们是浮点数，通常为[-448.0, +448.0]，
+    对于 FLOATING 量化，我们引入一个新的属性 TQC.exponent_bits(int)。使用这个属性来指定总位宽中有多少数位用于表示指数(相应地，底数位为总位宽-指数位-1)。
+
+    关于浮点量化的具体细节可以参考 [本文](https://zhuanlan.zhihu.com/p/574825662)
+
+    ### 其他属性
+        - TQC.num_of_bits(int)：量化位宽，对于 INT8, FP8 量化，量化位宽为 8。对于 INT16, FP16 量化，量化位宽为16。
+        - TQC.state(QuantizationStates): 量化状态，在 PPQ 中目前有共计 8 种不同的量化状态，该属性极大地丰富了 PPQ 量化信息的语义，
+                                         使得我们能够更加灵活地控制量化行为。该属性可以被用于切换 量化 / 非量化 状态；执行量化联合定点；执行参数烘焙。
+        - TQC.channel_axis(int): 量化轴，对于 PER_CHANNEL 量化，使用这个属性来指定沿着那一维度展开量化
+        - TQC.observer_algorithm(str): observer 算法，其中 observer 是用于确定 scale 和 offset 的对象，使用这个属性指明要使用何种类型的 observer 确定 scale 和 offset
+        - TQC.dominator(TensorQuantizationConfig): 一个指向父量化信息的指针。在 PPQ 中 TQC 与 TQC 之间并不是独立的，他们之间可以存在父子关系。所有子量化信息与父量化信息共享 scale 和 offset
+        - TQC.visiblity(QuantizationVisibility): 导出可见性，使用这个属性来告知 ppq 的导出器是否需要导出当前的 TQC。
+
+    ### 量化控制结构体的初始化
+
+    TensorQuantizationConfig 是 PPQ 中的核心数据结构，它总是由 Quantizer 对象完成创建的：
+
+        # 下面这段代码为一个指定的算子创建了相应的 Tensor Quantization Config
+        quantizer = PFL.Quantizer(platform=TargetPlatform.TRT_FP8, graph=graph) # 取得 TRT_FP8 所对应的量化器
+        quantizer.quantize_operation(op_name = op.name, platform = dispatching[op.name])
+
+    在 PPQ 当中，Quantizer 的职责即是为算子初始化他们的量化控制结构体。不同的量化器将按照不同的规则创建控制结构体，
+    如 TRT_FP8 所对应的量化器 只会为了 Conv, Gemm 算子创建量化信息，要求他们的输入按照对称-浮点-Per Channel的方式完成量化。
+    而 DSP_INT8 所对应的量化器为几乎所有算子创建量化信息，要求他们按照非对称-线性-Per Tensor的方式完成量化。
+
+    ### 量化控制结构体的校准
+
+    绝大部分的 TensorQuantizationConfig 在完成初始化之后都无法使用-他们的 scale 与 offset 均为空值，
+    且 Quantizer 在初始化他们时会将其状态(TQC.state)置为 INITIAL，处于这个状态的量化信息在计算过程中不会被启用。
+
+    我们必须送入一定量数据，进行必要 Calibration 操作后才能为网络中的量化信息确定合理的 scale 与 offset 值，这一过程是由种类繁多的 Observer 完成的：
+
+        # PPQ 目前支持 7 种不同的 Observer
+        OBSERVER_TABLE = {
+            'minmax': TorchMinMaxObserver,
+            'kl': TorchHistObserver,
+            'percentile': TorchPercentileObserver,
+            'mse': TorchMSEObserver,
+            'isotone': TorchIsotoneObserver,
+            'constant': ConstantObserver,
+            'floating': DirectMSEObserver
+        }
+
+    这些 Observer 会负责在网络计算过程中收集必要的统计信息，并为 TQC 的 scale 与 offset 赋予有效的值。在完成一切之后，
+    Observer 还会负责将 TQC 的状态(TQC.state)修改为 ACTIVED。此时量化信息将被正式启用，从而在网络前向传播模拟量化计算。
+
+    关于 Observer 的讨论，可以参考 [本视频](https://www.bilibili.com/video/BV1QF41157aM)
+
+    ### 量化控制结构体的父子链接
+
+    在我们讨论量化时，对于那些存在着多个输入的算子，例如 add, concat，它们的所有输入总是被要求有着相同的 scale。为了表述这种语义，
+    我们为 TQC 添加了 TQC.dominator 属性，这一属性可以指向另一个量化控制结构体。
+
+    假设我们存在两个不同的量化控制结构体 A, B：
+
+    - 语句 A.dominator = B 表示 A 将共享 B 的 scale 与 offset(A.policy, A.num_of_bits等属性仍将使用自己的)。于此同时 A.state 将被修改为 OVERLAPPED(A 将不再启用)
+    - 语句 A.master = B 表示 A 将共享 B 的 scale 与 offset(A.policy, A.num_of_bits等属性仍将使用自己的)。于此同时 A.state 将被修改为 PASSIVE(A 将仍然启用，但不具有独立的量化参数)
+
+    如果 A 已经是其他量化结构体 C 的父节点，则上述过程将级联地使得 B 成为 A, C 共同的父节点，A, C 都将共享 B 的 scale 与 offset。
+
+    下图展示了在量化控制结构体的生命周期中，量化状态是如何变迁的：
+
+    ![Quantization State](https://user-images.githubusercontent.com/43309460/199236632-ec69ca29-9900-4875-8299-a196546d0dde.png)
     """
     def __init__(
         self,
@@ -471,12 +573,12 @@ class TensorQuantizationConfig(Serializable):
         self._visiblity = visiblity
         super().__init__()
 
-    def can_export(self) -> bool:
+    def can_export(self, export_overlapped: bool = EXPORT_OVERLAPPED_CONFIG) -> bool:
         if self.visiblity == QuantizationVisibility.INTERNAL: return False
         type_check  = isinstance(self.scale, torch.Tensor) and isinstance(self.offset, torch.Tensor)
         valid_states = {QuantizationStates.BAKED, QuantizationStates.PASSIVE_BAKED}
 
-        if EXPORT_OVERLAPPED_CONFIG: valid_states.add(QuantizationStates.OVERLAPPED)
+        if export_overlapped: valid_states.add(QuantizationStates.OVERLAPPED)
         state_check = QuantizationStates.is_activated(self.state) or self.state in valid_states
 
         if (state_check or self.visiblity == QuantizationVisibility.FORCE_EXPORT):
@@ -582,8 +684,8 @@ class TensorQuantizationConfig(Serializable):
     def is_revisable(self):
         return (self.dominated_by == self and self.state in {
             QuantizationStates.ACTIVATED,
-            QuantizationStates.DEQUANTIZED,
-            QuantizationStates.DEACTIVATED,
+            QuantizationStates.FP32,
+            QuantizationStates.FP32,
             QuantizationStates.INITIAL,
             QuantizationStates.FP32,
             QuantizationStates.PASSIVE,

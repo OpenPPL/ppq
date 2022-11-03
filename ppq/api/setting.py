@@ -252,7 +252,7 @@ class QuantizationFusionSetting():
         self.align_avgpooling_to     = 'None'
         self.align_elementwise_to    = 'Align to Large'
         self.align_concat_to         = 'Align to Output'
-        self.force_alignment_overlap = False
+        self.force_alignment_overlap = True
 
 
 class LSQSetting():
@@ -390,10 +390,6 @@ class QuantizationSetting():
         # 程序签名
         self.version                         = PPQ_CONFIG.VERSION
         self.signature                       = PPQ_CONFIG.NAME
-
-        # Following setting will be removed.
-        self.advanced_optimization            = False
-        self.advanced_optimization_setting    = AdvancedOptimizationSetting()
 
         # 算子调度表，你可以编辑它来手动调度算子。
         self.dispatching_table               = DispatchingTable()

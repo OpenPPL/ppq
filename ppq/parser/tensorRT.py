@@ -14,20 +14,22 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import json
 from typing import Dict
 
 import torch
-from ppq.core import (DataType, OperationMeta, QuantizationProperty,
-                      QuantizationStates, TensorMeta, TensorQuantizationConfig,
-                      convert_any_to_torch_tensor)
+from ppq.core import (DataType, OperationMeta, QuantizationPolicy,
+                      QuantizationProperty, QuantizationStates, TensorMeta,
+                      TensorQuantizationConfig, convert_any_to_torch_tensor,
+                      ppq_warning)
 from ppq.IR import BaseGraph
 from ppq.IR.quantize import QuantableOperation, QuantableVariable
 from ppq.utils.round import ppq_tensor_round
 
-from .onnxruntime_exporter import ONNXRUNTIMExporter
+from .onnxruntime_exporter import OnnxExporter, ONNXRUNTIMExporter
 
 
-class TensorRTExporter(ONNXRUNTIMExporter):
+class TensorRTExporter_QDQ(ONNXRUNTIMExporter):
     """
     TensorRT PPQ 0.6.4 以来新加入的功能
     
@@ -250,3 +252,46 @@ class TensorRTExporter(ONNXRUNTIMExporter):
         engine_file = file_path.replace('.onnx', '.engine')
         with open(engine_file, 'wb') as file:
             file.write(trt_engine.serialize())
+
+
+class TensorRTExporter_JSON(OnnxExporter):
+    def export_quantization_config(self, config_path: str, graph: BaseGraph):
+
+        act_quant_info = {}
+        for op in graph.topological_sort():
+            if not isinstance(op, QuantableOperation): continue
+            if op.type in {"Gather", "Unsqueeze", "Concat", "Reshape", "Squeeze"}: continue
+
+            for cfg, var in op.config_with_variable:
+                if not cfg.can_export(export_overlapped=True): continue
+                if var.is_parameter: continue
+
+                if cfg.policy != QuantizationPolicy(
+                    QuantizationProperty.LINEAR + 
+                    QuantizationProperty.SYMMETRICAL + 
+                    QuantizationProperty.PER_TENSOR):
+                    ppq_warning(f'Can not export quantization config on variable {var.name}, '
+                                'Quantization Policy is invalid.')
+                    continue
+
+                if cfg.num_of_bits != 8 or cfg.quant_max != 127 or cfg.quant_min != -128:
+                    ppq_warning(f'Can not export quantization config on variable {var.name}, '
+                                'Tensor Quantization Config has unexpected setting.')
+                    continue
+
+                act_quant_info[var.name] = cfg.scale.item() * 127
+
+        json_qparams_str = json.dumps({'act_quant_info': act_quant_info}, indent=4)
+        with open(config_path, "w") as json_file:
+            json_file.write(json_qparams_str)
+
+
+    def export(self, file_path: str, graph: BaseGraph, 
+               config_path: str = None, save_as_external_data: bool = False):
+        if config_path is not None:
+            self.export_quantization_config(config_path, graph)
+        else:
+            ppq_warning('TensorRT Json Exporter needs a valid path of json file.')
+        
+        super().export(file_path=file_path, graph=graph, config_path=config_path, 
+                       save_as_external_data=save_as_external_data)

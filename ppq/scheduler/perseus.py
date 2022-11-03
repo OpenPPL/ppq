@@ -185,8 +185,10 @@ class Perseus(GraphDispatcher):
             ep_expr=None, direction='up')
         return fanin
 
-    def dispatch(self, in_plat: List[TargetPlatform] = None, 
-                 out_plat: List[TargetPlatform] = None, **kwargs) -> Dict[str, TargetPlatform]:
+    def dispatch(self, quant_types: Set[str] = None,
+                 in_plat: List[TargetPlatform] = None, 
+                 out_plat: List[TargetPlatform] = None, 
+                 **kwargs) -> Dict[str, TargetPlatform]:
         """对当前图执行默认算子调度逻辑
 
         在 Onnx 定义的神经网络中存在两类数据：

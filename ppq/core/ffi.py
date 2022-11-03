@@ -279,10 +279,11 @@ class CUDA:
         offsets: torch.Tensor,
         exponent: int = 4, 
         mantissa: int = 3,
-        minimum: float = -448, # FP8 E4M3
-        maximum: float = 448,
+        minimum: float = - 448, # FP8 E4M3
+        maximum: float = + 448,
         rounding: int = 0
     ) -> torch.Tensor:
+        if exponent <= 0: raise ValueError('Floating Quantization requires exponent > 0')
         if not tensor.is_contiguous(): tensor = tensor.contiguous()
         # if scale is too small, quantization might cause fp32 underflow.
         # if scale < 1e-7: raise ValueError('scale is too small.')
@@ -297,10 +298,11 @@ class CUDA:
         channel_axis: int,
         exponent: int = 4, 
         mantissa: int = 3,
-        minimum: float = -448, # FP8 E4M3
-        maximum: float = 448,
+        minimum: float = - 448, # FP8 E4M3
+        maximum: float = + 448,
         rounding: int = 0
     ) -> torch.Tensor:
+        if exponent <= 0: raise ValueError('Floating Quantization requires exponent > 0')
         if not tensor.is_contiguous(): tensor = tensor.contiguous()
         return CUDA_COMPLIER.CUDA_EXTENSION.QuantizeTensor_FC(
             tensor, scales, offsets, exponent, mantissa, 

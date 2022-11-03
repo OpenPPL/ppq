@@ -10,5 +10,5 @@ from .FPGAQuantizer import FPGAQuantizer
 from .NCNNQuantizer import NCNNQuantizer
 from .OpenvinoQuantizer import OpenvinoQuantizer
 from .TengineQuantizer import TengineQuantizer
-from .FP8Quantizer import GraphCoreFP8Quantizer, TensorRTFP8Quantizer
-from .TensorRTQuantizer import TensorRTQuantizer
+from .FP8Quantizer import GraphCoreQuantizer, TensorRTQuantizer_FP8
+from .TensorRTQuantizer import TensorRTQuantizer, TensorRTQuantizer_InputOnly

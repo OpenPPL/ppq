@@ -277,7 +277,7 @@ class MetaxExporter(OnnxExporter):
                     if cfg is not None and not QuantizationStates.can_export(cfg.state):
                         raise AttributeError(f'quantization state of variable {var.name} is unexpected, \
                         please check if you have finished the whole quantization process')
-                    elif cfg is not None and cfg.state not in {QuantizationStates.FP32, QuantizationStates.SOI}:
+                    elif cfg is not None and cfg.state not in {QuantizationStates.FP32}:
                         quantable_vars.append((cfg, var))
                         break
 
@@ -318,10 +318,10 @@ class MetaxExporter(OnnxExporter):
         # Ready to export onnx graph definition.
         _inputs, _outputs, _initilizers, _nodes = [], [], [], []
         for operation in graph.topological_sort():
-            _nodes.append(super().export_operation(operation))
+            _nodes.append(super().build_operator_proto(operation))
 
         for variable in graph.variables.values():
-            tensor_proto = super().export_var(variable)
+            tensor_proto = super().build_variable_proto(variable)
             if variable.name in graph.inputs:
                 _inputs.append(tensor_proto)
             if variable.name in graph.outputs:

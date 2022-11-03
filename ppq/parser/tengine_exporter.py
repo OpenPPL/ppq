@@ -1,23 +1,13 @@
 import json
-from pickletools import uint8
-from typing import Union
-
-import numpy as np
 import onnx
 import torch
 from onnx import helper, numpy_helper
-from ppq.core import (
-    GRAPH_OPSET_ATTRIB,
-    ONNX_EXPORT_OPSET,
-    ONNX_VERSION,
-    PPQ_CONFIG,
-    DataType,
-    convert_any_to_numpy,
-    ppq_warning,
-)
-from ppq.IR import BaseGraph, GraphExporter, Operation, OperationExporter, Variable
-from ppq.IR.quantize import QuantableOperation
-from ppq.core.quant import QuantizationStates
+from ppq.core import (GRAPH_OPSET_ATTRIB, ONNX_EXPORT_OPSET, ONNX_VERSION,
+                      PPQ_CONFIG, DataType, QuantizationStates,
+                      convert_any_to_numpy, ppq_warning)
+from ppq.core.quant import QuantizationProperty
+from ppq.IR import (BaseGraph, GraphExporter, Operation, OperationExporter,
+                    QuantableOperation, Variable)
 
 
 class ConstantOfShapeExporter(OperationExporter):
@@ -70,20 +60,6 @@ OPERATION_EXPORTERS = {
 }
 
 
-def convert_value(value: Union[int, float, np.ndarray, torch.Tensor]) -> str:
-    if type(value) in {int, float}:
-        return value
-    else:
-        value = convert_any_to_numpy(value, accept_none=True)
-        if value is None:
-            return value  # SOI config has Nona as its scale and
-        return value.tolist()
-
-
-class TengineExportUtils:
-    pass
-
-
 class TengineExporter(GraphExporter):
     def __init__(self) -> None:
         super().__init__()
@@ -96,13 +72,14 @@ class TengineExporter(GraphExporter):
         for operation in graph.operations.values():
             if isinstance(operation, QuantableOperation):
                 for config, _var in operation.config_with_variable:
-                    if (
-                        QuantizationStates.is_activated(config.state)
-                        or config.state == QuantizationStates.OVERLAPPED
-                    ):
+                    if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
+                        raise PermissionError('Tengine does not support per channel quantization.')
+                    
+                    if (QuantizationStates.is_activated(config.state)
+                        or config.state == QuantizationStates.OVERLAPPED):
                         var_scales[_var.name] = {
-                            "scale": convert_value(config.scale)[0],
-                            "zero_point": convert_value(config.offset)[0],
+                            "scale": config.scale.item(),
+                            "zero_point": config.offset.item(),
                         }
 
         with open(file=scale_path, mode="w") as file:
@@ -132,10 +109,13 @@ class TengineExporter(GraphExporter):
                 }
 
                 for config, _ in operation.config_with_variable:
+                    if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
+                        raise PermissionError('Tengine does not support per channel quantization.')
+
                     if config.dominated_by == config:
                         render_buffer["values"][config.__hash__()] = {
-                            "scale": convert_value(config.scale),
-                            "zero_point": convert_value(config.offset),
+                            "scale": config.scale.item(),
+                            "zero_point": config.offset.item(),
                         }
 
                 render_buffer["configs"][operation.name] = op_dict

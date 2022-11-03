@@ -11,7 +11,7 @@ from ppq.quantization.qfunction import PPQuantFunction
 
 import torch
 
-from .base import (GLOBAL_DISPATCHING_TABLE, BaseGraphExecutor,
+from .base import (OPERATION_FORWARD_TABLE, BaseGraphExecutor,
                    QuantOPRuntimeHook, RuntimeHook)
 from .op import TorchBackendContext
 
@@ -507,7 +507,7 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
                 assert isinstance(operation.platform, TargetPlatform), (
                     f'Operation {operation.name} has an invalid platform setting, '
                     f'only PPQ.core.TargetPlatform is expected here, while {type(operation.platform)} was given')
-                platform_dispatching_table = GLOBAL_DISPATCHING_TABLE[operation.platform]
+                platform_dispatching_table = OPERATION_FORWARD_TABLE[operation.platform]
                 if operation.type not in platform_dispatching_table:
                     raise NotImplementedError(
                         f'Graph op: {operation.name}({operation.type}) '

@@ -652,8 +652,6 @@ def Reshape_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackend
     values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
     data, shape = values
     shape = shape.cpu()
-    # get the batch of input tensor
-    batch = data.shape[0]
 
     # Avoid the element 0 in the shape that comes with onnx, such as [0,-1]
     shape = [shape[i] if shape[i] != 0 else data.shape[i] for i in range(len(shape))]
@@ -661,11 +659,6 @@ def Reshape_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackend
     # If the element in shape is a tensor, convert it to a value, for example,
     # convert [1, tensor(-1)] to [1, -1]
     shape = [shape[i].item() if hasattr(shape[i], 'item') else shape[i] for i in range(len(shape))]
-
-    if shape == [1,-1] and batch != shape[0]:
-        ppq_warning(f'Multi-batch optimization for calibration, change [1, -1] to {[batch,-1]}.')
-        shape[0] = batch
-
     return data.reshape(shape)
 
 
@@ -2522,8 +2515,11 @@ def HardSigmoid_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBac
             Output tensor
     """
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
+    alpha = GET_ATTRIBUTE_FROM_OPERATION(op, 'alpha', default=0.2)
+    beta  = GET_ATTRIBUTE_FROM_OPERATION(op, 'beta', default=0.5)
     [value] = values
-    return F.hardsigmoid(value)
+    value = alpha * value + beta
+    return torch.clip(value, 0, 1)
 
 
 def HardSwish_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:

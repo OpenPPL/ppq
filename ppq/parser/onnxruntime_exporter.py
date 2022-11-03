@@ -210,7 +210,7 @@ class ONNXRUNTIMExporter(OnnxExporter):
             dq_meta = OperationMeta(
             input_metas    = [TensorMeta(dtype=DataType.convert_from_torch(value_dtype), shape=meta.shape),
                               TensorMeta(dtype=DataType.FP32, shape=config.scale.shape),
-                              TensorMeta(dtype=DataType.convert_from_torch(offset_dtype), shape=config.offset.shape)],
+                              TensorMeta(dtype=DataType.FP32, shape=config.offset.shape)],
             output_metas   = [TensorMeta(dtype=DataType.FP32, shape=meta.shape)],
             operation_name = created.name, operation_type=created.type, executing_order=-1)
             created.meta_data = dq_meta
@@ -524,10 +524,10 @@ class ONNXRUNTIMExporter(OnnxExporter):
         # Ready to export onnx graph definition.
         _inputs, _outputs, _initilizers, _nodes = [], [], [], []
         for operation in graph.topological_sort():
-            _nodes.append(super().export_operation(operation))
+            _nodes.append(super().build_operator_proto(operation))
 
         for variable in graph.variables.values():
-            tensor_proto = super().export_var(variable)
+            tensor_proto = super().build_variable_proto(variable)
             if variable.name in graph.inputs:
                 _inputs.append(tensor_proto)
             if variable.name in graph.outputs:

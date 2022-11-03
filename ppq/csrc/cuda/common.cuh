@@ -7,6 +7,8 @@
 
 using at::Tensor;
 using Rounding = int;
+using std::max;
+using std::min;
 
 # define __inline__ inline
 constexpr int64_t CUDA_NUM_THREADS     = 1024;
@@ -158,7 +160,28 @@ float QuantizeScalarFloating(
      * This function convert an float value to low-precision float
      */
     FPConvertHelper helper; FPConvertHelper rounding_helper;
-    helper.value = static_cast<float>(value) / static_cast<float>(scale);
+    float Unscaled_FP32 = static_cast<float>(value) / scale;
+    
+    helper.value = Unscaled_FP32;
+	int32_t exponent_min  = -(1 << (exponent - 1)) + 1;
+    int32_t exponent_max  = (1 << (exponent - 1));
+
+    // Following code will process exponent overflow
+    /* For FP8 E4M3, the maximum exponent value should be 8.                                  */
+    /* The Maximum number of FP8 E4M3 should be (0 1111 111) = 480                            */
+    /* We call it as theoretical_maximum, FP8 E4M3 can not represent a number larger than it. */
+    uint32_t fp32_sign    = 0;
+    int32_t fp32_exp      = (exponent_max + 127) << 23;
+    int32_t fp32_mantissa = ~(0x007FFFFF >> mantissa) & 0x007FFFFF;
+    helper.data = fp32_sign + fp32_mantissa + fp32_exp;
+    float theoretical_maximum = helper.value;
+
+    if (Unscaled_FP32 > min(clip_max, theoretical_maximum)) 
+        return min(clip_max, theoretical_maximum);
+    if (Unscaled_FP32 < max(clip_min, -theoretical_maximum)) 
+        return max(clip_min, -theoretical_maximum);
+
+    // Code start from here will convert number within fp8 range.
     // Following code will Split float32 into sign, exp, mantissa
     /* IEEE 754 Standard: 1 bit sign, 8 bit exponent, 23 bit mantissa */
 
@@ -167,32 +190,23 @@ float QuantizeScalarFloating(
     /* In binary 00000000 01111111 11111111 11111111 = 0x007FFFFF in Hex */
 
     /* Tool: https://www.h-schmidt.net/FloatConverter/IEEE754.html */
+    helper.value  = Unscaled_FP32;
+    fp32_sign     = helper.data & 0x80000000;
+    fp32_exp      = helper.data & 0x7F800000;
+    fp32_mantissa = helper.data & 0x007FFFFF;
 
-    uint32_t fp32_sign    = helper.data & 0x80000000;
-    int32_t fp32_exp      = helper.data & 0x7F800000;
-    int32_t fp32_mantissa = helper.data & 0x007FFFFF;
-	int32_t exponent_min  = -(1 << exponent) + 1;
-    int32_t exponent_max  = (1 << exponent);
-
-    // Following code will process Float underflow
-    /* Float underflow means fp32_exp is smaller than exponent_min         */
+    // Following code will process exponent underflow
+    /* Float underflow means fp32_exp is smaller than exponent_min          */
     /* Where exponent_min is the minimum exponent value of quantized float. */
-    /* For FP8 E4M3, the minimum exponent value should be -15.             */
-	if (((fp32_exp >> 23) - 127) < exponent_min){
-        if (((fp32_exp >> 23) - 127) == (exponent_min - 1)){
-            // there is a chance to round
-            rounding_helper.data = (fp32_mantissa & 0x007FFFFF) + 0x3F800000;
-            if (_round2int(rounding_helper.value - 1, rounding)) {
-                helper.data = fp32_sign + ((exponent_min + 127) << 23) + (1 << (23 - mantissa));
-                return helper.value;
-            }
-        }
-        return 0.0f;
+    /* For FP8 E4M3, the minimum exponent value should be -7.               */
+    /* The Min Subnormal value of FP8 E4M3 should be (0 0000 001) = 2^-9    */
+    /* The Min normal value of FP8 E4M3 should be (0 0001 000) = 2^-6       */
+	if (((fp32_exp >> 23) - 127) < exponent_min + 1){
+        // following divide might have some problems
+        // but it is the simplest method with very limited error.
+        float min_subnormal = 1.0f / (1 << ((1 << (exponent - 1)) + mantissa - 2));
+        return _round2int(Unscaled_FP32 / min_subnormal, rounding) * min_subnormal;
 	}
-    if ((fp32_exp >> 23) - 127 > exponent_max){
-        if (fp32_sign) return clip_min;
-        else return clip_max;
-    }
 
     /* high precision mantissa convert to low precision mantissa requires rounding                         */
     /* Here we apply a tricky method to round mantissa:                                                    */
@@ -205,5 +219,5 @@ float QuantizeScalarFloating(
     fp32_mantissa = ((fp32_mantissa >> (23 - mantissa)) + round_bit) << (23 - mantissa);
     helper.data = fp32_sign + fp32_mantissa + fp32_exp;
 
-    return CLIP<float>(helper.value + offset, clip_min, clip_max);
+    return CLIP<float>(helper.value, clip_min, clip_max);
 }

@@ -27,10 +27,7 @@ class QNNDSPExporter(OnnxExporter):
                 if config.num_of_bits > 8: continue
 
                 if config.state in {
-                    QuantizationStates.SOI,
-                    QuantizationStates.DEACTIVATED,
-                    QuantizationStates.DEQUANTIZED,
-                    QuantizationStates.FP32
+                    QuantizationStates.FP32,
                 }: continue
                 # Simply override recorder is acceptable here,
                 # we do not support mix precision quantization for CUDA backend now.

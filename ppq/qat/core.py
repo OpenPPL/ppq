@@ -1,23 +1,22 @@
 import torch
 import torch.nn as nn
 from ppq import PPQuantFunction
-from ppq.IR import Operation, Variable
 from ppq.core import (OperationQuantizationConfig, TargetPlatform,
                       TensorQuantizationConfig, ppq_warning)
-from ppq.api import create_quantizer
+from ppq.IR import Operation, Variable
+from ppq.quantization.quantizer import BaseQuantizer
 
 
 class ENABLE_CALIBRATION:
     """ """
-    def __init__(self, model: nn.Module) -> None:
+    def __init__(self, model: nn.Module, quantizer: BaseQuantizer) -> None:
         self.model = model
 
     def __enter__(self):
-        self._state = PPQ_CONFIG.USING_CUDA_KERNEL
-        PPQ_CONFIG.USING_CUDA_KERNEL = True
+        pass
 
     def __exit__(self, *args):
-        PPQ_CONFIG.USING_CUDA_KERNEL = self._state
+        pass
 
 
 class PPQuantComputingLayer(nn.Module):
@@ -90,9 +89,12 @@ class QATHelper:
     @ staticmethod
     def quantize_pytorch_layer(layer: nn.Module, platform: TargetPlatform) -> PPQuantComputingLayer:
         config = QATHelper.generate_config_by_platform(layer=layer, platform=platform)
+
         if type(layer) in {nn.Conv1d, nn.Conv2d, nn.Conv3d}:
             return PPQuantConv(convert_from=layer, config=config)
+        
         if type(layer) in {nn.ConvTranspose1d, nn.ConvTranspose2d, nn.ConvTranspose3d}:
             return PPQuantConvTranspose(convert_from=layer, config=config)
+        
         if type(layer) in {nn.Linear}:
             return PPQuantLinear(convert_from=layer, config=config)

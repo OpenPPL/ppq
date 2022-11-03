@@ -26,6 +26,8 @@ OBSERVER_PERCENTILE_MANUL_OVERRIDE = 'OBSERVER_PERCENTILE_MANUL_OVERRIDE'
 OBSERVER_MSE_HIST_BINS = 2048
 # Observer 中 mse 计算的间隔，间隔越小，所需时间越长
 OBSERVER_MSE_COMPUTE_INTERVAL = 8
+# Floating MSE Observer 的样本个数
+OBSERVER_FLOATING_MSE_FETCHES = 4096
 
 # PASSIVE OPERATIONS 是那些不参与计算的 Op, 这些 op 的输入与输出将直接共享 scale
 # 同时这些 op 前后的定点过程将被直接停用

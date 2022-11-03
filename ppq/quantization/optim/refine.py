@@ -75,10 +75,7 @@ class QuantizeSimplifyPass(QuantizationOptimizationPass):
             if not isinstance(source_op, QuantableOperation): continue
             source_config = source_op.config.output_quantization_config[source_op.outputs.index(variable)]
 
-            if source_config.state in {
-                QuantizationStates.FP32,
-                QuantizationStates.SOI,
-                QuantizationStates.DEACTIVATED}:
+            if source_config.state in {QuantizationStates.FP32}:
                 continue # if source config does not have a valid state, skip it.
 
             for downstream_op, dest_idx in zip(variable.dest_ops, variable.dest_idx):
@@ -376,6 +373,7 @@ class QuantAlignmentPass(QuantizationOptimizationPass):
         for config in op.config.input_quantization_config:
             assert config.policy.has_property(QuantizationProperty.PER_TENSOR), (
                 'Quant Alignment can only happen with per tensor quantization.')
+            if config.policy.has_property(QuantizationProperty.FLOATING): return
             local_min = config.scale * (config.quant_min - config.offset)
             local_max = config.scale * (config.quant_max - config.offset)
 
