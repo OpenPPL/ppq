@@ -1,14 +1,23 @@
-# PPL Quantization Tool 0.6.5(PPL 量化工具)
-PPL QuantTool (PPQ) is a highly efficient neural network quantization tool with custimized IR, cuda based executor, automatic dispacher and powerful optimization passes. Together with OpenPPL ecosystem, we offer you this industrial-grade network deploy tool that empowers AI developers to unleash the full potential of AI hardware. With quantization and other optimizations, nerual network model can run 5~10x faster than ever.
+## PPL Quantization Tool 0.6.6(PPL 量化工具)
+![无标题](https://user-images.githubusercontent.com/43309460/199927034-55c7e3b8-40a1-4e7b-9751-87fdd299455e.png)
 
-PPL QuantTool 是一个高效的工业级神经网络量化工具。
-PPQ 被设计为一个灵活而全面的神经网络离线量化工具，我们允许你控制对量化进行细致入微的控制，同时严格控制硬件模拟误差。即便在网络极度复杂的情况下，我们依然能够得到正确的网络量化结果。PPQ 有着自定义的量化算子库、网络执行器、神经网络调度器、量化计算图等独特设计，这些为量化而设计的组件相互协作，共同构成了这一先进神经网络量化框架。借助 PPQ, OpenPPL, TensorRT, Tengine，ncnn等框架，你可以将神经网络模型提速 10 ~ 100 倍，并部署到多种多样的目标硬件平台，我们期待你将人工智慧带到千家万户之间。
 
-目前 PPQ 使用 onnx(opset 11 ~ 13) 模型文件作为输入，覆盖常用的 90 余种 onnx 算子类型。如果你是 Pytorch, tensorflow 的用户，你可以使用这些框架提供的方法将模型转换到 onnx。PPQ 支持向 TensorRT, OpenPPL, Openvino, ncnn, Onnxruntime, Tengine, Snpe 等多个推理引擎生成目标文件并完成部署。借助算子自定义与平台自定义功能，你还可以将 PPQ 的量化能力扩展到其他可能的硬件上。
+PPQ 是一个高效的工业级神经网络量化工具。
+PPQ 被设计为一个灵活而全面的 Onnx 模型量化工具，我们允许你控制对量化进行细致入微的控制，同时严格控制硬件模拟误差。PPQ 有着自定义的量化算子库、网络执行器、神经网络调度器、量化计算图等独特设计，这些组件专为量化而设计，共同构成了这一先进神经网络量化框架。我们将与你一起把人工智慧带到千家万户之间。
+
+目前 PPQ 使用 onnx(opset 11 ~ 13) 模型文件作为输入，覆盖常用的 90 余种 onnx 算子类型。如果你是 Pytorch, tensorflow 的用户，你可以使用这些框架提供的方法将模型转换到 onnx。PPQ 支持向 TensorRT, OpenPPL, Openvino, ncnn, Onnxruntime, Tengine, Snpe, GraphCore 等多个推理引擎生成目标文件并完成部署。PPQ 提供强大的自定义功能，你可以将 PPQ 的量化能力扩展到其他可能的硬件与推理库上。
+
+#### 在 0.6.6 的版本更新中，我们为你带来了这些功能：
+   1. [FP8 量化规范](https://zhuanlan.zhihu.com/p/574825662)，PPQ 现在支持 E4M3, E5M2 等多种规范的 FP8 [量化模拟与训练](https://github.com/openppl-public/ppq/blob/master/ppq/samples/fp8_sample.py)
+   2. [PFL 基础类库](https://github.com/openppl-public/ppq/blob/master/ppq/samples/yolo6_sample.py)，PPQ 现在提供一套更为基础的 api 函数帮助你完成更为灵活的量化
+   3. 更为强大的 [图模式匹配](https://github.com/openppl-public/ppq/blob/master/ppq/IR/search.py) 与 [图融合功能](https://github.com/openppl-public/ppq/blob/master/ppq/IR/morph.py)
+   4. 全新的 [TensorRT](https://github.com/openppl-public/ppq/blob/master/md_doc/deploy_trt_by_OnnxParser.md) 量化与导出逻辑
+   5. 更多正在更新的样例脚本及视频内容
+   6. 其他未知的软件特性
 
 ## Learning Path 学习路线
 
-### PPQ Basic 基础内容
+#### PPQ 基础用法及示例脚本
 | | **Description 介绍** | **Link 链接** |
 | :-: | :- | :-: |
 | 01 | 欢迎，在第一部分的内容中，我们首先向你展示如何使用 ppq 量化来自 pytorch, onnx, caffe 的模型 | [onnx](https://github.com/openppl-public/ppq/blob/master/ppq/samples/Tutorial/quantize.py), [caffe](https://github.com/openppl-public/ppq/blob/master/ppq/samples/quantize_caffe_model.py), [pytorch](https://github.com/openppl-public/ppq/blob/master/ppq/samples/quantize_torch_model.py) |
@@ -23,7 +32,7 @@ PPQ 被设计为一个灵活而全面的神经网络离线量化工具，我们�
 | 09 | 自定义量化优化过程 | [Optim](https://github.com/openppl-public/ppq/blob/master/ppq/samples/Tutorial/optimization.py) |
 | 10 | 自定义图融合过程与量化管线 | [Fusion](https://github.com/openppl-public/ppq/blob/master/ppq/samples/Tutorial/fusion.py) |
 
-### PPQ Optim 优化过程文档
+#### PPQ 优化过程文档
 | | **Description 介绍** | **Link 链接** |
 | :-: | :-: | :-: |
 | 01 | QuantSimplifyPass(通用量化精简过程) | [doc](https://github.com/openppl-public/ppq/blob/master/md_doc/Passes/QuantSimplify.md) |
@@ -37,7 +46,7 @@ PPQ 被设计为一个灵活而全面的神经网络离线量化工具，我们�
 | 09 | LearnedStepSizePass(网络微调过程) | [doc](https://github.com/openppl-public/ppq/blob/master/md_doc/Passes/LearnedStepSizePass.md) |
 | 10 | Other(其他) | [refer to](https://github.com/openppl-public/ppq/tree/master/ppq/quantization/optim) |
 
-### Quantized Computing 量化计算
+#### 量化入门视频
 |  | **Desc 介绍** | **Link 链接** |
 | :-: | :-: | :-: |
 | 01 | 计算机体系结构基础知识 |  [link](https://www.bilibili.com/video/BV1gS4y1Y7KR) |
@@ -49,7 +58,7 @@ PPQ 被设计为一个灵活而全面的神经网络离线量化工具，我们�
 | 07 | 量化参数选择 |  [link](https://www.bilibili.com/video/BV1QF41157aM) |
 | 08 | 量化误差传播分析 |  [link](https://www.bilibili.com/video/BV1CU4y1q7tr) |
 
-### PPQ Deploy 量化部署教程
+#### 量化部署教程
 | **使用例子(Examples)** | **网络部署平台(Platform)** | **输入模型格式(Format)** | **链接(Link)** | **相关视频(Video)** |
 | :- | :-: | :-: | :-: | :-: |
 | `TensorRT` |  |  |  |  |
@@ -75,7 +84,7 @@ PPQ 被设计为一个灵活而全面的神经网络离线量化工具，我们�
 | `OpenPPL` |  |  |  |  |
 | ppl cuda 后训练量化(PPQ) | ppl cuda | onnx | [link](https://github.com/openppl-public/ppq/blob/master/md_doc/inference_with_ppl_cuda.md) ||
 
-### Appendix 额外内容
+#### 额外内容
 | **使用例子(Examples)** | **网络部署平台(Platform)** | **输入模型格式(Format)** | **链接(Link)** | **相关视频(Video)** |
 | :- | :-: | :-: | :-: | :-: |
 | 注册量化代理函数 | - | pytorch | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/custimize_quant_func.py) ||
@@ -88,7 +97,7 @@ PPQ 被设计为一个灵活而全面的神经网络离线量化工具，我们�
 | 分析 Yolo 量化性能 | TensorRT | onnx | [benckmark](https://github.com/openppl-public/ppq/blob/master/ppq/samples/Yolo/04_Benchmark.py), [profiler](https://github.com/openppl-public/ppq/blob/master/ppq/samples/Yolo/03_Profile.py) | [link](https://www.bilibili.com/video/BV1jN4y1M7jt) |
 | 尝试修改 Yolo 量化策略以提高性能 | TensorRT | onnx | [link](https://github.com/openppl-public/ppq/blob/master/ppq/samples/Yolo/05_QuantizationAgain.py) | [link](https://www.bilibili.com/video/BV1ra411S7io) |
 
-### Dive into PPQ 深入理解量化框架
+#### Dive into PPQ 深入理解量化框架
 |  | **Desc 介绍** | **Link 链接** |
 | :-: | :-: | :-: |
 | 01 | PPQ 量化执行流程 |  [link](https://www.bilibili.com/video/BV1kt4y1b75m) |
@@ -99,8 +108,7 @@ PPQ 被设计为一个灵活而全面的神经网络离线量化工具，我们�
 | 06 | PPQ 量化优化过程 |  [link](https://www.bilibili.com/video/BV1zT411g7Ly) |
 | 07 | PPQ 量化函数 |  [link](https://www.bilibili.com/video/BV1CU4y1q7tr) |
 
-## Installation
-
+### Installation
 To release the power of this advanced quantization tool, at least one CUDA computing device is required.
 Install CUDA from [CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit-archive), PPL Quantization Tool will use CUDA compiler to compile cuda kernels at runtime.
 
@@ -155,7 +163,7 @@ pre-built wheels are maintained in [PPQ](https://pypi.org/project/ppq/), you cou
 python3 -m pip install ppq
 ```
 
-## Contact Us
+### Contact Us
 
 | WeChat Official Account | QQ Group |
 | :----:| :----: |
@@ -164,19 +172,19 @@ python3 -m pip install ppq
 
 Email: openppl.ai@hotmail.com
 
-## Other Resources
+### Other Resources
 
 * [Sensetime Parrots](https://www.sensetime.com/cn)
 * [Sensetime Parrots Primitive Libraries](https://github.com/openppl-public/ppl.nn)
 * [Sensetime mmlab](https://github.com/open-mmlab)
 
-## Contributions
+### Contributions
 
 We appreciate all contributions. If you are planning to contribute back bug-fixes, please do so without any further discussion.
 
 If you plan to contribute new features, utility functions, or extensions to the core, please first open an issue and discuss the feature with us. Sending a PR without discussion might end up resulting in a rejected PR because we might be taking the core in a different direction than you might be aware of.
 
-## Benchmark
+### Benchmark
 
 PPQ is tested with models from mmlab-classification, mmlab-detection, mmlab-segamentation, mmlab-editing, here we listed part of out testing result.
 
@@ -208,6 +216,6 @@ PPQ is tested with models from mmlab-classification, mmlab-detection, mmlab-sega
 * Classification models are evaluated with ImageNet, Detection and Segamentation models are evaluated with COCO dataset, Editing models are evaluated with DIV2K dataset.
 * All calibration datasets are randomly picked from training data.
 
-## License
+### License
 
 This project is distributed under the [Apache License, Version 2.0](LICENSE).
