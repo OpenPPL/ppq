@@ -14,8 +14,8 @@ from tqdm import tqdm
 from .base import QuantizationOptimizationPass
 
 OPTIMIZATION_LAYERTYPE_CONFIG = {
-    1: {'Relu', 'MaxPool', 'GlobalMaxPool', 'PRelu', 'AveragePool', 'GlobalAveragePool'},                     # level - 1 optimize
-    2: {'Relu', 'MaxPool', 'GlobalMaxPool', 'Add', 'Sub', 'PRelu', 'AveragePool', 'GlobalAveragePool'},       # level - 2 optimize
+    1: {'Relu', 'MaxPool', 'GlobalMaxPool', 'PRelu', 'AveragePool', 'GlobalAveragePool', 'LeakyRelu', 'Identity'},                     # level - 1 optimize
+    2: {'Relu', 'MaxPool', 'GlobalMaxPool', 'Add', 'Sub', 'PRelu', 'AveragePool', 'GlobalAveragePool', 'LeakyRelu', 'Identity'},       # level - 2 optimize
 }
 EQUALIZATION_OPERATION_TYPE = {'Conv', 'Gemm', 'ConvTranspose'}
 
@@ -370,6 +370,82 @@ class LayerwiseEqualizationPass(QuantizationOptimizationPass):
                     act_multiplier=self.act_multiplier)
 
         # equalization progress directly changes fp32 value of weight,
+        # store it for following procedure.
+        for op in graph.operations.values():
+            if isinstance(op, QuantableOperation):
+                op.store_parameter_value()
+
+
+class ChannelwiseSplitPass(LayerwiseEqualizationPass):
+
+    def __init__(self, iterations: int, threshold: float = 2,
+        including_bias: bool = False, bias_multiplier: float = 0.5,
+        including_act: bool = False, act_multiplier: float = 0.5,
+        interested_layers: List[str] = None, optimize_level: int = 2,
+        verbose:bool = False) -> None:
+
+        self.optimize_level    = optimize_level
+        self.iterations        = iterations
+        self.value_threshold   = threshold
+
+        self.including_bias    = including_bias
+        self.bias_multiplier   = bias_multiplier
+
+        self.including_act     = including_act
+        self.act_multiplier    = act_multiplier
+        
+        self.interested_layers = interested_layers
+        self.verbose           = verbose
+
+        self.name = 'PPQ Channelwise Split Pass'
+
+    def optimize(self, graph: BaseGraph, dataloader: Iterable, 
+                 executor: BaseGraphExecutor, collate_fn: Callable,
+                 **kwargs) -> None:
+
+        interested_operations = []
+        if self.interested_layers is None:
+
+            for operation in graph.operations.values():
+                if operation.type in EQUALIZATION_OPERATION_TYPE:
+                    interested_operations.append(operation)
+        else:
+
+            for name in self.interested_layers:
+                if name in graph.operations:
+                    interested_operations.append(graph.operations[name])
+
+        pairs = self.find_equalization_pair(
+            graph=graph, interested_operations=interested_operations)
+
+        print(f'{len(pairs)} equalization pair(s) was found, ready to run optimization.')
+        for iter_times in tqdm(range(self.iterations), desc='Layerwise Channel Split', total=self.iterations):
+            if self.including_act:
+                activations = self.collect_activations(
+                    graph=graph, executor=executor, dataloader=dataloader, collate_fn=collate_fn,
+                    operations=interested_operations)
+
+                for name, act in activations.items():
+                    graph.variables[name].value = act # 将激活值写回网络
+
+            for equalization_pair in pairs:
+                
+                # can not split group convolution.
+                is_group_conv = False
+                for layer in equalization_pair.downstream_layers + equalization_pair.upstream_layers:
+                    if layer.type in {'Conv', 'ConvTranspose'}:
+                        group  = layer.attributes.get('group', 1)
+                        if group != 1: is_group_conv = True
+                
+                if is_group_conv: continue
+                equalization_pair.channel_split(
+                    value_threshold=self.value_threshold,
+                    including_bias=self.including_bias,
+                    including_act=self.including_act,
+                    bias_multiplier=self.bias_multiplier,
+                    act_multiplier=self.act_multiplier)
+
+        # channel split progress directly changes fp32 value of weight,
         # store it for following procedure.
         for op in graph.operations.values():
             if isinstance(op, QuantableOperation):

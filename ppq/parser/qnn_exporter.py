@@ -1,7 +1,6 @@
 import json
 
-from ppq.core import (DataType, QuantizationStates,
-                      ChannelwiseTensorQuantizationConfig)
+from ppq.core import DataType, QuantizationStates
 from ppq.IR import BaseGraph
 from ppq.IR.quantize import QuantableOperation
 
@@ -28,19 +27,13 @@ class QNNDSPExporter(OnnxExporter):
                 if config.num_of_bits > 8: continue
 
                 if config.state in {
-                    QuantizationStates.SOI,
-                    QuantizationStates.DEACTIVATED,
-                    QuantizationStates.DEQUANTIZED,
-                    QuantizationStates.FP32
+                    QuantizationStates.FP32,
                 }: continue
                 # Simply override recorder is acceptable here,
                 # we do not support mix precision quantization for CUDA backend now.
                 # All configurations for this variable should keep identical towards each other.
 
-                if config.state == QuantizationStates.SLAVE and var.name in activation_info: continue
-
-                assert not isinstance(config, ChannelwiseTensorQuantizationConfig), 'QNNExporter only support'\
-                    'per tensor quantization for now'
+                if config.state == QuantizationStates.PASSIVE and var.name in activation_info: continue
                 info =  [{
                             'bitwidth': config.num_of_bits,
                             'max'     : convert_value(config.scale * (config.quant_max - config.offset), True, DataType.FP32),

@@ -37,14 +37,13 @@ def collate_fn(batch: dict) -> torch.Tensor:
 # 我们将调度方法修改为 conservative，并且要求 PPQ 启动量化微调
 # ------------------------------------------------------------
 QSetting = QuantizationSettingFactory.default_setting()
-QSetting.dispatcher = 'conservative'
 QSetting.lsq_optimization = True
 
 # ------------------------------------------------------------
 # 准备好 QuantizationSetting 后，我们加载模型，并且要求 ppq 按照规则完成图调度
 # ------------------------------------------------------------
 graph = load_onnx_graph(onnx_import_file=ONNX_PATH)
-graph = dispatch_graph(graph=graph, platform=QUANT_PLATFORM, setting=QSetting)
+graph = dispatch_graph(graph=graph, platform=QUANT_PLATFORM)
 for name in graph.inputs:
     if name not in INPUT_SHAPES:
         raise KeyError(f'Graph Input {name} needs a valid shape.')

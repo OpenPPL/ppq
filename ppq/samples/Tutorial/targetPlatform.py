@@ -10,7 +10,6 @@ from ppq.api import (ENABLE_CUDA_KERNEL, export_ppq_graph,
 from ppq.core import (QuantizationPolicy, QuantizationProperty,
                       QuantizationStates, RoundingPolicy, convert_any_to_numpy)
 from ppq.IR import BaseGraph, Operation, QuantableOperation
-from ppq.IR.morph import GraphDeviceSwitcher
 
 # ------------------------------------------------------------
 # 在这个脚本中，我们将创建一个新的量化平台，定义我们自己的量化规则
@@ -56,7 +55,7 @@ class MyQuantizer(BaseQuantizer):
         # ------------------------------------------------------------
         if operation.type == 'Conv':
             config = self.create_default_quant_config(
-                operation_meta     = operation.meta_data, 
+                op                 = operation, 
                 num_of_bits        = 8,
                 quant_max          = 127, 
                 quant_min          = -128,
@@ -130,13 +129,6 @@ class MyExporter(OnnxExporter):
             return value.tolist()
     
     def export(self, file_path: str, graph: BaseGraph, config_path: str, **kwargs):
-        # ------------------------------------------------------------
-        # 在一开始，我们要移除一些特殊的算子 -- PPQDeviceSwitcher
-        # 这些算子是为了 PPQ 的调度服务的，在导出 Onnx 的时候我们并不需要它
-        # ------------------------------------------------------------
-        processor = GraphDeviceSwitcher(graph)
-        processor.remove_switcher()
-
         # ------------------------------------------------------------
         # 接下来我们将导出量化信息，在 PPQ 中所有的量化信息都绑定在 Op 上
         # 因此我们需要遍历图中所有的 Op, 将绑定在其上的量化信息导出到文件

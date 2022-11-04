@@ -52,7 +52,7 @@ class QuantizationOptimizationPipeline(Container, Iterable):
     Quantizer is going to calling optimization pass from pipeline one by one to
         eventually finish network quantization procedure
     """
-    def __init__(self, passes: List[QuantizationOptimizationPass]) -> None:
+    def __init__(self, passes: List[QuantizationOptimizationPass]):
         super().__init__()
         self._pipeline = []
         if passes is not None:

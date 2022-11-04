@@ -254,8 +254,7 @@ def convert_any_to_numpy(
     elif isinstance(x, torch.Tensor):
         if x.numel() == 0 and accept_none: return None
         if x.numel() == 0 and not accept_none: raise ValueError('Trying to convert an empty value.')
-        if x.numel() == 1: return convert_any_to_numpy(x.detach().cpu().item())
-        if x.numel()  > 1: return x.detach().cpu().numpy()
+        if x.numel() >= 1: return x.detach().cpu().numpy()
     elif isinstance(x, list) or isinstance(x, tuple):
         return np.array(x)
     else:

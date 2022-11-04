@@ -32,6 +32,7 @@ class ComplieHelper(metaclass=SingletonMeta):
                 os.path.join(os.path.dirname(os.path.dirname(__file__)), 'csrc/cuda/linear.cu'),
                 os.path.join(os.path.dirname(os.path.dirname(__file__)), 'csrc/cuda/sort.cu'),
                 os.path.join(os.path.dirname(os.path.dirname(__file__)), 'csrc/cuda/train.cu'),
+                os.path.join(os.path.dirname(os.path.dirname(__file__)), 'csrc/cuda/floating.cu'),
                 os.path.join(os.path.dirname(os.path.dirname(__file__)), 'csrc/cpu/hist_mse.cc'),
             ],
             build_directory=os.path.join(os.path.dirname(os.path.dirname(__file__)), 'csrc/build/'),
@@ -270,6 +271,81 @@ class CUDA:
         end: int
     ) -> float:
         return CUDA_COMPLIER.CUDA_EXTENSION.compute_mse_loss(histogram, start, step, end)
+
+    @ staticmethod
+    def FloatingQuantize_T(
+        tensor: torch.Tensor,
+        scales: torch.Tensor,
+        offsets: torch.Tensor,
+        exponent: int = 4, 
+        mantissa: int = 3,
+        minimum: float = - 448, # FP8 E4M3
+        maximum: float = + 448,
+        rounding: int = 0
+    ) -> torch.Tensor:
+        if exponent <= 0: raise ValueError('Floating Quantization requires exponent > 0')
+        if not tensor.is_contiguous(): tensor = tensor.contiguous()
+        # if scale is too small, quantization might cause fp32 underflow.
+        # if scale < 1e-7: raise ValueError('scale is too small.')
+        return CUDA_COMPLIER.CUDA_EXTENSION.QuantizeTensor_FT(
+            tensor, scales, offsets, exponent, mantissa, minimum, maximum, rounding)
+
+    @ staticmethod
+    def FloatingQuantize_C(
+        tensor: torch.Tensor,
+        scales: torch.Tensor,
+        offsets: torch.Tensor,
+        channel_axis: int,
+        exponent: int = 4, 
+        mantissa: int = 3,
+        minimum: float = - 448, # FP8 E4M3
+        maximum: float = + 448,
+        rounding: int = 0
+    ) -> torch.Tensor:
+        if exponent <= 0: raise ValueError('Floating Quantization requires exponent > 0')
+        if not tensor.is_contiguous(): tensor = tensor.contiguous()
+        return CUDA_COMPLIER.CUDA_EXTENSION.QuantizeTensor_FC(
+            tensor, scales, offsets, exponent, mantissa, 
+            minimum, maximum, channel_axis, rounding)
+
+    @ staticmethod
+    def FloatingQuantize_T_B(
+        tensor: torch.Tensor,
+        scales: torch.Tensor,
+        offsets: torch.Tensor,
+        dy: torch.Tensor,
+        exponent: int, 
+        mantissa: int,
+        minimum: float,
+        maximum: float,
+        rounding: int,
+    ) -> List[torch.Tensor]:
+        if not tensor.is_contiguous(): tensor = tensor.contiguous()
+        return CUDA_COMPLIER.CUDA_EXTENSION.QuantizeTensor_FT_B(
+            tensor, scales, offsets,
+            dy, exponent, mantissa, minimum, maximum, rounding
+        )
+
+    @ staticmethod
+    def FloatingQuantize_C_B(
+        tensor: torch.Tensor,
+        scales: torch.Tensor,
+        offsets: torch.Tensor,
+        dy: torch.Tensor,
+        exponent: int, 
+        mantissa: int,
+        minimum: float,
+        maximum: float,
+        channel_axis: int,
+        rounding: int,
+    ) -> List[torch.Tensor]:
+        if not tensor.is_contiguous(): tensor = tensor.contiguous()
+        return CUDA_COMPLIER.CUDA_EXTENSION.QuantizeTensor_FC_B(
+            tensor, scales, offsets,
+            dy, exponent, mantissa, minimum, maximum, 
+            rounding, channel_axis
+        )
+
 
     @ staticmethod
     def Sync():

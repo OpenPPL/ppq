@@ -10,15 +10,17 @@ from .base import BaseTensorObserver
 from .order import TorchIsotoneObserver
 from .range import (TorchHistObserver, TorchMinMaxObserver, TorchMSEObserver,
                     TorchPercentileObserver)
+from .floating import ConstantObserver, DirectMSEObserver
 
-PPQ_OBSERVER_TABLE = {
+OBSERVER_TABLE = {
     'minmax': TorchMinMaxObserver,
     'kl': TorchHistObserver,
     'percentile': TorchPercentileObserver,
     'mse': TorchMSEObserver,
-    'isotone': TorchIsotoneObserver
+    'isotone': TorchIsotoneObserver,
+    'constant': ConstantObserver,
+    'floating': DirectMSEObserver
 }
-
 
 class TensorObserverFactroy():
     def __init__(self) -> None:
@@ -28,11 +30,11 @@ class TensorObserverFactroy():
     @ classmethod
     def build_observer(cls, variable: Variable, config: TensorQuantizationConfig) -> BaseTensorObserver:
         algorithm = str(config.observer_algorithm.lower())
-        if algorithm not in PPQ_OBSERVER_TABLE:
+        if algorithm not in OBSERVER_TABLE:
             raise ValueError(
-                f'Observer type not understand, Except one of {PPQ_OBSERVER_TABLE.keys()}, '\
+                f'Observer type not understand, Except one of {OBSERVER_TABLE.keys()}, '\
                 f'while {str(algorithm)} was given.')
-        return PPQ_OBSERVER_TABLE[algorithm](watch_on=variable, quant_cfg=config)
+        return OBSERVER_TABLE[algorithm](watch_on=variable, quant_cfg=config)
 
 
 class CalibrationHook(QuantOPRuntimeHook):

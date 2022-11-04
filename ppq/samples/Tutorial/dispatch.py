@@ -27,7 +27,7 @@ class MyQuantizer(BaseQuantizer):
         # ------------------------------------------------------------
         if operation.type == 'Conv':
             config = self.create_default_quant_config(
-                operation_meta     = operation.meta_data, 
+                op                 = operation, 
                 num_of_bits        = 4,
                 quant_max          = 15, 
                 quant_min          = -16,

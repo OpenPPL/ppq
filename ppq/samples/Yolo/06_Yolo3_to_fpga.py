@@ -40,7 +40,7 @@ class MyFPGAQuantizer(FPGAQuantizer):
 
 # load and schedule graph
 ppq_graph_ir = load_onnx_graph(model_path)
-ppq_graph_ir = dispatch_graph(ppq_graph_ir, target_platform, s)
+ppq_graph_ir = dispatch_graph(ppq_graph_ir, target_platform)
 
 # intialize quantizer and executor
 executor = TorchExecutor(ppq_graph_ir, device=EXECUTING_DEVICE)

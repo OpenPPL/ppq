@@ -94,7 +94,6 @@ class AdaRoundDelegator(TorchQuantizeDelegator):
         with torch.no_grad():
             scale, offset = config.scale, config.offset
             if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
-                assert isinstance(config, ChannelwiseTensorQuantizationConfig)
                 shape = [1 if axis != config.channel_axis else -1 for axis in range(value.ndim)]
                 scale = scale.view(shape)
 
@@ -111,7 +110,6 @@ class AdaRoundDelegator(TorchQuantizeDelegator):
     def finalize(self) -> None:
         weight, scale, offset = self.var.value, self.config.scale, self.config.offset
         if self.config.policy.has_property(QuantizationProperty.PER_CHANNEL):
-            assert isinstance(self.config, ChannelwiseTensorQuantizationConfig)
             shape = [1 if axis != self.config.channel_axis else -1 for axis in range(weight.ndim)]
             scale = scale.view(shape)
             offset = offset.view(shape)
@@ -128,7 +126,6 @@ class AdaRoundDelegator(TorchQuantizeDelegator):
         scale = config.scale
         offset = config.offset
         if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
-            assert isinstance(config, ChannelwiseTensorQuantizationConfig)
             shape = [1 if axis != config.channel_axis else -1 for axis in range(tensor.ndim)]
             scale = scale.view(shape)
             offset = offset.view(shape)
@@ -332,7 +329,7 @@ class ChannelSplitPass(QuantizationOptimizationPass):
         if downstream_op.type == 'ConvTranspose' or (downstream_op.type == 'Gemm' and downstream_op.attributes.get('transB', 0) == 0):
             down_axis = 0
 
-        if upstream_op.parameters[0].meta.shape[up_axis] != downstream_op.parameters[0].meta.shape[down_axis]:
+        if upstream_op.parameters[0].shape[up_axis] != downstream_op.parameters[0].shape[down_axis]:
             return False
 
         return True
@@ -503,7 +500,7 @@ class AdaroundPass(TrainingBasedPass):
 
             # register quant delegator
             for cfg, var in op.config_with_variable:
-                if cfg.state not in {QuantizationStates.ACTIVATED, QuantizationStates.SLAVE}: continue
+                if cfg.state not in {QuantizationStates.ACTIVATED, QuantizationStates.PASSIVE}: continue
                 if var.is_parameter and cfg.state not in {QuantizationStates.PASSIVE}:
                     delegator = AdaRoundDelegator(config=cfg, var=var, steps=steps)
                     trainable_params.extend(delegator.trainable_tensors())

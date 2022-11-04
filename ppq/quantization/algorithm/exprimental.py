@@ -5,7 +5,7 @@ import numpy as np
 import torch
 from ppq.core import TensorQuantizationConfig
 from ppq.executor import TorchQuantizeDelegator
-from ppq.quantization.qfunction.linear import PPQLinearQuantFunction
+from ppq.quantization.qfunction import PPQLinearQuantFunction
 from ppq.utils.ema import EMARecorder
 
 

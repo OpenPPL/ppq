@@ -1,16 +1,15 @@
 from typing import Union
 
 import torch
-from ppq.core import (PASSIVE_OPERATIONS, ChannelwiseTensorQuantizationConfig,
-                      OperationQuantizationConfig, QuantizationPolicy,
-                      QuantizationProperty, QuantizationStates, RoundingPolicy,
-                      TargetPlatform)
+from ppq.core import (PASSIVE_OPERATIONS, OperationQuantizationConfig,
+                      QuantizationPolicy, QuantizationProperty,
+                      QuantizationStates, RoundingPolicy, TargetPlatform)
 from ppq.IR import BaseGraph, Operation
 
 from .base import BaseQuantizer
 
 
-class ORT_PerTensorQuantizer(BaseQuantizer):
+class RKNN_PerTensorQuantizer(BaseQuantizer):
     def __init__(
         self,
         graph: BaseGraph
@@ -23,7 +22,7 @@ class ORT_PerTensorQuantizer(BaseQuantizer):
     def init_quantize_config(self, operation: Operation) -> OperationQuantizationConfig:
 
         base_quant_config = self.create_default_quant_config(
-            operation_meta=operation.meta_data, num_of_bits=self._num_of_bits,
+            op=operation, num_of_bits=self._num_of_bits, exponent_bits=0,
             quant_max=self._quant_max, quant_min=self._quant_min,
             observer_algorithm='percentile', policy=self.quantize_policy,
             rounding=self.rounding_policy,
@@ -56,7 +55,7 @@ class ORT_PerTensorQuantizer(BaseQuantizer):
 
     @ property
     def target_platform(self) -> TargetPlatform:
-        return TargetPlatform.ORT_OOS_INT8
+        return TargetPlatform.RKNN_INT8
 
     @ property
     def default_platform(self) -> TargetPlatform:
@@ -88,7 +87,7 @@ class ORT_PerTensorQuantizer(BaseQuantizer):
         return {'Relu', 'Clip'}
 
 
-class ORT_PerChannelQuantizer(BaseQuantizer):
+class RKNN_PerChannelQuantizer(BaseQuantizer):
     def __init__(
         self, graph: BaseGraph
     ) -> Union[torch.Tensor, list, dict]:
@@ -100,7 +99,7 @@ class ORT_PerChannelQuantizer(BaseQuantizer):
     def init_quantize_config(self, operation: Operation) -> OperationQuantizationConfig:
         base_quant_config = self.create_default_quant_config(
             policy=self.quantize_policy, rounding=self.rounding_policy,
-            operation_meta=operation.meta_data, num_of_bits=self._num_of_bits,
+            op=operation, num_of_bits=self._num_of_bits, exponent_bits=0,
             quant_max=self._quant_max, quant_min=self._quant_min,
             observer_algorithm='percentile')
 
@@ -119,12 +118,8 @@ class ORT_PerChannelQuantizer(BaseQuantizer):
                     QuantizationProperty.LINEAR +
                     QuantizationProperty.PER_CHANNEL
                 )
-                base_quant_config.input_quantization_config[1] = \
-                    ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
-                        convert_from = conv_weight_config,
-                        offset = None, scale  = None, channel_axis = 0
-                    )
-                base_quant_config.input_quantization_config[1].observer_algorithm = 'Minmax'
+                conv_weight_config.channel_axis = 0
+                conv_weight_config.observer_algorithm = 'minmax'
             # first parameter must exits, for gemm layer it will be gemm_weight
             # layout: [in_dim, out_dim]
             else:
@@ -138,12 +133,8 @@ class ORT_PerChannelQuantizer(BaseQuantizer):
                             QuantizationProperty.LINEAR +
                             QuantizationProperty.PER_CHANNEL
                         )
-                        base_quant_config.input_quantization_config[index] = \
-                            ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
-                                convert_from = matmul_weight_config,
-                                offset = None, scale  = None, channel_axis = 1
-                            )
-                        base_quant_config.input_quantization_config[index].observer_algorithm = 'Minmax'
+                        matmul_weight_config.channel_axis = 1
+                        matmul_weight_config.observer_algorithm = 'minmax'
             # if operation has bias
             if operation.type in {'Conv', 'Gemm'} and operation.num_of_input > 2:
                 bias_config = base_quant_config.input_quantization_config[-1]
@@ -156,21 +147,17 @@ class ORT_PerChannelQuantizer(BaseQuantizer):
                 bias_config.quant_max = int(pow(2, 30 - 1))
                 bias_config.quant_min = - int(pow(2, 30 - 1))
                 bias_config.state = QuantizationStates.PASSIVE_INIT
-                base_quant_config.input_quantization_config[-1] = \
-                    ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
-                        convert_from = bias_config, offset = None,
-                        scale = None, channel_axis = 0
-                    )
-                base_quant_config.input_quantization_config[-1].observer_algorithm = 'Minmax'
+                bias_config.channel_axis = 0
+                bias_config.observer_algorithm = 'minmax'
 
         if operation.type in PASSIVE_OPERATIONS:
-            # Those op are not active op.
             base_quant_config.is_active_quant_op = False
+
         return base_quant_config
 
     @ property
     def target_platform(self) -> TargetPlatform:
-        return TargetPlatform.ORT_OOS_INT8
+        return TargetPlatform.RKNN_INT8
 
     @ property
     def default_platform(self) -> TargetPlatform:

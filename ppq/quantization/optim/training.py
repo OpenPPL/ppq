@@ -735,14 +735,14 @@ class LearnedStepSizePass(TrainingBasedPass):
         for op in block.rps:
             if not isinstance(op, QuantableOperation): continue
 
-            if op.is_computing_op: 
-                for var in op.inputs[1:]: 
+            if op.is_computing_op or op.type in {'Add', 'Mul'}: # 独立的 Add Mul 算子也可以训练
+                for var in op.inputs: 
                     if var.is_parameter:
                         trainable_params.append(var.value)
 
             # register quant delegator
             for cfg, var in op.config_with_variable:
-                if cfg.state in {QuantizationStates.ACTIVATED, QuantizationStates.SLAVE}:
+                if cfg.state in {QuantizationStates.ACTIVATED, QuantizationStates.PASSIVE}:
                     delegator = LSQDelegator(config=cfg, var=var)
                     trainable_scales.extend(delegator.trainable_tensors())
                     executor.register_quantize_delegate(config=cfg, delegator=delegator)
@@ -750,6 +750,7 @@ class LearnedStepSizePass(TrainingBasedPass):
 
         # check if empty.
         tensors = [tensor for tensor in trainable_params + trainable_scales if tensor.requires_grad]
+        tensors = set(tensors) # remove duplicated tensor
         if len(tensors) == 0:
             for cfg, delegator in delegators.items():
                 executor.remove_quantize_delegate(config=cfg)

@@ -6,11 +6,10 @@ import onnx
 import torch
 from onnx import helper, numpy_helper
 from ppq.core import (GRAPH_OPSET_ATTRIB, ONNX_EXPORT_OPSET, ONNX_VERSION,
-                      PPQ_CONFIG, DataType, convert_any_to_numpy, ppq_warning)
-from ppq.core.quant import QuantizationStates
+                      PPQ_CONFIG, DataType, QuantizationStates,
+                      convert_any_to_numpy, ppq_warning)
 from ppq.IR import (BaseGraph, GraphExporter, Operation, OperationExporter,
                     Variable)
-from ppq.IR.morph import GraphDeviceSwitcher
 from ppq.IR.quantize import QuantableOperation
 
 
@@ -61,7 +60,7 @@ def convert_value(value: Union[int, float, np.ndarray, torch.Tensor]) -> str:
     if type(value) in {int, float}: return value
     else:
         value = convert_any_to_numpy(value, accept_none=True)
-        if value is None: return value # SOI config has None as its scale and
+        if value is None: return value # SOI config has Nona as its scale and
         return value.tolist()
 
 
@@ -96,7 +95,7 @@ class OnnxExporter(GraphExporter):
 
                 for config, _ in operation.config_with_variable:
                     if config.dominated_by == config:
-                        if (config.state != QuantizationStates.SOI):
+                        if (config.state != QuantizationStates.FP32):
                             render_buffer['values'][config.__hash__()] = {
                                 'scale'      : convert_value(config.scale),
                                 'zero_point' : convert_value(config.offset),
@@ -122,10 +121,10 @@ class OnnxExporter(GraphExporter):
         # Ready to export onnx graph defination.
         _inputs, _outputs, _initilizers, _nodes = [], [], [], []
         for operation in graph.topological_sort():
-            _nodes.append(self.export_operation(operation))
+            _nodes.append(self.build_operator_proto(operation))
 
         for variable in graph.variables.values():
-            tensor_proto = self.export_var(variable)
+            tensor_proto = self.build_variable_proto(variable)
             if variable.name in graph.inputs:
                 _inputs.append(tensor_proto)
             if variable.name in graph.outputs:
@@ -156,7 +155,7 @@ class OnnxExporter(GraphExporter):
         onnx_model.ir_version = graph._detail.get('ir_version', ONNX_VERSION)
         return onnx_model
 
-    def export_operation(self, operation: Operation) -> onnx.OperatorProto:
+    def build_operator_proto(self, operation: Operation) -> onnx.OperatorProto:
         """
         Convert PPQ Op to Onnx Operation
         An Op consumes zero or more Tensors, and produces zero or more Tensors.
@@ -185,56 +184,57 @@ class OnnxExporter(GraphExporter):
             **attributes)
         return op_proto
 
-    def export_var(self, variable: Variable) -> onnx.TensorProto:
+    def build_variable_proto(self, variable: Variable) -> onnx.TensorProto:
         """
-        Convert PPQ Variable to Onnx Tensor, There are 2 different types of Tensor in Onnx:
+        Convert PPQ Variable to Onnx TensorProto, There are 2 different types of Tensor in Onnx:
             Variable: Represents a Tensor whose value is not known until inference-time.
             Constant: Represents a Tensor whose value is known.
         """
-        if variable.meta is not None:
-            shape = variable.meta.shape
-            dtype = variable.meta.dtype.value
-        else:
-            shape, dtype = None, None
+        # Parameter Varaible in PPQ, Constant Variable in Onnx
+        if variable.is_parameter:
+            var_shape     = variable.value.shape
+            pytorch_dtype = variable.value.dtype
+            onnx_dtype    = DataType.convert_from_torch(pytorch_dtype).value
 
-        if dtype is None:
-            ppq_warning(f'Data type of Variable {variable.name} is not correctly traced, '
-                        'ppq will export it as fp32 variable to onnx.')
-            dtype = DataType.FP32.value
+        # Non Parameter
+        else:
+            var_shape  = variable.shape
+            onnx_dtype = variable.dtype.value
 
         if not variable.is_parameter:
             tensor_proto = helper.make_tensor_value_info(
-                name=variable.name,
-                # PPQ data type has exact same eunm value with onnx.
-                elem_type=dtype,
-                shape=shape)
+                name=variable.name, elem_type=onnx_dtype, shape=var_shape)
         else:
             value = variable.value
+            is_raw_format = False
             if isinstance(value, torch.Tensor):
-                if value.numel() == 0:
-                    value = []
+                if value.numel() == 0: value = []
                 elif value.ndim >= 1:
                     value = convert_any_to_numpy(variable.value).flatten()
-                elif value.ndim == 0:
-                    value = [value.item(), ] # it is fine for onnx, cause shape for this value will be []
+                    a     = value
+                    value = value.tobytes()
+                    is_raw_format = True
+                elif value.ndim == 0: # Pytorch Scalar Type
+                    value = [value.item(), ] # it is fine for onnx, shape for this value will be []
             else: value = value # value is python primary type.
             tensor_proto = helper.make_tensor(
-                name=variable.name, data_type=dtype,
-                dims=shape, vals=value)
+                name=variable.name, data_type=onnx_dtype,
+                dims=var_shape, vals=value, raw=is_raw_format)
         return tensor_proto
 
-    def export(self, file_path: str, graph: BaseGraph, config_path: str = None):
+    def export(self, file_path: str, graph: BaseGraph, 
+               config_path: str = None, save_as_external_data: bool=False):
         # during export we will remove all boundary operations from graph.
         # we do not want to change the structure of original graph,
         # so there have to take a clone of it.
         # graph = graph.copy()
-        # remove switchers.
-        if not PPQ_CONFIG.EXPORT_DEVICE_SWITCHER:
-            processor = GraphDeviceSwitcher(graph)
-            processor.remove_switcher()
 
         # if a valid config path is given, export quantization config to there.
         if config_path is not None:
             self.export_quantization_config(config_path, graph)
 
-        onnx.save(self.export_graph(graph=graph), file_path)
+        size_threshold = 0 if save_as_external_data else 1024
+        onnx.save(self.export_graph(graph=graph), file_path, 
+                  size_threshold=size_threshold,
+                  save_as_external_data=save_as_external_data,
+                  all_tensors_to_one_file=(not save_as_external_data))

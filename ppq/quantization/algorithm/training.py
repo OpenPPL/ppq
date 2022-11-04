@@ -4,18 +4,17 @@ from typing import Iterable, List, Tuple
 
 import torch
 from ppq.core import (NUM_OF_CHECKPOINT_FETCHS, PPQ_CONFIG,
-                      ChannelwiseTensorQuantizationConfig,
                       QuantizationProperty, QuantizationStates, RoundingPolicy,
                       TensorQuantizationConfig)
 from ppq.executor import TorchQuantizeDelegator
-from ppq.IR import BaseGraph, Operation, Variable
-from ppq.IR.search import SearchableGraph
+from ppq.IR import BaseGraph, Operation, SearchableGraph, Variable
+from ppq.quantization.qfunction import PPQuantFunction
 from ppq.utils.fetch import batch_random_fetch
 from ppq.utils.round import ppq_tensor_round
 from torch.autograd import Function
 
 
-class CuLSQ_T(Function):
+class CuLSQ_LT(Function):
     @ staticmethod
     def forward(ctx, tensor: torch.Tensor, scales: torch.Tensor,
                 offsets: torch.Tensor, quant_min: int, quant_max: int,
@@ -53,7 +52,7 @@ class CuLSQ_T(Function):
         return dx, ds, None, None, None, None, None
 
 
-class CuLSQ_C(Function):
+class CuLSQ_LC(Function):
     @ staticmethod
     def forward(ctx, tensor: torch.Tensor, scales: torch.Tensor,
                 offsets: torch.Tensor, channel_axis: int,
@@ -264,9 +263,10 @@ class BlockBuilder:
 
             while not least_first_queue.empty():
                 iter_operation = least_first_queue.pop()[-1]
-                if (least_first_queue.empty() and
-                    len(self.graph.get_upstream_operations(iter_operation)) > 1):
-                    return iter_operation
+                if (least_first_queue.empty()):
+                    upstream_ops = self.graph.get_upstream_operations(iter_operation)
+                    if all([op in least_first_queue._ops for op in upstream_ops]) and len(upstream_ops) > 1:
+                        return iter_operation
                 for down_op in self.graph.get_downstream_operations(iter_operation):
                     least_first_queue.push(self.depth[down_op], down_op)
 
@@ -333,15 +333,16 @@ class LSQDelegator(TorchQuantizeDelegator):
         # There is 4 checks for training scale:
         #   1. scale is valid
         #   2. state is active
-        #   3. do not have POWER_OF_2 policy
+        #   3. do not have POWER_OF_2 policy but Must have Linear policy
         #   4. is_scale_trainable = True
         self.scale_backup       = None
         self.is_scale_trainable = False
         if is_scale_trainable:
             policy_check = not config.policy.has_property(QuantizationProperty.POWER_OF_2)
+            linear_check = config.policy.has_property(QuantizationProperty.LINEAR)
             state_check  = ((config.state == QuantizationStates.ACTIVATED) and (config.dominated_by == config))
             value_check  = isinstance(config.scale, torch.Tensor)
-            if policy_check and state_check and value_check:
+            if policy_check and state_check and value_check and linear_check:
                 self.is_scale_trainable = True
                 self.scale_backup = self.config.scale.detach().clone()
 
@@ -392,7 +393,6 @@ class LSQDelegator(TorchQuantizeDelegator):
                 scale = scale * grad_scale + (scale - scale * grad_scale).detach()
 
             if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
-                assert isinstance(config, ChannelwiseTensorQuantizationConfig)
                 shape = [1 if axis != config.channel_axis else -1 for axis in range(tensor.ndim)]
                 scale = scale.view(shape)
                 offset = offset.view(shape)
@@ -404,18 +404,17 @@ class LSQDelegator(TorchQuantizeDelegator):
             return quantized
 
         else:
-            if not config.policy.has_property(QuantizationProperty.LINEAR):
-                raise ValueError('Critical Quantization Error! Non-linear config detected.')
-            if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
-                assert isinstance(config, ChannelwiseTensorQuantizationConfig), (
-                    'Critical Quantization Error! Except a ChannelwiseTensorQuantizationConfig.')
-                return CuLSQ_C.apply(
-                    tensor, config.scale, config.offset, config.channel_axis,
-                    config.quant_min, config.quant_max, config.rounding)
-            elif config.policy.has_property(QuantizationProperty.PER_TENSOR):
-                return CuLSQ_T.apply(
-                    tensor, config.scale, config.offset,
-                    config.quant_min, config.quant_max, config.rounding)
-            else:
-                raise PermissionError('Oops, Unexpected Error here.')
+            if config.policy.has_property(QuantizationProperty.LINEAR):
+                if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
+                    return CuLSQ_LC.apply(
+                        tensor, config.scale, config.offset, config.channel_axis,
+                        config.quant_min, config.quant_max, config.rounding)
+                elif config.policy.has_property(QuantizationProperty.PER_TENSOR):
+                    return CuLSQ_LT.apply(
+                        tensor, config.scale, config.offset,
+                        config.quant_min, config.quant_max, config.rounding)
+
+            elif config.policy.has_property(QuantizationProperty.FLOATING):
+                # For floating quantization, scale is not trainable.
+                return PPQuantFunction(tensor=tensor, config=config)
 

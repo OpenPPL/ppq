@@ -2,6 +2,8 @@ from abc import ABCMeta, abstractmethod
 from collections import defaultdict, deque
 from typing import Any, Callable, Dict, Iterable, Iterator, List, Set, Union
 
+from ppq.core import ppq_warning
+
 from .base.command import GraphCommand, GraphCommandType
 from .base.graph import BaseGraph, Operation
 from .processer import GraphCommandProcessor
@@ -157,138 +159,121 @@ class TraversalCommand(GraphCommand):
         WHERE   Path.length < 2
         语句将返回从 Conv 出发，到 Relu, Clip 的所有可能路径
         从中筛选出路径长度小于 2 的，并且将路径本身作为结果返回
-
-        Args:
-            query (str): [description]
-
-        Raises:
-            TypeError: [description]
-            KeyError: [description]
-
-        Returns:
-            [type]: [description]
         """
         pass
 
 
-class TreeNode:
-    def __init__(self, idx: int, pattern: Callable, edges: List[int]) -> None:
-        self.idx     = idx
-        self.pattern = pattern
-        self.edges   = edges
+class GraphPattern():
 
+    def __init__(self, node_patterns: List[Callable], edges: List[List[int]]) -> None:
+        """Pattern Tree 是一个用来表示图模式的结构体 这将在图中检索任意一个子图.
 
-class PatternTree(Iterable):
-    def __init__(self, patterns: List[Callable], edges: List[List[int]]) -> None:
-        """Pattern Tree 是一个用来表示图模式的结构体 这将在图中检索任意一个抽象树形结构.
-
-        你将使用 Pattern Tree 定义你的树结构
+        你将使用 Graph Pattern 定义你的子图结构
         使用 patterns 确定每一个节点需要满足的条件
-        使用 edges 将节点们彼此相连从而构成树形结构
+        使用 edges 将节点们彼此相连从而构成图结构
+        
+        构成的图必须可以进行拓扑排序，不可以检索有环结构，不可以检索不连通结构
+        例子：
+            pattern = ['Conv', 'Conv', 'Conv'],
+            edges = [[0, 1], [1, 2], [0, 2]]
 
-        patterns[0] 将被设定为树的根节点
+        描述了一个类似这样的树形结构:
+        
+            Conv -+- Conv -+- Conv
+                  |        |
+                  ----------
 
-        Args:
-            patterns (List[Callable]): _description_
-            edges (List[List[int]]): _description_
-
-        Raises:
-            TypeError: _description_
-            TypeError: _description_
-            ValueError: _description_
-        """
-        for pattern in patterns:
-            if not isinstance(pattern, Callable):
-                raise TypeError(f'Can not create Pattern Tree with pattern {str(pattern)} it is not callable.')
-        for edge in edges:
-            if not isinstance(edge, tuple) and not isinstance(edge, list):
-                raise TypeError(f'Can not create Pattern Tree with edge {str(edge)} it is not tuple or list.')
-            if len(edge) != 2:
-                raise ValueError(f'Can not create Pattern Tree with edge {str(edge)} '
-                                 f'it should contains exact 2 elements, however {len(edge)} was given.')
-            sp, ep = edge
-            if not isinstance(sp, int) or not isinstance(ep, int):
-                raise TypeError(f'Can not create Pattern Tree was given edge {[str(sp), str(ep)]}, '
-                                'expect int value here.')
-        '''
-        if len(edges) != len(patterns) - 1:
-            raise ValueError('Can not create Pattern with you input, input node and edges is not a tree. '
-                             '[num of edges != num of nodes - 1]')
-        '''
-
-        forward_stars = {node_id: [] for node_id in range(len(patterns))}
-        for sp, ep in edges: forward_stars[sp].append(ep)
-
-        self._nodes = [TreeNode(idx, pattern, forward_stars[idx]) for idx, pattern in enumerate(patterns)]
-        self.root = self._nodes[0]
-
-    def following_patterns(self, node_idx: int) -> List[Callable]:
-        node = self._nodes[node_idx]
-        return [self._nodes[following_node].pattern for following_node in node.edges]
-
-    def __getitem__(self, idx: int) -> TreeNode:
-        return self._nodes[idx]
-
-    def __iter__(self) -> Iterator[TreeNode]:
-        return super().__iter__()
-
-
-class HungarianSolver:
-    def __init__(self, num_of_ops: int, num_of_patterns: int, matches: List[List[int]]) -> None:
-        """
-        Hungarian Solver - Part of Tree Pattern Matching Algorithm
-        For complex pattern, there might be more than 1 corresponding op was founded,
-        Example:
+        第二个例子:
         pt = PatternTree(
-                patterns = [lambda x: x.is_computing_op, lambda x: x.is_computing_op, 'Conv', 'Mul']
+                patterns = [lambda x: x.is_computing_op, 'Softplus', 'Tanh', 'Mul']
                 edges = [[0, 1], [1, 2], [2, 3], [0, 3]])
 
             pt create an abstract tree pattern of:
-                                            --- lambda x: x.is_computing_op  --
-            lambda x: x.is_computing_op --- +                                 + --- 'Mul'
-                                            --- 'Conv'                       --
+                                            --- 'Softplus'   ---   'Tanh' --
+            lambda x: x.is_computing_op --- +                              + --- 'Mul'
+                                            ---     ---     ---    ---    --
 
-        There is an pattern overlap between x.is_computing_op and 'Conv',
-            so pattern x.is_computing_op might have more than 1 matchings.
-
-        in this case, we use hungarian algorithm to find an optimal matching(maximum).
-            if there is more than 1 optimal matching, this solver will return ARBITRARY ONE.
-
-        Args:
-            num_of_ops (int):
-
-            num_of_patterns (int):
-
-            matches (List[List[int]]): matches is a collection of op - pattern matchings,
-                if matches = [[0, 0], [1, 1], [2, 2]],
-                    it means op0 is matched with pattern 0
-                    it means op1 is matched with pattern 1
-                    it means op2 is matched with pattern 2
-
-            Hungarian Algorithm will find an optimial matching between ops and patterns.
+        错误的例子:
+            pattern = ['Conv', 'Conv', 'Conv'],
+            edges = [[0, 1], [1, 2], [2, 0]]
+        因为图中存在循环结构而无法检索
         """
-        self.neighbor_table  = {node_idx: set() for node_idx in range(num_of_patterns)}
-        self.num_of_ops      = num_of_ops
-        self.num_of_patterns = num_of_patterns
-        self.matched         = [-1 for _ in range(num_of_ops)]
-        for sp, ep in matches:
-            self.neighbor_table[sp].add(ep)
+        for idx, node_pattern in enumerate(node_patterns):
+            if isinstance(node_pattern, str):
+                node_patterns[idx] = TypeExpr(node_pattern)
+            elif not isinstance(node_pattern, Callable):
+                raise TypeError(f'Can not create Pattern with node pattern {str(node_pattern)} it is not callable.')
 
-    def solve(self) -> bool:
-        # 有一个匹配失败就立即返回，无需继续计算
-        visited = [False for _ in range(self.num_of_ops)]
-        for i in range(self.num_of_ops):
-            if not self._solve(i, visited): return False
-        return True
+        for edge in edges:
+            if not isinstance(edge, tuple) and not isinstance(edge, list):
+                raise TypeError(f'Can not create Pattern with edge {str(edge)} it is not tuple or list.')
+            if len(edge) != 2:
+                raise ValueError(f'Can not create Pattern with edge {str(edge)} '
+                                 f'it should contains exact 2 elements, however {len(edge)} was given.')
+            sp, ep = edge
+            if not isinstance(sp, int) or not isinstance(ep, int):
+                raise TypeError(f'Can not create Pattern was given edge {[str(sp), str(ep)]}, '
+                                'expect int value here.')
+        
+        self.order, self.output_table, self.input_table = self.compile(node_patterns=node_patterns, edges=edges)
+        self.argsort_order = sorted([(_, idx) for idx, _ in enumerate(self.order)])
+        self.argsort_order = [idx for _, idx in self.argsort_order]
+        self.node_patterns = node_patterns
 
-    def _solve(self, pattern: int, visited: List[bool]) -> bool:
-        for ep in self.neighbor_table[pattern]:
-            if visited[ep]: continue
-            visited[ep] = True
-            if self.matched[ep] == -1 or self._solve(self.matched[ep], visited):
-                self.matched[ep] = pattern
-                return True
-        return False
+
+    def compile(self, node_patterns: List[Callable], edges: List[List[int]]):
+        """ Pattern Compile.
+        1. Do topological Sort on given pattern.
+        2. Reorganize pattern by topological order.
+        """
+
+        # prepare for topological sort
+        visited = [False for _ in node_patterns]
+        num_of_inputs = [0 for _ in node_patterns]
+        forward_table = [set() for _ in node_patterns]
+        backward_table = [set() for _ in node_patterns]
+        roots = []
+        
+        for edge in edges:
+            sp, ep = edge
+            if sp >= len(node_patterns) or sp < 0:
+                raise IndexError(f'Can not Compile Pattern, Edge {edge} Out of Node Range, '
+                                 f'Except Value between 0 and {len(node_patterns) - 1}, however {sp} was given.')
+            if ep >= len(node_patterns) or ep < 0:
+                raise IndexError(f'Can not Compile Pattern, Edge {edge} Out of Node Range, '
+                                 f'Except Value between 0 and {len(node_patterns) - 1}, however {ep} was given.')
+            forward_table[sp].add(ep)
+            backward_table[ep].add(sp)
+            num_of_inputs[ep] += 1
+
+        # initialization
+        pop_list, sort_ret = deque(), []
+        for idx, n_input in enumerate(num_of_inputs):
+            if n_input == 0: 
+                pop_list.append(idx)
+                roots.append(idx)
+
+        # topological sort
+        for _ in range(len(visited)):
+            if len(pop_list) == 0: break
+            current = pop_list.popleft()
+
+            for next in forward_table[current]:
+                num_of_inputs[next] -= 1
+                if num_of_inputs[next] == 0:
+                    pop_list.append(next)
+
+            visited[current] = True
+            sort_ret.append(current)
+
+        if all(visited):
+            if len(roots) > 1:
+                ppq_warning('More than 1 pattern root was found, '
+                            'Complext Pattern might cause memory overflow ...')
+            return sort_ret, forward_table, backward_table
+        else:
+            raise RuntimeError('Topological Sort failed. '
+                               'Some node can not be sorted (might due to circular reference)')
 
 
 class TypeExpr(Callable):
@@ -300,28 +285,29 @@ class TypeExpr(Callable):
         return op.type == self.type
 
 
-class TreePatternMatcher:
-    def __init__(self, pattern_tree: PatternTree) -> None:
-        """TreePatternMatcher offers you a really powerful pattern matching
-        tool that helps you finding specific structure from your graph. Define
-        your network structure with pattern tree --- an internal data structure
-        of PPQ, then extract corresponding graph structures from ppq graph via
-        TreePatternMatcher.
-
-        This feature will benefits you a lot when dealing with graph fusion and graph editing.
-        PPQ use Depth First Search and Hungarian Algorithm to match pattern from your graph,
-            be aware that for complex pattern it might cost a lot of time in matching.
-
-        Time complexity: O(nkd^3),
-            where n is the num of operation in your graph,
-            k is the num of pattern in your pattern tree,
-            d is the maximum drgree in your graph.
-
-        Notice in most cases it won't reach this complexity,
-        it always have a complexity like O(nk)
-
-        ATTENTION: Do not use poorly designed pattern which might cause multiple matching results.
-                   For this case, ppq will randomly pick one matched result and return.
+class PatternMatchHelper:
+    @ staticmethod
+    def match_burte_force(
+        graph: BaseGraph, pattern: GraphPattern, 
+        exclusive: bool, max_candidates: int = 1000000) -> List[List[Operation]]:
+        """暴力子图模式匹配 这是 PPQ 0.6.6 更新的内容
+        在 0.6.6 之前，我们使用具有不确定性的贪心匹配算法，但是考虑到实际应用中的问题
+        在 0.6.6 版本之后，我们将其修改为枚举匹配。
+        
+        子图匹配问题是一个 NP-Hard 的问题，不存在多项式时间复杂度的解法。
+        你需要给出一个模式子图，match_burte_force 方法将在 graph 中对模式子图进行匹配。
+        
+        PPQ 使用了非递归的算法完成上述匹配，其最坏时间和空间复杂度大概都是 O(NM^k)
+        其中 N 是母图节点个数，M 是子图节点个数，k 是母图的最大出度
+        
+        对于存在二义性子图模式，匹配复杂度将指数级增长；为了限制算法执行时间，当匹配到多于
+        max_candidates 个模式子图时，算法强制停机，并报错返回。
+        
+        实际使用中的时间复杂度更加接近于 O(NM)
+        
+        参数 exclusive 指定了是否需要进行精确匹配。在精确匹配模式下：
+            1. 不允许模式子图中除根节点外的其他节点有来自模式子图以外节点的输入
+            2. 不允许模式子图中除叶节点外的其他节点有朝向模式子图以外节点的输出
 
         Example:
             pt = PatternTree(
@@ -333,78 +319,72 @@ class TreePatternMatcher:
             lambda x: x.is_computing_op --- +                              + --- 'Mul'
                                             ---     ---     ---    ---    --
 
-        Args:
-            pattern_tree (PatternTree): _description_
         """
-        self.pattern_tree   = pattern_tree
-        self._interal_store = []
-        self.results        = []
 
-    def match(self, graph: BaseGraph, exclusive: bool) -> List[List[Operation]]:
-        root, candidates = self.pattern_tree.root, []
+        def is_linked(upstream_op: Operation, downstream_op: Operation) -> bool:
+            if upstream_op is None or downstream_op is None: return True
+            return downstream_op in graph.get_downstream_operations(upstream_op)
+
+        node_order = pattern.order
+        matched_patterns = []
 
         # match root from graph, further pattern matching will start from root.
         for operation in graph.operations.values():
-            if root.pattern(operation):
-                candidates.append(operation)
+            root_idx = node_order[0]
+            if pattern.node_patterns[root_idx](operation):
+                matched_patterns.append([operation] + [None for _ in range(len(node_order) - 1)])
 
-        for op in candidates:
-            self._interal_store = [None for _ in range(len(self.pattern_tree._nodes))]
-            self._interal_store[0] = op
-            if self._match(graph=graph, op=op, node_idx=0, exclusive=exclusive):
-                self.results.append(self._interal_store)
-        return self.results
+        for idx in node_order[1: ]:
+            node_candidates, next_generation = [], []
+            for operation in graph.operations.values():
+                if pattern.node_patterns[idx](operation):
+                    node_candidates.append(operation)
 
-    def _match(self, graph: BaseGraph, op: Operation, node_idx: int, exclusive: bool) -> bool:
-        pnode, following_ops = self.pattern_tree[node_idx], graph.get_downstream_operations(op)
-        num_of_ops, num_of_patterns = len(following_ops), len(self.pattern_tree.following_patterns(node_idx))
+            for matched_pattern in matched_patterns:
+                for operation in node_candidates:
+                    is_pattern_root = len(pattern.input_table[idx]) == 0
+                    link_check, exclusive_check, duplicated_check = True, True, True
 
-        # 递归终止于 pattern 结尾
-        if len(pnode.edges) == 0:
-            if self._interal_store[node_idx] is not None:
-                if self._interal_store[node_idx] != op:
-                    return False # 这种情况出现于复杂模式，直接返回失败即可
-            self._interal_store[node_idx] = op
-            return True
+                    for upstream_idx in pattern.input_table[idx]:
+                        upstream_op = matched_pattern[upstream_idx]
 
-        matches = []
-        for op_idx, downstream_op in enumerate(following_ops):
-            for pattern_idx, pattern in enumerate(self.pattern_tree.following_patterns(node_idx)):
-                if pattern(downstream_op):
-                    matches.append((pattern_idx, op_idx))
+                        if not is_linked(upstream_op=upstream_op, downstream_op=operation):
+                            link_check = False
 
-        # exclusive 模式，不允许节点有额外输出边
-        if exclusive and num_of_ops != num_of_patterns:
-            return False
+                    if (operation in matched_pattern) and link_check:
+                        duplicated_check = False
 
-        # pattern 可以匹配到多个不同的节点，最坏情况下，找出所有可行的匹配方案时间复杂度为 n!
-        # 其中 n 为 op 的下游节点个数，对于这种情况，我们不可能枚举所有匹配方案并完成算法 (P-completed)。
-        # 如果 pattern 匹配到了多个节点，我们使用匈牙利算法找出任意一个最优匹配，并警告用户这样做的不完备性与随机性。
-        # 作为用户，你不应该输入有歧义的 pattern.
-        # 例如下面的 pattern:
-        #   nodes = [lambda x: x.is_computing_op, 'Mul', 'Mul', 'Mul', ...]
-        #   edges = [[0, 1], [0, 2], [0, 3], ...]
-        # 树形匹配将有 3! 种可行方案，我们将随机选取其中一种，进一步枚举可能产生不可预期的结果
-        matching_solver = HungarianSolver(
-            num_of_ops = num_of_ops,
-            num_of_patterns = num_of_patterns,
-            matches = matches)
+                    if (not is_pattern_root and exclusive) and link_check:
+                        matched_set = set(matched_pattern)
+                        for op in graph.get_upstream_operations(operation):
+                            if op not in matched_set: exclusive_check = False
+                        if len(pattern.input_table[idx]) != len(set(graph.get_upstream_operations(operation))):
+                            exclusive_check = False
 
-        # 二部图匹配失败，直接返回 False
-        if not matching_solver.solve():
-            return False
+                    if link_check and duplicated_check and exclusive_check:
+                        generated = matched_pattern.copy()
+                        generated[idx] = operation
+                        next_generation.append(generated)
+ 
+            matched_patterns = next_generation
+            if len(matched_patterns) > max_candidates:
+                raise OverflowError('Too many candidate patterns. Simplify your pattern first.')
 
-        # 二部图匹配成功，则 matching_solver.matched 中按顺序存储了匹配到的 op index
-        # 以此继续向下递归
-        for pattern_idx, op_idx in enumerate(matching_solver.matched):
-            if self._interal_store[node_idx] is not None:
-                if self._interal_store[node_idx] != op:
-                    return False # 这种情况出现于复杂模式，直接返回失败即可
-            self._interal_store[node_idx] = op
-            flag = self._match(graph=graph, op=following_ops[op_idx],
-                               node_idx=pnode.edges[pattern_idx], exclusive=exclusive)
-            if not flag: return False
-        return True
+            if len(matched_patterns) == 0: break
+
+        # final exclusive check
+        if exclusive:
+            filtered = []
+            for matched_pattern in matched_patterns:
+                check_flag = True
+                for idx, operation in enumerate(matched_pattern):
+                    if len(pattern.output_table[idx]) != 0:
+                        if not all([op in matched_pattern for op in graph.get_downstream_operations(operation)]):
+                            check_flag = False
+                if check_flag:
+                    filtered.append(matched_pattern)
+            matched_patterns = filtered
+        return matched_patterns
 
 
 class SearchableGraph(GraphCommandProcessor):
@@ -672,13 +652,39 @@ class SearchableGraph(GraphCommandProcessor):
             concat_matchings[concat.name].append(op.name)
         return dict(concat_matchings)
 
-    def pattern_matching(self, patterns: List[Callable],
-                         edges: List[List[int]], exclusive: bool = True) -> List[List[Operation]]:
-        # compile string to type expr.
-        for pidx in range (len(patterns)):
-            pfunc = patterns[pidx]
-            if isinstance(pfunc, str):
-                patterns[pidx] = TypeExpr(pfunc)
+    def pattern_matching(self, patterns: List[Callable], 
+                         edges: List[List[int]], 
+                         exclusive: bool = True) -> List[List[Operation]]:
+        """暴力子图模式匹配 这是 PPQ 0.6.6 更新的内容
+        在 0.6.6 之前，我们使用具有不确定性的贪心匹配算法，但是考虑到实际应用中的问题
+        在 0.6.6 版本之后，我们将其修改为枚举匹配。
 
-        pm = TreePatternMatcher(PatternTree(patterns=patterns, edges=edges))
-        return pm.match(self.graph, exclusive=exclusive)
+        子图匹配问题是一个 NP-Hard 的问题，不存在多项式时间复杂度的解法。
+        你需要给出一个模式子图，match_burte_force 方法将在 graph 中对模式子图进行匹配。
+
+        PPQ 使用了非递归的算法完成上述匹配，其最坏时间和空间复杂度大概都是 O(NM^k)
+        其中 N 是母图节点个数，M 是子图节点个数，k 是母图的最大出度
+        
+        对于存在二义性子图模式，匹配复杂度将指数级增长；为了限制算法执行时间，当匹配到多于
+        max_candidates 个模式子图时，算法强制停机，并报错返回。
+
+        实际使用中的时间复杂度更加接近于 O(NM)
+        
+        参数 exclusive 指定了是否需要进行精确匹配。在精确匹配模式下：
+            1. 不允许模式子图中除根节点外的其他节点有来自模式子图以外节点的输入
+            2. 不允许模式子图中除叶节点外的其他节点有朝向模式子图以外节点的输出
+
+        Example:
+            pt = PatternTree(
+                patterns = [lambda x: x.is_computing_op, 'Softplus', 'Tanh', 'Mul']
+                edges = [[0, 1], [1, 2], [2, 3], [0, 3]])
+
+            pt create an abstract tree pattern of:
+                                            --- 'Softplus'   ---   'Tanh' --
+            lambda x: x.is_computing_op --- +                              + --- 'Mul'
+                                            ---     ---     ---    ---    --
+
+        """
+        return PatternMatchHelper().match_burte_force(
+            graph=self.graph, pattern=GraphPattern(node_patterns=patterns, edges=edges), 
+            exclusive=exclusive)

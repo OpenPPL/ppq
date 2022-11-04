@@ -50,6 +50,29 @@ def torch_mean_square_error(y_pred: torch.Tensor, y_real: torch.Tensor, reductio
         raise ValueError(f'Unsupported reduction method.')
 
 def torch_snr_error(y_pred: torch.Tensor, y_real: torch.Tensor, reduction: str='mean') -> torch.Tensor:
+    """
+    Compute SNR between y_pred(tensor) and y_real(tensor)
+    
+    SNR can be calcualted as following equation:
+    
+        SNR(pred, real) = (pred - real) ^ 2 / (real) ^ 2
+    
+    if x and y are matrixs, SNR error over matrix should be the mean value of SNR error over all elements.
+    
+        SNR(pred, real) = mean((pred - real) ^ 2 / (real) ^ 2)
+
+    Args:
+        y_pred (torch.Tensor): _description_
+        y_real (torch.Tensor): _description_
+        reduction (str, optional): _description_. Defaults to 'mean'.
+
+    Raises:
+        ValueError: _description_
+        ValueError: _description_
+
+    Returns:
+        torch.Tensor: _description_
+    """
     if y_pred.shape != y_real.shape:
         raise ValueError(f'Can not compute snr loss for tensors with different shape. '
             f'({y_pred.shape} and {y_real.shape})')

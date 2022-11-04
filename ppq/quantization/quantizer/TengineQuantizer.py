@@ -20,8 +20,9 @@ class TengineQuantizer(BaseQuantizer):
 
     def init_quantize_config(self, operation: Operation) -> OperationQuantizationConfig:
         base_quant_config = self.create_default_quant_config(
-            operation_meta=operation.meta_data,
+            op=operation,
             num_of_bits=self._num_of_bits,
+            exponent_bits=0,
             quant_max=self._quant_max,
             quant_min=self._quant_min,
             observer_algorithm="percentile",
