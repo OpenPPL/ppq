@@ -44,12 +44,13 @@ If you want to install it, we strongly suggest you install TensorRT through [tar
 - MODEL_TYPE choose `NetworkFramework.ONNX`.
 - NETWORK_INPUTSHAPE fill in the shape of the data, e.g. `[1, 3, 224, 224]`.
 - CALIBRATION_BATCHSIZE is the batch during optimization, it is recommended to set it to 16 or 32 if your computing platform has enough computing power, otherwise, it can also be set to 1.
-- If the last layer of your model is a plugin operator, such as `yolo`, `nms`, etc., please add the following code to the `ProgramEntrance.py` script. The following code uses `yolo` as an example. These three shapes: [1, 36, 19, 19]，[1, 36, 38, 38], [1, 36, 76, 76] correspond to the three outputs of the model.
+- If the last layer of your model is a plugin operator, such as `yolo`, `nms`, etc., please add the following code to the `ProgramEntrance.py` script. The following code uses `EfficientNMS_TRT` as an example. These four shapes: [1, 1]，[1, 100, 4], [1, 100], [1, 100] correspond to the three outputs of the model. Note that the output type here should also be consistent with the original onnx model.
 
 ```bash
 def happyforward(*args, **kwards):
-    return torch.zeros([1, 36, 19, 19]).cuda(), torch.zeros([1, 36, 38, 38]).cuda(), torch.zeros([1, 36, 76, 76]).cuda()
-register_operation_handler(happyforward, 'yolo', platform=TargetPlatform.FP32)
+    return torch.zeros([1, 1], dtype=torch.int32).cuda(), torch.zeros([1, 100, 4],dtype=torch.float32).cuda(), \
+        torch.zeros([1, 100],dtype=torch.float32).cuda(), torch.zeros([1, 100], dtype=torch.int32).cuda() 
+register_operation_handler(happyforward, 'EfficientNMS_TRT', platform=TargetPlatform.FP32)
 ```
 - Other parameters are default.
 - Run script `python ProgramEntrance.py`
