@@ -20,7 +20,7 @@ from ppq.executor import (BaseGraphExecutor, TorchExecutor,
                           TorchQuantizeDelegator)
 from ppq.IR import (BaseGraph, GraphBuilder, GraphCommand, GraphExporter,
                     GraphFormatter, Operation, QuantableGraph, SearchableGraph,
-                    Variable)
+                    Variable, TrainableGraph)
 from ppq.IR.deploy import RunnableGraph
 from ppq.IR.quantize import QuantableOperation, QuantableVariable
 from ppq.IR.search import SearchableGraph

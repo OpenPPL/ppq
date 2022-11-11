@@ -9,8 +9,8 @@ from ppq import *
 from ppq.api import *
 
 ONNX_PATH        = 'models/yolov6s.onnx'       # 你的模型位置
-ENGINE_PATH      = 'Output/yolov5s6.onnx'  # 生成的 Engine 位置
-CALIBRATION_PATH = 'imgs'                         # 校准数据集
+ENGINE_PATH      = 'Output/yolov5s6.onnx'      # 生成的 Engine 位置
+CALIBRATION_PATH = 'imgs'                      # 校准数据集
 BATCHSIZE        = 1
 EXECUTING_DEVICE = 'cuda'
 # create dataloader
@@ -45,8 +45,14 @@ with ENABLE_CUDA_KERNEL():
         graph=qir, running_device=EXECUTING_DEVICE, 
         dataloader=dataloader, collate_fn=lambda x: x.to(EXECUTING_DEVICE))
 
-    '''
     export_ppq_graph(
         qir, platform=TargetPlatform.TRT_INT8, 
-        graph_save_to=ENGINE_PATH)
-    '''
+        graph_save_to=ENGINE_PATH, 
+        config_save_to='qparam.json')
+
+    # -------------------------------------------------------------------
+    # 完成量化后，你可以使用 create_engine.py 生成 trt engine.
+    # 它位于 ppq / samples / TensorRT 文件夹下
+    # 你可以使用 trt_infer.py 文件执行 engine 的推理
+    # 你可以使用 Example_Profiling.py 文件执行 engine 的性能分析
+    # -------------------------------------------------------------------

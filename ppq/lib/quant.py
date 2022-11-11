@@ -62,12 +62,10 @@ def Observer(
     return TensorObserverFactroy.build_observer(variable=variable, config=quant_config)
 
 
-class PytorchQuantStub(torch.nn.Module):
-    def __init__(self,
-                 quant_config: TensorQuantizationConfig,
-                 name: str = 'PPQ Quant Stub') -> None:
+class TensorQuant(torch.nn.Module):
+    def __init__(self, quant_config: TensorQuantizationConfig) -> None:
         """
-        PPQ Quant Stub
+        PPQ Tensor Quant
 
         Args:
             quant_config (TensorQuantizationConfig): _description_
@@ -77,7 +75,6 @@ class PytorchQuantStub(torch.nn.Module):
         self._delegator      = None
         self._batch_observed = 0
         self._observer       = Observer(quant_config=quant_config)
-        self.name            = name
 
     @ property
     def delegator(self) -> Callable:
@@ -100,6 +97,17 @@ class PytorchQuantStub(torch.nn.Module):
         if self._batch_observed == 0:
             raise PermissionError('You have not provide any data to this QuantStub, '
                                   'PPQ can not render its quant config yet.')
+        self._observer.render_quantization_config()
+
+
+class ParameterQuant(TensorQuant):
+    def __init__(self, quant_config: TensorQuantizationConfig, parameter: torch.Tensor) -> None:
+        if not isinstance(parameter, torch.Tensor):
+            raise TypeError(f'Expect a torch.Tensor here. However {type(parameter)} was given.')
+        
+        super().__init__(quant_config)
+        self.observe(parameter)
+        self.render()
 
 
 def LinearQuantizationConfig(

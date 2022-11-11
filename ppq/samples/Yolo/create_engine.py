@@ -23,7 +23,6 @@ def setDynamicRange(network, json_file):
     for i in range(network.num_inputs):
         input_tensor = network.get_input(i)
         if act_quant.__contains__(input_tensor.name):
-            print(input_tensor.name)
             value = act_quant[input_tensor.name]
             tensor_max = abs(value)
             tensor_min = -abs(value)
