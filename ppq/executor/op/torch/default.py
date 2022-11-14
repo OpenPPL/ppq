@@ -2168,7 +2168,10 @@ def Pad_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
     pads = convert_onnx_pads_to_torch(pads)
 
     if mode == 'constant':
-        constant_value = values[-1].item() if len(values) == 3 else 0
+        # default value is 0
+        if len(values) == 3 and values[-1] is None:
+            constant_value = 0
+        else: constant_value = values[-1].item() if len(values) == 3 else 0
         output = F.pad(value, pads, mode, constant_value)
     elif mode == 'reflect':
         output = value

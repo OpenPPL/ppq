@@ -65,7 +65,7 @@ def VALUE_TO_EXECUTING_DEVICE(op: Operation, ctx: TorchBackendContext, values: L
     if ctx is None: device = values[0].device
     else: device = ctx.executing_device
     for idx, (plat, value) in enumerate(zip(op.socket.in_plat, values)):
-        if value is None: raise ValueError('Input Value is Empty.')
+        if value is None: continue
         if plat == TargetPlatform.SOI or op.platform == TargetPlatform.SOI:
             values[idx] = value.cpu()
         else: values[idx] = value.to(device)
