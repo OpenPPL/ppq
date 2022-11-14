@@ -11,9 +11,10 @@ PPQ 被设计为一个灵活而全面的 Onnx 模型量化工具，我们允许�
    1. [FP8 量化规范](https://zhuanlan.zhihu.com/p/574825662)，PPQ 现在支持 E4M3, E5M2 等多种规范的 FP8 [量化模拟与训练](https://github.com/openppl-public/ppq/blob/master/ppq/samples/fp8_sample.py)
    2. [PFL 基础类库](https://github.com/openppl-public/ppq/blob/master/ppq/samples/yolo6_sample.py)，PPQ 现在提供一套更为基础的 api 函数帮助你完成更为灵活的量化
    3. 更为强大的 [图模式匹配](https://github.com/openppl-public/ppq/blob/master/ppq/IR/search.py) 与 [图融合功能](https://github.com/openppl-public/ppq/blob/master/ppq/IR/morph.py)
-   4. 全新的 [TensorRT](https://github.com/openppl-public/ppq/blob/master/md_doc/deploy_trt_by_OnnxParser.md) 量化与导出逻辑
-   5. 更多正在更新的样例脚本及视频内容
-   6. 其他未知的软件特性
+   4. 基于 Onnx 的模型 [QAT](https://github.com/openppl-public/ppq/blob/master/ppq/samples/QAT/imagenet.py) 功能
+   5. 全新的 [TensorRT](https://github.com/openppl-public/ppq/blob/master/md_doc/deploy_trt_by_OnnxParser.md) 量化与导出逻辑
+   6. 更多正在更新的样例脚本及视频内容
+   7. 其他未知的软件特性
 
 ## Learning Path 学习路线
 
