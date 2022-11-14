@@ -47,4 +47,4 @@ from .extension import (register_calibration_observer,
 from .quant import (Dispatcher, Exporter, FloatingQuantizationConfig,
                     LinearQuantizationConfig, Observer,
                     OperationForwardFunction, Parser, Pipeline, QuantFunction,
-                    Quantizer, PytorchQuantStub)
+                    Quantizer, TensorQuant, ParameterQuant)

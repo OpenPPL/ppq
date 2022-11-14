@@ -97,14 +97,6 @@ class RuntimeCalibrationPass(QuantizationOptimizationPass):
 
     """
     def __init__(self, method: str = None, override: bool = False) -> None:
-        """
-        Args:
-            method (str, optional): calibration method, if is not None, will override quantizer's setting.
-                Defaults to None.
-
-            override (bool, optional): whether to override existing quantization configurations.
-        """
-
         super().__init__(name='PPQ Runtime Calibration Pass')
         self._method = method
         self._observers = {}

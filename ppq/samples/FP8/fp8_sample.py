@@ -1,28 +1,24 @@
 import torch
+from torchvision import models
 
 import ppq.lib as PFL
 from ppq import TargetPlatform, TorchExecutor, graphwise_error_analyse
-from ppq.api import ENABLE_CUDA_KERNEL
-from ppq.api.interface import load_onnx_graph
+from ppq.api import ENABLE_CUDA_KERNEL, load_torch_model
 from ppq.core.quant import (QuantizationPolicy, QuantizationProperty,
                             RoundingPolicy)
 from ppq.quantization.optim import (LearnedStepSizePass, ParameterBakingPass,
-                                    ParameterQuantizePass, QuantAlignmentPass,
-                                    QuantizeFusionPass, QuantizeSimplifyPass,
+                                    ParameterQuantizePass,
                                     RuntimeCalibrationPass)
 
 # ------------------------------------------------------------
-# 在这个例子中我们将向你展示如何使用 INT8 量化一个 Bert 模型
+# 在这个例子中我们将向你展示如何使用 FP8 量化一个 Pytorch 模型
 # 我们使用随机数据进行量化，这并不能得到好的量化结果。
 # 在量化你的网络时，你应当使用真实数据和正确的预处理。
 # ------------------------------------------------------------
-graph = load_onnx_graph(onnx_import_file='bert.onnx')
-
-dataset = [
-    {
-        'input_ids': torch.randint(low=0, high=5000, size=[16, 128]), 
-        'attention_mask': torch.randint(low=0, high=1, size=[16, 128])
-    } for _ in range(64)]
+model = models.efficientnet_b0(pretrained=True)
+graph = load_torch_model(
+    model, sample=torch.zeros(size=[1, 3, 224, 224]).cuda())
+dataset = [torch.rand(size=[1, 3, 224, 224]) for _ in range(64)]
 
 # -----------------------------------------------------------
 # 我们将借助 PFL - PPQ Foundation Library, 即 PPQ 基础类库完成量化
@@ -30,7 +26,7 @@ dataset = [
 # 算法工程师、部署工程师、以及芯片研发人员使用的，它更为灵活。
 # 我们将手动使用 Quantizer 完成算子量化信息初始化, 并且手动完成模型的调度工作
 # ------------------------------------------------------------
-collate_fn  = lambda x: {'input_ids': x['input_ids'].cuda(), 'attention_mask': x['attention_mask'].cuda()}
+collate_fn  = lambda x: x.to('cuda')
 
 # ------------------------------------------------------------
 # 在开始之前，我需要向你介绍量化器、量化信息以及调度表
@@ -43,19 +39,20 @@ from ppq import TensorQuantizationConfig as TQC
 MyTQC = TQC(
     policy = QuantizationPolicy(
         QuantizationProperty.SYMMETRICAL + 
-        QuantizationProperty.LINEAR +
-        QuantizationProperty.PER_TENSOR),
+        QuantizationProperty.FLOATING +
+        QuantizationProperty.PER_TENSOR + 
+        QuantizationProperty.POWER_OF_2),
     rounding=RoundingPolicy.ROUND_HALF_EVEN,
-    num_of_bits=8, quant_min=-128, quant_max=127, 
-    exponent_bits=0, channel_axis=None,
+    num_of_bits=8, quant_min=-448.0, quant_max=448.0, 
+    exponent_bits=3, channel_axis=None,
     observer_algorithm='minmax'
 )
 # ------------------------------------------------------------
-# 作为示例，我们创建了一个 "线性" "对称" "Tensorwise" 的量化信息
+# 作为示例，我们创建了一个 "浮点" "对称" "Tensorwise" 的量化信息
 # 这三者皆是该量化信息的 QuantizationPolicy 的一部分
 # 同时要求该量化信息使用 ROUND_HALF_EVEN 方式进行取整
-# 量化位宽为 8 bit，其中指数部分为 0 bit
-# 量化上限为 127.0，下限则为 -128.0
+# 量化位宽为 8 bit，其中指数部分为 3 bit
+# 量化上限为 448.0，下限则为 -448.0
 # 这是一个 Tensorwise 的量化信息，因此 channel_axis = None
 # observer_algorithm 表示在未来使用 minmax calibration 方法确定该量化信息的 scale
 
@@ -72,9 +69,9 @@ MyTQC = TQC(
 # 由它们所生成的量化信息是不同的，为此你可以访问它们的源代码
 # 位于 ppq.quantization.quantizer 中，查看它们初始化量化信息的逻辑。
 # ------------------------------------------------------------
-_ = PFL.Quantizer(platform=TargetPlatform.TRT_FP8, graph=graph)          # 取得 TRT_FP8 所对应的量化器
-_ = PFL.Quantizer(platform=TargetPlatform.GRAPHCORE_FP8, graph=graph)    # 取得 GRAPHCORE_FP8 所对应的量化器
-quantizer = PFL.Quantizer(platform=TargetPlatform.TRT_INT8, graph=graph) # 取得 TRT_INT8 所对应的量化器
+_ = PFL.Quantizer(platform=TargetPlatform.TRT_INT8, graph=graph)      # 取得 TRT_INT8 所对应的量化器
+_ = PFL.Quantizer(platform=TargetPlatform.GRAPHCORE_FP8, graph=graph) # 取得 GRAPHCORE_FP8 所对应的量化器
+quantizer = PFL.Quantizer(platform=TargetPlatform.TRT_FP8, graph=graph) # 取得 TRT_FP8 所对应的量化器
 
 # ------------------------------------------------------------
 # 调度器是 PPQ 中另一核心类型，它负责切分计算图
@@ -93,9 +90,10 @@ for op in graph.operations.values():
     dispatching['Op1'] = TargetPlatform.FP32        # 将 Op1 强行送往非量化区
     dispatching['Op2'] = TargetPlatform.UNSPECIFIED # 将 Op2 强行送往量化区
     
-    # 你可能已经注意到了，我们并没有将 Op2 送往 TRT_INT8，而是将其送往 UNSPECIFIED 平台
+    # 你可能已经注意到了，我们并没有将 Op2 送往 TRT_FP8，而是将其送往 UNSPECIFIED 平台
     # 其含义是告诉量化器我们 "建议" 量化器对算子初始化量化信息，如果此时 Op2 不是量化器所支持的类型，则该算子仍然不会被量化
-    # 但如果我们直接将 Op2 送往 TRT_INT8，不论如何该算子都将被量化
+    # 但如果我们直接将 Op2 送往 TRT_FP8，不论如何该算子都将被量化
+    
     quantizer.quantize_operation(
         op_name = op.name, platform = dispatching[op.name])
 
@@ -114,13 +112,10 @@ executor.load_graph(graph=graph)
 # 在 PPQ 中，模型的量化是由一个一个的量化过程(QuantizationOptimizationPass)完成的
 # 量化管线 是 量化过程 的集合，在其中的量化过程将被逐个调用
 # 从而实现对 TQC 中内容的修改，最终实现模型的量化
-# 在这里我们为管线中添加了 7 个量化过程，分别处理不同的内容
+# 在这里我们为管线中添加了 4 个量化过程，分别处理不同的内容
 
-# QuantizeSimplifyPass - 用于移除网络中的冗余量化信息
-# QuantizeFusionPass - 用于调整量化信息状态，从而模拟推理图融合
 # ParameterQuantizePass - 用于为模型中的所有参数执行 Calibration, 生成它们的 scale，并将对应 TQC 的状态调整为 ACTIVED
 # RuntimeCalibrationPass - 用于为模型中的所有激活执行 Calibration, 生成它们的 scale，并将对应 TQC 的状态调整为 ACTIVED
-# QuantAlignmentPass - 用于执行 concat, add, sum, sub, pooling 算子的定点对齐
 # LearnedStepSizePass - 用于训练微调模型的权重，从而降低量化误差
 # ParameterBakingPass - 用于执行模型参数烘焙
 
@@ -129,15 +124,11 @@ executor.load_graph(graph=graph)
 # 从而创造出新的量化优化过程
 # ------------------------------------------------------------
 pipeline = PFL.Pipeline([
-    QuantizeSimplifyPass(),
-    QuantizeFusionPass(
-        activation_type=quantizer.activation_fusion_types),
     ParameterQuantizePass(),
     RuntimeCalibrationPass(),
-    QuantAlignmentPass(force_overlap=True),
-    # LearnedStepSizePass(
-    #     steps=1000, is_scale_trainable=False, 
-    #     lr=1e-4, block_size=4, collecting_device='cuda'),
+    LearnedStepSizePass(
+        steps=1000, is_scale_trainable=False, 
+        lr=1e-4, block_size=4, collecting_device='cuda'),
     ParameterBakingPass()
 ])
 
@@ -159,5 +150,5 @@ with ENABLE_CUDA_KERNEL():
 # PPQ 则会返回一个对应的 GraphExporter 对象，它将负责将 PPQ 的量化信息
 # 翻译成推理框架所需的内容。你也可以自己写一个 GraphExporter 类并注册到 PPQ 框架中来。
 # ------------------------------------------------------------
-exporter = PFL.Exporter(platform=TargetPlatform.TRT_INT8)
+exporter = PFL.Exporter(platform=TargetPlatform.TRT_FP8)
 exporter.export(file_path='Quantized.onnx', graph=graph)

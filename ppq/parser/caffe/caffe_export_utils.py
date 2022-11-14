@@ -44,7 +44,8 @@ class CaffeOpExporter(object):
         'DepthToSpace': 'SubpixelUp',
         'SpaceToDepth': 'SubpixelDown',
         'HardSwish': 'HSwish',
-        'HardSigmoid': 'HSigmoid'
+        'HardSigmoid': 'HSigmoid',
+        'MatMul': 'MatMul'
     }
 
     def __init__(self, op: Operation):
@@ -645,3 +646,8 @@ class HardSwish(CaffeOpExporter):
 @register_class
 class HardSigmoid(CaffeOpExporter):
     pass
+
+@register_class
+class MatMul(CaffeOpExporter):
+    pass
+

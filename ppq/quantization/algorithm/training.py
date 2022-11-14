@@ -417,4 +417,3 @@ class LSQDelegator(TorchQuantizeDelegator):
             elif config.policy.has_property(QuantizationProperty.FLOATING):
                 # For floating quantization, scale is not trainable.
                 return PPQuantFunction(tensor=tensor, config=config)
-

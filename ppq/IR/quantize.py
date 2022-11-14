@@ -241,6 +241,7 @@ class QuantableVariable(Variable):
         else: clone._fp32_value = self._fp32_value
         return clone
 
+
 class DeviceSwitchOP(Operation):
     """This Class has been removed since PPQ 0.6.6
     """
@@ -252,6 +253,8 @@ class DeviceSwitchOP(Operation):
             name=name, op_type='PPQDeviceSwitch',
             platform=TargetPlatform.UNSPECIFIED,
             inputs=inputs, outputs=outputs)
+
+
 class QuantableGraph(GraphCommandProcessor):
     def process(self, command: GraphCommand) -> Any:
         if command.command_type == GraphCommandType.QUANTIZE_OPERATION:

@@ -6,7 +6,6 @@
 
 # For this inference test, all test data is randomly picked.
 # If you want to use real data, just rewrite the defination of SAMPLES
-import onnxruntime
 import torch
 from ppq import *
 from ppq.api import *
@@ -28,8 +27,7 @@ REQUIRE_ANALYSE  = True
 QS.lsq_optimization = FINETUNE                                  # 启动网络再训练过程，降低量化误差
 QS.lsq_optimization_setting.steps = 500                         # 再训练步数，影响训练时间，500 步大概几分钟
 QS.lsq_optimization_setting.collecting_device = 'cuda'          # 缓存数据放在那，cuda 就是放在 gpu，如果显存超了你就换成 'cpu'
-
-QS.dispatching_table.append(operation='OP NAME', platform=TargetPlatform.FP32) # 把量化的不太好的算子送回 FP32
+QS.dispatching_table.append(operation='OP NAME', platform=TargetPlatform.FP32) # 你可以把量化的不太好的算子送回 FP32
 
 print('正准备量化你的网络，检查下列设置:')
 print(f'TARGET PLATFORM      : {QUANT_PLATFROM.name}')
@@ -57,34 +55,15 @@ with ENABLE_CUDA_KERNEL():
     for op, snr in reports.items():
         if snr > 0.1: ppq_warning(f'层 {op} 的累计量化误差显著，请考虑进行优化')
 
-    if REQUIRE_ANALYSE:
-        print('正计算逐层量化误差(SNR)，每一层的独立量化误差应小于 0.1 以保证量化精度:')
-        layerwise_error_analyse(graph=qir, running_device=EXECUTING_DEVICE,
-                                interested_outputs=None,
-                                dataloader=SAMPLES, collate_fn=lambda x: x.to(EXECUTING_DEVICE))
-
     print('网络量化结束，正在生成目标文件:')
     export_ppq_graph(
-        graph=qir, platform=QUANT_PLATFROM,
-        graph_save_to = 'model_int8.onnx')
+        graph=qir, platform=TargetPlatform.TRT_INT8,
+        graph_save_to = 'model_int8.onnx', 
+        config_save_to='model_int8.json')
 
     # -------------------------------------------------------------------
-    # 启动 tensorRT 进行推理，你先装一下 trt
+    # 完成量化后，你可以使用 create_engine.py 生成 trt engine.
+    # 它位于 ppq / samples / TensorRT 文件夹下
+    # 你可以使用 trt_infer.py 文件执行 engine 的推理
+    # 你可以使用 Example_Profiling.py 文件执行 engine 的性能分析
     # -------------------------------------------------------------------
-    import tensorrt as trt
-    import trt_infer
-
-    samples = [convert_any_to_numpy(sample) for sample in SAMPLES]
-    logger = trt.Logger(trt.Logger.INFO)
-    with open('model_int8.engine', 'rb') as f, trt.Runtime(logger) as runtime:
-        engine = runtime.deserialize_cuda_engine(f.read())
-
-    results = []
-    with engine.create_execution_context() as context:
-        inputs, outputs, bindings, stream = trt_infer.allocate_buffers(context.engine)
-        for sample in tqdm(samples, desc='TensorRT is running...'):
-            inputs[0].host = convert_any_to_numpy(sample)
-            [output] = trt_infer.do_inference(
-                context, bindings=bindings, inputs=inputs, 
-                outputs=outputs, stream=stream, batch_size=1)
-            results.append(convert_any_to_torch_tensor(output).reshape([-1, 1000]))
