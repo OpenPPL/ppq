@@ -1195,7 +1195,7 @@ def ConstantOfShape_forward(op: Operation, values: List[torch.Tensor], ctx: Torc
     value = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='value', compulsive=False, default=0.0)
     [shape], fill_value = values, convert_any_to_python_primary_type(value)
     output = torch.Tensor().new_full(
-        size=shape.tolist(), fill_value=fill_value)
+        size=tuple(shape.tolist()), fill_value=fill_value)
     if isinstance(fill_value, int): output = output.long()
     elif isinstance(fill_value, float): output = output.float()
     else: raise TypeError(f'Can not parse value type{type(value)}.')
