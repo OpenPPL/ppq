@@ -277,7 +277,7 @@ class MetaxExporter(OnnxExporter):
                     if cfg is not None and not QuantizationStates.can_export(cfg.state):
                         raise AttributeError(f'quantization state of variable {var.name} is unexpected, \
                         please check if you have finished the whole quantization process')
-                    elif cfg is not None and cfg.state not in {QuantizationStates.FP32}:
+                    elif cfg is not None and cfg.state not in {QuantizationStates.FP32, QuantizationStates.SOI}:
                         quantable_vars.append((cfg, var))
                         break
 

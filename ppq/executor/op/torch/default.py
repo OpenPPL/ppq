@@ -2160,8 +2160,7 @@ def Pad_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
     values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
 
     mode = op.attributes.get('mode', 'constant')
-    value = values[0]
-    pads = values[1] if len(values) > 1 else op.attributes['pads']
+    value, pads = values[0], values[1]
     if len(values) > 3: raise ValueError('Unsupported pad version, except at most 2 input variable.')
 
     pads = pads.tolist()

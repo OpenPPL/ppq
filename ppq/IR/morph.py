@@ -87,7 +87,8 @@ class GraphFormatter(GraphCommandProcessor):
             GraphCommandType.FORMAT_PARAMETERS,
             GraphCommandType.FORMAT_CONSTANT_INPUT,
             GraphCommandType.FORMAT_SLICE,
-            GraphCommandType.TRUNCATE_ON_VAR
+            GraphCommandType.TRUNCATE_ON_VAR,
+            GraphCommandType.FORMAT_RESIZE
         ]
 
     def process(self, command: GraphCommand) -> Any:
@@ -111,6 +112,8 @@ class GraphFormatter(GraphCommandProcessor):
             return self.format_constant_input()
         if command.command_type == GraphCommandType.FORMAT_SLICE:
             return self.format_slice()
+        if command.command_type == GraphCommandType.FORMAT_RESIZE:
+            return self.format_resize()
         if command.command_type == GraphCommandType.TRUNCATE_ON_VAR:
             assert isinstance(command, TruncateGraphCommand), f'Use TruncateGraphCommand here.'
             return self.truncate_on_var(command.var, command.mark_as_output)
@@ -151,34 +154,26 @@ class GraphFormatter(GraphCommandProcessor):
                    pads parameter is given by the second input variable
                 2. pads 参数被放置于 operation.attribute 中
                    pads parameter is set in attribute
-            此函数统一 pad 算子行为：所有 pad 算子的 pads 参数均由 operation.attribute 给出
-            this func unifies behaviors of Pad op: pads parameter will always given in
-            attribute
-            同时当 padding mode 设置为 constant 时，pads 将存在一个用来确定 padding value 的值
-            存在该值时，该函数返回 ValueError
-            when the padding mode is set to constant, its constant input will be used as
-            padding value
+            此函数统一 pad 算子行为：所有 pad 算子的 pads 参数均由第二个输入给出
         """
-        interested_ops = []
-        for _, operation in self.graph.operations.items():
-            if operation.type == 'Pad': interested_ops.append(operation)
-        for operation in interested_ops:
-            assert isinstance(operation, Operation)
-            padding_value = operation.attributes.get('pads_value', 0)
-            padding_mode = operation.attributes.get('mode', 'constant')
-            if padding_mode == 'constant' and len(operation.inputs) == 3:
-                pads_variable = operation.inputs[1]
-                pads_constant_op = pads_variable.source_op
-                padding_value = pads_constant_op.attributes['value']
-                self.__delete_constant_input(operation, 1)
-            if len(operation.inputs) > 1:
-                # here exist a pattern: constant -> pad
-                pads_variable = operation.inputs[1]
-                pads_constant_op = pads_variable.source_op
-                pads = pads_constant_op.attributes['value']
-                self.__delete_constant_input(operation, 1)
-                operation.attributes['pads'] = convert_any_to_python_primary_type(pads)
-            if padding_mode == 'constant': operation.attributes['pads_value'] = padding_value
+        for op in self.graph.operations.values():
+            if op.type == 'Pad' and 'pads' in op.attributes:
+                self.graph.create_link_with_op(
+                    variable=self.graph.create_variable(
+                        value=torch.tensor(op.attributes['pads']), is_parameter=True),
+                    upstream_op=None, downstream_op=op)
+                op.attributes.clear()
+
+    def format_resize(self) -> None:
+        """
+            升级 opset 10 的 resize 到 opset 11
+        """
+        for op in self.graph.operations.values():
+            if op.type == 'Resize' and len(op.inputs) == 2:
+                self.graph.create_link_with_op(
+                    variable=self.graph.create_variable(value=None, is_parameter=False),
+                    upstream_op=None, downstream_op=op)
+                op.inputs[1], op.inputs[2] = op.inputs[2], op.inputs[1]
 
     def format_clip(self) -> None:
         """
@@ -358,10 +353,7 @@ class GraphFormatter(GraphCommandProcessor):
 
                 # 删除孤立变量
                 if var.source_op is None and var.name not in self.graph.inputs:
-                    # PATCH 20220630, onnx 使用名字为 '' 的变量占位，这些占位变量不能删除
-                    if var.name == '': continue
-                    if not var.is_parameter:
-                        var_blacklist.add(var)
+                    if len(var.dest_ops) == 0: var_blacklist.add(var)
 
                 # 没有输出的不能删...会影响算子输出顺序...
 

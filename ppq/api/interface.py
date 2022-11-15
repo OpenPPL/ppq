@@ -619,6 +619,8 @@ def format_graph(graph: BaseGraph) -> BaseGraph:
     formatter(GraphCommand(GraphCommandType.FORMAT_CAST))
     formatter(GraphCommand(GraphCommandType.FORMAT_SLICE))
     formatter(GraphCommand(GraphCommandType.FORMAT_CLIP))
+    formatter(GraphCommand(GraphCommandType.FORMAT_PAD))
+    formatter(GraphCommand(GraphCommandType.FORMAT_RESIZE))
     formatter(GraphCommand(GraphCommandType.DELETE_ISOLATED))
 
     return graph

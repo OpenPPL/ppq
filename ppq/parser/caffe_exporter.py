@@ -182,6 +182,7 @@ class SNPECaffeExporter(CaffeExporter):
 
                 if config.state in {
                     QuantizationStates.FP32,
+                    QuantizationStates.SOI
                 }: continue
                 # Simply override recorder is acceptable here,
                 # we do not support mix precision quantization for CUDA backend now.
