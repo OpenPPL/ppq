@@ -192,10 +192,11 @@ class OnnxExporter(GraphExporter):
         """
         # Parameter Varaible in PPQ, Constant Variable in Onnx
         if variable.is_parameter:
-            var_shape     = variable.value.shape
-            pytorch_dtype = variable.value.dtype
-            onnx_dtype    = DataType.convert_from_torch(pytorch_dtype).value
-
+            if variable.value is not None:
+                var_shape     = variable.value.shape
+                pytorch_dtype = variable.value.dtype
+                onnx_dtype    = DataType.convert_from_torch(pytorch_dtype).value
+ 
         # Non Parameter
         else:
             var_shape  = variable.shape
@@ -211,7 +212,6 @@ class OnnxExporter(GraphExporter):
                 if value.numel() == 0: value = []
                 elif value.ndim >= 1:
                     value = convert_any_to_numpy(variable.value).flatten()
-                    a     = value
                     value = value.tobytes()
                     is_raw_format = True
                 elif value.ndim == 0: # Pytorch Scalar Type

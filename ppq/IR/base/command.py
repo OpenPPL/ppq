@@ -96,6 +96,9 @@ class GraphCommandType(Enum):
     FORMAT_SLICE = 29
     # 从一个指定位置将图截断
     TRUNCATE_ON_VAR = 30
+    
+    # 升级图中的 resize 到 opset 11
+    FORMAT_RESIZE = 31
 
 class GraphCommand():
     def __init__(self, command_type: GraphCommandType, **kwargs) -> None:

@@ -351,8 +351,7 @@ class QuantizationStates(Enum):
 
     @ classmethod
     def can_export(cls, state) -> bool:
-        return state not in {QuantizationStates.INITIAL, QuantizationStates.FP32, 
-                             QuantizationStates.PASSIVE_INIT, QuantizationStates.SOI, 
+        return state not in {QuantizationStates.INITIAL, QuantizationStates.PASSIVE_INIT, 
                              QuantizationStates.DEQUANTIZED, QuantizationStates.DEACTIVED}
 
 

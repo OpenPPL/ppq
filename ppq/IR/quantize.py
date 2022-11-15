@@ -136,7 +136,7 @@ class QuantableOperation(Operation):
                 # so that we can use var.value.device as a deploy device for stored_value
                 stored_value = convert_any_to_torch_tensor(var.value, device=expire_device)
                 var.value = convert_any_to_torch_tensor(var.value, device=None)
-                var.value = convert_any_to_torch_tensor(var.stored_value, device=var.value.device)
+                var.value = convert_any_to_torch_tensor(var.stored_value, device=var.value.device if var.value is not None else None)
                 var.stored_value = stored_value
             quant_config.state = QuantizationStates.FP32
         self._dequantized = True
@@ -156,7 +156,7 @@ class QuantableOperation(Operation):
                     # so that we can use var.value.device as a deploy device for stored_value
                     stored_value = convert_any_to_torch_tensor(var.value, device=expire_device)
                     var.value = convert_any_to_torch_tensor(var.value, device=None)
-                    var.value = convert_any_to_torch_tensor(var.stored_value, device=var.value.device)
+                    var.value = convert_any_to_torch_tensor(var.stored_value, device=var.value.device if var.value is not None else None)
                     var.stored_value = stored_value
         self._dequantized = False
         return self
