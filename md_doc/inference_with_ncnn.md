@@ -20,7 +20,8 @@ import os
 import numpy as np
 import torch
 from ppq.api import load_onnx_graph
-from ppq.api.interface import dispatch_graph, QUANTIZER_COLLECTION
+from ppq.api.interface import dispatch_graph
+from ppq.lib import Quantizer
 from ppq.core import TargetPlatform
 from ppq.executor import TorchExecutor
 from ppq import QuantizationSettingFactory
@@ -44,7 +45,7 @@ ppq_graph_ir = dispatch_graph(ppq_graph_ir, target_platform, setting)
 
 # intialize quantizer and executor
 executor = TorchExecutor(ppq_graph_ir, device=EXECUTING_DEVICE)
-quantizer = QUANTIZER_COLLECTION[target_platform](graph=ppq_graph_ir)
+quantizer = Quantizer[target_platform](graph=ppq_graph_ir)
 
 # run quantization
 calib_steps = max(min(512, len(dataloader)), 8)     # 8 ~ 512
