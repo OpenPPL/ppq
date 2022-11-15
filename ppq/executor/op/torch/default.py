@@ -1286,7 +1286,7 @@ def Slice_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCo
     """
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=3, max_num_of_input=5)
     data, starts, ends = values[: 3]
-    axes  = values[3] if len(values) > 3 else None
+    axes  = values[3] if len(values) > 3 else torch.tensor([idx for idx, _ in enumerate(starts.tolist())])
     steps = values[4] if len(values) > 4 else torch.ones_like(starts)
     if axes is not None: axes = axes.tolist()
     starts, ends, steps = starts.tolist(), ends.tolist(), steps.tolist()
