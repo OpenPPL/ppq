@@ -15,17 +15,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import json
+import os
 from typing import Dict
+from typing import List
+import struct
 
 import torch
-from ppq.core import (DataType, OperationMeta, QuantizationPolicy,
+from ppq.core import (DataType, OperationMeta, QuantizationPolicy, NetworkFramework,
                       QuantizationProperty, QuantizationStates, TensorMeta,
                       TensorQuantizationConfig, convert_any_to_torch_tensor,
-                      ppq_warning)
-from ppq.IR import BaseGraph
+                      ppq_warning, ppq_info)
+from ppq.IR import BaseGraph, GraphExporter
 from ppq.IR.quantize import QuantableOperation, QuantableVariable
 from ppq.utils.round import ppq_tensor_round
 
+from .caffe_exporter import CaffeExporter
 from .onnxruntime_exporter import OnnxExporter, ONNXRUNTIMExporter
 
 
@@ -254,44 +258,81 @@ class TensorRTExporter_QDQ(ONNXRUNTIMExporter):
             file.write(trt_engine.serialize())
 
 
-class TensorRTExporter_JSON(OnnxExporter):
+class TensorRTExporter_JSON(GraphExporter):
     def export_quantization_config(self, config_path: str, graph: BaseGraph):
-
+        quant_info = {}
         act_quant_info = {}
-        for op in graph.topological_sort():
-            if not isinstance(op, QuantableOperation): continue
-            if op.type in {"Gather", "Unsqueeze", "Concat", "Reshape", "Squeeze"}: continue
+        quant_info["act_quant_info"] = act_quant_info
+        topo_order =  graph.topological_sort()
+        for index, op in enumerate(topo_order):
+            
+            if op.type in {"Shape", "Gather", "Unsqueeze", "Concat", "Reshape"}:
+               continue
+            
+            if index == 0:
+                assert graph.inputs.__contains__(op.inputs[0].name)
+                input_cfg = op.config.input_quantization_config[0]
+                assert input_cfg.state == QuantizationStates.ACTIVATED and\
+                    input_cfg.policy.has_property(QuantizationProperty.PER_TENSOR)
+                trt_range_input = input_cfg.scale.item() * (input_cfg.quant_max - input_cfg.quant_min) / 2
+                act_quant_info[op.inputs[0].name] = trt_range_input
+                output_cfg = op.config.output_quantization_config[0]
+                trt_range_output = output_cfg.scale.item() * (output_cfg.quant_max - output_cfg.quant_min) / 2
+                act_quant_info[op.outputs[0].name] = trt_range_input
 
-            for cfg, var in op.config_with_variable:
-                if not cfg.can_export(export_overlapped=True): continue
-                if var.is_parameter: continue
-
-                if cfg.policy != QuantizationPolicy(
-                    QuantizationProperty.LINEAR + 
-                    QuantizationProperty.SYMMETRICAL + 
-                    QuantizationProperty.PER_TENSOR):
-                    ppq_warning(f'Can not export quantization config on variable {var.name}, '
-                                'Quantization Policy is invalid.')
+            else:
+                if not hasattr(op, 'config'):
+                    ppq_warning(f'This op does not write quantization parameters: {op.name}.')
                     continue
-
-                if cfg.num_of_bits != 8 or cfg.quant_max != 127 or cfg.quant_min != -128:
-                    ppq_warning(f'Can not export quantization config on variable {var.name}, '
-                                'Tensor Quantization Config has unexpected setting.')
-                    continue
-
-                act_quant_info[var.name] = cfg.scale.item() * 127
-
-        json_qparams_str = json.dumps({'act_quant_info': act_quant_info}, indent=4)
+                else:
+                    ppq_info(f'This op writes quantization parameters: {op.name}')
+                    output_cfg = op.config.output_quantization_config[0]
+                    trt_range_output = output_cfg.scale.item() * (output_cfg.quant_max - output_cfg.quant_min) / 2
+                    act_quant_info[op.outputs[0].name] = trt_range_output
+        json_qparams_str = json.dumps(quant_info, indent=4)
         with open(config_path, "w") as json_file:
             json_file.write(json_qparams_str)
 
+    def export_weights(self, graph: BaseGraph, config_path: str = None):
+        topo_order =  graph.topological_sort()
+        weights_list = []
+        for index, op in enumerate(topo_order):
+            if op.type in {"Conv", "Gemm"}:
+                weights_list.extend(op.parameters)
 
-    def export(self, file_path: str, graph: BaseGraph, 
-               config_path: str = None, save_as_external_data: bool = False):
+        weight_file_path = os.path.join(os.path.dirname(config_path), "quantized.wts")
+
+        f = open(weight_file_path, 'w')
+        f.write("{}\n".format(len(weights_list)))
+
+        for param in weights_list:
+            weight_name = param.name
+            weight_value = param.value.reshape(-1).cpu().numpy()
+            f.write("{} {}".format(weight_name, len(weight_value)))
+            for value in weight_value:
+                f.write(" ")
+                f.write(struct.pack(">f", float(value)).hex())
+            f.write("\n")
+        ppq_info(f'Parameters have been saved to file: {weight_file_path}')
+
+
+    def export(self, file_path: str, graph: BaseGraph, config_path: str = None, input_shapes: List[List[int]] = [[1, 3, 224, 224]]):
         if config_path is not None:
             self.export_quantization_config(config_path, graph)
-        else:
-            ppq_warning('TensorRT Json Exporter needs a valid path of json file.')
+        self.export_weights(graph, config_path)
+        _, ext = os.path.splitext(file_path)
+        if ext == '.onnx':
+            exporter = OnnxExporter()
+            exporter.export(file_path=file_path, graph=graph, config_path=None)
+        elif ext in {'.prototxt', '.caffemodel'}:
+            exporter = CaffeExporter()
+            exporter.export(file_path=file_path, graph=graph, config_path=None, input_shapes=input_shapes)
         
-        super().export(file_path=file_path, graph=graph, config_path=config_path, 
-                       save_as_external_data=save_as_external_data)
+        # no pre-determined export format, we export according to the
+        # original model format
+        elif graph._built_from == NetworkFramework.CAFFE:
+            exporter = CaffeExporter()
+            exporter.export(file_path=file_path, graph=graph, config_path=None, input_shapes=input_shapes)
+        elif graph._built_from == NetworkFramework.ONNX:
+            exporter = OnnxExporter()
+            exporter.export(file_path=file_path, graph=graph, config_path=None)
