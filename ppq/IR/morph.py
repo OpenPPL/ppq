@@ -88,7 +88,8 @@ class GraphFormatter(GraphCommandProcessor):
             GraphCommandType.FORMAT_CONSTANT_INPUT,
             GraphCommandType.FORMAT_SLICE,
             GraphCommandType.TRUNCATE_ON_VAR,
-            GraphCommandType.FORMAT_RESIZE
+            GraphCommandType.FORMAT_RESIZE,
+            GraphCommandType.FORMAT_SNG_BN
         ]
 
     def process(self, command: GraphCommand) -> Any:
@@ -114,6 +115,8 @@ class GraphFormatter(GraphCommandProcessor):
             return self.format_slice()
         if command.command_type == GraphCommandType.FORMAT_RESIZE:
             return self.format_resize()
+        if command.command_type == GraphCommandType.FORMAT_SNG_BN:
+            return self.format_sng_bn()
         if command.command_type == GraphCommandType.TRUNCATE_ON_VAR:
             assert isinstance(command, TruncateGraphCommand), f'Use TruncateGraphCommand here.'
             return self.truncate_on_var(command.var, command.mark_as_output)
@@ -234,7 +237,78 @@ class GraphFormatter(GraphCommandProcessor):
             if 'indices' in operation.attributes:
                 operation.attributes['gather_index'] = operation.attributes['indices']
                 operation.attributes.pop('indices')
+                
+    def format_sng_bn(self) -> None:
+        """
+        batchnormal: 这个算子独立出现的时候（前面没有Conv），我们考虑把它合进一个1x1的conv
+        """
+        interested_ops = []
+        for operation in self.graph.operations.values():
+            if operation.type == "BatchNormalization":
+                upstream_ops = self.graph.get_upstream_operations(operation)  # 假设bn上游只有一个op或者没有op
 
+                if len(upstream_ops) == 0:
+                    interested_ops.append(operation)
+                    continue
+                assert len(upstream_ops) == 1, f"BN op({operation.name}) should have only one input"
+                if upstream_ops[0].type not in ["Conv", "Gemm", "ConvTranspose"]:
+                    interested_ops.append(operation)
+                else:
+                    down_ops = self.graph.get_downstream_operations(upstream_ops[0])
+                    if len(down_ops) != 1:
+                        interested_ops.append(operation)
+
+        for bn_op in interested_ops:
+            assert isinstance(bn_op, Operation)
+            assert len(bn_op.parameters) == 4, "BatchNorm should have 4 parameters, namely alpha, beta, mean, var"
+            alpha = bn_op.parameters[0].value
+            beta  = bn_op.parameters[1].value
+            mean  = bn_op.parameters[2].value
+            var   = bn_op.parameters[3].value
+            epsilon = bn_op.attributes.get("epsilon", 1e-5)
+
+            input_var = bn_op.inputs[0]
+            input_channel = alpha.shape[0]
+            bn_out_var = bn_op.outputs[0]
+            w = np.ones((input_channel, 1, 1, 1), dtype=np.float32)  # 1x1卷积 group卷积
+            b = np.zeros(
+                shape=w.shape[1] * input_channel,
+                dtype=np.float32,
+            )
+            scale = alpha / np.sqrt(var + epsilon)
+            w = w * scale.reshape([-1, 1, 1, 1])
+            b = alpha * (b - mean) / np.sqrt(var + epsilon) + beta
+            conv_op = Operation(
+                name=bn_op.name + "_conv",
+                op_type="Conv",
+                attributes=dict(
+                    kernel_shape=[1, 1], strides=[1, 1], dilations=[1, 1], pads=[0, 0, 0, 0], group=input_channel
+                ),
+                inputs=[input_var],
+                outputs=[bn_out_var],
+                platform=bn_op.platform,
+            )
+            self.graph.append_operation(conv_op)
+
+            w_var = self.graph.create_variable(
+                name=conv_op.name + "_1x1_weight", value=w, is_parameter=True, dest_ops=[conv_op]
+            )
+            b_var = self.graph.create_variable(
+                name=conv_op.name + "_1x1_bias", value=b, is_parameter=True, dest_ops=[conv_op]
+            )
+            conv_op.inputs.extend([w_var, b_var])
+            self.graph.variables[w_var.name] = w_var
+            self.graph.variables[b_var.name] = b_var
+
+            if bn_op.outputs[0].name in self.graph.outputs:
+                del self.graph.outputs[bn_op.outputs[0].name]
+                self.graph.outputs.update({conv_op.outputs[0].name: conv_op.outputs[0]})
+
+            self.graph.remove_operation(bn_op)
+
+            bn_out_var.source_op = conv_op
+            input_var.dest_ops.append(conv_op)
+        
     def format_cast(self) -> None:
         """cast op 的参数 to 默认为 int，使用该函数将其封装为 ppq.core.DataType."""
         interested_ops = []
@@ -459,7 +533,7 @@ class GraphMerger(GraphCommandProcessor):
     def process(self, command: GraphCommand) -> Any:
         if command.command_type == GraphCommandType.FUSE_BN:
             return self.fuse_bn()
-
+    
     def fuse_bn(self):
         search_engine = SearchableGraph(graph=self.graph)
         paths = search_engine.path_matching(
