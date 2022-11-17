@@ -428,6 +428,13 @@ class QuantizationSettingFactory:
         default_setting.equalization = True
         return default_setting
 
+    @staticmethod
+    def ascend_setting() -> QuantizationSetting:
+        default_setting = QuantizationSetting()
+        default_setting.fusion = True
+        return default_setting
+
+
     @ staticmethod
     def dsp_setting() -> QuantizationSetting:
         default_setting = QuantizationSetting()

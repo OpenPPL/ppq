@@ -12,3 +12,4 @@ from .OpenvinoQuantizer import OpenvinoQuantizer
 from .TengineQuantizer import TengineQuantizer
 from .FP8Quantizer import GraphCoreQuantizer, TensorRTQuantizer_FP8
 from .TensorRTQuantizer import TensorRTQuantizer, TensorRTQuantizer_InputOnly
+from .AscendQuantizer import AscendQuantizer

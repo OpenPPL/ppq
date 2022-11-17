@@ -5,7 +5,8 @@ from ppq.parser import (CaffeExporter, CaffeParser, ExtensionExporter,
                         ONNXRUNTIMExporter, PPLBackendExporter,
                         PPLDSPCaffeExporter, PPLDSPTICaffeExporter,
                         QNNDSPExporter, SNPECaffeExporter, TengineExporter,
-                        TensorRTExporter_QDQ, TensorRTExporter_JSON)
+                        TensorRTExporter_QDQ, TensorRTExporter_JSON,
+                        AscendExporter)
 from ppq.quantization.quantizer import (ExtQuantizer, FPGAQuantizer,
                                         GraphCoreQuantizer,
                                         MetaxChannelwiseQuantizer,
@@ -13,7 +14,7 @@ from ppq.quantization.quantizer import (ExtQuantizer, FPGAQuantizer,
                                         NCNNQuantizer, NXP_Quantizer,
                                         OpenvinoQuantizer, PPL_DSP_Quantizer,
                                         PPL_DSP_TI_Quantizer, PPLCUDAQuantizer,
-                                        RKNN_PerTensorQuantizer,
+                                        RKNN_PerTensorQuantizer,AscendQuantizer,
                                         TengineQuantizer, TensorRTQuantizer,
                                         TensorRTQuantizer_FP8)
 
@@ -23,6 +24,7 @@ __QUANTIZER_COLLECTION__ = {
     TargetPlatform.SNPE_INT8:    PPL_DSP_Quantizer,
     TargetPlatform.QNN_DSP_INT8: PPL_DSP_Quantizer,
     TargetPlatform.TRT_INT8:     TensorRTQuantizer,
+    TargetPlatform.ASC_INT8:     AscendQuantizer,
     TargetPlatform.NCNN_INT8:    NCNNQuantizer,
     TargetPlatform.NXP_INT8:     NXP_Quantizer,
     TargetPlatform.RKNN_INT8:    RKNN_PerTensorQuantizer,
@@ -62,6 +64,7 @@ __EXPORTERS__ = {
     TargetPlatform.METAX_INT8_C:  ONNXRUNTIMExporter,
     TargetPlatform.METAX_INT8_T:  ONNXRUNTIMExporter,
     TargetPlatform.TRT_INT8:      TensorRTExporter_JSON,
+    TargetPlatform.ASC_INT8:      AscendExporter,
     TargetPlatform.TRT_FP8:       ONNXRUNTIMExporter,
     TargetPlatform.NCNN_INT8:     NCNNExporter,
     TargetPlatform.TENGINE_INT8:  TengineExporter
