@@ -100,6 +100,9 @@ class GraphCommandType(Enum):
     # 升级图中的 resize 到 opset 11
     FORMAT_RESIZE = 31
 
+    # 单独的BN转成conv1x1
+    # fuse Computing layer and BN
+    FORMAT_SNG_BN = 32
 class GraphCommand():
     def __init__(self, command_type: GraphCommandType, **kwargs) -> None:
         assert isinstance(command_type, GraphCommandType), \

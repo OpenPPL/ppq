@@ -615,6 +615,7 @@ def format_graph(graph: BaseGraph) -> BaseGraph:
 
     formatter(GraphCommand(GraphCommandType.FORMAT_CONSTANT_INPUT))
     formatter(GraphCommand(GraphCommandType.FUSE_BN))
+    formatter(GraphCommand(GraphCommandType.FORMAT_SNG_BN))
     formatter(GraphCommand(GraphCommandType.FORMAT_PARAMETERS))
     formatter(GraphCommand(GraphCommandType.FORMAT_CAST))
     formatter(GraphCommand(GraphCommandType.FORMAT_SLICE))
