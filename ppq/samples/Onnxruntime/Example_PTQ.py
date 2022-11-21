@@ -44,9 +44,8 @@ if QUANT_PLATFROM in {TargetPlatform.PPL_DSP_INT8,                  # 这些平�
                        TargetPlatform.FPGA_INT8}:
     QS.equalization = True                                          # per tensor 量化平台需要做 equalization
 
-if QUANT_PLATFROM in {TargetPlatform.ACADEMIC_INT8,                 # 把量化的不太好的算子送回 FP32
-                       TargetPlatform.PPL_CUDA_INT8,                # 注意做这件事之前你需要确保你的执行框架具有混合精度执行的能力，以及浮点计算的能力
-                       TargetPlatform.TRT_INT8}:
+if QUANT_PLATFROM in {TargetPlatform.PPL_CUDA_INT8,                # 注意做这件事之前你需要确保你的执行框架具有混合精度执行的能力，以及浮点计算的能力
+                      TargetPlatform.TRT_INT8}:
     QS.dispatching_table.append(operation='OP NAME', platform=TargetPlatform.FP32)
 
 print('正准备量化你的网络，检查下列设置:')
@@ -101,5 +100,5 @@ with ENABLE_CUDA_KERNEL():
     session = onnxruntime.InferenceSession('model_int8.onnx', providers=['CUDAExecutionProvider'])
     onnxruntime_results = []
     for sample in tqdm(SAMPLES, desc='ONNXRUNTIME GENERATEING OUTPUTS', total=len(SAMPLES)):
-        result = session.run([int8_output_names[0]], {int8_input_names[0]: convert_any_to_numpy(sample)})
+        result = session.run(None, {int8_input_names[0]: convert_any_to_numpy(sample)})
         onnxruntime_results.append(result)

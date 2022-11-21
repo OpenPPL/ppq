@@ -47,7 +47,7 @@ class PPL_DSP_Quantizer(BaseQuantizer):
                     QuantizationProperty.LINEAR +
                     QuantizationProperty.PER_TENSOR)
                 bias_config.state = QuantizationStates.PASSIVE_INIT
-                bias_config.visiblity = QuantizationVisibility.INTERNAL
+                bias_config.visibility = QuantizationVisibility.INTERNAL
 
             for config in base_quant_config.input_quantization_config[1: ]:
                 config.observer_algorithm = 'minmax'
@@ -64,8 +64,8 @@ class PPL_DSP_Quantizer(BaseQuantizer):
                     min_cfg.state = QuantizationStates.PASSIVE_INIT
                     max_cfg.state = QuantizationStates.PASSIVE_INIT
 
-                    min_cfg.visiblity = QuantizationVisibility.INTERNAL
-                    max_cfg.visiblity = QuantizationVisibility.INTERNAL
+                    min_cfg.visibility = QuantizationVisibility.INTERNAL
+                    max_cfg.visibility = QuantizationVisibility.INTERNAL
 
             if operation.type == 'Pad':
                 if operation.num_of_input > 2:

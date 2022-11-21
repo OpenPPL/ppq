@@ -16,7 +16,7 @@ from .storage import Serializable
 
 class QuantizationVisibility(Enum):
     FORCE_EXPORT       = 1
-    EXPOET_WHEN_ACTIVE = 2
+    EXPORT_WHEN_ACTIVE = 2
     INTERNAL           = 3
 
 
@@ -503,7 +503,7 @@ class TensorQuantizationConfig(Serializable):
         observer_algorithm: str   = None,
         detail: Any               = None,
         channel_axis: int         = None,
-        visiblity: QuantizationVisibility = QuantizationVisibility.EXPOET_WHEN_ACTIVE,
+        visibility: QuantizationVisibility = QuantizationVisibility.EXPORT_WHEN_ACTIVE,
         state: QuantizationStates = QuantizationStates.INITIAL
     ):
         """Create a PPQ Tensor Quantization Configuration Instance.
@@ -570,18 +570,18 @@ class TensorQuantizationConfig(Serializable):
         self.detail = {} if detail is None else detail
         self._dominator = self # union-find
         self._hash = self.__create_hash()
-        self._visiblity = visiblity
+        self._visibility = visibility
         super().__init__()
 
     def can_export(self, export_overlapped: bool = EXPORT_OVERLAPPED_CONFIG) -> bool:
-        if self.visiblity == QuantizationVisibility.INTERNAL: return False
+        if self.visibility == QuantizationVisibility.INTERNAL: return False
         type_check  = isinstance(self.scale, torch.Tensor) and isinstance(self.offset, torch.Tensor)
         valid_states = {QuantizationStates.BAKED, QuantizationStates.PASSIVE_BAKED}
 
         if export_overlapped: valid_states.add(QuantizationStates.OVERLAPPED)
         state_check = QuantizationStates.is_activated(self.state) or self.state in valid_states
 
-        if (state_check or self.visiblity == QuantizationVisibility.FORCE_EXPORT):
+        if (state_check or self.visibility == QuantizationVisibility.FORCE_EXPORT):
             if type_check: return True
         return False
 
@@ -693,12 +693,12 @@ class TensorQuantizationConfig(Serializable):
         })
 
     @ property
-    def visiblity(self) -> QuantizationVisibility:
-        return self._visiblity
+    def visibility(self) -> QuantizationVisibility:
+        return self._visibility
 
-    @ visiblity.setter
-    def visiblity(self, visiblity: QuantizationVisibility):
-        self._visiblity = visiblity
+    @ visibility.setter
+    def visibility(self, visiblity: QuantizationVisibility):
+        self._visibility = visiblity
 
     @ property
     def scale(self) -> torch.Tensor:
@@ -828,7 +828,7 @@ class TensorQuantizationConfig(Serializable):
             state=self.state,
             exponent_bits=self.exponent_bits,
             channel_axis=self.channel_axis,
-            visiblity=self.visiblity
+            visibility=self.visibility
         )
         if self.state == QuantizationStates.OVERLAPPED:
             config._dominator = self._dominator

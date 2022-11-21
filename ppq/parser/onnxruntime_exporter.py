@@ -25,7 +25,7 @@ class QDQHelper():
         if not TQC.can_export(): return False
         meta_check = bounded_var.meta is not None
 
-        if TQC.visiblity == QuantizationVisibility.INTERNAL: return False
+        if TQC.visibility == QuantizationVisibility.INTERNAL: return False
         if TQC.num_of_bits == 8 and TQC.policy.has_property(QuantizationProperty.LINEAR):
             if TQC.policy.has_property(QuantizationProperty.ASYMMETRICAL):
                 range_check = (TQC.quant_max <= 255 and TQC.quant_min >= 0)
@@ -37,10 +37,6 @@ class QDQHelper():
                         f'INT8 value range must be [-128, 127] or [0, 255], '
                         f'however [{TQC.quant_min, TQC.quant_max}] was given.')
             return False
-
-        if not meta_check:
-            raise ValueError(f'Meta Data is missing! Graph Export Failed. '
-                             f'(Check Meta For Varaible: {bounded_var.name})')
         return True
 
 
@@ -106,7 +102,7 @@ class ONNXRUNTIMExporter(OnnxExporter):
             # Following code will export Linear Quantization Config
             # That is for FP32 -> INT
             if meta is None: meta = var.meta
-            offset_dtype, value_dtype = self.infer_qtype(config)
+            offset_dtype, _ = self.infer_qtype(config)
             scale  = convert_any_to_torch_tensor(config.scale.clone(), dtype=torch.float32)
             offset = ppq_tensor_round(config.offset.clone()).type(offset_dtype)
 
@@ -128,13 +124,6 @@ class ONNXRUNTIMExporter(OnnxExporter):
             graph.create_link_with_op(variable=s_var, upstream_op=None, downstream_op=created)
             graph.create_link_with_op(variable=z_var, upstream_op=None, downstream_op=created)
 
-            meta = OperationMeta(
-            input_metas    = [TensorMeta(dtype=DataType.FP32, shape=meta.shape),
-                              TensorMeta(dtype=DataType.FP32, shape=config.scale.shape),
-                              TensorMeta(dtype=DataType.convert_from_torch(offset_dtype), shape=config.offset.shape)],
-            output_metas   = [TensorMeta(dtype=DataType.convert_from_torch(value_dtype), shape=meta.shape)],
-            operation_name = created.name, operation_type=created.type, executing_order=-1)
-            created.meta_data = meta
             return created
         
         elif config.policy.has_property(QuantizationProperty.FLOATING):
@@ -164,13 +153,6 @@ class ONNXRUNTIMExporter(OnnxExporter):
             graph.create_link_with_op(variable=s_var, upstream_op=None, downstream_op=created)
             graph.create_link_with_op(variable=z_var, upstream_op=None, downstream_op=created)
 
-            meta = OperationMeta(
-            input_metas    = [TensorMeta(dtype=DataType.FP32, shape=meta.shape),
-                              TensorMeta(dtype=DataType.FP32, shape=config.scale.shape),
-                              TensorMeta(dtype=DataType.FP32, shape=config.offset.shape)],
-            output_metas   = [TensorMeta(dtype=DataType.FP32, shape=meta.shape)],
-            operation_name = created.name, operation_type=created.type, executing_order=-1)
-            created.meta_data = meta
             return created
         
         else:
@@ -188,7 +170,7 @@ class ONNXRUNTIMExporter(OnnxExporter):
         """
         if config.policy.has_property(QuantizationProperty.LINEAR):
             if meta is None: meta = var.meta
-            offset_dtype, value_dtype = self.infer_qtype(config)
+            offset_dtype, _ = self.infer_qtype(config)
             scale  = convert_any_to_torch_tensor(config.scale.clone(), dtype=torch.float32)
             offset = ppq_tensor_round(config.offset.clone()).type(offset_dtype)
 
@@ -210,13 +192,6 @@ class ONNXRUNTIMExporter(OnnxExporter):
             graph.create_link_with_op(variable=s_var, upstream_op=None, downstream_op=created)
             graph.create_link_with_op(variable=z_var, upstream_op=None, downstream_op=created)
 
-            dq_meta = OperationMeta(
-            input_metas    = [TensorMeta(dtype=DataType.convert_from_torch(value_dtype), shape=meta.shape),
-                              TensorMeta(dtype=DataType.FP32, shape=config.scale.shape),
-                              TensorMeta(dtype=DataType.FP32, shape=config.offset.shape)],
-            output_metas   = [TensorMeta(dtype=DataType.FP32, shape=meta.shape)],
-            operation_name = created.name, operation_type=created.type, executing_order=-1)
-            created.meta_data = dq_meta
             return created
 
         elif config.policy.has_property(QuantizationProperty.FLOATING):
@@ -244,13 +219,6 @@ class ONNXRUNTIMExporter(OnnxExporter):
             graph.create_link_with_op(variable=s_var, upstream_op=None, downstream_op=created)
             graph.create_link_with_op(variable=z_var, upstream_op=None, downstream_op=created)
 
-            dq_meta = OperationMeta(
-            input_metas    = [TensorMeta(dtype=DataType.FP32, shape=meta.shape),
-                              TensorMeta(dtype=DataType.FP32, shape=config.scale.shape),
-                              TensorMeta(dtype=DataType.FP32, shape=config.offset.shape)],
-            output_metas   = [TensorMeta(dtype=DataType.FP32, shape=meta.shape)],
-            operation_name = created.name, operation_type=created.type, executing_order=-1)
-            created.meta_data = dq_meta
             return created
 
         else:
@@ -514,7 +482,33 @@ class ONNXRUNTIMExporter(OnnxExporter):
         return self.remove_duplicated_quant_op(graph)
 
     def export(self, file_path: str, graph: BaseGraph, config_path: str = None, 
-               save_as_external_data: bool = False) -> None:
+               export_QDQ_op: bool = True, quantized_param: bool = False,
+               remove_activation: bool = True, save_as_external_data: bool = False) -> None:
+        """
+        Export PPQ Graph to Onnx format.
+            This function requires a set of parameters to configure onnx format.
+        
+        Args:
+            file_path (str): Onnx file name.
+            
+            graph (BaseGraph): Exporting ppq graph.
+            
+            config_path (str, optional): config file is a json file that contains quant-related
+                information, this file is require by TensorRT for initialize its quantization
+                pipeline. If config_path = None, no json file will be created.
+
+            export_QDQ_op (bool, optional): whether to export QDQ node in onnx model.
+
+            quantized_param (bool, optional): export quantized parameter, if quantized_param = False,
+                PPQ will export parameter in FP32 format.
+            
+            remove_activation (bool, optional): this option will remove activation op(Relu, Clip),
+                requires ASYMMTRICAL quantizaiton.
+            
+            save_as_external_data (bool, optional): for model larger than 2GB, 
+                this option will split model into external param files.
+        """
+        # In prepare stage, quant & dequant node are inserted into graph.
         graph = self.prepare_graph(graph)
 
         # if a valid config path is given, export quantization config to there.
@@ -531,19 +525,13 @@ class ONNXRUNTIMExporter(OnnxExporter):
 
         for variable in graph.variables.values():
             tensor_proto = super().build_variable_proto(variable)
-            if variable.name in graph.inputs:
-                _inputs.append(tensor_proto)
-            if variable.name in graph.outputs:
-                _outputs.append(tensor_proto)
-            if variable.is_parameter:
-                _initilizers.append(tensor_proto)
+            if variable.name in graph.inputs: _inputs.append(tensor_proto)
+            if variable.name in graph.outputs: _outputs.append(tensor_proto)
+            if variable.is_parameter: _initilizers.append(tensor_proto)
 
         graph_def = helper.make_graph(
-            name=name,
-            nodes=_nodes,
-            inputs=_inputs,
-            outputs=_outputs,
-            initializer=_initilizers)
+            name=name, nodes=_nodes, inputs=_inputs,
+            outputs=_outputs, initializer=_initilizers)
         extra_opsets = self.required_opsets
 
         opsets = []

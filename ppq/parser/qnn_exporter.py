@@ -22,7 +22,7 @@ class QNNDSPExporter(OnnxExporter):
                         f'Operation {operation.name} has an invalid quantization state({config.state}) '
                         f'at variable {var.name}.')
 
-                if config.visiblity == QuantizationVisibility.INTERNAL: continue
+                if config.visibility == QuantizationVisibility.INTERNAL: continue
                 if config.state in {
                     QuantizationStates.FP32,
                     QuantizationStates.SOI
