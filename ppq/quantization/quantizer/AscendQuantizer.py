@@ -23,7 +23,7 @@ class AscendQuantizer(BaseQuantizer):
 
         base_quant_config = self.create_default_quant_config(
             op=operation, num_of_bits=self._num_of_bits, exponent_bits=0,
-            quant_max= +127, quant_min= -128, observer_algorithm='percentile', 
+            quant_max=self._quant_max, quant_min=self._quant_min, observer_algorithm='percentile', 
             policy=self.quantize_policy, rounding=self.rounding_policy,
         )
 
@@ -43,6 +43,8 @@ class AscendQuantizer(BaseQuantizer):
                     # conv_weight_config.channel_axis = (1 if operation.type == 'ConvTranspose' else 0)
                     conv_weight_config.channel_axis = 1
                     conv_weight_config.observer_algorithm = 'minmax'
+                    conv_weight_config.quant_max = 127
+                    conv_weight_config.quant_min = -128
         
 
             elif operation.type == 'Gemm':
@@ -56,6 +58,8 @@ class AscendQuantizer(BaseQuantizer):
                     
                     # gemm_weight_config.channel_axis = 0
                     gemm_weight_config.observer_algorithm = 'minmax'
+                    gemm_weight_config.quant_max = 127
+                    gemm_weight_config.quant_min = -128
 
             # if operation has bias
             if operation.num_of_input > 2:
