@@ -1,6 +1,6 @@
 import json
 
-from ppq.core import DataType, QuantizationStates
+from ppq.core import DataType, QuantizationStates, QuantizationVisibility
 from ppq.IR import BaseGraph
 from ppq.IR.quantize import QuantableOperation
 
@@ -22,17 +22,11 @@ class QNNDSPExporter(OnnxExporter):
                         f'Operation {operation.name} has an invalid quantization state({config.state}) '
                         f'at variable {var.name}.')
 
-                # PATCH 2021.11.25
-                # REMOVE BIAS FROM CONFIGURATION
-                if config.num_of_bits > 8: continue
-
+                if config.visibility == QuantizationVisibility.INTERNAL: continue
                 if config.state in {
                     QuantizationStates.FP32,
                     QuantizationStates.SOI
                 }: continue
-                # Simply override recorder is acceptable here,
-                # we do not support mix precision quantization for CUDA backend now.
-                # All configurations for this variable should keep identical towards each other.
 
                 if config.state == QuantizationStates.PASSIVE and var.name in activation_info: continue
                 info =  [{

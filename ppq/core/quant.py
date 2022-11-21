@@ -16,7 +16,7 @@ from .storage import Serializable
 
 class QuantizationVisibility(Enum):
     FORCE_EXPORT       = 1
-    EXPOET_WHEN_ACTIVE = 2
+    EXPORT_WHEN_ACTIVE = 2
     INTERNAL           = 3
 
 
@@ -60,6 +60,7 @@ class TargetPlatform(Enum):
     NCNN_INT8     = 102
     OPENVINO_INT8 = 103
     TENGINE_INT8  = 104
+    ASC_INT8      = 106
     
     PPL_CUDA_INT8 = 201
     PPL_CUDA_INT4 = 202
@@ -84,8 +85,6 @@ class TargetPlatform(Enum):
     HEXAGON_INT8  = 801
     GRAPHCORE_FP8 = 901
 
-    ASC_INT8 = 106
-
     FP32 = 0
     FP16 = 1
     BF16 = 2
@@ -109,8 +108,8 @@ class TargetPlatform(Enum):
         return platform in {
             cls.PPL_DSP_INT8, cls.PPL_DSP_TI_INT8, cls.QNN_DSP_INT8, cls.TRT_INT8, cls.NCNN_INT8, cls.NXP_INT8,
             cls.SNPE_INT8, cls.PPL_CUDA_INT8, cls.PPL_CUDA_INT4, cls.EXTENSION, cls.PPL_CUDA_MIX, cls.RKNN_INT8,
-            cls.METAX_INT8_C, cls.METAX_INT8_T, cls.OPENVINO_INT8, cls.FPGA_INT8, cls.TENGINE_INT8, cls.ASC_INT8,
-            cls.FP8, cls.GRAPHCORE_FP8, cls.TRT_FP8, cls.UNSPECIFIED}
+            cls.METAX_INT8_C, cls.METAX_INT8_T, cls.OPENVINO_INT8, cls.FPGA_INT8, cls.TENGINE_INT8, 
+            cls.FP8, cls.GRAPHCORE_FP8, cls.TRT_FP8, cls.ASC_INT8, cls.UNSPECIFIED}
 
 
 class RoundingPolicy(Enum):
@@ -504,7 +503,7 @@ class TensorQuantizationConfig(Serializable):
         observer_algorithm: str   = None,
         detail: Any               = None,
         channel_axis: int         = None,
-        visiblity: QuantizationVisibility = QuantizationVisibility.EXPOET_WHEN_ACTIVE,
+        visibility: QuantizationVisibility = QuantizationVisibility.EXPORT_WHEN_ACTIVE,
         state: QuantizationStates = QuantizationStates.INITIAL
     ):
         """Create a PPQ Tensor Quantization Configuration Instance.
@@ -571,18 +570,18 @@ class TensorQuantizationConfig(Serializable):
         self.detail = {} if detail is None else detail
         self._dominator = self # union-find
         self._hash = self.__create_hash()
-        self._visiblity = visiblity
+        self._visibility = visibility
         super().__init__()
 
     def can_export(self, export_overlapped: bool = EXPORT_OVERLAPPED_CONFIG) -> bool:
-        if self.visiblity == QuantizationVisibility.INTERNAL: return False
+        if self.visibility == QuantizationVisibility.INTERNAL: return False
         type_check  = isinstance(self.scale, torch.Tensor) and isinstance(self.offset, torch.Tensor)
         valid_states = {QuantizationStates.BAKED, QuantizationStates.PASSIVE_BAKED}
 
         if export_overlapped: valid_states.add(QuantizationStates.OVERLAPPED)
         state_check = QuantizationStates.is_activated(self.state) or self.state in valid_states
 
-        if (state_check or self.visiblity == QuantizationVisibility.FORCE_EXPORT):
+        if (state_check or self.visibility == QuantizationVisibility.FORCE_EXPORT):
             if type_check: return True
         return False
 
@@ -694,12 +693,12 @@ class TensorQuantizationConfig(Serializable):
         })
 
     @ property
-    def visiblity(self) -> bool:
-        return self._visiblity
+    def visibility(self) -> QuantizationVisibility:
+        return self._visibility
 
-    @ visiblity.setter
-    def visiblity(self, visiblity: bool):
-        self._visiblity = visiblity
+    @ visibility.setter
+    def visibility(self, visiblity: QuantizationVisibility):
+        self._visibility = visiblity
 
     @ property
     def scale(self) -> torch.Tensor:
@@ -828,7 +827,8 @@ class TensorQuantizationConfig(Serializable):
             detail=self.detail.copy(),
             state=self.state,
             exponent_bits=self.exponent_bits,
-            channel_axis=self.channel_axis
+            channel_axis=self.channel_axis,
+            visibility=self.visibility
         )
         if self.state == QuantizationStates.OVERLAPPED:
             config._dominator = self._dominator

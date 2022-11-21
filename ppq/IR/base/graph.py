@@ -132,7 +132,7 @@ class Variable(Serializable):
             return self.value.dtype
         if self.meta is not None:
             return self.meta.dtype
-        else: return DataType.NONETYPE
+        else: return DataType.FP32
 
     def copy(self, copy_value: bool = False):
         if not copy_value or self.value is None:

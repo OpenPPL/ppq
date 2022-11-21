@@ -128,7 +128,7 @@ class PassiveParameterQuantizePass(QuantizationOptimizationPass):
 
                 for config in op.config.input_quantization_config[1: ]:
                     config.master_by = i_cfg
-                    config.visiblity = self.clip_visiblity
+                    config.visibility = self.clip_visiblity
 
             if op.type in {'Pad'} and self.process_pad:
                 # inputs are [input value, pad[shape-related], pad value[optional]]
@@ -142,7 +142,7 @@ class PassiveParameterQuantizePass(QuantizationOptimizationPass):
                 if len(op.config.input_quantization_config) > 1:
                     pad_config = op.config.input_quantization_config[-1]
                     pad_config.master_by = i_cfg
-                    pad_config.visiblity = self.pad_visiblity
+                    pad_config.visibility = self.pad_visiblity
 
         # final check
         for op in graph.operations.values():

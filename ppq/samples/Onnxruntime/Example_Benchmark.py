@@ -26,11 +26,12 @@ from tqdm import tqdm
 
 from ppq import *
 from ppq.api import *
+import ppq.lib
 
 QUANT_PLATFROM = TargetPlatform.TRT_INT8
 BATCHSIZE = 1
 MODELS = {
-    'resnet50': torchvision.models.resnet50,
+    'resnet18': torchvision.models.resnet18,
     'mobilenet_v2': torchvision.models.mobilenet.mobilenet_v2,
     'mnas': torchvision.models.mnasnet0_5,
     'shufflenet': torchvision.models.shufflenet_v2_x1_0}
@@ -57,10 +58,6 @@ for mname, model_builder in MODELS.items():
         result = result.cpu().reshape([BATCHSIZE, 1000])
         ref_results.append(result)
     
-    # record input & output name
-    fp32_input_names  = [name for name, _ in quantized.inputs.items()]
-    fp32_output_names = [name for name, _ in quantized.outputs.items()]
-    
     # quantization error analyse
     graphwise_error_analyse(graph=quantized, running_device='cuda', 
                             dataloader=SAMPLES, collate_fn=lambda x: x.cuda(), steps=32)
@@ -72,15 +69,14 @@ for mname, model_builder in MODELS.items():
         graph_save_to='model_int8.onnx')
 
     # record input & output name
-    int8_input_names  = [name for name, _ in quantized.inputs.items()]
-    int8_output_names = [name for name, _ in quantized.outputs.items()]
+    input_names  = [name for name, _ in quantized.inputs.items()]
 
     # run with onnxruntime.
     # compare onnxruntime result with ppq.
     session = onnxruntime.InferenceSession('model_int8.onnx', providers=['CUDAExecutionProvider'])
     onnxruntime_results = []
     for sample in tqdm(SAMPLES, desc='ONNXRUNTIME GENERATEING OUTPUTS', total=len(SAMPLES)):
-        result = session.run([int8_output_names[0]], {int8_input_names[0]: convert_any_to_numpy(sample)})
+        result = session.run(None, {input_names[0]: convert_any_to_numpy(sample)})
         result = convert_any_to_torch_tensor(result).reshape([BATCHSIZE, 1000])
         onnxruntime_results.append(result)
 
@@ -99,7 +95,7 @@ for mname, model_builder in MODELS.items():
     session = onnxruntime.InferenceSession('model_fp32.onnx', providers=['CUDAExecutionProvider'])    
     tick = time.time()
     for sample in tqdm(benchmark_samples, desc='FP32 benchmark...'):
-        session.run([fp32_output_names[0]], {fp32_input_names[0]: sample})
+        session.run(None, {input_names[0]: sample})
     tok  = time.time()
     print(f'Time span (FP32 MODE): {tok - tick : .4f} sec')
     
@@ -107,6 +103,6 @@ for mname, model_builder in MODELS.items():
     session = onnxruntime.InferenceSession('model_int8.onnx', providers=['CUDAExecutionProvider'])    
     tick = time.time()
     for sample in tqdm(benchmark_samples, desc='INT8 benchmark...'):
-        session.run([int8_output_names[0]], {int8_input_names[0]: sample})
+        session.run(None, {input_names[0]: sample})
     tok  = time.time()
     print(f'Time span (INT8 MODE): {tok - tick  : .4f} sec')
