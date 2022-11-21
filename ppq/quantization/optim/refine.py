@@ -497,8 +497,7 @@ class MishFusionPass(QuantizationOptimizationPass):
     def __init__(self) -> None:
         super().__init__('Mish Fusion')
 
-    def optimize(self, graph: BaseGraph,
-                 dataloader: Iterable, executor: BaseGraphExecutor, **kwargs) -> None:
+    def optimize(self, graph: BaseGraph, **kwargs) -> None:
         search_engine = SearchableGraph(graph)
         patterns = search_engine.pattern_matching(
             patterns = [lambda x: x.is_computing_op, 'Softplus', 'Tanh', 'Mul'],
@@ -555,8 +554,6 @@ class NxpQuantizeFusionPass(QuantizationOptimizationPass):
     def optimize(
         self,
         graph: BaseGraph,
-        dataloader: Iterable,
-        executor: BaseGraphExecutor,
         **kwargs
     ) -> None:
         processor = SearchableGraph(graph)

@@ -3,8 +3,10 @@ from typing import Dict, List
 import onnx
 import torch
 from onnx import helper
+
 from ppq.core import (GRAPH_OPSET_ATTRIB, PPQ_CONFIG, DataType, OperationMeta,
-                      QuantizationProperty, QuantizationStates, TensorMeta,
+                      QuantizationProperty, QuantizationStates,
+                      QuantizationVisibility, TensorMeta,
                       TensorQuantizationConfig, convert_any_to_torch_tensor,
                       ppq_warning)
 from ppq.IR import (BaseGraph, Operation, QuantableOperation,
@@ -23,6 +25,7 @@ class QDQHelper():
         if not TQC.can_export(): return False
         meta_check = bounded_var.meta is not None
 
+        if TQC.visiblity == QuantizationVisibility.INTERNAL: return False
         if TQC.num_of_bits == 8 and TQC.policy.has_property(QuantizationProperty.LINEAR):
             if TQC.policy.has_property(QuantizationProperty.ASYMMETRICAL):
                 range_check = (TQC.quant_max <= 255 and TQC.quant_min >= 0)

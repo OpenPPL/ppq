@@ -237,7 +237,7 @@ class GraphFormatter(GraphCommandProcessor):
             if 'indices' in operation.attributes:
                 operation.attributes['gather_index'] = operation.attributes['indices']
                 operation.attributes.pop('indices')
-                
+
     def format_sng_bn(self) -> None:
         """
         batchnormal: 这个算子独立出现的时候（前面没有Conv），我们考虑把它合进一个1x1的conv
@@ -308,7 +308,7 @@ class GraphFormatter(GraphCommandProcessor):
 
             bn_out_var.source_op = conv_op
             input_var.dest_ops.append(conv_op)
-        
+
     def format_cast(self) -> None:
         """cast op 的参数 to 默认为 int，使用该函数将其封装为 ppq.core.DataType."""
         interested_ops = []
@@ -533,7 +533,7 @@ class GraphMerger(GraphCommandProcessor):
     def process(self, command: GraphCommand) -> Any:
         if command.command_type == GraphCommandType.FUSE_BN:
             return self.fuse_bn()
-    
+
     def fuse_bn(self):
         search_engine = SearchableGraph(graph=self.graph)
         paths = search_engine.path_matching(
@@ -750,6 +750,7 @@ class GraphMerger(GraphCommandProcessor):
             return layernorm
 
         search_engine = SearchableGraph(graph=self.graph)
+        fused         = False
         
         # pattern 1:
         #                                 ---     ---     ---      ---        ---       ---    ---    --
@@ -791,6 +792,7 @@ class GraphMerger(GraphCommandProcessor):
                         if var != layernorm_input_var and var != layernorm_output_var:
                             self.graph.remove_variable(var)
                     self.graph.remove_operation(op)
+                    fused = True
 
         # pattern 2:
         #  ---   ---  ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---  -- Mul(11)   ---   ---   Add(12) ---
@@ -831,7 +833,129 @@ class GraphMerger(GraphCommandProcessor):
                         if var != layernorm_input_var and var != layernorm_output_var:
                             self.graph.remove_variable(var)
                     self.graph.remove_operation(op)
+                fused = True
+        
+        # final check, if no valid pattern was found, we give a warning.
+        if not fused:
+            ppq_warning('No valid layernorm pattern was found, check your graph again.')
 
+
+    def fuse_skiplayernorm(self):
+        """ Fuse Add + Layernorm to SkipLayernorm, SkipLayernorm is a plugin operation defined by TensorRT """
+        fused         = False
+        search_engine = SearchableGraph(graph=self.graph)
+        
+        matches = search_engine.pattern_matching(patterns=['Add', 'LayerNormalization'], edges=[[0, 1]], exclusive=True)
+        for add, layernorm in matches:
+            # Skip connection can not be constant.
+            if add.num_of_parameter == 0:
+                input_vars = add.inputs.copy()
+                output_var = add.outputs[0]
+                self.graph.remove_operation(add)
+                self.graph.remove_variable(output_var)
+                
+                for var in input_vars:
+                    var.dest_ops.append(layernorm)
+                    layernorm.inputs.append(var)
+
+                layernorm.type = 'skipLayerNormPlugin'
+                fused = True
+        # final check, if no valid pattern was found, we give a warning.
+        if not fused:
+            ppq_warning('No valid Skip Layernorm pattern was found, check your graph again.')
+
+
+    def fuse_gelu(self):
+        """ Fuse Gelu
+        
+        Pattern: * - Div - Erf - Add - Mul - Mul
+                   |                 |
+                   -------------------
+        """
+        fused         = False
+        search_engine = SearchableGraph(graph=self.graph)
+        
+        matches = search_engine.pattern_matching(
+            patterns=[lambda x: True, 'Div', 'Erf', 'Add', 'Mul', 'Mul'], 
+            edges=[[0, 1], [1, 2], [2, 3], [3, 4], [0, 4], [4, 5]], exclusive=True)
+        
+        for _, div, erf, add, mul1, mul2 in matches:
+            removing_var = []
+            removing_var.extend(div.outputs)
+            removing_var.extend(erf.outputs)
+            removing_var.extend(add.outputs)
+            removing_var.extend(mul1.outputs)
+
+            self.graph.remove_operation(div)
+            self.graph.remove_operation(erf)
+            self.graph.remove_operation(add)
+            self.graph.remove_operation(mul1)
+            for var in removing_var:
+                self.graph.remove_variable(var)
+
+            input_vars  = _.outputs.copy()
+            output_vars = mul2.outputs.copy()
+
+            self.graph.remove_operation(mul2)
+            self.graph.create_operation(op_type='Gelu', inputs=input_vars, outputs=output_vars)
+            assert len(input_vars) == 1, 'Fusion failed, Pattern unrecognized.'
+            fused = True
+
+        # final check, if no valid pattern was found, we give a warning.
+        if not fused:
+            ppq_warning('No valid Gelu pattern was found, check your graph again.')
+
+
+    def constant_folding(self):
+        """ Fuse Mul + Conv, Mul + Gemm, Mul + Matmul """
+        fused         = False
+        search_engine = SearchableGraph(graph=self.graph)
+        
+        matches = search_engine.pattern_matching(
+            patterns=[lambda x: x.type in {'Conv', 'Gemm', 'MatMul'}, 'Mul'], 
+            edges=[[0, 1]], exclusive=True)
+
+        for op, mul in matches:
+            if mul.num_of_parameter == 1 and op.inputs[1].is_parameter:
+                if mul.parameters[0].value.size == 1:
+                    mul_value = mul.parameters[0].value
+                    op.inputs[1].value = torch.tensor(mul_value) * torch.tensor(op.inputs[1].value) 
+
+                removing_var = []
+                removing_var.extend(op.outputs)
+                output_var = mul.outputs[0]
+
+                self.graph.remove_operation(mul)
+                for var in removing_var:
+                    self.graph.remove_variable(var)
+
+                op.outputs.append(output_var)
+                fused = True
+
+        matches = search_engine.pattern_matching(
+            patterns=['Mul', lambda x: x.type in {'Conv', 'Gemm', 'MatMul'}], 
+            edges=[[0, 1]], exclusive=True)
+
+        for mul, op in matches:
+            if mul.num_of_parameter == 1 and op.inputs[1].is_parameter:
+                if mul.parameters[0].value.size == 1:
+                    mul_value = mul.parameters[0].value
+                    op.inputs[1].value *= torch.tensor(mul_value) * torch.tensor(op.inputs[1].value) 
+            
+                removing_var = []
+                removing_var.extend(mul.outputs)
+                input_var = mul.inputs[0] if mul.inputs[0].is_parameter else mul.inputs[1]
+
+                self.graph.remove_operation(mul)
+                for var in removing_var:
+                    self.graph.remove_variable(var)
+                
+                op._input_vars = [[input_var] + op._input_vars]
+                fused = True
+
+        # final check, if no valid pattern was found, we give a warning.
+        if not fused:
+            ppq_warning('No valid Constant pattern was found, check your graph again.')
 
 class GraphDecomposer(GraphCommandProcessor):
     """Since PPQ 0.6.4, GraphDecomposer is introduced to split some complex

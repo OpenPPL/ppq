@@ -20,21 +20,17 @@ class QuantizationOptimizationPass(metaclass = ABCMeta):
         self.name = name
 
     def apply(
-        self, graph: BaseGraph,
-        dataloader: Iterable, executor: BaseGraphExecutor,
-        **kwargs
+        self, graph: BaseGraph, **kwargs
     ) -> None:
         if not isinstance(graph, BaseGraph):
             raise TypeError(
                 f'Incorrect graph object input, expect PPQ BaseGraph here, '
                 f'while {type(graph)} was given.')
-        self.optimize(graph, dataloader=dataloader, executor=executor, **kwargs)
+        self.optimize(graph, **kwargs)
 
     @ abstractmethod
     def optimize(
-        self, graph: BaseGraph,
-        dataloader: Iterable, executor: BaseGraphExecutor,
-        **kwargs
+        self, graph: BaseGraph, **kwargs
     ) -> None:
         raise NotImplementedError('Implement this function first.')
 

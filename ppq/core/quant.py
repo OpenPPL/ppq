@@ -84,8 +84,6 @@ class TargetPlatform(Enum):
     HEXAGON_INT8  = 801
     GRAPHCORE_FP8 = 901
 
-    ASC_INT8 = 106
-
     FP32 = 0
     FP16 = 1
     BF16 = 2
@@ -109,7 +107,7 @@ class TargetPlatform(Enum):
         return platform in {
             cls.PPL_DSP_INT8, cls.PPL_DSP_TI_INT8, cls.QNN_DSP_INT8, cls.TRT_INT8, cls.NCNN_INT8, cls.NXP_INT8,
             cls.SNPE_INT8, cls.PPL_CUDA_INT8, cls.PPL_CUDA_INT4, cls.EXTENSION, cls.PPL_CUDA_MIX, cls.RKNN_INT8,
-            cls.METAX_INT8_C, cls.METAX_INT8_T, cls.OPENVINO_INT8, cls.FPGA_INT8, cls.TENGINE_INT8, cls.ASC_INT8,
+            cls.METAX_INT8_C, cls.METAX_INT8_T, cls.OPENVINO_INT8, cls.FPGA_INT8, cls.TENGINE_INT8, 
             cls.FP8, cls.GRAPHCORE_FP8, cls.TRT_FP8, cls.UNSPECIFIED}
 
 
@@ -694,11 +692,11 @@ class TensorQuantizationConfig(Serializable):
         })
 
     @ property
-    def visiblity(self) -> bool:
+    def visiblity(self) -> QuantizationVisibility:
         return self._visiblity
 
     @ visiblity.setter
-    def visiblity(self, visiblity: bool):
+    def visiblity(self, visiblity: QuantizationVisibility):
         self._visiblity = visiblity
 
     @ property
@@ -828,7 +826,8 @@ class TensorQuantizationConfig(Serializable):
             detail=self.detail.copy(),
             state=self.state,
             exponent_bits=self.exponent_bits,
-            channel_axis=self.channel_axis
+            channel_axis=self.channel_axis,
+            visiblity=self.visiblity
         )
         if self.state == QuantizationStates.OVERLAPPED:
             config._dominator = self._dominator
