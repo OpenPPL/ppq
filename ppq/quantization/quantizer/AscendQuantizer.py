@@ -23,9 +23,8 @@ class AscendQuantizer(BaseQuantizer):
 
         base_quant_config = self.create_default_quant_config(
             op=operation, num_of_bits=self._num_of_bits, exponent_bits=0,
-            quant_max=self._quant_max, quant_min=self._quant_min,
-            observer_algorithm='percentile', policy=self.quantize_policy,
-            rounding=self.rounding_policy,
+            quant_max= +127, quant_min= -128, observer_algorithm='percentile', 
+            policy=self.quantize_policy, rounding=self.rounding_policy,
         )
 
         if operation.type in {'Conv', 'Gemm', 'ConvTranspose'}:
