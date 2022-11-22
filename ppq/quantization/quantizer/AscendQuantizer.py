@@ -20,10 +20,9 @@ class AscendQuantizer(BaseQuantizer):
 
 
     def init_quantize_config(self, operation: Operation) -> OperationQuantizationConfig:
-
         base_quant_config = self.create_default_quant_config(
             op=operation, num_of_bits=self._num_of_bits, exponent_bits=0,
-            quant_max=self._quant_max, quant_min=self._quant_min, observer_algorithm='percentile', 
+            quant_max= self._quant_max, quant_min= self._quant_min, observer_algorithm='percentile', 
             policy=self.quantize_policy, rounding=self.rounding_policy,
         )
 
@@ -33,6 +32,7 @@ class AscendQuantizer(BaseQuantizer):
 
             # if operation.type in {'Conv', 'ConvTranspose'}:
             if operation.type == "Conv":
+
                 if operation.inputs[1].is_parameter:
                     conv_weight_config = base_quant_config.input_quantization_config[1]
                     conv_weight_config.policy = QuantizationPolicy(
