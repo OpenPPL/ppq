@@ -28,7 +28,6 @@ FLT_EPSILON = 1.1920929e-10
 def adapt_scale(scale):
     min = FLT_EPSILON
     max = 1.0 / FLT_EPSILON
-
     if scale < min:
         scale = FLT_EPSILON
         ppq_warning(f'scale is too small: {scale}.')
@@ -37,13 +36,30 @@ def adapt_scale(scale):
         ppq_warning(f'scale is too large: {scale}.')
     return scale
 
+def check_offset(offset):
+    if offset>127.0 or offset < -128.0:
+        raise RuntimeError(f'This offset value {offset} does not comply with the rules.')
+
+def generate_shape(shape):
+    channels = ""
+    height = ""
+    width = ""
+    if len(shape) == 2:
+        channel = shape[1]
+        height = 1
+        width = 1
+    elif len(shape) == 4:
+        _, channels, height, width = shape
+    else:
+        raise RuntimeError(f'Please design this shape yourself.')
+    return channels, height, width
+
 class AscendExporter(GraphExporter):
     def export_quantization_config(self, config_path: str, graph: BaseGraph):
         new_config_path = os.path.splitext(config_path)[0] + ".txt"
         matched_nodes = []
 
         for op in graph.topological_sort():
-
             if op.type == "Conv":
                 quant_unit_list = []
                 quant_unit_list.append("record {\n")
@@ -54,7 +70,9 @@ class AscendExporter(GraphExporter):
                     input_cfg.policy.has_property(QuantizationProperty.PER_TENSOR)
 
                 scale_d = input_cfg.scale.item()
-                offset_d = 0
+                offset_d = int(input_cfg.offset.item()) - 128
+                check_offset(offset_d)
+
                 quant_unit_list.append("    scale_d: " + str(adapt_scale(scale_d)) + "\n")
                 quant_unit_list.append("    offset_d: " + str(offset_d) + "\n")
                 
@@ -67,8 +85,9 @@ class AscendExporter(GraphExporter):
                 
                 for num in range(kernel_nums):
                     quant_unit_list.append("    offset_w: " + "0" + "\n")
-                
-                _, channels, height, width = op.inputs[0].shape
+
+                channels, height, width = generate_shape(op.inputs[0].shape)
+
                 quant_unit_list.append("    channels: " + str(channels) + "\n")
                 quant_unit_list.append("    height: " + str(height) + "\n")
                 quant_unit_list.append("    width: " + str(width) + "\n")
@@ -81,12 +100,15 @@ class AscendExporter(GraphExporter):
                 quant_unit_list.append("record {\n")
                 quant_unit_list.append("  key: " + op.name + "\n")
                 quant_unit_list.append("  value {\n")
+
                 input_cfg = op.config.input_quantization_config[0]
                 assert input_cfg.state == QuantizationStates.ACTIVATED and\
                     input_cfg.policy.has_property(QuantizationProperty.PER_TENSOR)
 
                 scale_d = input_cfg.scale.item()
-                offset_d = 0
+                offset_d = int(input_cfg.offset.item()) - 128
+                check_offset(offset_d)
+
                 quant_unit_list.append("    scale_d: " + str(adapt_scale(scale_d)) + "\n")
                 quant_unit_list.append("    offset_d: " + str(offset_d) + "\n")
                 param_values = op.parameters[0].value
@@ -94,7 +116,8 @@ class AscendExporter(GraphExporter):
                 scale_w = max_value / 127.0
                 quant_unit_list.append("    scale_w: " + str(adapt_scale(scale_w)) + "\n")
                 quant_unit_list.append("    offset_w: " + "0" + "\n")
-                _, channels, height, width = op.inputs[0].shape
+            
+                channels, height, width = generate_shape(op.inputs[0].shape)
                 quant_unit_list.append("    channels: " + str(channels) + "\n")
                 quant_unit_list.append("    height: " + str(height) + "\n")
                 quant_unit_list.append("    width: " + str(width) + "\n")
@@ -111,7 +134,10 @@ class AscendExporter(GraphExporter):
                 assert input_cfg.state == QuantizationStates.ACTIVATED and\
                     input_cfg.policy.has_property(QuantizationProperty.PER_TENSOR)
                 scale_d = input_cfg.scale.item()
-                offset_d = 0
+                
+                offset_d = int(input_cfg.offset.item()) - 128
+                check_offset(offset_d)
+
                 quant_unit_list.append("    scale_d: " + str(adapt_scale(scale_d)) + "\n")
                 quant_unit_list.append("    offset_d: " + str(offset_d) + "\n")
                 _, channels, height, width = op.inputs[0].shape
