@@ -158,6 +158,20 @@ class CaffeExporter(GraphExporter):
 
         # dump model
         caffe_model, caffe_proto = self.prepare_model(graph, input_shapes)
+
+        caffe_proto, str_buffer = str(caffe_proto), ''
+        lines = caffe_proto.split('\n')
+
+        for idx in range(len(lines)):
+            line = lines[idx]
+            # snpe do not want hole and ceil_mode
+            if 'hole' in line or 'ceil_mode' in line: continue
+            # snpe do not want quantize_param
+            if 'quantize_param' in line:
+                idx += 4
+                continue
+            str_buffer = (str_buffer + line) + '\n'
+        caffe_proto = str_buffer
         self.dump_to_file(caffe_model = caffe_model,
             caffe_proto = caffe_proto, file_path = file_path)
 
