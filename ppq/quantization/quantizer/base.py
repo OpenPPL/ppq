@@ -211,10 +211,9 @@ class BaseQuantizer(metaclass = ABCMeta):
     def quant_operation_types(self) -> set:
         raise NotImplementedError('Quantizier does not have a quantable op set yet.')
 
-    @ abstractproperty
     @ property
     def target_platform(self) -> TargetPlatform:
-        raise NotImplementedError('Quantizier does not have a default platform setting yet.')
+        return TargetPlatform.INT8
 
     @ property
     def activation_fusion_types(self) -> set:
