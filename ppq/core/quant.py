@@ -89,6 +89,7 @@ class TargetPlatform(Enum):
     FP16 = 1
     BF16 = 2
     FP8  = 3
+    INT8 = 4
     # SHAPE-OR-INDEX
     SOI = -1
     # initial state
@@ -109,7 +110,7 @@ class TargetPlatform(Enum):
             cls.PPL_DSP_INT8, cls.PPL_DSP_TI_INT8, cls.QNN_DSP_INT8, cls.TRT_INT8, cls.NCNN_INT8, cls.NXP_INT8,
             cls.SNPE_INT8, cls.PPL_CUDA_INT8, cls.PPL_CUDA_INT4, cls.EXTENSION, cls.PPL_CUDA_MIX, cls.RKNN_INT8,
             cls.METAX_INT8_C, cls.METAX_INT8_T, cls.OPENVINO_INT8, cls.FPGA_INT8, cls.TENGINE_INT8, 
-            cls.FP8, cls.GRAPHCORE_FP8, cls.TRT_FP8, cls.ASC_INT8, cls.UNSPECIFIED}
+            cls.FP8, cls.GRAPHCORE_FP8, cls.TRT_FP8, cls.ASC_INT8, cls.UNSPECIFIED, cls.INT8}
 
 
 class RoundingPolicy(Enum):
