@@ -10,6 +10,7 @@ from ppq.IR import BaseGraph, QuantableVariable
 from ppq.quantization.analyse.util import MeasurePrinter, MeasureRecorder
 from ppq.utils.fetch import tensor_random_fetch
 from tqdm import tqdm
+from ppq.core import ppq_warning
 
 
 def load_calibration_dataset(
@@ -67,9 +68,8 @@ def load_calibration_dataset(
         if sample.ndim == 3: sample = sample.unsqueeze(0)
         if input_format == 'hwc': sample = sample.permute([0, 3, 1, 2])
 
-        assert sample.shape[1] == 1 or sample.shape[1] == 3 or sample.shape[1] == 4, (
-            f'你的文件 {os.path.join(directory, file)} 拥有 {sample.shape[1]} 个输入通道. '
-            '这是合理的图像文件吗?(是否忘记了输入图像应当是 NCHW 的)')
+        if sample.shape[1] not in {1, 3, 4}:
+            ppq_warning(f'Quantized data is not a regular channel, which channel is {sample.shape[1]}.')
 
         assert sample.shape[0] == 1 or batchsize == 1, (
             f'你的输入图像似乎已经有了预设好的 batchsize, 因此我们不会再尝试对你的输入进行打包。')

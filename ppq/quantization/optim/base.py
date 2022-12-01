@@ -4,7 +4,7 @@ from typing import Container, Iterable, Iterator, List
 
 from ppq.executor import BaseGraphExecutor
 from ppq.IR import BaseGraph, BaseGraph
-
+from ppq.core import ppq_info
 
 class QuantizationOptimizationPass(metaclass = ABCMeta):
     """QuantizationOptimizationPass is a basic building block of PPQ
@@ -78,6 +78,8 @@ class QuantizationOptimizationPipeline(Container, Iterable):
             max_name_length = max([len(name) for name in names])
 
         for optim_pass in self._pipeline:
+            ppq_info(f'running: {optim_pass.__str__}')
+
             if not isinstance(optim_pass, QuantizationOptimizationPass):
                 raise TypeError(f'Quantization Optimization Pipeline object only suppose to contain optimization passes only, '
                      f'while {str(optim_pass)}({type(optim_pass)}) was found.')

@@ -60,12 +60,16 @@ class AscendExporter(GraphExporter):
         matched_nodes = []
 
         for op in graph.topological_sort():
-            if op.type == "Conv":
+            if op.type in {"Conv", "ConvTranspose", "Gemm"}:
+                if not hasattr(op, 'config'):
+                    ppq_warning(f'This op does not write quantization parameters: {op.name}.')
+                    continue
                 op_name = '''\"''' + op.name + '''\"'''
                 quant_unit_list = []
                 quant_unit_list.append("record {\n")
                 quant_unit_list.append("  key: " + op_name + "\n")
                 quant_unit_list.append("  value {\n")
+
                 input_cfg = op.config.input_quantization_config[0]
                 assert input_cfg.state == QuantizationStates.ACTIVATED and\
                     input_cfg.policy.has_property(QuantizationProperty.PER_TENSOR)
@@ -76,15 +80,17 @@ class AscendExporter(GraphExporter):
                 check_offset(offset_d)
                 quant_unit_list.append("    scale_d: " + str(adapt_scale(op, scale_d)) + "\n")
                 quant_unit_list.append("    offset_d: " + str(offset_d) + "\n")
-                
-                kernel_nums = op.parameters[0].shape[0]
-                for num in range(kernel_nums):
-                    kernel_value = op.parameters[0].value[num]
-                    max_value = max(torch.abs(kernel_value.min()).item(), torch.abs(kernel_value.max()).item())
-                    scale_w = max_value / 127.0
+
+                weight_config = op.config.input_quantization_config[1]
+                scale_list = convert_value(weight_config.scale, False, DataType.FP32)
+
+                if op.type == "Gemm":
+                    assert len(scale_list)==1, 'Gemm can only have one scale.'
+
+                for scale_w in scale_list:
                     quant_unit_list.append("    scale_w: " + str(adapt_scale(op, scale_w)) + "\n")
                 
-                for num in range(kernel_nums):
+                for _ in range(len(scale_list)):
                     quant_unit_list.append("    offset_w: " + "0" + "\n")
 
                 channels, height, width = generate_shape(op.inputs[0].shape)
@@ -95,39 +101,12 @@ class AscendExporter(GraphExporter):
                 quant_unit_list.append("  }" + "\n")
                 quant_unit_list.append("}" + "\n")
                 matched_nodes.append(quant_unit_list)
-            
-            elif op.type == "Gemm":
-                op_name = '''\"''' + op.name + '''\"'''
-                quant_unit_list = []
-                quant_unit_list.append("record {\n")
-                quant_unit_list.append("  key: " + op_name + "\n")
-                quant_unit_list.append("  value {\n")
 
-                input_cfg = op.config.input_quantization_config[0]
-                assert input_cfg.state == QuantizationStates.ACTIVATED and\
-                    input_cfg.policy.has_property(QuantizationProperty.PER_TENSOR)
 
-                scale_d = input_cfg.scale.item()
-                offset_d = int(input_cfg.offset.item()) - 128
-                check_offset(offset_d)
-
-                quant_unit_list.append("    scale_d: " + str(adapt_scale(op, scale_d)) + "\n")
-                quant_unit_list.append("    offset_d: " + str(offset_d) + "\n")
-                param_values = op.parameters[0].value
-                max_value = max(torch.abs(param_values.min()).item(), torch.abs(param_values.max()).item())
-                scale_w = max_value / 127.0
-                quant_unit_list.append("    scale_w: " + str(adapt_scale(op, scale_w)) + "\n")
-                quant_unit_list.append("    offset_w: " + "0" + "\n")
-            
-                channels, height, width = generate_shape(op.inputs[0].shape)
-                quant_unit_list.append("    channels: " + str(channels) + "\n")
-                quant_unit_list.append("    height: " + str(height) + "\n")
-                quant_unit_list.append("    width: " + str(width) + "\n")
-                quant_unit_list.append("  }" + "\n")
-                quant_unit_list.append("}" + "\n")
-                matched_nodes.append(quant_unit_list)
-
-            elif op.type == {"AveragePool", "ConvTranspose"}:
+            elif op.type == "AveragePool":
+                if not hasattr(op, 'config'):
+                    ppq_warning(f'This op does not write quantization parameters: {op.name}.')
+                    continue
                 op_name = '''\"''' + op.name + '''\"'''
                 quant_unit_list = []
                 quant_unit_list.append("record {\n")
@@ -140,7 +119,6 @@ class AscendExporter(GraphExporter):
                 
                 offset_d = int(input_cfg.offset.item()) - 128
                 check_offset(offset_d)
-
                 quant_unit_list.append("    scale_d: " + str(adapt_scale(op, scale_d)) + "\n")
                 quant_unit_list.append("    offset_d: " + str(offset_d) + "\n")
                 _, channels, height, width = op.inputs[0].shape
