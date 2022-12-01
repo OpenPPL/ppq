@@ -119,7 +119,7 @@ class OnnxExporter(GraphExporter):
         if not name: name = f'{PPQ_CONFIG.NAME} - v({PPQ_CONFIG.VERSION})'
 
         # Ready to export onnx graph defination.
-        _inputs, _outputs, _initilizers, _nodes = [], [], [], []
+        _inputs, _outputs, _initilizers, _nodes, _value_info = [], [], [], [], []
         for operation in graph.topological_sort():
             _nodes.append(self.build_operator_proto(operation))
 
@@ -131,11 +131,14 @@ class OnnxExporter(GraphExporter):
                 _outputs.append(tensor_proto)
             if variable.is_parameter:
                 _initilizers.append(tensor_proto)
+            else:
+                _value_info.append(tensor_proto)
 
         graph_def = helper.make_graph(
             name=name, nodes=_nodes,
             inputs=_inputs, outputs=_outputs,
-            initializer=_initilizers)
+            initializer=_initilizers, 
+            value_info=_value_info)
 
         # if opset is missing from your graph, give it a default one.
         if GRAPH_OPSET_ATTRIB not in graph._detail:
