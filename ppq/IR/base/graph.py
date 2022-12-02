@@ -581,7 +581,7 @@ class BaseGraph(Serializable):
         self.remove_variable(downstream_variable)
         return self
 
-    def remove_operation(self, removing_op: Operation):
+    def remove_operation(self, removing_op: Operation, keep_coherence: bool = False):
         """Remove operation from graph, this function will unlink removing
         operation from current graph, pop it from graph.operations, and remove
         it from all its input and output variables.
@@ -590,12 +590,16 @@ class BaseGraph(Serializable):
 
         Args:
             removing_op (Operation): [description]
+            
+            keep_coherence (bool): if keep_coherence = True, 
+                PPQ will link downstream operations of removing op to the upstream operation.
         """
         if removing_op.name not in self.operations:
             raise KeyError(f'Can not remove operation {removing_op.name}, operation not found.')
 
         # removing all parameters first.
         for parameter in removing_op.inputs.copy():
+            if keep_coherence and removing_op.type in {'Constant', 'Identity'}: break
             if parameter.is_parameter:
 
                 parameter.dest_ops.clear()
@@ -604,16 +608,41 @@ class BaseGraph(Serializable):
 
                 self.variables.pop(parameter.name)
 
-        # remove operation from its output variables
-        for output_var in removing_op.outputs:
-            output_var.source_op = None
-        removing_op.outputs.clear()
+        if not keep_coherence:
+            # remove operation from its output variables
+            for output_var in removing_op.outputs:
+                output_var.source_op = None
+            removing_op.outputs.clear()
 
-        # remove operation from its input variables
-        for input_var in removing_op.inputs:
-            if removing_op in input_var.dest_ops:
-                input_var.dest_ops.remove(removing_op)
-        removing_op.inputs.clear()
+            # remove operation from its input variables
+            for input_var in removing_op.inputs:
+                if removing_op in input_var.dest_ops:
+                    input_var.dest_ops.remove(removing_op)
+            removing_op.inputs.clear()
+
+        else:
+            if removing_op.num_of_input != 1:
+                raise PermissionError(f'Can not remove operation {removing_op.name} with keep_coherence = True, '
+                                      'operation must has exactly 1 input variable.')
+            if removing_op.num_of_output != 1:
+                raise PermissionError(f'Can not remove operation {removing_op.name} with keep_coherence = True, '
+                                      'operation must has exactly 1 output variable.')
+            
+            input_var    = removing_op.inputs[0]
+            removing_var = removing_op.outputs[0]
+            dest_ops     = removing_var.dest_ops
+            is_graph_output = removing_var.name in self.outputs
+            
+            for op in dest_ops:
+                op.inputs[op.inputs.index(removing_var)] = input_var
+                input_var.dest_ops.append(op)
+            removing_var.dest_ops.clear()
+            removing_var.source_op = None
+            input_var.dest_ops.remove(removing_op)
+            self.remove_variable(removing_var)
+
+            if is_graph_output:
+                self.mark_variable_as_graph_output(input_var)
 
         self.operations.pop(removing_op.name)
         return self

@@ -103,6 +103,11 @@ class GraphCommandType(Enum):
     # 单独的BN转成conv1x1
     # fuse Computing layer and BN
     FORMAT_SNG_BN = 32
+    
+    # 移除 Identity
+    # remove all identity ops from your graph
+    REMOVE_IDENTITY = 33
+    
 class GraphCommand():
     def __init__(self, command_type: GraphCommandType, **kwargs) -> None:
         assert isinstance(command_type, GraphCommandType), \

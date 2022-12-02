@@ -89,7 +89,8 @@ class GraphFormatter(GraphCommandProcessor):
             GraphCommandType.FORMAT_SLICE,
             GraphCommandType.TRUNCATE_ON_VAR,
             GraphCommandType.FORMAT_RESIZE,
-            GraphCommandType.FORMAT_SNG_BN
+            GraphCommandType.FORMAT_SNG_BN,
+            GraphCommandType.REMOVE_IDENTITY
         ]
 
     def process(self, command: GraphCommand) -> Any:
@@ -120,6 +121,8 @@ class GraphFormatter(GraphCommandProcessor):
         if command.command_type == GraphCommandType.TRUNCATE_ON_VAR:
             assert isinstance(command, TruncateGraphCommand), f'Use TruncateGraphCommand here.'
             return self.truncate_on_var(command.var, command.mark_as_output)
+        if command.command_type == GraphCommandType.REMOVE_IDENTITY:
+            return self.remove_identity()
 
     def format_slice(self) -> None:
         """
@@ -521,6 +524,13 @@ class GraphFormatter(GraphCommandProcessor):
         var.dest_ops.append(operation)
         operation.inputs.append(var)
 
+    def remove_identity(self):
+        removing_ops = []
+        for op in self.graph.operations.values():
+            if op.type == 'Identity': removing_ops.append(op)
+        
+        for op in removing_ops:
+            self.graph.remove_operation(op, keep_coherence=True)
 
 class GraphMerger(GraphCommandProcessor):
     """Graph Merger implements all graph fusion related functions."""
@@ -956,6 +966,125 @@ class GraphMerger(GraphCommandProcessor):
         # final check, if no valid pattern was found, we give a warning.
         if not fused:
             ppq_warning('No valid Constant pattern was found, check your graph again.')
+
+
+    def fuse_selfattention(self):
+        search_engine = SearchableGraph(graph=self.graph)
+        matches = search_engine.pattern_matching(
+            patterns=['MatMul', 'Add', 'Softmax', 'MatMul'], 
+            edges=[[0, 1], [1, 2], [2, 3]], exclusive=False)
+
+        for m1, add, softmax, m2 in matches:
+            trans_Q, trans_K, trans_V, trans_O = None, None, None, None
+            perm_Q, perm_K, perm_V, perm_O = None, None, None, None
+
+            # check pattern
+            if m1.num_of_parameter != 0 or m2.num_of_parameter != 0: continue
+            if m2.inputs[0].source_op != softmax: continue
+            
+            # source op of Q
+            sq = m1.inputs[0].source_op
+            if sq is not None and sq.type == 'Transpose':
+                trans_Q = sq
+                perm_Q  = trans_Q.attributes['perm']
+
+            # source op of K                
+            sk = m1.inputs[1].source_op
+            if sk is not None and sq.type == 'Transpose':
+                trans_K = sk
+                perm_K  = trans_K.attributes['perm']
+            
+            # source op of V
+            sv = m2.inputs[1].source_op
+            if sv is not None and sv.type == 'Transpose':
+                trans_V = sv
+                perm_V  = trans_V.attributes['perm']
+            
+            # output op of O
+            oo = m2.outputs[0].dest_ops
+            if len(oo) == 1 and oo[0].type == 'Transpose':
+                trans_O = oo[0]
+                perm_O  = trans_O.attributes['perm']
+
+            for op in [trans_Q, trans_K, trans_V, trans_O, softmax]:
+                if op is not None: self.graph.remove_operation(op, keep_coherence=True)
+            for var in [add.outputs[0], m1.outputs[0]]:
+                self.graph.remove_variable(var)
+
+            Q_var, K_var, V_var = m1.inputs[0], m1.inputs[1], m2.inputs[1]
+            mask_var, O_var     = add.inputs[0], m2.outputs[0]
+            
+            for op in m1, add, m2:
+                self.graph.remove_operation(op)
+            
+            op = self.graph.create_operation(op_type='SelfAttention', attributes={
+                'TransQ': perm_Q, 'TransK': perm_K, 'TransV': perm_V, 'TransO': perm_O
+            }, inputs=[Q_var, K_var, V_var, mask_var], outputs=[O_var])
+            
+            # remove empty transpose
+            non_empty_attr = {}
+            for k, v in op.attributes.values():
+                if v is not None: non_empty_attr[k] = v
+            op._attributes = non_empty_attr
+
+        matches = search_engine.pattern_matching(
+            patterns=['MatMul', 'Softmax', 'MatMul'], 
+            edges=[[0, 1], [1, 2]], exclusive=False)
+
+        # self-attention with no mask
+        for m1, softmax, m2 in matches:
+            trans_Q, trans_K, trans_V, trans_O = None, None, None, None
+            perm_Q, perm_K, perm_V, perm_O = None, None, None, None
+
+            # check pattern
+            if m1.num_of_parameter != 0 or m2.num_of_parameter != 0: continue
+            if m2.inputs[0].source_op != softmax: continue
+            
+            # source op of Q
+            sq = m1.inputs[0].source_op
+            if sq is not None and sq.type == 'Transpose':
+                trans_Q = sq
+                perm_Q  = trans_Q.attributes['perm']
+
+            # source op of K                
+            sk = m1.inputs[1].source_op
+            if sk is not None and sq.type == 'Transpose':
+                trans_K = sk
+                perm_K  = trans_K.attributes['perm']
+            
+            # source op of V
+            sv = m2.inputs[1].source_op
+            if sv is not None and sv.type == 'Transpose':
+                trans_V = sv
+                perm_V  = trans_V.attributes['perm']
+            
+            # output op of O
+            oo = m2.outputs[0].dest_ops
+            if len(oo) == 1 and oo[0].type == 'Transpose':
+                trans_O = oo[0]
+                perm_O  = trans_O.attributes['perm']
+
+            for op in [trans_Q, trans_K, trans_V, trans_O, softmax]:
+                if op is not None: self.graph.remove_operation(op, keep_coherence=True)
+            for var in [m1.outputs[0]]:
+                self.graph.remove_variable(var)
+
+            Q_var, K_var, V_var = m1.inputs[0], m1.inputs[1], m2.inputs[1]
+            O_var               = m2.outputs[0]
+            
+            for op in m1, m2:
+                self.graph.remove_operation(op)
+            
+            op = self.graph.create_operation(op_type='SelfAttention', attributes={
+                'TransQ': perm_Q, 'TransK': perm_K, 'TransV': perm_V, 'TransO': perm_O
+            }, inputs=[Q_var, K_var, V_var, self.graph.create_variable()], outputs=[O_var])
+            
+            # remove empty transpose
+            non_empty_attr = {}
+            for k, v in op.attributes.values():
+                if v is not None: non_empty_attr[k] = v
+            op._attributes = non_empty_attr
+
 
 class GraphDecomposer(GraphCommandProcessor):
     """Since PPQ 0.6.4, GraphDecomposer is introduced to split some complex
