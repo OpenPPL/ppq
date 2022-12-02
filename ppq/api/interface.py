@@ -622,6 +622,7 @@ def format_graph(graph: BaseGraph) -> BaseGraph:
     formatter(GraphCommand(GraphCommandType.FORMAT_CLIP))
     formatter(GraphCommand(GraphCommandType.FORMAT_PAD))
     formatter(GraphCommand(GraphCommandType.FORMAT_RESIZE))
+    formatter(GraphCommand(GraphCommandType.REMOVE_IDENTITY))
     formatter(GraphCommand(GraphCommandType.DELETE_ISOLATED))
 
     return graph

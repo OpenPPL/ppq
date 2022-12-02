@@ -519,7 +519,7 @@ class ONNXRUNTIMExporter(OnnxExporter):
         if not name: name = 'PPL Quantization Tool - Onnx Export'
 
         # Ready to export onnx graph definition.
-        _inputs, _outputs, _initilizers, _nodes = [], [], [], []
+        _inputs, _outputs, _initilizers, _nodes, _value_info = [], [], [], [], []
         for operation in graph.topological_sort():
             _nodes.append(super().build_operator_proto(operation))
 
@@ -528,10 +528,12 @@ class ONNXRUNTIMExporter(OnnxExporter):
             if variable.name in graph.inputs: _inputs.append(tensor_proto)
             if variable.name in graph.outputs: _outputs.append(tensor_proto)
             if variable.is_parameter: _initilizers.append(tensor_proto)
+            else: _value_info.append(tensor_proto)
 
         graph_def = helper.make_graph(
             name=name, nodes=_nodes, inputs=_inputs,
-            outputs=_outputs, initializer=_initilizers)
+            outputs=_outputs, initializer=_initilizers, 
+            value_info=_value_info)
         extra_opsets = self.required_opsets
 
         opsets = []
