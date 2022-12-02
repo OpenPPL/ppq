@@ -30,8 +30,7 @@ class AscendQuantizer(BaseQuantizer):
 
             assert operation.num_of_input > 0, 'Seems you got a Computing layer with no parameters.'
 
-            # if operation.type in {'Conv', 'ConvTranspose'}:
-            if operation.type == "Conv":
+            if operation.type in {'Conv', 'ConvTranspose'}:
 
                 if operation.inputs[1].is_parameter:
                     conv_weight_config = base_quant_config.input_quantization_config[1]
@@ -40,12 +39,10 @@ class AscendQuantizer(BaseQuantizer):
                         QuantizationProperty.LINEAR +
                         QuantizationProperty.PER_CHANNEL
                     )
-                    # conv_weight_config.channel_axis = (1 if operation.type == 'ConvTranspose' else 0)
-                    conv_weight_config.channel_axis = 1
+                    conv_weight_config.channel_axis = (1 if operation.type == 'ConvTranspose' else 0)
                     conv_weight_config.observer_algorithm = 'minmax'
                     conv_weight_config.quant_max = 127
                     conv_weight_config.quant_min = -128
-        
 
             elif operation.type == 'Gemm':
                 if operation.inputs[1].is_parameter:

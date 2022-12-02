@@ -61,7 +61,8 @@ if TARGET_PLATFORM == TargetPlatform.FPGA_INT8:
     QS = QuantizationSettingFactory.fpga_setting()
 if TARGET_PLATFORM == TargetPlatform.TRT_INT8:
     QS = QuantizationSettingFactory.trt_setting()
-
+if TARGET_PLATFORM == TargetPlatform.ASC_INT8:
+    QS = QuantizationSettingFactory.ascend_setting()
 # -------------------------------------------------------------------
 # 下面向你展示了如何使用 finetuning 过程提升量化精度
 # 在 PPQ 中我们提供了十余种算法用来帮助你恢复精度
