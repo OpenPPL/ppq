@@ -167,7 +167,9 @@ class TensorMeta:
         return f'Tensor({self.name}) meta: dtype({self.dtype}), shape({self.shape})'
     
     def copy(self):
-        return TensorMeta(dtype=self.dtype, shape=self.shape.copy(), tensor_name=self.name)
+        if self.shape is not None:
+            return TensorMeta(dtype=self.dtype, shape=self.shape.copy(), tensor_name=self.name)
+        else: return TensorMeta(dtype=self.dtype, shape=None, tensor_name=self.name)
 
 
 class OperationMeta:
