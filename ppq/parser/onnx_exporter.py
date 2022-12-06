@@ -107,7 +107,7 @@ class OnnxExporter(GraphExporter):
         with open(file=config_path, mode='w') as file:
             json.dump(render_buffer, file, indent=4)
 
-    def export_graph(self, graph: BaseGraph) -> onnx.GraphProto:
+    def export_graph(self, graph: BaseGraph) -> onnx.ModelProto:
         """
         Convert a PPQ IR to Onnx IR.
         This export will only convert PPQ Op and var to onnx, all quantization configs will be skipped.

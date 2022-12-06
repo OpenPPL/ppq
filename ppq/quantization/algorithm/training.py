@@ -384,7 +384,22 @@ class LSQDelegator(TorchQuantizeDelegator):
         pass # do nothing here.
 
     def __call__(self, tensor: torch.Tensor, config: TensorQuantizationConfig) -> torch.Tensor:
-        if not PPQ_CONFIG.USING_CUDA_KERNEL:
+        if tensor.is_cuda and PPQ_CONFIG.USING_CUDA_KERNEL:
+            if config.policy.has_property(QuantizationProperty.LINEAR):
+                if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
+                    return CuLSQ_LC.apply(
+                        tensor, config.scale, config.offset, config.channel_axis,
+                        config.quant_min, config.quant_max, config.rounding)
+                elif config.policy.has_property(QuantizationProperty.PER_TENSOR):
+                    return CuLSQ_LT.apply(
+                        tensor, config.scale, config.offset,
+                        config.quant_min, config.quant_max, config.rounding)
+
+            elif config.policy.has_property(QuantizationProperty.FLOATING):
+                # For floating quantization, scale is not trainable.
+                return PPQuantFunction(tensor=tensor, config=config)
+
+        else:
             scale, offset = config.scale, config.offset
 
             if self.is_scale_trainable:
@@ -402,18 +417,4 @@ class LSQDelegator(TorchQuantizeDelegator):
             quantized = (quantized - offset.detach()) * scale
             quantized = quantized
             return quantized
-
-        else:
-            if config.policy.has_property(QuantizationProperty.LINEAR):
-                if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
-                    return CuLSQ_LC.apply(
-                        tensor, config.scale, config.offset, config.channel_axis,
-                        config.quant_min, config.quant_max, config.rounding)
-                elif config.policy.has_property(QuantizationProperty.PER_TENSOR):
-                    return CuLSQ_LT.apply(
-                        tensor, config.scale, config.offset,
-                        config.quant_min, config.quant_max, config.rounding)
-
-            elif config.policy.has_property(QuantizationProperty.FLOATING):
-                # For floating quantization, scale is not trainable.
-                return PPQuantFunction(tensor=tensor, config=config)
+            
