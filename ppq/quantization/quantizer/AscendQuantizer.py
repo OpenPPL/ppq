@@ -7,6 +7,40 @@ from ppq.core import (PASSIVE_OPERATIONS, OperationQuantizationConfig,
 from ppq.IR import BaseGraph, Operation
 from .base import BaseQuantizer
 
+from ppq.executor.op.torch.base import GET_ATTRIBUTE_FROM_OPERATION
+
+def ASSERT_CONV_AND_DECONV(op: Operation):
+    if op.type == "Conv":
+        filter = op.inputs[1].value.shape
+        assert len(filter) == 4, (
+            f'Ascend Quantization needs the dimension of filter must be 4, while your filter is {len(filter)}')
+
+
+    if op.type == "ConvTranspose":
+        filter = op.inputs[1].value.shape
+        dilation  = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='dilations', compulsive=True, default=1)
+        groups    = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='group', compulsive=True, default=1)
+
+        assert len(filter) == 4, (
+            f'Ascend Quantization needs the dimension of filter must be 4, while your filter is {len(filter)}')
+        assert dilation == [1, 1], (
+            f'Ascend Quantization needs the dilation must be [1, 1], while your dilation is {dilation}')
+        assert groups == 1, (
+            f'Ascend Quantization needs the groups must be 1, while your groups is {groups}')
+
+
+
+def ASSERT_GEMM(op: Operation):
+    axis  = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='axis', compulsive=True, default=1)
+    assert axis == 1, (
+            f'Ascend Quantization needs the axis must be 1, while your axis is {axis}')
+
+    if 'transpose' in op.attributes:
+        transpose = op.attributes['transpose']
+        assert transpose == False, (
+            f'Ascend Quantization needs the transpose must be False, while your transpose is {transpose}')
+
+
 
 class AscendQuantizer(BaseQuantizer):
     def __init__(
@@ -25,6 +59,8 @@ class AscendQuantizer(BaseQuantizer):
             quant_max= self._quant_max, quant_min= self._quant_min, observer_algorithm='percentile', 
             policy=self.quantize_policy, rounding=self.rounding_policy,
         )
+
+        ASSERT_CONV_AND_DECONV(operation)
 
         if operation.type in {'Conv', 'Gemm', 'ConvTranspose'}:
 
@@ -45,6 +81,9 @@ class AscendQuantizer(BaseQuantizer):
                     conv_weight_config.quant_min = -128
 
             elif operation.type == 'Gemm':
+                
+                ASSERT_GEMM(operation)
+
                 if operation.inputs[1].is_parameter:
                     gemm_weight_config = base_quant_config.input_quantization_config[1]
                     gemm_weight_config.policy = QuantizationPolicy(

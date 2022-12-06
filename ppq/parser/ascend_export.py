@@ -85,11 +85,12 @@ class AscendExporter(GraphExporter):
                 scale_list = convert_value(weight_config.scale, False, DataType.FP32)
 
                 if op.type == "Gemm":
-                    assert len(scale_list)==1, 'Gemm can only have one scale.'
+                    assert isinstance(scale_list,float), 'Gemm can only have one scale.'
+                    scale_list = [scale_list]
 
                 for scale_w in scale_list:
                     quant_unit_list.append("    scale_w: " + str(adapt_scale(op, scale_w)) + "\n")
-                
+
                 for _ in range(len(scale_list)):
                     quant_unit_list.append("    offset_w: " + "0" + "\n")
 

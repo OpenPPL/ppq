@@ -431,7 +431,7 @@ class QuantizationSettingFactory:
     @staticmethod
     def ascend_setting() -> QuantizationSetting:
         default_setting = QuantizationSetting()
-        default_setting.fusion = True
+        default_setting.fusion = False
         return default_setting
 
 
