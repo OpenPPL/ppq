@@ -120,7 +120,7 @@ class QuantableOperation(Operation):
                 # convert var.value to torch.Tensor
                 # notice here we set device = None, this conversion will not change var.value.device anyway.
                 # so that we can use var.value.device as a deploy device for stored_value
-                var.stored_value = convert_any_to_torch_tensor(var.value, device='cpu')
+                var.stored_value = convert_any_to_torch_tensor(var.value, device='cpu').clone()
         return self
 
     def dequantize(self, parameter_only: bool = False, expire_device: str = 'cpu'):
