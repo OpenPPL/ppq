@@ -260,36 +260,31 @@ class TensorRTExporter_QDQ(ONNXRUNTIMExporter):
 
 class TensorRTExporter_JSON(GraphExporter):
     def export_quantization_config(self, config_path: str, graph: BaseGraph):
-        quant_info = {}
         act_quant_info = {}
-        quant_info["act_quant_info"] = act_quant_info
-        topo_order =  graph.topological_sort()
-        for index, op in enumerate(topo_order):
-            
-            if op.type in {"Shape", "Gather", "Unsqueeze", "Concat", "Reshape"}:
-               continue
-            
-            if index == 0:
-                assert graph.inputs.__contains__(op.inputs[0].name)
-                input_cfg = op.config.input_quantization_config[0]
-                assert input_cfg.state == QuantizationStates.ACTIVATED and\
-                    input_cfg.policy.has_property(QuantizationProperty.PER_TENSOR)
-                trt_range_input = input_cfg.scale.item() * (input_cfg.quant_max - input_cfg.quant_min) / 2
-                act_quant_info[op.inputs[0].name] = trt_range_input
-                output_cfg = op.config.output_quantization_config[0]
-                trt_range_output = output_cfg.scale.item() * (output_cfg.quant_max - output_cfg.quant_min) / 2
-                act_quant_info[op.outputs[0].name] = trt_range_input
+        for op in graph.topological_sort():
+            if not isinstance(op, QuantableOperation): continue
+            if op.type in {"Gather", "Unsqueeze", "Concat", "Reshape", "Squeeze"}: continue
 
-            else:
-                if not hasattr(op, 'config'):
-                    ppq_warning(f'This op does not write quantization parameters: {op.name}.')
+            for cfg, var in op.config_with_variable:
+                if not cfg.can_export(export_overlapped=True): continue
+                if var.is_parameter: continue
+
+                if cfg.policy != QuantizationPolicy(
+                    QuantizationProperty.LINEAR + 
+                    QuantizationProperty.SYMMETRICAL + 
+                    QuantizationProperty.PER_TENSOR):
+                    ppq_warning(f'Can not export quantization config on variable {var.name}, '
+                                'Quantization Policy is invalid.')
                     continue
-                else:
-                    ppq_info(f'This op writes quantization parameters: {op.name}')
-                    output_cfg = op.config.output_quantization_config[0]
-                    trt_range_output = output_cfg.scale.item() * (output_cfg.quant_max - output_cfg.quant_min) / 2
-                    act_quant_info[op.outputs[0].name] = trt_range_output
-        json_qparams_str = json.dumps(quant_info, indent=4)
+
+                if cfg.num_of_bits != 8 or cfg.quant_max != 127 or cfg.quant_min != -128:
+                    ppq_warning(f'Can not export quantization config on variable {var.name}, '
+                                'Tensor Quantization Config has unexpected setting.')
+                    continue
+
+                act_quant_info[var.name] = cfg.scale.item() * 127
+
+        json_qparams_str = json.dumps({'act_quant_info': act_quant_info}, indent=4)
         with open(config_path, "w") as json_file:
             json_file.write(json_qparams_str)
 
@@ -317,6 +312,10 @@ class TensorRTExporter_JSON(GraphExporter):
 
 
     def export(self, file_path: str, graph: BaseGraph, config_path: str = None, input_shapes: List[List[int]] = [[1, 3, 224, 224]]):
+        ppq_info('You are about to export PPQ Graph to TensorRT. \n'
+           'This Exporter will generate an onnx file for describing model structure together with a json file for passing quantization param. '
+           'You are supposed to compile TensorRT INT8 engine via following script manually: ppq.utils.write_qparams_onnx2trt.py')
+
         if config_path is not None:
             self.export_quantization_config(config_path, graph)
         self.export_weights(graph, config_path)
