@@ -11,13 +11,15 @@ the target platform on which we want to deploy our model(*TargetPlatform.QNN_DSP
 simplified model, initialize quantizer and executor, and then run the quantization process
 ```python
 import os
+
 import numpy as np
 import torch
-from ppq.api import load_onnx_graph
-from ppq.api.interface import dispatch_graph, QUANTIZER_COLLECTION
+
+from ppq import QuantizationSettingFactory
+from ppq.api import dispatch_graph, export_ppq_graph, load_onnx_graph
 from ppq.core import TargetPlatform
 from ppq.executor import TorchExecutor
-from ppq import QuantizationSettingFactory
+from ppq.lib import Quantizer
 
 model_path = '/models/shufflenet-v2-sim.onnx' # onnx simplified model
 data_path  = '/data/ImageNet/calibration' # calibration data folder
@@ -34,16 +36,16 @@ setting = QuantizationSettingFactory.dsp_setting()
 
 # load and schedule graph
 ppq_graph_ir = load_onnx_graph(model_path)
-ppq_graph_ir = dispatch_graph(ppq_graph_ir, target_platform, setting)
+ppq_graph_ir = dispatch_graph(ppq_graph_ir, target_platform)
 
 # intialize quantizer and executor
 executor = TorchExecutor(ppq_graph_ir, device='cuda')
-quantizer = QUANTIZER_COLLECTION[target_platform](graph=ppq_graph_ir)
+quantizer = Quantizer(graph=ppq_graph_ir, platform=target_platform)
 
 # run quantization
 calib_steps = max(min(512, len(dataloader)), 8)     # 8 ~ 512
 dummy_input = dataloader[0].to(EXECUTING_DEVICE)    # random input for meta tracing
-quantizer.quantize(
+ppq_graph_ir = quantizer.quantize(
         inputs=dummy_input,                         # some random input tensor, should be list or dict for multiple inputs
         calib_dataloader=dataloader,                # calibration dataloader
         executor=executor,                          # executor in charge of everywhere graph execution is needed
@@ -53,7 +55,7 @@ quantizer.quantize(
 )
 
 # export quantization param file and model file
-export_ppq_graph(graph=ppq_ir_graph, platform=TargetPlatform.QNN_DSP_INT8, graph_save_to='shufflenet-v2-sim-ppq', config_save_to='shufflenet-v2-sim-ppq.table')
+export_ppq_graph(graph=ppq_graph_ir, platform=TargetPlatform.QNN_DSP_INT8, graph_save_to='shufflenet-v2-sim-ppq', config_save_to='shufflenet-v2-sim-ppq.table')```
 ```
 
 ## Convert Your Model
