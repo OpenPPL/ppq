@@ -3,6 +3,7 @@ from collections import deque
 from typing import Any, Dict, List, Text, Union
 
 import torch
+import numpy as np
 from ppq.core import (LINEAR_ACTIVATIONS, DataType, NetworkFramework,
                       Serializable, SingletonMeta, TargetPlatform, TensorMeta,
                       convert_any_to_torch_tensor, ppq_warning)
@@ -13,15 +14,16 @@ from .opdef import (DEFAULT_SOCKET_CREATOR, DEFAULT_SOCKET_TABLE,
 
 class Variable(Serializable):
     def __init__(self, name: str, value: Any = None, is_parameter: bool = False,
-                 dest_ops: List[OperationBase] = None, source_op: OperationBase = None) -> None:
+                 dest_ops: List[OperationBase] = None, source_op: OperationBase = None,
+                 shape: List[int] = None, dtype: DataType= DataType.FP32) -> None:
         super().__init__()
         self._name = name
         self._value = None if value is None else value
         self._dest_ops = [] if dest_ops is None else dest_ops
         self._source_op = None if source_op is None else source_op
         self._is_parameter = is_parameter
-        self._shape = None
-        self._dtype = None
+        self._shape = shape
+        self._dtype = dtype
 
     @ property
     def is_parameter(self) -> bool:
@@ -70,18 +72,7 @@ class Variable(Serializable):
 
     @ property
     def meta(self) -> TensorMeta:
-        if self.source_op is not None:
-            if self.source_op.meta_data is None: return None
-            return self.source_op.meta_data.output_metas[self.src_idx]
-        elif len(self.dest_ops) > 0:
-            dest_op = self.dest_ops[0]
-            dest_idx = self.dest_idx[0]
-            if dest_op.meta_data is None: return None
-            return dest_op.meta_data.input_metas[dest_idx]
-        else:
-            raise RuntimeError(
-                f'Seems you got an isolated variable {self.name}, '
-                'PPQ is not able to infer its meta data yet.')
+        raise Exception('PPQ Variable.meta has been removed since 0.6.6, use Variable.shape, Variable.dtype instead.')
 
     def __hash__(self) -> int:
         return self._name.__hash__()
@@ -102,26 +93,11 @@ class Variable(Serializable):
         """
         if self.value is not None: 
             return self.value.shape
-        if self.meta is not None:
-            return self.meta.shape
-        else: return None
+        return self._shape
 
     @ shape.setter
     def shape(self, new_shape: List[Union[Text, int, None]]):
-        if self.meta is None:
-            raise PermissionError(f'Can not assign shape with variable {self.name}, '
-                                  'cause it is not linked within a graph.')
-        if self.is_parameter == True:
-            raise PermissionError(f'Can not assign shape with variable {self.name}, '
-                                  'cause it is a parameter varaible.')
-        # override all meta data.
-        if self.source_op is not None:
-            if self.source_op.meta_data is not None:
-                self.source_op.meta_data.output_metas[self.src_idx].shape = new_shape
-        
-        for dest_op, dest_idx in zip(self.dest_ops, self.dest_idx):
-            if dest_op.meta_data is not None:
-                dest_op.meta_data.input_metas[dest_idx].shape = new_shape
+        self._shape = new_shape
 
     @ property
     def dtype(self) -> DataType:
@@ -129,10 +105,19 @@ class Variable(Serializable):
         It is modifiable when current variable is not a paramter.
         """
         if self.value is not None: 
-            return self.value.dtype
-        if self.meta is not None:
-            return self.meta.dtype
-        else: return DataType.FP32
+            return DataType.convert_from_torch(self.value.dtype)
+        return self._dtype
+        
+    @ dtype.setter
+    def dtype(self, T: DataType):
+        if isinstance(T, np.dtype):
+            self._dtype = DataType.convert_from_numpy(T)
+        elif isinstance(T, torch.dtype):
+            self._dtype = DataType.convert_from_torch(T)
+        elif isinstance(T, DataType):
+            self._dtype = T
+        else:
+            raise TypeError(f'Invalid Dtype: {T} was given.')
 
     def copy(self, copy_value: bool = False):
         if not copy_value or self.value is None:
@@ -145,7 +130,7 @@ class Variable(Serializable):
             self.value = convert_any_to_torch_tensor(self.value)
         if isinstance(self.value, torch.Tensor):
             value = self.value.clone()
-        return Variable(name=self.name, value=value, is_parameter=self.is_parameter)
+        return Variable(name=self.name, value=value, is_parameter=self.is_parameter, shape=self.shape, dtype=self.dtype)
 
 
 class Operation(OperationBase, Serializable):
@@ -804,8 +789,6 @@ class BaseGraph(Serializable):
         if var_name not in self.variables:
             raise KeyError(f'Can not find variable {var_name} within current graph.')
         if var_name in self.outputs: return
-        if var_name in self.inputs:
-            raise KeyError(f'Can not mark variable {var_name} as graph output, cause it is graph input.')
         self.outputs[var_name] = self.variables[var_name]
 
     def __getstate__(self) -> dict:

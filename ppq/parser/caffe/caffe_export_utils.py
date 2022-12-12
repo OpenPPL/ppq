@@ -71,11 +71,10 @@ class CaffeOpExporter(object):
             blob = ppl_caffe_pb2.BlobProto()
             value = var.value
             value = convert_any_to_numpy(value)
-            if var.meta is not None:
-                shape = var.shape
-                dtype = DataType.to_numpy(var.meta.dtype)
-            else:
-                shape, dtype = value.shape, value.dtype
+    
+            shape = var.shape
+            dtype = DataType.to_numpy(var.dtype)
+
             blob.shape.dim.extend(shape)
             blob.data.extend(value.astype(dtype).flat)
             self.layer.blobs.extend([blob])
@@ -300,11 +299,10 @@ class Add(CaffeOpExporter):
 
             blob = ppl_caffe_pb2.BlobProto()
             value = convert_any_to_numpy(var.value)
-            if var.meta is not None:
-                shape = var.shape
-                dtype = DataType.to_numpy(var.meta.dtype)
-            else:
-                shape, dtype = value.shape, value.dtype
+
+            shape = var.shape
+            dtype = DataType.to_numpy(var.dtype)
+
             blob.shape.dim.extend(shape)
             blob.data.extend(value.astype(dtype).flat)
             param_layer.blobs.extend([blob])

@@ -4,11 +4,10 @@ import onnx
 import torch
 from onnx import helper
 
-from ppq.core import (GRAPH_OPSET_ATTRIB, PPQ_CONFIG, DataType, OperationMeta,
+from ppq.core import (GRAPH_OPSET_ATTRIB, PPQ_CONFIG,
                       QuantizationProperty, QuantizationStates,
-                      QuantizationVisibility, TensorMeta,
-                      TensorQuantizationConfig, convert_any_to_torch_tensor,
-                      ppq_warning)
+                      QuantizationVisibility, TensorQuantizationConfig, 
+                      convert_any_to_torch_tensor, ppq_warning)
 from ppq.IR import (BaseGraph, Operation, QuantableOperation,
                     QuantableVariable, Variable)
 from ppq.quantization.qfunction.linear import PPQLinearQuant_toInt
@@ -23,7 +22,6 @@ class QDQHelper():
     def TQC_Exportable_Check(
         TQC: TensorQuantizationConfig, bounded_var: Variable) -> bool:
         if not TQC.can_export(): return False
-        meta_check = bounded_var.meta is not None
 
         if TQC.visibility == QuantizationVisibility.INTERNAL: return False
         if TQC.num_of_bits == 8 and TQC.policy.has_property(QuantizationProperty.LINEAR):
@@ -91,8 +89,7 @@ class ONNXRUNTIMExporter(OnnxExporter):
 
     def insert_quant_on_variable(
         self, graph: BaseGraph, var: QuantableVariable,
-        config: TensorQuantizationConfig, related_op: Operation,
-        meta: TensorMeta = None) -> Operation:
+        config: TensorQuantizationConfig, related_op: Operation) -> Operation:
         """
         Insert a Quantize Node on given variable, according to given TensorQuantizationConfig.
         There is two basic type of Quantize Node: QuantizeLinear and QuantizeFloating.
@@ -101,8 +98,7 @@ class ONNXRUNTIMExporter(OnnxExporter):
         if config.policy.has_property(QuantizationProperty.LINEAR):
             # Following code will export Linear Quantization Config
             # That is for FP32 -> INT
-            if meta is None: meta = var.meta
-            offset_dtype, _ = self.infer_qtype(config)
+            offset_dtype, value_type = self.infer_qtype(config)
             scale  = convert_any_to_torch_tensor(config.scale.clone(), dtype=torch.float32)
             offset = ppq_tensor_round(config.offset.clone()).type(offset_dtype)
 
@@ -113,7 +109,7 @@ class ONNXRUNTIMExporter(OnnxExporter):
             if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
                 created.attributes['axis'] = config.channel_axis
 
-            # PATCH 20220803, OPSET 13 REQUIRES AXIS = 0
+            # PATCH 20220803, OPSET 13 REQUIRES ATTRIBUTE AXIS
             if config.policy.has_property(QuantizationProperty.PER_TENSOR):
                 created.attributes['axis'] = 0
 
@@ -123,13 +119,14 @@ class ONNXRUNTIMExporter(OnnxExporter):
 
             graph.create_link_with_op(variable=s_var, upstream_op=None, downstream_op=created)
             graph.create_link_with_op(variable=z_var, upstream_op=None, downstream_op=created)
+            created.outputs[0].dtype = value_type
+            created.outputs[0].shape = var.shape
 
             return created
         
         elif config.policy.has_property(QuantizationProperty.FLOATING):
             # Following code will export Linear Quantization Config
             # That is for FP32 -> FP8
-            if meta is None: meta = var.meta
             scale  = convert_any_to_torch_tensor(config.scale.clone(), dtype=torch.float32)
             offset = convert_any_to_torch_tensor(config.offset.clone(), dtype=torch.float32)
 
@@ -152,6 +149,7 @@ class ONNXRUNTIMExporter(OnnxExporter):
 
             graph.create_link_with_op(variable=s_var, upstream_op=None, downstream_op=created)
             graph.create_link_with_op(variable=z_var, upstream_op=None, downstream_op=created)
+            created.outputs[0].shape = var.shape
 
             return created
         
@@ -162,14 +160,12 @@ class ONNXRUNTIMExporter(OnnxExporter):
 
     def insert_dequant_on_variable(
         self, graph: BaseGraph, var: QuantableVariable,
-        config: TensorQuantizationConfig, related_op: Operation,
-        meta: TensorMeta = None) -> Operation:
+        config: TensorQuantizationConfig, related_op: Operation) -> Operation:
         """
         Insert a DeQuantize Node on given variable, according to given TensorQuantizationConfig.
         There is two basic type of DeQuantize Node: DeQuantizeLinear and DeQuantizeFloating.
         """
         if config.policy.has_property(QuantizationProperty.LINEAR):
-            if meta is None: meta = var.meta
             offset_dtype, _ = self.infer_qtype(config)
             scale  = convert_any_to_torch_tensor(config.scale.clone(), dtype=torch.float32)
             offset = ppq_tensor_round(config.offset.clone()).type(offset_dtype)
@@ -191,11 +187,11 @@ class ONNXRUNTIMExporter(OnnxExporter):
 
             graph.create_link_with_op(variable=s_var, upstream_op=None, downstream_op=created)
             graph.create_link_with_op(variable=z_var, upstream_op=None, downstream_op=created)
+            created.outputs[0].shape = var.shape
 
             return created
 
         elif config.policy.has_property(QuantizationProperty.FLOATING):
-            if meta is None: meta = var.meta
             scale  = convert_any_to_torch_tensor(config.scale.clone(), dtype=torch.float32)
             offset = convert_any_to_torch_tensor(config.offset.clone(), dtype=torch.float32)
 
@@ -218,6 +214,7 @@ class ONNXRUNTIMExporter(OnnxExporter):
 
             graph.create_link_with_op(variable=s_var, upstream_op=None, downstream_op=created)
             graph.create_link_with_op(variable=z_var, upstream_op=None, downstream_op=created)
+            created.outputs[0].shape = var.shape
 
             return created
 
@@ -293,10 +290,10 @@ class ONNXRUNTIMExporter(OnnxExporter):
             # insert quant & dequant op on var
             self.insert_dequant_on_variable(
                 graph=graph, var=input_var, config=quant_config, 
-                related_op=upstream_op, meta=input_var.meta)
+                related_op=upstream_op)
             self.insert_quant_on_variable(
                 graph=graph, var=input_var, config=quant_config, 
-                related_op=upstream_op, meta=input_var.meta)
+                related_op=upstream_op)
 
         # formatter = GraphFormatter(graph)
         # formatter(GraphCommand(GraphCommandType.DELETE_ISOLATED))
@@ -372,14 +369,12 @@ class ONNXRUNTIMExporter(OnnxExporter):
                 axes = convert_any_to_torch_tensor(op.attributes.pop('axes'), dtype=torch.int64)
                 var = graph.create_variable(name=None, value=axes, is_parameter=True)
                 graph.create_link_with_op(variable=var, upstream_op=None, downstream_op=op)
-                op.meta_data.input_metas.append(TensorMeta.parsing_from_torch_tensor(var.value, var.name))
 
             elif op.type == 'Split':
                 if 'split' not in op.attributes: continue # split is already v13
                 split = convert_any_to_torch_tensor(op.attributes.pop('split'), dtype=torch.int64)
                 var = graph.create_variable(name=None, value=split, is_parameter=True)
                 graph.create_link_with_op(variable=var, upstream_op=None, downstream_op=op)
-                op.meta_data.input_metas.append(TensorMeta.parsing_from_torch_tensor(var.value, var.name))
 
     def convert_operation(self, graph: BaseGraph, op: QuantableOperation,
                           process_activation: bool, process_parameter: bool,
@@ -410,7 +405,6 @@ class ONNXRUNTIMExporter(OnnxExporter):
         for config, var in op.config_with_variable:
             if not QDQHelper.TQC_Exportable_Check(TQC=config, bounded_var=var): continue
 
-            meta = var.meta
             if var.is_parameter and process_parameter:
                 assert len(var.dest_ops) == 1, (
                 f'Can not export variable {var.name}, cause it has more than 1 destination operations. '
@@ -426,20 +420,20 @@ class ONNXRUNTIMExporter(OnnxExporter):
                 # needs insert both quant and dequant op for them
                 if not quant_param_to_int:
                     created = self.insert_quant_on_variable(
-                        graph=graph, var=var, config=config, related_op=op, meta=meta)
+                        graph=graph, var=var, config=config, related_op=op)
                     var = created.outputs[0]
 
                 self.insert_dequant_on_variable(
-                    graph=graph, var=var, config=config, related_op=op, meta=meta)
+                    graph=graph, var=var, config=config, related_op=op)
                 if quant_param_to_int and config.policy.has_property(QuantizationProperty.LINEAR):
                     var.value = PPQLinearQuant_toInt(tensor=var.value, config=config)
 
             elif (not var.is_parameter) and process_activation:
                 created = self.insert_quant_on_variable(
-                    graph=graph, var=var, config=config, related_op=op, meta=meta)
+                    graph=graph, var=var, config=config, related_op=op)
                 self.insert_dequant_on_variable(
                     graph=graph, var=created.outputs[0], config=config, 
-                    related_op=op, meta=meta)
+                    related_op=op)
 
     def prepare_graph(
         self, graph: BaseGraph,
