@@ -249,8 +249,12 @@ class GraphFormatter(GraphCommandProcessor):
         for operation in self.graph.operations.values():
             if operation.type == "BatchNormalization":
                 upstream_ops = self.graph.get_upstream_operations(operation)  # 假设bn上游只有一个op或者没有op
-
-                if len(upstream_ops) == 0:
+                down_ops = self.graph.get_downstream_operations(operation)
+                
+                if len(upstream_ops) == 0 and len(down_ops) == 0:
+                    continue
+                # bn是模型的第一个op
+                if len(upstream_ops) == 0 and len(down_ops) != 0:
                     interested_ops.append(operation)
                     continue
                 assert len(upstream_ops) == 1, f"BN op({operation.name}) should have only one input"
