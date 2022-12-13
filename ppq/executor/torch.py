@@ -2,7 +2,7 @@ from typing import Callable, Dict, List, Union
 
 import torch
 
-from ppq.core import (QuantizationStates, TargetPlatform,
+from ppq.core import (QuantizationStates, TargetPlatform, DataType,
                       TensorQuantizationConfig, empty_ppq_cache, ppq_warning)
 from ppq.IR import BaseGraph, Operation, QuantableOperation, RunnableGraph
 from ppq.IR.base.command import GraphDeployCommand
@@ -639,13 +639,12 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
         feed_dict = {}
         for var_name, input_var in self._graph.inputs.items():
             if len(input_var.dest_ops) == 0: continue
-            dest_op  = input_var.dest_ops[0]
-            dest_idx = dest_op.inputs.index(input_var)
 
-            assert isinstance(dest_op, Operation) and dest_op.meta_data is not None, \
-                'Operation meta has not been traced. Please invoke TorchExecutor.tracing_meta_data() first'
-            tensor_meta = dest_op.meta_data.input_metas[dest_idx]
-            feed_dict[var_name] = tensor_meta.create_tensor(device=self._device)
+            assert input_var.shape is not None, (
+                f'Can not generate dummy input for input variable {input_var.name}, input shape is not specified.')
+
+            feed_dict[var_name] = torch.Tensor(size=input_var.shape, device='cpu').fill_(
+                0).type(dtype=DataType.to_torch(input_var.dtype)).to(self._device)
         self.forward(inputs=feed_dict, hooks=hooks)
 
     def partial_graph_forward(

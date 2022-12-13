@@ -203,7 +203,6 @@ class Operation(OperationBase, Serializable):
             attributes=self.attributes.copy(), 
             platform=self.platform, 
             opset=self.opset)
-        clone.meta_data = self.meta_data.copy()
         clone._detail = self._detail.copy()
         return clone
 

@@ -128,7 +128,7 @@ def graphwise_error_analyse(
 
             recorders[operation.name] = MeasureRecorder(measurement=method)
             hooks[operation.name] = OutputRecorder(
-                operation=operation, operation_meta=operation.meta_data, fetchs=fetchs)
+                operation=operation, fetchs=fetchs)
             caches[operation.name] = []
 
     # dequantize all
@@ -307,7 +307,7 @@ def statistical_analyse(
     for operation in interested_op:
         if isinstance(operation, QuantableOperation):
             hooks[operation.name] = DetailedRecorder(
-                operation=operation, operation_meta=operation.meta_data)
+                operation=operation)
             caches[operation.name] = {
                 'Quantized Input': [], 'Quantized Output': [], 
                 'Dequantized Input': [], 'Dequantized Output': []}
