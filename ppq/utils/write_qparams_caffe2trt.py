@@ -10,7 +10,7 @@ EXPLICIT_BATCH = 1 << (int)(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)
 class ModelData(object):
     DEPLOY_PATH = "deploy.prototxt"
     MODEL_PATH = "model.caffemodel"
-    OUTPUT_NAME = "238","251","240","248","250","252"
+    OUTPUT_NAME = "238","251","240","248","250","252"  #caffe2trt needs to specify the name of the output tensor.
     # The original model is a float32 one.
     DTYPE = trt.float32
 
