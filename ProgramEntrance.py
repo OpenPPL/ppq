@@ -197,5 +197,5 @@ with ENABLE_CUDA_KERNEL():
 
     # 如果你需要导出 CAFFE 模型，使用下面的语句，caffe exporter 需要一个 input_shapes 参数。
     # export(working_directory=WORKING_DIRECTORY,
-    #        quantized=quantized, platform=TARGET_PLATFORM,
-    #        input_shapes=[NETWORK_INPUTSHAPE])
+    #        quantized=quantized, platform=TargetPlatform.CAFFE,
+    #        input_shapes=NETWORK_INPUTSHAPE)
