@@ -15,8 +15,8 @@ from .op import TorchBackendContext
 
 class TorchMetaDataTracingHook(RuntimeHook):
     def __init__(self, operation: Operation) -> None:
-        self.input_metas, self.output_metas = [], []
-        super().__init__(operation, operation_meta=None)
+        super().__init__(operation)
+
     def pre_forward_hook(self, inputs: List[torch.Tensor], **kwargs) -> list:
         # some operations got none as its input
         # therefore we have to create meta for those none input value manually.
@@ -28,11 +28,15 @@ class TorchMetaDataTracingHook(RuntimeHook):
             else:
                 var.shape = tensor.shape
                 var.dtype = tensor.dtype
+                print(f'{var.name} shape has been created.')
+
         return inputs
+
     def post_forward_hook(self, outputs: List[torch.Tensor], **kwargs) -> list:
         for tensor, var in zip(outputs, self._hook_to.outputs):
             var.shape = tensor.shape
             var.dtype = tensor.dtype
+
         return outputs
 
 
