@@ -96,12 +96,12 @@ class RuntimeCalibrationPass(QuantizationOptimizationPass):
     This feature requires PPQ > 0.6.5
 
     """
-    def __init__(self, method: str = None, override: bool = False) -> None:
+    def __init__(self, method: str = None, override: bool = False, calib_steps: int = 32) -> None:
         super().__init__(name='PPQ Runtime Calibration Pass')
         self._method = method
-        self._observers = {}
-        self._collate_fn = None
-        self._calib_steps = None
+        self._observers   = {}
+        self._collate_fn  = None
+        self._calib_steps = calib_steps
         self._override = override
 
     def calibrate(self, desc: str, dataloader: Iterable, executor: BaseGraphExecutor,
@@ -125,19 +125,20 @@ class RuntimeCalibrationPass(QuantizationOptimizationPass):
         graph: BaseGraph,
         dataloader: Iterable,
         executor: BaseGraphExecutor,
-        calib_steps: int,
-        collate_fn: Callable,
+        calib_steps: int = 32,
+        collate_fn: Callable = None,
         **kwargs
     ) -> None:
-        self._collate_fn = collate_fn
-        self._calib_steps = calib_steps
-        assert calib_steps >= 8, 'Insufficient Calibration Detected, to better quantize your network, '\
-            'more calibration steps is required, we strongly recommend you to prepare more calibration data '\
-            'and more calibration steps is preferred here. (at least 8)'
+        if collate_fn is not None: self._collate_fn = collate_fn
+        if calib_steps is not None: self._calib_steps = calib_steps
 
-        assert calib_steps <= 512, 'Calibration steps is too large, ppq is capable for quantizing your network within 8-512 '\
-            'calibration steps. More calibration steps will greatly delay ppq\'s calibration procedure. '\
-            'Reset your calib_steps parameter please.'
+        assert calib_steps >= 8, ('Insufficient Calibration Detected, to get a better quantization performance, '
+            'more calibration steps is required, we strongly recommend you to prepare more calibration data '
+            'and more calibration steps is preferred here. (at least 8)')
+
+        assert calib_steps <= 512, ('Calibration steps is too large, ppq can quantize your network within 8-512 '
+            'calibration steps. More calibration steps will greatly delay ppq\'s calibration procedure. '
+            'Reset your calib_steps parameter please.')
 
         # -------------------------------------------------
         # Override existing quantization configurations

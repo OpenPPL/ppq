@@ -25,14 +25,14 @@ class NxpExporter(GraphExporter):
             tensor_proto = helper.make_tensor_value_info(
                 name=variable.name,
                 # PPQ data type has exact same eunm value with onnx.
-                elem_type=variable.meta.dtype.value,
+                elem_type=variable.dtype.value,
                 shape=variable.shape)
         else:
             value = convert_any_to_numpy(variable.value)
             if value is None: value = []
             else: value = value.flatten()
             tensor_proto = helper.make_tensor(
-                name=variable.name, data_type=variable.meta.dtype.value,
+                name=variable.name, data_type=variable.dtype.value,
                 dims=variable.shape,
                 vals=value
             )

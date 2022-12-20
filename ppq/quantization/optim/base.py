@@ -4,7 +4,6 @@ from typing import Container, Iterable, Iterator, List
 
 from ppq.executor import BaseGraphExecutor
 from ppq.IR import BaseGraph, BaseGraph
-from ppq.core import ppq_info
 
 class QuantizationOptimizationPass(metaclass = ABCMeta):
     """QuantizationOptimizationPass is a basic building block of PPQ
@@ -68,9 +67,7 @@ class QuantizationOptimizationPipeline(Container, Iterable):
         return self._pipeline.__iter__()
 
     def optimize(
-        self, graph: BaseGraph,
-        dataloader: Iterable, executor: BaseGraphExecutor, verbose: bool = False,
-        **kwargs
+        self, graph: BaseGraph, verbose: bool = True, **kwargs
     ) -> None:
         max_name_length = 0
         if len(self._pipeline) > 0:
@@ -78,8 +75,6 @@ class QuantizationOptimizationPipeline(Container, Iterable):
             max_name_length = max([len(name) for name in names])
 
         for optim_pass in self._pipeline:
-            ppq_info(f'running: {optim_pass.__str__}')
-
             if not isinstance(optim_pass, QuantizationOptimizationPass):
                 raise TypeError(f'Quantization Optimization Pipeline object only suppose to contain optimization passes only, '
                      f'while {str(optim_pass)}({type(optim_pass)}) was found.')
@@ -92,7 +87,7 @@ class QuantizationOptimizationPipeline(Container, Iterable):
             if not isinstance(graph, BaseGraph): 
                 raise TypeError(f'parameter 1 should be an instance of PPQ BaseGraph when calling optim pass, '
                                 f'however {type(graph)} was given.')
-            optim_pass.apply(graph=graph, dataloader=dataloader, executor=executor, **kwargs)
+            optim_pass.apply(graph=graph, **kwargs)
             if verbose: print(f'Finished.')
 
     def append_optimization_to_pipeline(self, optim_pass: QuantizationOptimizationPass, at_front:bool = False):

@@ -75,8 +75,7 @@ class PassiveParameterQuantizePass(QuantizationOptimizationPass):
         self.pad_visiblity  = pad_visiblity
         super().__init__(name='PPQ Passive Parameter Quantization')
 
-    def optimize(self, graph: BaseGraph,
-        dataloader: Iterable, executor: BaseGraphExecutor, **kwargs) -> None:
+    def optimize(self, graph: BaseGraph, **kwargs) -> None:
 
         def check_state(state: QuantizationStates):
             return state in {
@@ -174,7 +173,7 @@ class ParameterQuantizePass(QuantizationOptimizationPass):
         self,
         graph: BaseGraph,
         dataloader: Iterable,
-        executor: BaseGraphExecutor,
+        executor: TorchExecutor,
         **kwargs
     ) -> None:
         # build observer and hook for each quantable operation

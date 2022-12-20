@@ -1,20 +1,20 @@
 from ppq.core import NetworkFramework, TargetPlatform
-from ppq.parser import (CaffeExporter, CaffeParser, ExtensionExporter,
-                        NativeExporter, NativeImporter, NCNNExporter,
-                        NxpExporter, OnnxExporter, OnnxParser,
+from ppq.parser import (AscendExporter, CaffeExporter, CaffeParser,
+                        ExtensionExporter, NativeExporter, NativeImporter,
+                        NCNNExporter, NxpExporter, OnnxExporter, OnnxParser,
                         ONNXRUNTIMExporter, PPLBackendExporter,
                         PPLDSPCaffeExporter, PPLDSPTICaffeExporter,
                         QNNDSPExporter, SNPECaffeExporter, TengineExporter,
-                        TensorRTExporter_QDQ, TensorRTExporter_JSON,
-                        AscendExporter)
-from ppq.quantization.quantizer import (ExtQuantizer, FPGAQuantizer,
-                                        GraphCoreQuantizer,
+                        TensorRTExporter_JSON, TensorRTExporter_QDQ)
+from ppq.quantization.quantizer import (AscendQuantizer, ExtQuantizer,
+                                        FPGAQuantizer, GraphCoreQuantizer,
                                         MetaxChannelwiseQuantizer,
                                         MetaxTensorwiseQuantizer,
                                         NCNNQuantizer, NXP_Quantizer,
+                                        OnnxruntimeQuantizer,
                                         OpenvinoQuantizer, PPL_DSP_Quantizer,
                                         PPL_DSP_TI_Quantizer, PPLCUDAQuantizer,
-                                        RKNN_PerTensorQuantizer,AscendQuantizer,
+                                        RKNN_PerTensorQuantizer,
                                         TengineQuantizer, TensorRTQuantizer,
                                         TensorRTQuantizer_FP8)
 
@@ -37,6 +37,7 @@ __QUANTIZER_COLLECTION__ = {
     TargetPlatform.TENGINE_INT8:  TengineQuantizer,
     TargetPlatform.GRAPHCORE_FP8: GraphCoreQuantizer,
     TargetPlatform.TRT_FP8:       TensorRTQuantizer_FP8,
+    TargetPlatform.ONNXRUNTIME:   OnnxruntimeQuantizer,
 }
 
 

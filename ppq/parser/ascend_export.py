@@ -1,21 +1,10 @@
-import json
-from typing import Dict
+
 import os
-
-import torch
-from ppq.core import (DataType, OperationMeta, QuantizationPolicy,
-                      QuantizationProperty, QuantizationStates, TensorMeta,
-                      TensorQuantizationConfig, convert_any_to_torch_tensor,
-                      ppq_warning)
-from ppq.IR import BaseGraph
-from ppq.IR.quantize import QuantableOperation, QuantableVariable
-from ppq.utils.round import ppq_tensor_round
-
 from typing import List
 
 from ppq.core import (DataType, NetworkFramework, QuantizationProperty,
-                      QuantizationStates)
-from ppq.IR import BaseGraph, GraphExporter, QuantableOperation
+                      QuantizationStates, ppq_warning)
+from ppq.IR import BaseGraph, GraphExporter
 
 from .caffe_exporter import CaffeExporter
 from .onnx_exporter import OnnxExporter

@@ -94,8 +94,8 @@ class CaffeExporter(GraphExporter):
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
         if all([var.value is not None for var in graph.inputs.values()]):
             inputs = {var.name: convert_any_to_torch_tensor(var.value).to(device) for var in graph.inputs.values()}
-        elif all([var.meta is not None for var in graph.inputs.values()]):
-            inputs = {var.name: torch.randn(*var.shape, dtype=DataType.to_torch(var.meta.dtype), device=device)\
+        elif all([var.shape is not None for var in graph.inputs.values()]):
+            inputs = {var.name: torch.randn(*var.shape, dtype=DataType.to_torch(var.dtype), device=device)\
                 for var in graph.inputs.values()}
         else:
             assert len([input_shapes]) == len(graph.inputs), (

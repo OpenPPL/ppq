@@ -431,6 +431,8 @@ def quantize_caffe_model(
 
     quantizer = PFL.Quantizer(platform=platform, graph=ppq_ir)
     executor = TorchExecutor(graph=quantizer._graph, device=device)
+    executor.tracing_operation_meta(inputs=dummy_input)
+
     if do_quantize:
         quantizer.quantize(
             inputs=dummy_input,
@@ -443,8 +445,6 @@ def quantize_caffe_model(
         if verbose: quantizer.report()
         return quantizer._graph
     else:
-        executor = TorchExecutor(graph=ppq_ir, device=device)
-        executor.tracing_operation_meta(inputs=dummy_input)
         return quantizer._graph
 
 @ empty_ppq_cache

@@ -11,7 +11,25 @@ def PPQuantFunction(tensor: torch.Tensor, config: TensorQuantizationConfig) -> t
     """
     ## PPQ 核心量化函数
 
-    根据 config 中描述的策略，这个函数将会执行线性量化，浮点量化或动态量化
+    根据 config 中描述的策略，量化给定的 tensor.
+    
+    请注意 config.state 必须处在激活状态，该函数起作用。如果 config.state 处于
+        INITIAL, FP32, PASSIVE_INIT 等未激活状态，该函数不进行任何处理，直接返回 tensor.
+
+    ### 线性量化(QuantizationProperty.LINEAR):
+
+        INT8 = Clip(Round((FP32 / scale)))
+
+    ### 浮点量化(QuantizationProperty.FLOATING):
+
+        FP8 = Clip(FP32_TO_FP8((FP32 / scale)))
+
+    ### 动态线性量化(QuantizationProperty.DYNMAIC)
+
+        scale = max(FP32) / 255
+
+        INT8  = Clip(Round((FP32 / scale)))
+
     """
     if tensor is None: raise ValueError('Tensor is empty.')
     if config.policy.has_property(QuantizationProperty.LINEAR):

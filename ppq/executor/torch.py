@@ -1,34 +1,23 @@
-from typing import Any, Callable, Dict, List, Union
+from typing import Callable, Dict, List, Union
 
-import numpy
-from ppq.core import (DataType, OperationMeta,
-                      QuantizationProperty, QuantizationStates, TargetPlatform,
-                      TensorMeta, TensorQuantizationConfig, empty_ppq_cache,
-                      ppq_warning)
+import torch
+
+from ppq.core import (QuantizationStates, TargetPlatform, DataType,
+                      TensorQuantizationConfig, empty_ppq_cache, ppq_warning)
 from ppq.IR import BaseGraph, Operation, QuantableOperation, RunnableGraph
 from ppq.IR.base.command import GraphDeployCommand
 from ppq.quantization.qfunction import PPQuantFunction
-
-import torch
 
 from .base import (OPERATION_FORWARD_TABLE, BaseGraphExecutor,
                    QuantOPRuntimeHook, RuntimeHook)
 from .op import TorchBackendContext
 
 
-def build_meta(value: Any) -> TensorMeta:
-    if isinstance(value, torch.Tensor):
-        return TensorMeta.parsing_from_torch_tensor(value)
-    if isinstance(value, numpy.ndarray):
-        return TensorMeta.parsing_from_numpy_ndarray(value)
-    raise TypeError(f'Can not tracing meta for given value(type: {type(value)}), check your graph again.')
-
-
 class TorchMetaDataTracingHook(RuntimeHook):
     def __init__(self, operation: Operation) -> None:
-        self.input_metas, self.output_metas = [], []
-        super().__init__(operation, operation_meta=None)
-    def pre_forward_hook(self, inputs: list, **kwargs) -> list:
+        super().__init__(operation)
+
+    def pre_forward_hook(self, inputs: List[torch.Tensor], **kwargs) -> list:
         # some operations got none as its input
         # therefore we have to create meta for those none input value manually.
         for tensor, var in zip(inputs, self._hook_to.inputs):
@@ -36,12 +25,17 @@ class TorchMetaDataTracingHook(RuntimeHook):
                 ppq_warning(
                     f'Unexpected input value of operation {self._hook_to.name}, '
                     f'recieving "None" at its input {self._hook_to.inputs.index(var)}')
-                self.input_metas.append(TensorMeta(dtype=DataType.NONETYPE, shape=None))
             else:
-                self.input_metas.append(build_meta(tensor))
+                var.shape = tensor.shape
+                var.dtype = tensor.dtype
+
         return inputs
-    def post_forward_hook(self, outputs: list, **kwargs) -> list:
-        self.output_metas = [build_meta(tensor) for tensor in outputs]
+
+    def post_forward_hook(self, outputs: List[torch.Tensor], **kwargs) -> list:
+        for tensor, var in zip(outputs, self._hook_to.outputs):
+            var.shape = tensor.shape
+            var.dtype = tensor.dtype
+
         return outputs
 
 
@@ -606,15 +600,6 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
             executing_order=self._executing_order,
             hooks=hooks)
 
-        for op_name, operation in self._graph.operations.items():
-            operation.meta_data = OperationMeta(
-                input_metas     = hooks[op_name].input_metas,
-                output_metas    = hooks[op_name].output_metas,
-                operation_name  = operation.name,
-                operation_type  = operation.type,
-                executing_order = self._executing_order.index(operation)
-            )
-
     def load_graph(self, graph: BaseGraph) -> dict:
         super().load_graph(graph)
         self._deployed = False
@@ -657,13 +642,12 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
         feed_dict = {}
         for var_name, input_var in self._graph.inputs.items():
             if len(input_var.dest_ops) == 0: continue
-            dest_op  = input_var.dest_ops[0]
-            dest_idx = dest_op.inputs.index(input_var)
 
-            assert isinstance(dest_op, Operation) and dest_op.meta_data is not None, \
-                'Operation meta has not been traced. Please invoke TorchExecutor.tracing_meta_data() first'
-            tensor_meta = dest_op.meta_data.input_metas[dest_idx]
-            feed_dict[var_name] = tensor_meta.create_tensor(device=self._device)
+            assert input_var.shape is not None, (
+                f'Can not generate dummy input for input variable {input_var.name}, input shape is not specified.')
+
+            feed_dict[var_name] = torch.Tensor(size=input_var.shape, device='cpu').fill_(
+                0).type(dtype=DataType.to_torch(input_var.dtype)).to(self._device)
         self.forward(inputs=feed_dict, hooks=hooks)
 
     def partial_graph_forward(

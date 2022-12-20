@@ -115,8 +115,8 @@ def LinearQuantizationConfig(
     dynamic: bool = False,
     power_of_2: bool = False,
     channel_axis: int = None,
-    quant_min: int = -127,
-    quant_max: int = 128,
+    quant_min: int = -128,
+    quant_max: int = 127,
     num_of_bits = 8,
     calibration: str = 'minmax',
     rounding: RoundingPolicy = RoundingPolicy.ROUND_HALF_EVEN) -> TensorQuantizationConfig:
@@ -127,7 +127,7 @@ def LinearQuantizationConfig(
     chn = QuantizationProperty.PER_TENSOR if channel_axis is None else QuantizationProperty.PER_CHANNEL
 
     return TensorQuantizationConfig(
-        policy = QuantizationPolicy(sym + dyn + pw2 + chn),
+        policy = QuantizationPolicy(sym + dyn + pw2 + chn + QuantizationProperty.LINEAR),
         rounding = rounding,
         num_of_bits = num_of_bits,
         quant_min = quant_min,

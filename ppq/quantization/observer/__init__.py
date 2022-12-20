@@ -45,7 +45,7 @@ class CalibrationHook(QuantOPRuntimeHook):
     ) -> None:
         self._operation = operation
         self._observer_table = observer_table
-        super().__init__(operation, operation_meta=operation.meta_data)
+        super().__init__(operation)
 
     def pre_forward_hook(
         self, inputs: list, quant_inputs: list, quant_configs: List[TensorQuantizationConfig]) -> list:

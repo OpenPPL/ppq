@@ -2,7 +2,7 @@
 from typing import Callable, Dict, Iterator, List
 
 import torch
-from ppq.core import PASSIVE_OPERATIONS, OperationMeta, ppq_warning
+from ppq.core import PASSIVE_OPERATIONS, ppq_warning
 from ppq.executor import RuntimeHook, TorchExecutor
 from ppq.IR import BaseGraph, Operation, QuantableOperation, Variable
 from ppq.quantization.measure.norm import torch_snr_error
@@ -13,11 +13,10 @@ from .util import MeasurePrinter, MeasureRecorder
 
 
 class OutputRecorder(RuntimeHook):
-    def __init__(self, operation: Operation,
-        operation_meta: OperationMeta = None, fetchs: int = 4096) -> None:
+    def __init__(self, operation: Operation, fetchs: int = 4096) -> None:
         self.fetched     = None
         self.fetchs      = fetchs
-        super().__init__(operation, operation_meta=operation_meta)
+        super().__init__(operation)
 
     def pre_forward_hook(self, inputs: list, **kwargs) -> list:
         return super().pre_forward_hook(inputs, **kwargs)
@@ -39,12 +38,11 @@ class OutputRecorder(RuntimeHook):
 
 class DetailedRecorder(RuntimeHook):
     def __init__(self, operation: Operation,
-        operation_meta: OperationMeta = None, 
         fetchs: int = 1024) -> None:
         self.fetchs      = fetchs
         self.i_storage   = [[] for _ in range(operation.num_of_input)]
         self.o_storage   = [[] for _ in range(operation.num_of_output)]
-        super().__init__(operation, operation_meta=operation_meta)
+        super().__init__(operation)
 
     def pre_forward_hook(self, inputs: List[torch.Tensor], **kwargs) -> list:
         for idx, input in enumerate(inputs):
@@ -130,7 +128,7 @@ def graphwise_error_analyse(
 
             recorders[operation.name] = MeasureRecorder(measurement=method)
             hooks[operation.name] = OutputRecorder(
-                operation=operation, operation_meta=operation.meta_data, fetchs=fetchs)
+                operation=operation, fetchs=fetchs)
             caches[operation.name] = []
 
     # dequantize all
@@ -309,7 +307,7 @@ def statistical_analyse(
     for operation in interested_op:
         if isinstance(operation, QuantableOperation):
             hooks[operation.name] = DetailedRecorder(
-                operation=operation, operation_meta=operation.meta_data)
+                operation=operation)
             caches[operation.name] = {
                 'Quantized Input': [], 'Quantized Output': [], 
                 'Dequantized Input': [], 'Dequantized Output': []}

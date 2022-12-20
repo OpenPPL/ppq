@@ -190,7 +190,9 @@ class QuantableVariable(Variable):
             dest_ops  = convert_from.dest_ops.copy(),
             source_op = convert_from.source_op,
             value     = convert_from.value,
-            is_parameter = convert_from.is_parameter)
+            is_parameter = convert_from.is_parameter,
+            shape     = convert_from.shape,
+            dtype     = convert_from.dtype)
         self._fp32_value = None
         if convert_from.value is not None:
             self._fp32_value = convert_any_to_torch_tensor(convert_from.value, device='cpu')
