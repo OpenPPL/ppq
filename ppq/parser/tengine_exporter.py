@@ -153,7 +153,7 @@ class TengineExporter(GraphExporter):
 
     def export_var(self, variable: Variable) -> onnx.TensorProto:
         shape = variable.shape
-        dtype = DataType.to_numpy(variable.dtype)
+        dtype = variable.dtype.value
 
         if dtype is None:
             ppq_warning(
