@@ -22,8 +22,8 @@ class Variable(Serializable):
         self._dest_ops = [] if dest_ops is None else dest_ops
         self._source_op = None if source_op is None else source_op
         self._is_parameter = is_parameter
-        self._shape = shape
-        self._dtype = dtype
+        self.shape = shape
+        self.dtype = dtype
 
     @ property
     def is_parameter(self) -> bool:
@@ -96,16 +96,28 @@ class Variable(Serializable):
         return self._shape
 
     @ shape.setter
-    def shape(self, new_shape: List[Union[Text, int, None]]):
-        self._shape = new_shape
+    def shape(self, shape: List[Union[Text, int, None]]):
+        if isinstance(shape, torch.Tensor):
+            shape = shape.tolist()
+        if isinstance(shape, torch.Size):
+            shape = list(shape)
+        if isinstance(shape, list):
+            for element in shape:
+                if type(element) not in {str, int}:
+                    raise TypeError(f'Shape of a variable should only contains int or str. '
+                                    f'however {type(element)} was given.')
+        self._shape = shape
 
     @ property
     def dtype(self) -> DataType:
         """ Return tensor shape of this variable
         It is modifiable when current variable is not a paramter.
         """
-        if self.value is not None: 
-            return DataType.convert_from_torch(self.value.dtype)
+        if self.value is not None:
+            if isinstance(self.value, torch.Tensor):
+                return DataType.convert_from_torch(self.value.dtype)
+            if isinstance(self.value, np.ndarray):
+                return DataType.convert_from_numpy(self.value.dtype)
         return self._dtype
         
     @ dtype.setter
@@ -121,8 +133,11 @@ class Variable(Serializable):
 
     def copy(self, copy_value: bool = False):
         if not copy_value or self.value is None:
-            return Variable(name=self.name, value=self.value, is_parameter=self.is_parameter)
-        
+            cloned = Variable(
+                name=self.name, value=self.value, 
+                is_parameter=self.is_parameter, shape=self.shape, dtype=self.dtype)
+            return cloned
+
         if not isinstance(self.value, torch.Tensor):
             ppq_warning(f'You are requiring to copy variable {self.name}, '
                         'however its value is not an instance of torch.Tensor, '
@@ -130,7 +145,8 @@ class Variable(Serializable):
             self.value = convert_any_to_torch_tensor(self.value)
         if isinstance(self.value, torch.Tensor):
             value = self.value.clone()
-        return Variable(name=self.name, value=value, is_parameter=self.is_parameter, shape=self.shape, dtype=self.dtype)
+        return Variable(name=self.name, value=value, 
+                        is_parameter=self.is_parameter, shape=self.shape, dtype=self.dtype)
 
 
 class Operation(OperationBase, Serializable):

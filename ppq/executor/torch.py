@@ -28,7 +28,6 @@ class TorchMetaDataTracingHook(RuntimeHook):
             else:
                 var.shape = tensor.shape
                 var.dtype = tensor.dtype
-                print(f'{var.name} shape has been created.')
 
         return inputs
 
