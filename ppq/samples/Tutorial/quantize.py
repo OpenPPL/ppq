@@ -10,8 +10,7 @@ from ppq.core.data import convert_any_to_torch_tensor
 from ppq.executor.torch import TorchExecutor
 from ppq.quantization.analyse.graphwise import graphwise_error_analyse
 
-BATCHSIZE        = 1
-INPUT_SHAPES     = {'input.1': [BATCHSIZE, 3, 224, 224]}
+INPUT_SHAPES     = {'input.1': [1, 3, 224, 224]}
 DEVICE           = 'cuda'
 QUANT_PLATFORM   = TargetPlatform.TRT_INT8
 ONNX_PATH        = 'model.onnx'
@@ -37,7 +36,7 @@ def collate_fn(batch: dict) -> torch.Tensor:
 # 我们将调度方法修改为 conservative，并且要求 PPQ 启动量化微调
 # ------------------------------------------------------------
 QSetting = QuantizationSettingFactory.default_setting()
-QSetting.lsq_optimization = True
+QSetting.lsq_optimization = False
 
 # ------------------------------------------------------------
 # 准备好 QuantizationSetting 后，我们加载模型，并且要求 ppq 按照规则完成图调度
@@ -47,6 +46,9 @@ graph = dispatch_graph(graph=graph, platform=QUANT_PLATFORM)
 for name in graph.inputs:
     if name not in INPUT_SHAPES:
         raise KeyError(f'Graph Input {name} needs a valid shape.')
+
+if len(graph.outputs) != 1:
+    raise ValueError('This Script Requires graph to have only 1 output.')
 
 # ------------------------------------------------------------
 # 生成校准所需的数据集，我们准备开始完成网络量化任务
@@ -72,6 +74,7 @@ for sample in calibration_dataset:
 graphwise_error_analyse(
     graph=quantized, running_device=DEVICE, 
     collate_fn=collate_fn, dataloader=calibration_dataset)
+
 export_ppq_graph(graph=quantized, platform=TargetPlatform.ONNXRUNTIME,
                  graph_save_to=ONNX_OUTPUT_PATH)
 
@@ -84,18 +87,18 @@ except ImportError as e:
     raise Exception('Onnxruntime is not installed.')
 
 sess = onnxruntime.InferenceSession(ONNX_OUTPUT_PATH, providers=['CUDAExecutionProvider'])
+output_name = sess.get_outputs()[0].name
+
 onnxruntime_outputs = []
 for sample in calibration_dataset:
     onnxruntime_outputs.append(sess.run(
-        output_names=[name for name in graph.outputs], 
+        output_names=[output_name], 
         input_feed={k: convert_any_to_numpy(v) for k, v in sample.items()}))
 
-name_of_output = [name for name in graph.outputs]
-for oidx, output in enumerate(name_of_output):
-    y_pred, y_real = [], []
-    for reference_output, onnxruntime_output in zip(reference_outputs, onnxruntime_outputs):
-        y_pred.append(convert_any_to_torch_tensor(reference_output[oidx], device='cpu').unsqueeze(0))
-        y_real.append(convert_any_to_torch_tensor(onnxruntime_output[oidx], device='cpu').unsqueeze(0))
-    y_pred = torch.cat(y_pred, dim=0)
-    y_real = torch.cat(y_real, dim=0)
-    print(f'Simulating Error For {output}: {torch_snr_error(y_pred=y_pred, y_real=y_real).item() :.4f}')
+y_pred, y_real = [], []
+for reference_output, onnxruntime_output in zip(reference_outputs, onnxruntime_outputs):
+    y_pred.append(convert_any_to_torch_tensor(reference_output[0], device='cpu').unsqueeze(0))
+    y_real.append(convert_any_to_torch_tensor(onnxruntime_output[0], device='cpu').unsqueeze(0))
+y_pred = torch.cat(y_pred, dim=0)
+y_real = torch.cat(y_real, dim=0)
+print(f'Simulating Error For {output_name}: {torch_snr_error(y_pred=y_pred, y_real=y_real).item() * 100 :.4f}%')
