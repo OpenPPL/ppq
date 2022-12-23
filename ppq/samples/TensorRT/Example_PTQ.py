@@ -1,69 +1,78 @@
-# ---------------------------------------------------------------
-# 这个脚本向你展示了如何使用 tensorRT 对 PPQ 导出的模型进行推理
+import os
 
-# This script shows you how to export ppq internal graph to tensorRT
-# ---------------------------------------------------------------
-
-# For this inference test, all test data is randomly picked.
-# If you want to use real data, just rewrite the defination of SAMPLES
+import numpy as np
 import torch
-from ppq import *
-from ppq.api import *
-from tqdm import tqdm
+import torchvision
 
-QUANT_PLATFROM = TargetPlatform.TRT_INT8
-MODEL          = 'model.onnx'
-INPUT_SHAPE    = [1, 3, 224, 224]
-SAMPLES        = [torch.rand(size=INPUT_SHAPE) for _ in range(256)] # rewirte this to use real data.
-DEVICE         = 'cuda'
-FINETUNE       = True
-QS             = QuantizationSettingFactory.default_setting()
-EXECUTING_DEVICE = 'cuda'
-REQUIRE_ANALYSE  = True
+from ppq import TargetPlatform, graphwise_error_analyse, TorchExecutor
+from ppq.api import ENABLE_CUDA_KERNEL, export_ppq_graph, load_torch_model
+from ppq.core import convert_any_to_numpy
+from ppq.quantization.optim import *
+import ppq.lib as PFL
 
-# -------------------------------------------------------------------
-# 下面向你展示了常用参数调节选项：
-# -------------------------------------------------------------------
-QS.lsq_optimization = FINETUNE                                  # 启动网络再训练过程，降低量化误差
-QS.lsq_optimization_setting.steps = 500                         # 再训练步数，影响训练时间，500 步大概几分钟
-QS.lsq_optimization_setting.collecting_device = 'cuda'          # 缓存数据放在那，cuda 就是放在 gpu，如果显存超了你就换成 'cpu'
-QS.dispatching_table.append(operation='OP NAME', platform=TargetPlatform.FP32) # 你可以把量化的不太好的算子送回 FP32
+calibration_dataloader = []
+for file in os.listdir('imagenet'):
+    path = os.path.join('imagenet', file)
+    arr  = np.fromfile(path, dtype=np.dtype('float32')).reshape([1, 3, 224, 224])
+    calibration_dataloader.append(torch.tensor(arr))
 
-print('正准备量化你的网络，检查下列设置:')
-print(f'TARGET PLATFORM      : {QUANT_PLATFROM.name}')
-print(f'NETWORK INPUTSHAPE   : {INPUT_SHAPE}')
-
-# ENABLE CUDA KERNEL 会加速量化效率 3x ~ 10x，但是你如果没有装相应编译环境的话是编译不了的
-# 你可以尝试安装编译环境，或者在不启动 CUDA KERNEL 的情况下完成量化：移除 with ENABLE_CUDA_KERNEL(): 即可
 with ENABLE_CUDA_KERNEL():
-    qir = quantize_onnx_model(
-        onnx_import_file=MODEL, calib_dataloader=SAMPLES, calib_steps=128, setting=QS,
-        input_shape=INPUT_SHAPE, collate_fn=lambda x: x.to(EXECUTING_DEVICE), 
-        platform=QUANT_PLATFROM, do_quantize=True)
+    model = torchvision.models.mnasnet1_0(pretrained=True).cuda()
+    graph = load_torch_model(model=model, sample=torch.zeros(size=[1, 3, 224, 224]).cuda())
+    # ------------------------------------------------------------
+    # 我们首先进行标准的量化流程，为所有算子初始化量化信息，并进行 Calibration
+    # ------------------------------------------------------------
+    quantizer   = PFL.Quantizer(platform=TargetPlatform.TRT_INT8, graph=graph) # 取得 TRT_INT8 所对应的量化器
+    dispatching = PFL.Dispatcher(graph=graph).dispatch(          # 生成调度表
+        quant_types=quantizer.quant_operation_types)
 
-    # -------------------------------------------------------------------
-    # PPQ 计算量化误差时，使用信噪比的倒数作为指标，即噪声能量 / 信号能量
-    # 量化误差 0.1 表示在整体信号中，量化噪声的能量约为 10%
-    # 你应当注意，在 graphwise_error_analyse 分析中，我们衡量的是累计误差
-    # 网络的最后一层往往都具有较大的累计误差，这些误差是其前面的所有层所共同造成的
-    # 你需要使用 layerwise_error_analyse 逐层分析误差的来源
-    # -------------------------------------------------------------------
-    print('正计算网络量化误差(SNR)，最后一层的误差应小于 0.1 以保证量化精度:')
-    reports = graphwise_error_analyse(
-        graph=qir, running_device=EXECUTING_DEVICE, steps=32,
-        dataloader=SAMPLES, collate_fn=lambda x: x.to(EXECUTING_DEVICE))
-    for op, snr in reports.items():
-        if snr > 0.1: ppq_warning(f'层 {op} 的累计量化误差显著，请考虑进行优化')
+    # 为算子初始化量化信息
+    for op in graph.operations.values():
+        quantizer.quantize_operation(
+            op_name = op.name, platform = dispatching[op.name])
 
-    print('网络量化结束，正在生成目标文件:')
+    # 初始化执行器
+    collate_fn = lambda x: x.to('cuda')
+    executor = TorchExecutor(graph=graph, device='cuda')
+    executor.tracing_operation_meta(inputs=torch.zeros(size=[1, 3, 224, 224]).cuda())
+    executor.load_graph(graph=graph)
+
+    # ------------------------------------------------------------
+    # 创建优化管线，由于后续还要继续训练我们的模型，我们不能在此处调用
+    # ParameterBakingPass()，一旦模型权重完成烘焙，则它们不能被进一步调整
+    # ------------------------------------------------------------
+    pipeline = PFL.Pipeline([
+        QuantizeSimplifyPass(),
+        QuantizeFusionPass(
+            activation_type=quantizer.activation_fusion_types),
+        ParameterQuantizePass(),
+        RuntimeCalibrationPass(),
+        PassiveParameterQuantizePass(),
+        QuantAlignmentPass(force_overlap=True),
+    ])
+
+with ENABLE_CUDA_KERNEL():
+    # 调用管线完成量化
+    pipeline.optimize(
+        graph=graph, dataloader=calibration_dataloader, verbose=True, 
+        calib_steps=32, collate_fn=collate_fn, executor=executor)
+
+    graphwise_error_analyse(
+        graph=graph, running_device='cuda', dataloader=calibration_dataloader, 
+        collate_fn=lambda x: x.cuda())
+
     export_ppq_graph(
-        graph=qir, platform=TargetPlatform.TRT_INT8,
-        graph_save_to = 'model_int8.onnx', 
-        config_save_to='model_int8.json')
+        graph=graph, platform=TargetPlatform.TRT_INT8, 
+        graph_save_to='Output/quantized.onnx', 
+        config_save_to='Output/quantized.json')
+    
+    results, executor = [], TorchExecutor(graph=graph)
+    for idx, data in enumerate(calibration_dataloader):
+        arr = convert_any_to_numpy(executor(data.cuda())[0])
+        arr.tofile(f'Output/Result/{idx}.bin')
 
-    # -------------------------------------------------------------------
-    # 完成量化后，你可以使用 create_engine.py 生成 trt engine.
-    # 它位于 ppq / samples / TensorRT 文件夹下
-    # 你可以使用 trt_infer.py 文件执行 engine 的推理
-    # 你可以使用 Example_Profiling.py 文件执行 engine 的性能分析
-    # -------------------------------------------------------------------
+    from ppq.utils.TensorRTUtil import build_engine
+    build_engine(onnx_file='Output/quantized.onnx', int8_scale_file='Output/quantized.json', engine_file='Output/INT8.engine', int8=True, fp16=True)
+    build_engine(onnx_file='Output/quantized.onnx', engine_file='Output/FP16.engine', int8=False, fp16=True)
+    build_engine(onnx_file='Output/quantized.onnx', engine_file='Output/FP32.engine', int8=False, fp16=False)
+
