@@ -179,7 +179,7 @@ def graphwise_error_analyse(
         if method == 'snr': method_str = 'NOISE:SIGNAL POWER RATIO'
         if method == 'cosine': method_str = 'COSINE SIMILARITY'
         if method == 'mse': method_str = 'MSE LOSS(UNSCALED)'
-        MeasurePrinter(results, order='large_to_small', measure=method_str).print()
+        MeasurePrinter(results, order='large_to_small', measure=method_str, percentage=method in {'snr', 'cosine'}).print()
     return results
 
 
