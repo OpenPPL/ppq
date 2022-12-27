@@ -6,6 +6,9 @@ from .graph import Operation, Variable
 
 
 class GraphCommandType(Enum):
+    # convert value inside graph to torch.tensor(usually from numpy)
+    CONVERT_TO_TENSOR = 0
+    
     # 图上权重部署到 GPU(tensor)，由 RunnableGraph 进行处理
     # deploy graph weights to GPU
     DEPLOY_TO_CUDA = 1
@@ -49,9 +52,6 @@ class GraphCommandType(Enum):
     # 移除所有孤立节点
     # remove all isolated operators
     DELETE_ISOLATED = 14
-    # 尝试用 add 替换 sub
-    # try use Add op to replace Sub op
-    REPLACE_SUB = 15
     # 将所有参数变量进行分裂（只允许一个 dest_op ）
     # split variables and each variable is allowed to be used by only one operator
     FORMAT_PARAMETERS = 16
@@ -100,14 +100,17 @@ class GraphCommandType(Enum):
     # 升级图中的 resize 到 opset 11
     FORMAT_RESIZE = 31
 
-    # 单独的BN转成conv1x1
-    # fuse Computing layer and BN
-    FORMAT_SNG_BN = 32
-    
+    # Replace Single Batchnorm to some op else.
+    REPLACE_BATCHNORM_TO_CONV = 32
+    REPLACE_BATCHNORM_TO_SCALE = 33
+
+    # Fuse Bias add to Gemm, Conv and ConvTranspose
+    FUSE_BIAS_ADD = 34
+
     # 移除 Identity
     # remove all identity ops from your graph
-    REMOVE_IDENTITY = 33
-    
+    REMOVE_IDENTITY = 35
+
 class GraphCommand():
     def __init__(self, command_type: GraphCommandType, **kwargs) -> None:
         assert isinstance(command_type, GraphCommandType), \

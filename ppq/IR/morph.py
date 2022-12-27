@@ -1,7 +1,7 @@
 from typing import Any, List
 
-import numpy as np
 import torch
+
 from ppq.core import (DataType, convert_any_to_python_primary_type,
                       convert_any_to_torch_tensor, ppq_warning)
 from ppq.IR.search import SearchableGraph
@@ -23,6 +23,10 @@ class GraphReplacer(GraphCommandProcessor):
             assert isinstance(command, ReplaceVariableCommand), \
                 'Use ReplaceOperationCommand instead of GraphCommand'
             return self.replace_var(command.op_name, command.replace_to)
+        if command.command_type == GraphCommandType.REPLACE_BATCHNORM_TO_CONV:
+            return self.replace_batchnorm_to_conv()
+        if command.command_type == GraphCommandType.REPLACE_BATCHNORM_TO_SCALE:
+            return self.replace_batchnorm_to_scale()
 
     def replace_op(self, op_name: str, replace_to: Operation):
         if op_name not in self._graph.operations:
@@ -71,7 +75,80 @@ class GraphReplacer(GraphCommandProcessor):
         return [
             GraphCommandType.REPLACE_OP,
             GraphCommandType.REPLACE_VAR,
+            GraphCommandType.REPLACE_BATCHNORM_TO_CONV,
+            GraphCommandType.REPLACE_BATCHNORM_TO_SCALE,
         ]
+
+    def replace_batchnorm_to_conv(self, dimension: int = 2):
+        """ Replace Batchnorm to 1D Convolution. """
+        for op in self.graph.operations.values():
+            if op.type == 'BatchNormalization':
+                ppq_warning(f'Isolated BatchNormalization({op.name}) was detected, '
+                            f'PPQ will replace it to 1*1 Convolution({dimension}D).')
+
+                assert len(op.parameters) == 4, "BatchNorm should have 4 parameters, namely alpha, beta, mean, var"
+                alpha = op.parameters[0].value
+                beta  = op.parameters[1].value
+                mean  = op.parameters[2].value
+                var   = op.parameters[3].value
+                epsilon = op.attributes.get("epsilon", 1e-5)
+                
+                with torch.no_grad():
+                    w = alpha / torch.sqrt(var + epsilon)
+                    w = w.reshape([-1, 1] + [1] * dimension)
+                    b = alpha * (-mean) / torch.sqrt(var + epsilon) + beta
+
+                op.type = 'Conv'
+                op.attributes.clear()
+                op.attributes['kernel_shape'] = [1] * dimension
+                op.attributes['strides']      = [1] * dimension
+                op.attributes['dilations']    = [1] * dimension
+                op.attributes['pads']         = [0, 0] * dimension
+                op.attributes['group']        = w.numel()
+
+                # remove last 2 variable, make conv has exact 3 input
+                self.graph.remove_variable(op.inputs[-1])
+                self.graph.remove_variable(op.inputs[-1])
+
+                with torch.no_grad():
+                    op.inputs[1].value = w
+                    op.inputs[2].value = b
+
+    def replace_batchnorm_to_scale(self, dimension: int = 4):
+        """ Replace Batchnorm to Mul + Add. 
+        
+        By default this function created a 4d mul + add corresponding to NCHW layout.
+        """
+        graph = self.graph
+        for op in [_ for _ in self.graph.operations.values()]:
+
+            if op.type == 'BatchNormalization':
+                ppq_warning(f'Isolated BatchNormalization({op.name}) was detected, '
+                            f'PPQ will replace it to Mul + Add({dimension}D).')
+                
+                assert len(op.parameters) == 4, "BatchNorm should have 4 parameters, namely alpha, beta, mean, var"
+                alpha = op.parameters[0].value
+                beta  = op.parameters[1].value
+                mean  = op.parameters[2].value
+                var   = op.parameters[3].value
+                epsilon = op.attributes.get("epsilon", 1e-5)
+
+                with torch.no_grad():
+                    multiplier = alpha / torch.sqrt(var + epsilon)
+                    bias = (-mean) * multiplier + beta
+
+                for var in [_ for _ in op.parameters]: graph.remove_variable(var)
+                graph.create_variable(value=multiplier, is_parameter=True, dest_ops=[op])
+                op.type = 'Mul'
+                op.attributes.clear()
+
+                add = graph.create_operation(op_type='Add')
+                graph.insert_op_after(A=add, B=op)
+                graph.create_variable(value=bias, is_parameter=True, dest_ops=[add])
+                
+                if dimension > 1:
+                    op.parameters[0].value = op.parameters[0].value.reshape([1, -1] + [1] * (dimension - 2))
+                    add.parameters[0].value = add.parameters[0].value.reshape([1, -1] + [1] * (dimension - 2))
 
 
 class GraphFormatter(GraphCommandProcessor):
@@ -83,14 +160,13 @@ class GraphFormatter(GraphCommandProcessor):
             GraphCommandType.FORMAT_CAST,
             GraphCommandType.FORMAT_INT64_CONSTANT,
             GraphCommandType.DELETE_ISOLATED,
-            GraphCommandType.REPLACE_SUB,
             GraphCommandType.FORMAT_PARAMETERS,
             GraphCommandType.FORMAT_CONSTANT_INPUT,
             GraphCommandType.FORMAT_SLICE,
             GraphCommandType.TRUNCATE_ON_VAR,
             GraphCommandType.FORMAT_RESIZE,
-            GraphCommandType.FORMAT_SNG_BN,
-            GraphCommandType.REMOVE_IDENTITY
+            GraphCommandType.REMOVE_IDENTITY,
+            GraphCommandType.CONVERT_TO_TENSOR,
         ]
 
     def process(self, command: GraphCommand) -> Any:
@@ -106,8 +182,6 @@ class GraphFormatter(GraphCommandProcessor):
             return self.delete_isolated()
         if command.command_type == GraphCommandType.FORMAT_INT64_CONSTANT:
             return self.format_int64_constant()
-        if command.command_type == GraphCommandType.REPLACE_SUB:
-            return self.replace_substraction()
         if command.command_type == GraphCommandType.FORMAT_PARAMETERS:
             return self.format_parameter_variables()
         if command.command_type == GraphCommandType.FORMAT_CONSTANT_INPUT:
@@ -116,13 +190,13 @@ class GraphFormatter(GraphCommandProcessor):
             return self.format_slice()
         if command.command_type == GraphCommandType.FORMAT_RESIZE:
             return self.format_resize()
-        if command.command_type == GraphCommandType.FORMAT_SNG_BN:
-            return self.format_sng_bn()
         if command.command_type == GraphCommandType.TRUNCATE_ON_VAR:
             assert isinstance(command, TruncateGraphCommand), f'Use TruncateGraphCommand here.'
             return self.truncate_on_var(command.var, command.mark_as_output)
         if command.command_type == GraphCommandType.REMOVE_IDENTITY:
             return self.remove_identity()
+        if command.command_type == GraphCommandType.CONVERT_TO_TENSOR:
+            return self.convert_to_tensor()
 
     def format_slice(self) -> None:
         """
@@ -240,81 +314,6 @@ class GraphFormatter(GraphCommandProcessor):
             if 'indices' in operation.attributes:
                 operation.attributes['gather_index'] = operation.attributes['indices']
                 operation.attributes.pop('indices')
-
-    def format_sng_bn(self) -> None:
-        """
-        batchnormal: 这个算子独立出现的时候（前面没有Conv），我们考虑把它合进一个1x1的conv
-        """
-        interested_ops = []
-        for operation in self.graph.operations.values():
-            if operation.type == "BatchNormalization":
-                upstream_ops = self.graph.get_upstream_operations(operation)  # 假设bn上游只有一个op或者没有op
-                down_ops = self.graph.get_downstream_operations(operation)
-                
-                if len(upstream_ops) == 0 and len(down_ops) == 0:
-                    continue
-                # bn是模型的第一个op
-                if len(upstream_ops) == 0 and len(down_ops) != 0:
-                    interested_ops.append(operation)
-                    continue
-                assert len(upstream_ops) == 1, f"BN op({operation.name}) should have only one input"
-                if upstream_ops[0].type not in ["Conv", "Gemm", "ConvTranspose"]:
-                    interested_ops.append(operation)
-                else:
-                    down_ops = self.graph.get_downstream_operations(upstream_ops[0])
-                    if len(down_ops) != 1:
-                        interested_ops.append(operation)
-
-        for bn_op in interested_ops:
-            assert isinstance(bn_op, Operation)
-            assert len(bn_op.parameters) == 4, "BatchNorm should have 4 parameters, namely alpha, beta, mean, var"
-            alpha = bn_op.parameters[0].value
-            beta  = bn_op.parameters[1].value
-            mean  = bn_op.parameters[2].value
-            var   = bn_op.parameters[3].value
-            epsilon = bn_op.attributes.get("epsilon", 1e-5)
-
-            input_var = bn_op.inputs[0]
-            input_channel = alpha.shape[0]
-            bn_out_var = bn_op.outputs[0]
-            w = np.ones((input_channel, 1, 1, 1), dtype=np.float32)  # 1x1卷积 group卷积
-            b = np.zeros(
-                shape=w.shape[1] * input_channel,
-                dtype=np.float32,
-            )
-            scale = alpha / np.sqrt(var + epsilon)
-            w = w * scale.reshape([-1, 1, 1, 1])
-            b = alpha * (b - mean) / np.sqrt(var + epsilon) + beta
-            conv_op = Operation(
-                name=bn_op.name + "_conv",
-                op_type="Conv",
-                attributes=dict(
-                    kernel_shape=[1, 1], strides=[1, 1], dilations=[1, 1], pads=[0, 0, 0, 0], group=input_channel
-                ),
-                inputs=[input_var],
-                outputs=[bn_out_var],
-                platform=bn_op.platform,
-            )
-            self.graph.append_operation(conv_op)
-
-            w_var = self.graph.create_variable(
-                name=conv_op.name + "_1x1_weight", value=w, is_parameter=True, dest_ops=[conv_op]
-            )
-            b_var = self.graph.create_variable(
-                name=conv_op.name + "_1x1_bias", value=b, is_parameter=True, dest_ops=[conv_op]
-            )
-            conv_op.inputs.extend([w_var, b_var])
-            self.graph.variables[w_var.name] = w_var
-            self.graph.variables[b_var.name] = b_var
-
-            if bn_op.outputs[0].name in self.graph.outputs:
-                del self.graph.outputs[bn_op.outputs[0].name]
-                self.graph.outputs.update({conv_op.outputs[0].name: conv_op.outputs[0]})
-
-            self.graph.remove_operation(bn_op)
-
-            bn_out_var.source_op = conv_op
-            input_var.dest_ops.append(conv_op)
 
     def format_cast(self) -> None:
         """cast op 的参数 to 默认为 int，使用该函数将其封装为 ppq.core.DataType."""
@@ -466,40 +465,6 @@ class GraphFormatter(GraphCommandProcessor):
             # pop variable from graph
             self.graph.remove_variable(var)
 
-    def replace_substraction(self) -> None:
-        substractions = []
-        for operation in self.graph.operations.values():
-            if operation.type == 'Sub':
-                substractions.append(operation)
-
-        for operation in substractions:
-            assert isinstance(operation, Operation)
-            subtractor = operation.inputs[-1].source_op
-            substractor_var = operation.inputs[-1]
-
-            # create a neg operation
-            neg_op = Operation(name=subtractor.name + '_neg', op_type='Neg', attributes={})
-            self.graph.append_operation(neg_op)
-
-            # create related variables
-            neg_var = Variable(name=subtractor.name + '_neg_1', dest_ops=[operation], source_op=neg_op)
-
-            # link var to op
-            neg_op.inputs.append(substractor_var)
-            neg_op.outputs.append(neg_var)
-
-            operation.inputs.remove(substractor_var)
-            operation.inputs.append(neg_var)
-
-            substractor_var.dest_ops.remove(operation)
-            substractor_var.dest_ops.append(neg_op)
-
-            # add var to graph
-            self.graph.append_variable(neg_var)
-
-            # replace sub to add
-            operation._type = 'Add'
-
     def __delete_constant_input(self, op: Operation, input_idx: int):
         op_name = op.name
         if op_name not in self._graph.operations:
@@ -536,17 +501,28 @@ class GraphFormatter(GraphCommandProcessor):
         for op in removing_ops:
             self.graph.remove_operation(op, keep_coherence=True)
 
+    def convert_to_tensor(self):
+        """ Convert anything inside your network to torch tensor. (Usually from numpy)"""
+        for var in self.graph.variables.values():
+            if var.value is not None:
+                var.value = convert_any_to_torch_tensor(var.value)
+
+
 class GraphMerger(GraphCommandProcessor):
     """Graph Merger implements all graph fusion related functions."""
     def _acceptable_command_types(self) -> List[GraphCommandType]:
         return [
             # add more extensions in the future
-            GraphCommandType.FUSE_BN
+            GraphCommandType.FUSE_BN,
+            GraphCommandType.FUSE_BIAS_ADD
         ]
 
     def process(self, command: GraphCommand) -> Any:
         if command.command_type == GraphCommandType.FUSE_BN:
             return self.fuse_bn()
+        if command.command_type == GraphCommandType.FUSE_BIAS_ADD:
+            return self.fuse_bias_add()
+
 
     def fuse_bn(self):
         search_engine = SearchableGraph(graph=self.graph)
@@ -579,41 +555,41 @@ class GraphMerger(GraphCommandProcessor):
 
             if computing_op.num_of_parameters == 1:
                 w = computing_op.parameters[0].value  # no bias.
-                assert isinstance(w, np.ndarray), 'values of parameters are assumed numpy arrays'
+                assert isinstance(w, torch.Tensor), 'values of parameters are assumed as torch Tensor'
                 if computing_op.type == 'ConvTranspose':
-                    b = np.zeros(shape=w.shape[1] * computing_op.attributes.get('group', 1), dtype=np.float32)
+                    b = torch.zeros(size=w.shape[1] * computing_op.attributes.get('group', 1))
                 elif computing_op.type == 'Gemm' and computing_op.attributes.get('transB', 0) == 0:
-                    b = np.zeros(shape=w.shape[1], dtype=np.float32)
+                    b = torch.zeros(size=w.shape[1])
                 else:
-                    b = np.zeros(shape=w.shape[0], dtype=np.float32)
+                    b = torch.zeros(size=w.shape[0])
             else:
                 w, b = [var.value for var in computing_op.parameters[: 2]]  # has bias.
 
             if computing_op.type == 'Conv':
 
                 # calculate new weight and bias
-                scale = alpha / np.sqrt(var + epsilon)
+                scale = alpha / torch.sqrt(var + epsilon)
                 w = w * scale.reshape([-1] + [1] * (w.ndim - 1))
-                b = alpha * (b - mean) / np.sqrt(var + epsilon) + beta
+                b = alpha * (b - mean) / torch.sqrt(var + epsilon) + beta
 
             elif computing_op.type == 'Gemm':
 
                 # calculate new weight and bias
-                scale = alpha / np.sqrt(var + epsilon)
+                scale = alpha / torch.sqrt(var + epsilon)
                 if computing_op.attributes.get('transB', 0):
                     w = w * scale.reshape([-1, 1])
                 else:
                     w = w * scale.reshape([1, -1])
-                b = alpha * (b - mean) / np.sqrt(var + epsilon) + beta
+                b = alpha * (b - mean) / torch.sqrt(var + epsilon) + beta
 
             elif computing_op.type == 'ConvTranspose':
 
-                scale = alpha / np.sqrt(var + epsilon)
+                scale = alpha / torch.sqrt(var + epsilon)
                 group = computing_op.attributes.get('group', 1)
                 scale = scale.reshape([group, 1, -1, 1, 1])
                 w = w.reshape([group, -1, w.shape[1], w.shape[2], w.shape[3]]) * scale
                 w = w.reshape([w.shape[0] * w.shape[1], w.shape[2], w.shape[3], w.shape[4]])
-                b = alpha * (b - mean) / np.sqrt(var + epsilon) + beta
+                b = alpha * (b - mean) / torch.sqrt(var + epsilon) + beta
             else:
                 raise TypeError(
                     f'Unexpected op type {computing_op.type}. '
@@ -646,7 +622,6 @@ class GraphMerger(GraphCommandProcessor):
 
             self.graph.append_variable(weight_var)
             self.graph.append_variable(bias_var)
-
 
     def fuse_gemm(self):
         """Fuse MatMul + add into a singal Gemm
@@ -723,7 +698,6 @@ class GraphMerger(GraphCommandProcessor):
                 if _is_replaceable(op) == False:
                     continue
                 op.type = "Gemm"
-
 
     def fuse_layernorm(self, exclusive_search: bool = False):
         """Fuse Layernormalization with pattern matching."""
@@ -853,7 +827,6 @@ class GraphMerger(GraphCommandProcessor):
         if not fused:
             ppq_warning('No valid layernorm pattern was found, check your graph again.')
 
-
     def fuse_skiplayernorm(self):
         """ Fuse Add + Layernorm to SkipLayernorm, SkipLayernorm is a plugin operation defined by TensorRT """
         fused         = False
@@ -877,7 +850,6 @@ class GraphMerger(GraphCommandProcessor):
         # final check, if no valid pattern was found, we give a warning.
         if not fused:
             ppq_warning('No valid Skip Layernorm pattern was found, check your graph again.')
-
 
     def fuse_gelu(self):
         """ Fuse Gelu
@@ -919,58 +891,46 @@ class GraphMerger(GraphCommandProcessor):
         if not fused:
             ppq_warning('No valid Gelu pattern was found, check your graph again.')
 
+    def fuse_bias_add(self):
+        """ 
+        Fuse Pattern like Conv + Add, ConvTranspose + Add, Gemm + Add
+        This fusion will require a constant input as bias.
+        """
+        graph = self.graph
+        for op in [_ for _ in graph.operations.values()]:
+            if op.type in {'Conv', 'ConvTranspose', 'Gemm'}:
+                # check if current op has only 1 downstream op
+                channel_dimension = 1 # NCHW, NCHWD, NCH
+                if op.type == 'Gemm': channel_dimension
+                if len(graph.get_downstream_operations(op)) == 1:
+                    down = graph.get_downstream_operations(op)[0]
+                    
+                    if down.type == 'Add':
+                        bias = down.parameters[0]
+                        if op.type not in {'Gemm'}:
+                            # check if it is a bias add
+                            if not bias.value.dim() == op.parameters[0].value.dim(): continue
+                            if not bias.value.squeeze().dim() == 1: continue
+                            if bias.value.shape[channel_dimension] == 1: continue
+                            bias.value = bias.value.squeeze() # conv bias can only be 1d
+                        else:
+                            # Gemm bias can be any shape.
+                            # see https://github.com/onnx/onnx/blob/main/docs/Changelog.md#Gemm-11
+                            pass
+                    
+                        # ready for fusion
+                        if op.num_of_input == 3: # already has a bias
+                            pass
+                        else:
+                            graph.create_variable(is_parameter=True, value=bias.value, dest_ops=[op])
+                            graph.remove_operation(removing_op=down, keep_coherence=True)
 
-    def constant_folding(self):
-        """ Fuse Mul + Conv, Mul + Gemm, Mul + Matmul """
-        fused         = False
-        search_engine = SearchableGraph(graph=self.graph)
-        
-        matches = search_engine.pattern_matching(
-            patterns=[lambda x: x.type in {'Conv', 'Gemm', 'MatMul'}, 'Mul'], 
-            edges=[[0, 1]], exclusive=True)
-
-        for op, mul in matches:
-            if mul.num_of_parameter == 1 and op.inputs[1].is_parameter:
-                if mul.parameters[0].value.size == 1:
-                    mul_value = mul.parameters[0].value
-                    op.inputs[1].value = torch.tensor(mul_value) * torch.tensor(op.inputs[1].value) 
-
-                removing_var = []
-                removing_var.extend(op.outputs)
-                output_var = mul.outputs[0]
-
-                self.graph.remove_operation(mul)
-                for var in removing_var:
-                    self.graph.remove_variable(var)
-
-                op.outputs.append(output_var)
-                fused = True
-
-        matches = search_engine.pattern_matching(
-            patterns=['Mul', lambda x: x.type in {'Conv', 'Gemm', 'MatMul'}], 
-            edges=[[0, 1]], exclusive=True)
-
-        for mul, op in matches:
-            if mul.num_of_parameter == 1 and op.inputs[1].is_parameter:
-                if mul.parameters[0].value.size == 1:
-                    mul_value = mul.parameters[0].value
-                    op.inputs[1].value *= torch.tensor(mul_value) * torch.tensor(op.inputs[1].value) 
-            
-                removing_var = []
-                removing_var.extend(mul.outputs)
-                input_var = mul.inputs[0] if mul.inputs[0].is_parameter else mul.inputs[1]
-
-                self.graph.remove_operation(mul)
-                for var in removing_var:
-                    self.graph.remove_variable(var)
-                
-                op._input_vars = [[input_var] + op._input_vars]
-                fused = True
-
-        # final check, if no valid pattern was found, we give a warning.
-        if not fused:
-            ppq_warning('No valid Constant pattern was found, check your graph again.')
-
+    def fuse_scale(self):
+        "Fuse Conv + Mul or Conv + Add"
+        "Fuse ConvTranspose + Mul or ConvTranspose + Add"
+        "Fuse Gemm + Mul or Gemm + Add"
+        "Fuse MatMul + Mul"
+        pass
 
     def fuse_selfattention(self):
         search_engine = SearchableGraph(graph=self.graph)
@@ -1174,6 +1134,7 @@ class GraphDecomposer(GraphCommandProcessor):
 
     def decompose_gru(self):
         pass
+
 
 class GraphDeviceSwitcher(GraphCommandProcessor):
     """Graph Device Switcher insert necessary switcher operation for graph
