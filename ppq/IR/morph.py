@@ -906,6 +906,8 @@ class GraphMerger(GraphCommandProcessor):
                     down = graph.get_downstream_operations(op)[0]
                     
                     if down.type == 'Add':
+                        if down.num_of_parameter != 1: continue
+                        
                         bias = down.parameters[0]
                         if op.type not in {'Gemm'}:
                             # check if it is a bias add
