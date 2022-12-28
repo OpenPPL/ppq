@@ -183,7 +183,7 @@ class GraphFormatter(GraphCommandProcessor):
         if command.command_type == GraphCommandType.FORMAT_INT64_CONSTANT:
             return self.format_int64_constant()
         if command.command_type == GraphCommandType.FORMAT_PARAMETERS:
-            return self.format_parameter_variables()
+            return self.format_parameter()
         if command.command_type == GraphCommandType.FORMAT_CONSTANT_INPUT:
             return self.format_constant_input()
         if command.command_type == GraphCommandType.FORMAT_SLICE:
@@ -437,30 +437,18 @@ class GraphFormatter(GraphCommandProcessor):
             for var in var_blacklist:
                 self.graph.remove_variable(var)
 
-    def format_parameter_variables(self) -> None:
-        vars = []
-        for var in self.graph.variables.values():
+    def format_parameter(self) -> None:
+        """ Split parameter that has more than 1 dest ops """
+        print('FORMAT PARAMETER RUNNING.')
+        for var in [_ for _ in self.graph.variables.values()]:
             if var.is_parameter and len(var.dest_ops) > 1:
-                # found parameter with multiple destination operations
-                # split parameter variable
-                vars.append(var)
-
-        for var in vars:
-            assert isinstance(var, Variable)
-            for idx, dest_op in enumerate(var.dest_ops.copy()):
-                # create variables
-                sub_var = Variable(
-                    name=var.name + '_' + str(idx),
-                    value=var.value, is_parameter=True,
-                    dest_ops=[dest_op], source_op=None)
-                self.graph.append_variable(sub_var)
-
-                # replace original variable with splited one.
-                dest_op.inputs[dest_op.inputs.index(var)] = sub_var
-                var.dest_ops.remove(dest_op)
-
-            # pop variable from graph
-            self.graph.remove_variable(var)
+                for op in var.dest_ops:
+                    created = self.graph.create_variable(
+                        value=var.value.clone(), is_parameter=True)
+                    op.inputs[op.inputs.index(var)] = created
+                    created.dest_ops.append(op)
+                var.dest_ops.clear()
+                self.graph.remove_variable(var)
 
     def __delete_constant_input(self, op: Operation, input_idx: int):
         op_name = op.name
