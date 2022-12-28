@@ -9,4 +9,3 @@ from .quantize import (DeviceSwitchOP, QuantableGraph, QuantableOperation,
                        QuantableVariable)
 from .search import (Path, GraphPattern, SearchableGraph, TraversalCommand,
                      PatternMatchHelper)
-from .training import TrainableGraph
