@@ -181,13 +181,11 @@ class HorizontalLayerSplitPass(QuantizationOptimizationPass):
                         platform=op1.platform)
                     input_var, output_var = op1.inputs[0], op1.outputs[0]
                     graph.create_link_with_op(
-                        variable=op1.inputs[0], upstream_op=input_var.source_op, 
-                        downstream_op=op2)
+                        variable=op1.inputs[0], A=input_var.source_op, 
+                        B=op2)
                     
                     # create weight for cloned operation.
-                    graph.create_link_with_op(
-                        variable=graph.create_variable(value=op1.inputs[1].value.clone(), is_parameter=True), 
-                        upstream_op=None, downstream_op=op2)
+                    graph.create_variable(value=op1.inputs[1].value.clone(), is_parameter=True, dest_ops=[op2])
 
                     # set splited value
                     op1.inputs[1].value.copy_(r_value)
@@ -197,12 +195,8 @@ class HorizontalLayerSplitPass(QuantizationOptimizationPass):
                     adder = graph.create_operation(op_type='Add', platform=op1.platform, outputs=[output_var])
                     output_var.source_op = adder
                     
-                    graph.create_link_with_op(
-                        variable=graph.create_variable(), 
-                        upstream_op=op1, downstream_op=adder)
-                    graph.create_link_with_op(
-                        variable=graph.create_variable(), 
-                        upstream_op=op2, downstream_op=adder)
+                    graph.create_link_with_op(A=op1, B=adder)
+                    graph.create_link_with_op(A=op2, B=adder)
 
 
 class MetaxGemmSplitPass(QuantizationOptimizationPass):
@@ -302,70 +296,70 @@ class GRUSplitPass(QuantizationOptimizationPass):
             constant_of_sub = graph.create_variable(value=torch.tensor(1.0).to(Wz.device), is_parameter=True)
 
             # link variables
-            graph.create_link_with_op(variable=constant_of_sub, upstream_op=None, downstream_op=op11)
-            graph.create_link_with_op(variable=graph.create_variable(), upstream_op=op1, downstream_op=op3)
-            graph.create_link_with_op(variable=graph.create_variable(), upstream_op=op2, downstream_op=op3)
-            graph.create_link_with_op(variable=graph.create_variable(), upstream_op=op3, downstream_op=op4)
+            graph.create_link_with_op(variable=constant_of_sub, A=None, B=op11)
+            graph.create_link_with_op(A=op1, B=op3)
+            graph.create_link_with_op(A=op2, B=op3)
+            graph.create_link_with_op(A=op3, B=op4)
 
             var = graph.create_variable()
-            graph.create_link_with_op(variable=var, upstream_op=op4, downstream_op=op5)
-            graph.create_link_with_op(variable=var, upstream_op=op4, downstream_op=op6)
+            graph.create_link_with_op(variable=var, A=op4, B=op5)
+            graph.create_link_with_op(variable=var, A=op4, B=op6)
 
             var = graph.create_variable()
-            graph.create_link_with_op(variable=var, upstream_op=op5, downstream_op=op11)
-            graph.create_link_with_op(variable=var, upstream_op=op5, downstream_op=op10)
+            graph.create_link_with_op(variable=var, A=op5, B=op11)
+            graph.create_link_with_op(variable=var, A=op5, B=op10)
 
-            graph.create_link_with_op(variable=graph.create_variable(), upstream_op=op6, downstream_op=op9)
-            graph.create_link_with_op(variable=graph.create_variable(), upstream_op=op7, downstream_op=op9)
-            graph.create_link_with_op(variable=graph.create_variable(), upstream_op=op8, downstream_op=op12)
-            graph.create_link_with_op(variable=graph.create_variable(), upstream_op=op9, downstream_op=op12)
-            graph.create_link_with_op(variable=graph.create_variable(), upstream_op=op10, downstream_op=op15)
-            graph.create_link_with_op(variable=graph.create_variable(), upstream_op=op11, downstream_op=op13)
-            graph.create_link_with_op(variable=graph.create_variable(), upstream_op=op12, downstream_op=op14)
-            graph.create_link_with_op(variable=graph.create_variable(), upstream_op=op13, downstream_op=op15)
-            graph.create_link_with_op(variable=graph.create_variable(), upstream_op=op14, downstream_op=op13)
+            graph.create_link_with_op(A=op6, B=op9)
+            graph.create_link_with_op(A=op7, B=op9)
+            graph.create_link_with_op(A=op8, B=op12)
+            graph.create_link_with_op(A=op9, B=op12)
+            graph.create_link_with_op(A=op10, B=op15)
+            graph.create_link_with_op(A=op11, B=op13)
+            graph.create_link_with_op(A=op12, B=op14)
+            graph.create_link_with_op(A=op13, B=op15)
+            graph.create_link_with_op(A=op14, B=op13)
 
             # mark h as graph input, link h to op2, op10 and op7
             rnn_h.source_op.outputs.remove(rnn_h)
             rnn_h.source_op = None
             rnn_h.dest_ops.remove(op)
             graph.mark_variable_as_graph_input(rnn_h)
-            graph.create_link_with_op(variable=rnn_h, upstream_op=None, downstream_op=op2)
-            graph.create_link_with_op(variable=rnn_h, upstream_op=None, downstream_op=op7)
-            graph.create_link_with_op(variable=rnn_h, upstream_op=None, downstream_op=op10)
+            graph.create_link_with_op(variable=rnn_h, A=None, B=op2)
+            graph.create_link_with_op(variable=rnn_h, A=None, B=op7)
+            graph.create_link_with_op(variable=rnn_h, A=None, B=op10)
 
             # link x to op1 and op8
             rnn_x.dest_ops.remove(op)
-            graph.create_link_with_op(variable=rnn_x, upstream_op=rnn_x.source_op, downstream_op=op1)
-            graph.create_link_with_op(variable=rnn_x, upstream_op=rnn_x.source_op, downstream_op=op8)
+            graph.create_link_with_op(variable=rnn_x, A=rnn_x.source_op, B=op1)
+            graph.create_link_with_op(variable=rnn_x, A=rnn_x.source_op, B=op8)
 
             # create parameters
-            graph.create_link_with_op(variable=Wzr_var, upstream_op=None, downstream_op=op1)
-            graph.create_link_with_op(variable=Rzr_var, upstream_op=None, downstream_op=op2)
-            graph.create_link_with_op(variable=Wh_var, upstream_op=None, downstream_op=op8)
-            graph.create_link_with_op(variable=Rh_var, upstream_op=None, downstream_op=op7)
-            graph.create_link_with_op(variable=Wbzr_var, upstream_op=None, downstream_op=op1)
-            graph.create_link_with_op(variable=Rbzr_var, upstream_op=None, downstream_op=op2)
-            graph.create_link_with_op(variable=Wbh_var, upstream_op=None, downstream_op=op8)
-            graph.create_link_with_op(variable=Rbh_var, upstream_op=None, downstream_op=op7)
+            graph.create_link_with_op(variable=Wzr_var, A=None, B=op1)
+            graph.create_link_with_op(variable=Rzr_var, A=None, B=op2)
+            graph.create_link_with_op(variable=Wh_var, A=None, B=op8)
+            graph.create_link_with_op(variable=Rh_var, A=None, B=op7)
+            graph.create_link_with_op(variable=Wbzr_var, A=None, B=op1)
+            graph.create_link_with_op(variable=Rbzr_var, A=None, B=op2)
+            graph.create_link_with_op(variable=Wbh_var, A=None, B=op8)
+            graph.create_link_with_op(variable=Rbh_var, A=None, B=op7)
 
             graph.create_link_with_op(variable=graph.create_variable(
-                value=torch.tensor([0]), is_parameter=True), upstream_op=None, downstream_op=op5)
+                value=torch.tensor([0]), is_parameter=True), A=None, B=op5)
             graph.create_link_with_op(variable=graph.create_variable(
-                value=torch.tensor([hidden_size]), is_parameter=True), upstream_op=None, downstream_op=op5)
+                value=torch.tensor([hidden_size]), is_parameter=True), A=None, B=op5)
             graph.create_link_with_op(variable=graph.create_variable(
-                value=torch.tensor([1]), is_parameter=True), upstream_op=None, downstream_op=op5)
+                value=torch.tensor([1]), is_parameter=True), A=None, B=op5)
             graph.create_link_with_op(variable=graph.create_variable(
-                value=torch.tensor([1]), is_parameter=True), upstream_op=None, downstream_op=op5)
+                value=torch.tensor([1]), is_parameter=True), A=None, B=op5)
 
             graph.create_link_with_op(variable=graph.create_variable(
-                value=torch.tensor([hidden_size]), is_parameter=True), upstream_op=None, downstream_op=op6)
+                value=torch.tensor([hidden_size]), is_parameter=True), A=None, B=op6)
             graph.create_link_with_op(variable=graph.create_variable(
-                value=torch.tensor([2 * hidden_size]), is_parameter=True), upstream_op=None, downstream_op=op6)
+                value=torch.tensor([2 * hidden_size]), is_parameter=True), A=None, B=op6)
             graph.create_link_with_op(variable=graph.create_variable(
-                value=torch.tensor([1]), is_parameter=True), upstream_op=None, downstream_op=op6)
+                value=torch.tensor([1]), is_parameter=True), A=None, B=op6)
             graph.create_link_with_op(variable=graph.create_variable(
-                value=torch.tensor([1]), is_parameter=True), upstream_op=None, downstream_op=op6)
+                value=torch.tensor([1]), is_parameter=True), A=None, B=op6)
 
             hidden_vec, last_state = op.outputs
             last_state.source_op = op15

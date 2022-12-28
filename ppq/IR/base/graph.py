@@ -92,7 +92,7 @@ class Variable(Serializable):
         return state
 
     @ property
-    def shape(self) -> List[int]:
+    def shape(self) -> List[Union[Text, int, None]]:
         """ Return tensor shape of this variable
         It is modifiable when current variable is not a paramter.
         """
@@ -184,10 +184,6 @@ class Operation(OperationBase, Serializable):
     @ property
     def parameters(self) -> List[Variable]:
         return [var for var in self.inputs if var.is_parameter]
-
-    @ property
-    def num_of_parameters(self) -> int:
-        return len(self.parameters)
 
     @ property
     def is_linear_activation(self) -> bool:
@@ -507,7 +503,7 @@ class BaseGraph(Serializable):
         up_var.dest_ops[up_var.dest_ops.index(down_op)] = inserting_op
         down_op.inputs[down_op.inputs.index(up_var)] = link_var
 
-    def create_link_with_op(self, variable: Variable, upstream_op: Operation, downstream_op: Operation):
+    def create_link_with_op(self, A: Operation, B: Operation, variable: Variable = None):
         """Create a link with given variable from upstream_op to downstream_op
         variable will be appended to upstream_op's output and downstream_op's
         input given variable must have empty source_op or its source_op ==
@@ -532,32 +528,34 @@ class BaseGraph(Serializable):
             upstream_op (Operation): _description_
             downstream_op (Operation): _description_
         """
+        if variable is None:
+            variable = self.create_variable()
         if variable.name not in self.variables:
             raise KeyError(f'Can not find your variable {variable.name} in current graph.')
-        if upstream_op is not None and upstream_op.name not in self.operations:
-            raise KeyError(f'Can not find your operation {upstream_op.name} in current graph.')
-        if downstream_op is not None and downstream_op.name not in self.operations:
-            raise KeyError(f'Can not find your operation {downstream_op.name} in current graph.')
+        if A is not None and A.name not in self.operations:
+            raise KeyError(f'Can not find your operation {A.name} in current graph.')
+        if B is not None and B.name not in self.operations:
+            raise KeyError(f'Can not find your operation {B.name} in current graph.')
 
-        if variable.source_op is None: variable.source_op = upstream_op
-        if variable.source_op != upstream_op:
+        if variable.source_op is None: variable.source_op = A
+        if variable.source_op != A:
             raise PermissionError(f'Can not create link with variable {variable}, '
-                                  f'cause its source operations != {upstream_op}')
+                                  f'cause its source operations != {A}')
 
         # For complex graph, following logic might have some error.
-        if upstream_op is not None and variable not in upstream_op.outputs:
-            upstream_op.outputs.append(variable)
-        if downstream_op is None: return
-        if downstream_op is not None and variable not in downstream_op.inputs:
-            variable.dest_ops.append(downstream_op)
-            downstream_op.inputs.append(variable)
+        if A is not None and variable not in A.outputs:
+            A.outputs.append(variable)
+        if B is None: return
+        if B is not None and variable not in B.inputs:
+            variable.dest_ops.append(B)
+            B.inputs.append(variable)
         else: 
-            variable.dest_ops.append(downstream_op)
-            downstream_op.inputs.append(variable)
+            variable.dest_ops.append(B)
+            B.inputs.append(variable)
             ppq_warning(f'You are trying to link variable with operation, '
-                          f'however Variable {variable.name} has already linked with downstream op {downstream_op.name}')
+                          f'however Variable {variable.name} has already linked with downstream op {B.name}')
 
-    def create_link_with_var(self, upstream_variable: Variable, downstream_variable: Variable):
+    def create_link_with_var(self, A: Variable, B: Variable):
         """connect upstream_variable.source_op with
         downstream_variable.dest_ops, downstream variable will be eliminated by
         this function.
@@ -568,17 +566,22 @@ class BaseGraph(Serializable):
             upstream_variable (_type_): _description_
             downstream_variable (_type_): _description_
         """
-        if downstream_variable.source_op is not None:
+        if A is not None and A.name not in self.variables:
+            raise KeyError(f'Can not find your variable {A.name} in current graph.')
+        if B is not None and B.name not in self.variables:
+            raise KeyError(f'Can not find your variable {B.name} in current graph.')
+        
+        if B.source_op is not None:
             raise PermissionError(
-                f'Can not create link with variable {upstream_variable.name} & {downstream_variable.name}, '
+                f'Can not create link with variable {A.name} & {B.name}, '
                 'Cause downstream variable has a non-empty source op')
 
-        dest_ops = downstream_variable.dest_ops
+        dest_ops = B.dest_ops
         for dest_op in dest_ops:
-            dest_op.inputs[dest_op.inputs.index(downstream_variable)] = upstream_variable
-            upstream_variable.dest_ops.append(dest_op)
-        downstream_variable.dest_ops.clear()
-        self.remove_variable(downstream_variable)
+            dest_op.inputs[dest_op.inputs.index(B)] = A
+            A.dest_ops.append(dest_op)
+        B.dest_ops.clear()
+        self.remove_variable(B)
         return self
 
     def remove_operation(self, removing_op: Operation, keep_coherence: bool = False):
@@ -861,9 +864,7 @@ class BaseGraph(Serializable):
                     f'Graph Copy Error, Variable {i_var.name} is not correctly cloned')
                 ci_var = cloned.variables[i_var.name]
                 cloned.create_link_with_op(
-                    variable=ci_var, 
-                    upstream_op=ci_var.source_op, 
-                    downstream_op=c_op)
+                    variable=ci_var, A=ci_var.source_op, B=c_op)
             for o_var in op.outputs:
                 assert o_var.name in cloned.variables, (
                     f'Graph Copy Error, Variable {o_var.name} is not correctly cloned')

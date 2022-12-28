@@ -238,10 +238,7 @@ class GraphFormatter(GraphCommandProcessor):
         """
         for op in self.graph.operations.values():
             if op.type == 'Pad' and 'pads' in op.attributes:
-                self.graph.create_link_with_op(
-                    variable=self.graph.create_variable(
-                        value=torch.tensor(op.attributes['pads']), is_parameter=True),
-                    upstream_op=None, downstream_op=op)
+                self.graph.create_variable(value=torch.tensor(op.attributes['pads']), is_parameter=True, dest_ops=[op])
                 op.attributes.clear()
 
     def format_resize(self) -> None:
@@ -250,9 +247,9 @@ class GraphFormatter(GraphCommandProcessor):
         """
         for op in self.graph.operations.values():
             if op.type == 'Resize' and len(op.inputs) == 2:
-                self.graph.create_link_with_op(
-                    variable=self.graph.create_variable(value=None, is_parameter=False),
-                    upstream_op=None, downstream_op=op)
+                # 创建一个空的 variable, 这个 variable 没有值与 source_op, 也不是 parameter
+                # 这种行为 Onnx 是允许的，这种变量用以传递空值，起到占位符的作用
+                self.graph.create_variable(value=None, is_parameter=False, dest_ops=[op])
                 op.inputs[1], op.inputs[2] = op.inputs[2], op.inputs[1]
 
     def format_clip(self) -> None:
@@ -553,7 +550,7 @@ class GraphMerger(GraphCommandProcessor):
             var   = bn_op.parameters[3].value
             epsilon = bn_op.attributes.get('epsilon', 1e-5)
 
-            if computing_op.num_of_parameters == 1:
+            if computing_op.num_of_parameter == 1:
                 w = computing_op.parameters[0].value  # no bias.
                 assert isinstance(w, torch.Tensor), 'values of parameters are assumed as torch Tensor'
                 if computing_op.type == 'ConvTranspose':
@@ -681,16 +678,16 @@ class GraphMerger(GraphCommandProcessor):
 
                     # remove bias add, move bias to matmul
                     self.graph.remove_operation(add)
-                    self.graph.create_link_with_op(variable=bias_var, upstream_op=None, downstream_op=matmul)
-                    self.graph.create_link_with_var(upstream_variable=matmul_out, downstream_variable=add_out)
+                    self.graph.create_link_with_op(variable=bias_var, A=None, B=matmul)
+                    self.graph.create_link_with_var(A=matmul_out, B=add_out)
                 elif bias_var.value.shape[0] == matmul.parameters[0].value.shape[-2]:
 
                     bias_var.dest_ops.clear()
                     add.inputs.remove(bias_var)
                     # remove bias add, move bias to matmul
                     self.graph.remove_operation(add)
-                    self.graph.create_link_with_op(variable=bias_var, upstream_op=None, downstream_op=matmul)
-                    self.graph.create_link_with_var(upstream_variable=matmul_out, downstream_variable=add_out)
+                    self.graph.create_link_with_op(variable=bias_var, A=None, B=matmul)
+                    self.graph.create_link_with_var(A=matmul_out, B=add_out)
 
         # process single gemm
         for op in self.graph.operations.values():
@@ -734,7 +731,7 @@ class GraphMerger(GraphCommandProcessor):
             if bias is not None:
                 self.graph.create_link_with_op(
                     variable=self.graph.create_variable(value=bias, is_parameter=True), 
-                    upstream_op=None, downstream_op=layernorm)
+                    A=None, B=layernorm)
             return layernorm
 
         search_engine = SearchableGraph(graph=self.graph)
@@ -1110,14 +1107,11 @@ class GraphDecomposer(GraphCommandProcessor):
                 bias_add  = graph.create_operation(op_type='Add', platform=op.platform)
                 bias_var  = op.inputs[-1]
 
-                graph.create_link_with_op(
-                    variable=graph.create_variable(),
-                    upstream_op=op, downstream_op=bias_add)
-
+                graph.create_link_with_op(A=op, B=bias_add)
                 graph.create_link_with_op(
                     variable=graph.create_variable(
                         value=bias_var.value * op.attributes.get('beta', 1), is_parameter=True),
-                    upstream_op=None, downstream_op=bias_add)
+                    A=None, B=bias_add)
 
                 graph.remove_variable(bias_var)
                 output_var.source_op = bias_add

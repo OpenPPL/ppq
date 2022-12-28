@@ -102,10 +102,10 @@ class ONNXRUNTIMExporter(OnnxExporter):
             scale  = convert_any_to_torch_tensor(config.scale.clone(), dtype=torch.float32)
             offset = ppq_tensor_round(config.offset.clone()).type(offset_dtype)
 
-            s_var = graph.create_variable(name=None, value=scale, is_parameter=True)
-            z_var = graph.create_variable(name=None, value=offset, is_parameter=True)
             created = graph.create_operation(op_type='QuantizeLinear', attributes={})
-
+            s_var = graph.create_variable(name=None, value=scale, is_parameter=True, dest_ops=[created])
+            z_var = graph.create_variable(name=None, value=offset, is_parameter=True, dest_ops=[created])
+            
             if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
                 created.attributes['axis'] = config.channel_axis
 
@@ -117,8 +117,6 @@ class ONNXRUNTIMExporter(OnnxExporter):
                 graph.insert_op_between_var_and_op(created, up_var=var, down_op=related_op)
             else: graph.insert_op_on_var(created, var=var.name)
 
-            graph.create_link_with_op(variable=s_var, upstream_op=None, downstream_op=created)
-            graph.create_link_with_op(variable=z_var, upstream_op=None, downstream_op=created)
             created.outputs[0].dtype = value_type
             created.outputs[0].shape = var.shape
 
@@ -130,8 +128,6 @@ class ONNXRUNTIMExporter(OnnxExporter):
             scale  = convert_any_to_torch_tensor(config.scale.clone(), dtype=torch.float32)
             offset = convert_any_to_torch_tensor(config.offset.clone(), dtype=torch.float32)
 
-            s_var = graph.create_variable(name=None, value=scale, is_parameter=True)
-            z_var = graph.create_variable(name=None, value=offset, is_parameter=True)
             created = graph.create_operation(
                 op_type='QuantizeFloating', 
                 attributes={
@@ -139,6 +135,8 @@ class ONNXRUNTIMExporter(OnnxExporter):
                     'max': config.quant_max, 
                     'exponent': config.exponent_bits, 
                     'mantissa': config.mantissa_bits})
+            s_var = graph.create_variable(name=None, value=scale, is_parameter=True, dest_ops=[created])
+            z_var = graph.create_variable(name=None, value=offset, is_parameter=True, dest_ops=[created])
 
             if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
                 created.attributes['axis'] = config.channel_axis
@@ -147,10 +145,7 @@ class ONNXRUNTIMExporter(OnnxExporter):
                 graph.insert_op_between_var_and_op(created, up_var=var, down_op=related_op)
             else: graph.insert_op_on_var(created, var=var.name)
 
-            graph.create_link_with_op(variable=s_var, upstream_op=None, downstream_op=created)
-            graph.create_link_with_op(variable=z_var, upstream_op=None, downstream_op=created)
             created.outputs[0].shape = var.shape
-
             return created
         
         else:
@@ -169,10 +164,10 @@ class ONNXRUNTIMExporter(OnnxExporter):
             offset_dtype, _ = self.infer_qtype(config)
             scale  = convert_any_to_torch_tensor(config.scale.clone(), dtype=torch.float32)
             offset = ppq_tensor_round(config.offset.clone()).type(offset_dtype)
-
-            s_var = graph.create_variable(name=None, value=scale.clone(), is_parameter=True)
-            z_var = graph.create_variable(name=None, value=offset.clone(), is_parameter=True)
+            
             created = graph.create_operation(op_type='DequantizeLinear', attributes={})
+            s_var = graph.create_variable(name=None, value=scale, is_parameter=True, dest_ops=[created])
+            z_var = graph.create_variable(name=None, value=offset, is_parameter=True, dest_ops=[created])
 
             if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
                 created.attributes['axis'] = config.channel_axis
@@ -184,9 +179,6 @@ class ONNXRUNTIMExporter(OnnxExporter):
             if var in related_op.inputs:
                 graph.insert_op_between_var_and_op(created, up_var=var, down_op=related_op)
             else: graph.insert_op_on_var(created, var=var.name)
-
-            graph.create_link_with_op(variable=s_var, upstream_op=None, downstream_op=created)
-            graph.create_link_with_op(variable=z_var, upstream_op=None, downstream_op=created)
             created.outputs[0].shape = var.shape
 
             return created
@@ -195,8 +187,6 @@ class ONNXRUNTIMExporter(OnnxExporter):
             scale  = convert_any_to_torch_tensor(config.scale.clone(), dtype=torch.float32)
             offset = convert_any_to_torch_tensor(config.offset.clone(), dtype=torch.float32)
 
-            s_var = graph.create_variable(name=None, value=scale.clone(), is_parameter=True)
-            z_var = graph.create_variable(name=None, value=offset.clone(), is_parameter=True)
             created = graph.create_operation(
                 op_type='DequantizeFloating', 
                 attributes={
@@ -204,6 +194,8 @@ class ONNXRUNTIMExporter(OnnxExporter):
                     'max': config.quant_max, 
                     'exponent': config.exponent_bits, 
                     'mantissa': config.mantissa_bits})
+            s_var = graph.create_variable(name=None, value=scale, is_parameter=True, dest_ops=[created])
+            z_var = graph.create_variable(name=None, value=offset, is_parameter=True, dest_ops=[created])
 
             if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
                 created.attributes['axis'] = config.channel_axis
@@ -211,9 +203,6 @@ class ONNXRUNTIMExporter(OnnxExporter):
             if var in related_op.inputs:
                 graph.insert_op_between_var_and_op(created, up_var=var, down_op=related_op)
             else: graph.insert_op_on_var(created, var=var.name)
-
-            graph.create_link_with_op(variable=s_var, upstream_op=None, downstream_op=created)
-            graph.create_link_with_op(variable=z_var, upstream_op=None, downstream_op=created)
             created.outputs[0].shape = var.shape
 
             return created
@@ -367,15 +356,13 @@ class ONNXRUNTIMExporter(OnnxExporter):
             if op.type == 'ReduceSum' or op.type == 'Squeeze' or op.type == 'Unsqueeze':
                 if 'axes' not in op.attributes: continue # is already v13
                 axes = convert_any_to_torch_tensor(op.attributes.pop('axes'), dtype=torch.int64)
-                var = graph.create_variable(name=None, value=axes, is_parameter=True)
-                graph.create_link_with_op(variable=var, upstream_op=None, downstream_op=op)
+                graph.create_variable(name=None, value=axes, is_parameter=True, dest_ops=[op])
 
             elif op.type == 'Split':
                 if 'split' not in op.attributes: continue # split is already v13
                 split = convert_any_to_torch_tensor(op.attributes.pop('split'), dtype=torch.int64)
-                var = graph.create_variable(name=None, value=split, is_parameter=True)
-                graph.create_link_with_op(variable=var, upstream_op=None, downstream_op=op)
-
+                graph.create_variable(name=None, value=split, is_parameter=True, dest_ops=[op])
+    
     def convert_operation(self, graph: BaseGraph, op: QuantableOperation,
                           process_activation: bool, process_parameter: bool,
                           quant_param_to_int: bool):

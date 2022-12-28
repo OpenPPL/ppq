@@ -184,6 +184,7 @@ executor.forward 函数默认不需要梯度，如果希望执行带有梯度的
 
 
 ### Hook (执行钩子函数)
+
 在调用 executor.forward 函数时可以传入 hooks 参数。钩子函数是注册在 op 上的，你可以传入一个字典用来说明需要调用的钩子函数：
 字典 {'Conv 1': myhook} 说明了希望在算子 Conv 1 的执行器件调用钩子函数 myhook。
 
@@ -200,3 +201,4 @@ executor.forward 函数默认不需要梯度，如果希望执行带有梯度的
 
         def post_forward_hook(self, outputs: list, **kwargs) -> list:
             return outputs
+

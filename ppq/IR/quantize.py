@@ -63,8 +63,6 @@ class QuantableOperation(Operation):
         )
 
         self._config            = quantize_config
-        # meta data is a crucial attribute for quantization
-        self._meta              = convert_from.meta_data
         self._dequantized       = False
 
     @ property

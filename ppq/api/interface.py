@@ -18,7 +18,7 @@ from ppq.core.common import (FORMATTER_FORMAT_CONSTANT_INPUT,
 from ppq.executor import TorchExecutor
 from ppq.executor.base import BaseGraphExecutor
 from ppq.IR import (BaseGraph, GraphBuilder, GraphCommand, GraphCommandType,
-                    GraphFormatter, GraphMerger)
+                    GraphFormatter, GraphMerger, GraphReplacer)
 from ppq.IR.quantize import QuantableOperation
 from ppq.quantization.optim.base import QuantizationOptimizationPass
 from ppq.quantization.quantizer import BaseQuantizer
@@ -617,7 +617,7 @@ def format_graph(graph: BaseGraph) -> BaseGraph:
     """
     
     # do graph level optimization
-    formatter = GraphFormatter(GraphMerger(graph))
+    formatter = GraphReplacer(GraphFormatter(GraphMerger(graph)))
     formatter(GraphCommand(GraphCommandType.CONVERT_TO_TENSOR))
     formatter(GraphCommand(GraphCommandType.FORMAT_PARAMETERS))
     
