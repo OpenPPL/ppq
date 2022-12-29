@@ -5,7 +5,8 @@ from ppq.parser import (AscendExporter, CaffeExporter, CaffeParser,
                         ONNXRUNTIMExporter, PPLBackendExporter,
                         PPLDSPCaffeExporter, PPLDSPTICaffeExporter,
                         QNNDSPExporter, SNPECaffeExporter, TengineExporter,
-                        TensorRTExporter_JSON, TensorRTExporter_QDQ)
+                        TensorRTExporter_JSON, TensorRTExporter_QDQ,
+                        MNNExporter)
 from ppq.quantization.quantizer import (AscendQuantizer, ExtQuantizer,
                                         FPGAQuantizer, GraphCoreQuantizer,
                                         MetaxChannelwiseQuantizer,
@@ -16,7 +17,7 @@ from ppq.quantization.quantizer import (AscendQuantizer, ExtQuantizer,
                                         PPL_DSP_TI_Quantizer, PPLCUDAQuantizer,
                                         RKNN_PerTensorQuantizer,
                                         TengineQuantizer, TensorRTQuantizer,
-                                        TensorRTQuantizer_FP8)
+                                        TensorRTQuantizer_FP8, MNNQuantizer)
 
 __QUANTIZER_COLLECTION__ = {
     TargetPlatform.PPL_DSP_INT8: PPL_DSP_Quantizer,
@@ -24,6 +25,7 @@ __QUANTIZER_COLLECTION__ = {
     TargetPlatform.SNPE_INT8:    PPL_DSP_Quantizer,
     TargetPlatform.QNN_DSP_INT8: PPL_DSP_Quantizer,
     TargetPlatform.TRT_INT8:     TensorRTQuantizer,
+    TargetPlatform.MNN_INT8:     MNNQuantizer,
     TargetPlatform.ASC_INT8:     AscendQuantizer,
     TargetPlatform.NCNN_INT8:    NCNNQuantizer,
     TargetPlatform.NXP_INT8:     NXP_Quantizer,
@@ -68,7 +70,8 @@ __EXPORTERS__ = {
     TargetPlatform.ASC_INT8:      AscendExporter,
     TargetPlatform.TRT_FP8:       ONNXRUNTIMExporter,
     TargetPlatform.NCNN_INT8:     NCNNExporter,
-    TargetPlatform.TENGINE_INT8:  TengineExporter
+    TargetPlatform.TENGINE_INT8:  TengineExporter,
+    TargetPlatform.MNN_INT8:      MNNExporter,
 }
 
 

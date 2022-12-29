@@ -16,3 +16,4 @@ from .qnn_exporter import QNNDSPExporter
 from .ncnn_exporter import NCNNExporter
 from .tengine_exporter import TengineExporter
 from .ascend_export import AscendExporter
+from .mnn_exporter import MNNExporter

@@ -14,3 +14,4 @@ from .FP8Quantizer import GraphCoreQuantizer, TensorRTQuantizer_FP8
 from .TensorRTQuantizer import TensorRTQuantizer, TensorRTQuantizer_InputOnly
 from .AscendQuantizer import AscendQuantizer
 from .ORTQuantizer import OnnxruntimeQuantizer
+from .MNNQuantizer import MNNQuantizer
