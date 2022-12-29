@@ -11,8 +11,6 @@ from .caffe_exporter import CaffeExporter
 from .onnx_exporter import OnnxExporter
 from .util import convert_value
 
-ASCEND_QUANT_OP = {"Conv", "ConvTranspose", "Gemm", "AveragePool"}
-
 class MNNExporter(GraphExporter):
     def export_quantization_config(self, config_path: str, graph: BaseGraph):
         quant_info_json = {}
