@@ -192,7 +192,7 @@ with ENABLE_CUDA_KERNEL():
     print('网络量化结束，正在生成目标文件:')
     export_ppq_graph(
         graph=quantized, platform=TARGET_PLATFORM,
-        graph_save_to = os.path.join(WORKING_DIRECTORY, 'quantized'),
+        graph_save_to = os.path.join(WORKING_DIRECTORY, 'quantized.onnx'),
         config_save_to = os.path.join(WORKING_DIRECTORY, 'quant_cfg.json'))
 
     # 如果你需要导出 CAFFE 模型，使用下面的语句，caffe exporter 需要一个 input_shapes 参数。
