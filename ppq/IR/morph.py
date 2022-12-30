@@ -185,7 +185,7 @@ class GraphFormatter(GraphCommandProcessor):
         if command.command_type == GraphCommandType.FORMAT_PARAMETERS:
             return self.format_parameter()
         if command.command_type == GraphCommandType.FORMAT_CONSTANT_INPUT:
-            return self.format_constant_input()
+            return self.remove_constant_input()
         if command.command_type == GraphCommandType.FORMAT_SLICE:
             return self.format_slice()
         if command.command_type == GraphCommandType.FORMAT_RESIZE:
@@ -340,25 +340,27 @@ class GraphFormatter(GraphCommandProcessor):
 
                 if all(check): value = value.int()
 
-    def format_constant_input(self) -> None:
-        """部分部署平台不支持 Constant Op，在这种情况下我们使用这个 pass 把 Constant Op 的输入切换成
-        parameter variable 的形式 some backend platform doesn't support Constant
+    def remove_constant_input(self) -> None:
+        """部分部署平台不支持 Constant Op 作为算子的输入
+            在这种情况下我们使用这个 pass 把它们切换成 Parameter Variable
+        
+        Some backend platform doesn't support Constant
         Op, we use this pass to replace it by forcing its value to be a
         parameter variable."""
-        constant_ops = []
-        for operation in self.graph.operations.values():
-            if operation.type == 'Constant':
-                assert len(operation.outputs) == 1, (
-                    f'Constant Operation {operation.name} has more than 1 output, is there a network parsing error?')
-                constant_ops.append(operation)
+        removing_ops = []
+        for op in self.graph.operations.values():
+            if op.type == 'Constant':
+                assert len(op.outputs) == 1, (
+                    f'Constant Operation {op.name} has more than 1 output, is there a network parsing error?')
+                removing_ops.append(op)
 
-        for operation in constant_ops:
-            assert isinstance(operation, Operation)
-            constant_value = operation.attributes['value']
-            output_var = operation.outputs[0]
+        for const_op in removing_ops:
+            assert isinstance(const_op, Operation)
+            constant_value = const_op.attributes['value']
+            output_var = const_op.outputs[0]
             output_var._is_parameter = True
             output_var.value = constant_value
-            self.graph.remove_operation(removing_op=operation)
+            self.graph.remove_operation(removing_op=const_op)
 
     def truncate_on_var(self, var: Variable, mark_as_output: bool):
         """从一个指定位置将图截断.
@@ -395,6 +397,7 @@ class GraphFormatter(GraphCommandProcessor):
         self.delete_isolated()
 
     def delete_isolated(self):
+        """Remove Isolated Variable from Graph."""
         blacklist = [None]
         while len(blacklist) > 0:
             blacklist = []
@@ -439,7 +442,6 @@ class GraphFormatter(GraphCommandProcessor):
 
     def format_parameter(self) -> None:
         """ Split parameter that has more than 1 dest ops """
-        print('FORMAT PARAMETER RUNNING.')
         for var in [_ for _ in self.graph.variables.values()]:
             if var.is_parameter and len(var.dest_ops) > 1:
                 for op in var.dest_ops:

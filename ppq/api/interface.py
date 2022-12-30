@@ -618,11 +618,10 @@ def format_graph(graph: BaseGraph) -> BaseGraph:
     
     # do graph level optimization
     formatter = GraphReplacer(GraphFormatter(GraphMerger(graph)))
-    formatter(GraphCommand(GraphCommandType.CONVERT_TO_TENSOR))
-    formatter(GraphCommand(GraphCommandType.FORMAT_PARAMETERS))
-    
     if FORMATTER_FORMAT_CONSTANT_INPUT:
         formatter(GraphCommand(GraphCommandType.FORMAT_CONSTANT_INPUT))
+    formatter(GraphCommand(GraphCommandType.CONVERT_TO_TENSOR))
+    formatter(GraphCommand(GraphCommandType.FORMAT_PARAMETERS))
     
     if FORMATTER_FUSE_BIAS_ADD:
         formatter(GraphCommand(GraphCommandType.FUSE_BIAS_ADD))

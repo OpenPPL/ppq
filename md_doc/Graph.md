@@ -285,3 +285,158 @@ QuantableOperation 是 PPQ 在 Onnx Operation 基础上追加定义的内容，�
 * **copy(self, copy_value: bool = False) -> BaseGraph:**
 
     返回一个图的克隆对象，参数 copy_value 决定了是仅拷贝图的结构，还是执行深拷贝
+
+## PPQ Graph Extension(PPQ 计算图扩展)
+
+在 PPQ 中，我们设计了一些类用于扩充 BaseGraph 的功能，它们定义在文件夹 ppq\IR 中。
+
+这些类涵盖常见的算子合并、算子拆分、算子规范化、图模式匹配等功能，你可以在优化过程以及图的预处理过程中使用这些类完成特定的任务，我们将向你简要介绍其中常用的功能：
+
+### 5. SearchableGraph(图模式匹配引擎):
+
+定义于 ppq\IR\search.py。
+
+该类用于在计算图中检索特定模式，匹配满足特定规则的算子。
+
+#### 成员方法
+
+* **path_matching(self, sp_expr: Callable, rp_expr: Callable, ep_expr: Callable, direction: str) -> List[Path]:**
+
+    按给定模式匹配图中的路径，在网络中，路径指的是从起点到终点的全程路由。
+
+    参数 sp_expr, rp_expr, ep_expr 用于定义匹配模式，它们分别对应起点、中继点、终点的匹配模式。direction 用于确定匹配方向。
+
+        如：
+            sp_expr = lamdba x: x.type == 'Conv'
+            rp_expr = lamdba x, y: y.type == 'Relu'
+            ep_expr = lamdba x: x.type == 'Conv'
+            direction = 'down'
+        该指令检索出从任意 Conv 出发，到任意 Conv 的所有可行路径
+        其中路径上含有任意多个 Relu 节点，并且只能包含 Relu
+
+
+        又如：
+            sp_expr = lamdba x: x.type in {'Conv', 'Gemm'}
+            rp_expr = lamdba x, y: x.type == 'Gemm' and y.type == 'Relu'
+            ep_expr = lamdba x: x.type in {'Conv', 'Gemm'}
+            direction = 'down'
+        该指令检索出从任意 Conv 或 Gemm 出发，到任意 Conv 或 Gemm 的所有可行路径
+        其中如果输入算子是 Gemm, 则允许路径上存在一个 Relu
+
+    sp_expr, ep_expr 均是一元表达式，rp_expr 则需要接受两个输入做出判断。
+
+    该函数返回所有图中满足条件的路径，路径是有序的。
+
+* **opset_matching(self, sp_expr: Callable, rp_expr: Callable, ep_expr: Callable, direction: str) -> OperationSet**
+
+    按给定模式匹配图中的算子集合。
+
+    与 path_matching 匹配规则类似，但该函数不关注算子的顺序，因此它将更加高效。函数返回匹配到的所有算子(无序)。
+
+* **pattern_matching(self, patterns: List[Callable], edges: List[List[int]], exclusive: bool = True) -> List[List[Operation]]:**
+
+    按给定模式匹配网络中的子图结构。
+
+    暴力子图模式匹配 这是 PPQ 0.6.6 更新的内容，
+    在 0.6.6 之前，我们使用具有不确定性的贪心匹配算法，但是考虑到实际应用中的问题。
+    在 0.6.6 版本之后，我们将其修改为枚举匹配。
+
+    子图匹配问题是一个 NP-Hard 的问题，不存在多项式时间复杂度的解法。
+    你需要给出一个模式子图，match_burte_force 方法将在 graph 中对模式子图进行匹配。
+
+    PPQ 使用了非递归的算法完成上述匹配，其最坏时间和空间复杂度大概都是 O(NM^k)
+    其中 N 是母图节点个数，M 是子图节点个数，k 是母图的最大出度
+        
+    对于存在二义性子图模式，匹配复杂度将指数级增长；为了限制算法执行时间，当匹配到多于
+    max_candidates 个模式子图时，算法强制停机，并报错返回。
+
+    实际使用中的时间复杂度更加接近于 O(NM)
+        
+    参数 exclusive 指定了是否需要进行精确匹配。在精确匹配模式下：
+
+    1. 不允许模式子图中除根节点外的其他节点有来自模式子图以外节点的输入
+
+    2. 不允许模式子图中除叶节点外的其他节点有朝向模式子图以外节点的输出
+
+    
+    使用例子：
+    
+            pt = PatternTree(
+                patterns = [lambda x: x.is_computing_op, 'Softplus', 'Tanh', 'Mul']
+                edges = [[0, 1], [1, 2], [2, 3], [0, 3]])
+
+            pt will match pattern like that:
+                                            --- 'Softplus'   ---   'Tanh' --
+            lambda x: x.is_computing_op --- +                              + --- 'Mul'
+                                            ---     ---     ---    ---    --
+    
+    该函数按模式指定的顺序返回匹配到的算子
+
+
+### 6. GraphFormatter(图规范化):
+
+定义于 ppq\IR\morph.py。
+
+这个类中包含大量成员方法，这些方法用于规范化图中算子，并移除孤立的变量，我们将重点介绍其中几个成员函数
+
+#### 成员方法
+
+* **truncate_on_var(self, var: Variable, mark_as_output: bool):**
+    
+    从一个指定的变量处截断计算图，该变量后续的所有算子都将被移除。
+    参数 mark_as_output 决定了是否将当前变量指定为图的输出变量。
+
+* **delete_isolated(self):**
+
+    移除图中所有悬而未决的孤立变量与孤立算子。
+    这将删除那些没有连接到图的输出的算子与变量。
+
+
+* **format_parameter(self) -> None:**
+
+    分裂图中所有的参数，确保它们是一对一的。
+    Onnx 允许变量存在一对多的关系，即一个参数可以被多个算子所共同使用，这对于 PPQ 的后续处理逻辑而言会出现错误。
+    因此该函数用于分裂图中所有一对多的参数，它们将被复制多份，并保证处理过后的图中不存在同时连接在多个算子上的参数。
+
+### 7. GraphMerger(算子融合器):
+
+定义于 ppq\IR\morph.py。
+
+这个类中包含大量成员方法，这些方法用于融合图中算子。
+
+#### 成员方法
+
+* **fuse_bn(self):**
+    
+    合并图中的 Conv + bn, Gemm + bn, MatMul + bn, ConvTranspose + bn
+
+* **fuse_gemm(self):**
+
+    合并图中的 MatMul + Add，将其替换成 Gemm
+
+    该函数不会检查替换的正确性，在 Onnx 定义中 Gemm 仅能处理二维输入，但 MatMul 可以处理多维输入，因此融合之后的算子可能出现错误。
+
+* **fuse_layernorm(self):**
+
+    合并图中的 layernorm
+
+    Onnx 标准中不包含 Layernorm 算子，因此它们将被拆分成ReduceMean(1) --- Sub(2) --- Pow(3) --- ReduceMean(4) --- Add(5) --- Sqrt(6) --- Div(7) --- Mul(8) --- (Add)(9)。
+    该函数将它们进行合并
+
+* **fuse_skiplayernorm(self):**
+
+    合并图中的 Add + Layernorm
+
+* **fuse_gelu(self):**
+
+    合并图中的 gelu 激活函数
+
+    Onnx 标准中不包含 Gelu 算子，因此它们将被拆分成 'Div', 'Erf', 'Add', 'Mul', 'Mul' 5个算子。
+    该函数将它们进行合并
+
+* **fuse_bias_add(self):**
+
+    合并图中的 bias add。
+    
+    在一些情况下，Onnx 导出的计算图会出现 Conv bias 形成独立算子的情况，即 Conv 之后存在单独的 Add 算子。
+    该函数用于合并上述情况。
