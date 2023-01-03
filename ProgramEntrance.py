@@ -176,5 +176,5 @@ with ENABLE_CUDA_KERNEL():
     print('网络量化结束，正在生成目标文件:')
     export_ppq_graph(
         graph=quantized, platform=TARGET_PLATFORM,
-        graph_save_to = os.path.join(WORKING_DIRECTORY, 'quantized'),
+        graph_save_to = os.path.join(WORKING_DIRECTORY, 'quantized.onnx'),
         config_save_to = os.path.join(WORKING_DIRECTORY, 'quant_cfg.json'))
