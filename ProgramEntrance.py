@@ -49,20 +49,7 @@ assert graph is not None, 'Graph Loading Error, Check your input again.'
 # 当你的网络量化误差过高时，你需要修改 SETTING 对象中的属性来进行特定的优化
 # -------------------------------------------------------------------
 QS = QuantizationSettingFactory.default_setting()
-if TARGET_PLATFORM == TargetPlatform.PPL_CUDA_INT8:
-    QS = QuantizationSettingFactory.pplcuda_setting()
-if TARGET_PLATFORM in {TargetPlatform.PPL_DSP_INT8, TargetPlatform.HEXAGON_INT8, TargetPlatform.SNPE_INT8}:
-    QS = QuantizationSettingFactory.dsp_setting()
-if TARGET_PLATFORM == TargetPlatform.METAX_INT8_T:
-    QS = QuantizationSettingFactory.metax_pertensor_setting()
-if TARGET_PLATFORM == TargetPlatform.NXP_INT8:
-    QS = QuantizationSettingFactory.nxp_setting()
-if TARGET_PLATFORM == TargetPlatform.FPGA_INT8:
-    QS = QuantizationSettingFactory.fpga_setting()
-if TARGET_PLATFORM == TargetPlatform.TRT_INT8:
-    QS = QuantizationSettingFactory.trt_setting()
-if TARGET_PLATFORM == TargetPlatform.ASC_INT8:
-    QS = QuantizationSettingFactory.ascend_setting()
+
 # -------------------------------------------------------------------
 # 下面向你展示了如何使用 finetuning 过程提升量化精度
 # 在 PPQ 中我们提供了十余种算法用来帮助你恢复精度
@@ -147,10 +134,7 @@ with ENABLE_CUDA_KERNEL():
         layerwise_error_analyse(graph=quantized, running_device=EXECUTING_DEVICE,
                                 interested_outputs=None,
                                 dataloader=dataloader, collate_fn=lambda x: x.to(EXECUTING_DEVICE))
-    def collect_data(data):
-        img = data
-        return img.cuda()
-    graphwise_error_analyse(quantized, 'cuda', dataloader, collect_data, 'cosine', steps=32)
+
     # -------------------------------------------------------------------
     # 使用 export_ppq_graph 函数来导出量化后的模型
     # PPQ 会根据你所选择的导出平台来修改模型格式，请知悉：
@@ -194,8 +178,3 @@ with ENABLE_CUDA_KERNEL():
         graph=quantized, platform=TARGET_PLATFORM,
         graph_save_to = os.path.join(WORKING_DIRECTORY, 'quantized'),
         config_save_to = os.path.join(WORKING_DIRECTORY, 'quant_cfg.json'))
-
-    # 如果你需要导出 CAFFE 模型，使用下面的语句，caffe exporter 需要一个 input_shapes 参数。
-    # export(working_directory=WORKING_DIRECTORY,
-    #        quantized=quantized, platform=TargetPlatform.CAFFE,
-    #        input_shapes=NETWORK_INPUTSHAPE)

@@ -206,12 +206,10 @@ class Operation(OperationBase, Serializable):
         return self._name.__hash__()
 
     def __str__(self) -> str:
-        return f'{self._name}({self.type}) ' \
-               f'- inputs:{[var.name for var in self.inputs]}, outputs:{[var.name for var in self.outputs]}'
+        return f'{self._name}(Type: {self.type}, Num of Input: {self.num_of_input}, Num of Output: {self.num_of_output})'
 
     def __repr__(self) -> str:
-        return f'{self._name}({self.type}) ' \
-               f'- inputs:{[var.name for var in self.inputs]}, outputs:{[var.name for var in self.outputs]}'
+        return f'{self._name}(Type: {self.type}, Num of Input: {self.num_of_input}, Num of Output: {self.num_of_output})'
 
     def __getstate__(self) -> dict:
         state = super().__getstate__()
@@ -433,9 +431,11 @@ class BaseGraph(Serializable):
         var = B.inputs[input_idx]
         
         var.dest_ops[var.dest_ops.index(B)] = A
-        A.inputs.append(var)
         B.inputs[input_idx] = self.create_variable()
         B.inputs[input_idx].source_op = A
+        B.inputs[input_idx].dest_ops.append(B)
+    
+        A.inputs.append(var)
         A.outputs.append(B.inputs[input_idx])
 
     def insert_op_after(self, A: Operation, B: Operation, output_idx: int = 0):
@@ -456,9 +456,12 @@ class BaseGraph(Serializable):
         var = B.outputs[output_idx]
         
         var.source_op = A
-        B.outputs[output_idx] = self.create_variable(dest_ops=[A])
+        B.outputs[output_idx] = self.create_variable()
         B.outputs[output_idx].source_op = B
+        B.outputs[output_idx].dest_ops.append(A)
+        
         A.outputs.append(var)
+        A.inputs.append(B.outputs[output_idx])
 
     def insert_op_between_var_and_op(self, inserting_op: Operation, up_var: Variable, down_op: Operation):
         """Insert one operation to current graph. Inserting operation will just

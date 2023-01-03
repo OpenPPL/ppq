@@ -82,19 +82,19 @@ class ONNXRUNTIMExporter(OnnxExporter):
         if config.policy.has_property(QuantizationProperty.ASYMMETRICAL):
             offset_dtype = torch.uint8
             value_dtype  = torch.uint8
-        if config.num_of_bits > 16:
+        if config.num_of_bits > 8:
             offset_dtype = torch.int32
             value_dtype  = torch.int32
         return offset_dtype, value_dtype
 
-    def insert_quant_on_variable(
-        self, graph: BaseGraph, var: QuantableVariable,
-        config: TensorQuantizationConfig, related_op: Operation) -> Operation:
+    def insert_quantize_node(
+        self, graph: BaseGraph, 
+        var: Variable, config: TensorQuantizationConfig, 
+        op: Operation) -> Operation:
         """
         Insert a Quantize Node on given variable, according to given TensorQuantizationConfig.
         There is two basic type of Quantize Node: QuantizeLinear and QuantizeFloating.
         """
-        
         if config.policy.has_property(QuantizationProperty.LINEAR):
             # Following code will export Linear Quantization Config
             # That is for FP32 -> INT
@@ -103,23 +103,20 @@ class ONNXRUNTIMExporter(OnnxExporter):
             offset = ppq_tensor_round(config.offset.clone()).type(offset_dtype)
 
             created = graph.create_operation(op_type='QuantizeLinear', attributes={})
-            s_var = graph.create_variable(name=None, value=scale, is_parameter=True, dest_ops=[created])
-            z_var = graph.create_variable(name=None, value=offset, is_parameter=True, dest_ops=[created])
-            
             if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
                 created.attributes['axis'] = config.channel_axis
+            else: created.attributes['axis'] = None
+            
+            if var in op.inputs:  graph.insert_op_before(A=created, B=op, input_idx=op.inputs.index(var))
+            elif var in op.outputs: graph.insert_op_after(A=created, B=op, output_idx=op.outputs.index(var))
+            else: raise ValueError(f'Unexpected Error in Exporting Op {op.name}({op.type}).')
 
-            # PATCH 20220803, OPSET 13 REQUIRES ATTRIBUTE AXIS
-            if config.policy.has_property(QuantizationProperty.PER_TENSOR):
-                created.attributes['axis'] = 0
-
-            if related_op is not None and var in related_op.inputs:
-                graph.insert_op_between_var_and_op(created, up_var=var, down_op=related_op)
-            else: graph.insert_op_on_var(created, var=var.name)
+            graph.create_variable(name=None, value=scale, is_parameter=True, dest_ops=[created])
+            graph.create_variable(name=None, value=offset, is_parameter=True, dest_ops=[created])
 
             created.outputs[0].dtype = value_type
             created.outputs[0].shape = var.shape
-
+            created.inputs[0].shape = var.shape
             return created
         
         elif config.policy.has_property(QuantizationProperty.FLOATING):
@@ -135,17 +132,20 @@ class ONNXRUNTIMExporter(OnnxExporter):
                     'max': config.quant_max, 
                     'exponent': config.exponent_bits, 
                     'mantissa': config.mantissa_bits})
-            s_var = graph.create_variable(name=None, value=scale, is_parameter=True, dest_ops=[created])
-            z_var = graph.create_variable(name=None, value=offset, is_parameter=True, dest_ops=[created])
 
             if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
                 created.attributes['axis'] = config.channel_axis
+            else: created.attributes['axis'] = None
+            
+            if var in op.inputs:  graph.insert_op_before(A=created, B=op, input_idx=op.inputs.index(var))
+            elif var in op.outputs: graph.insert_op_after(A=created, B=op, output_idx=op.outputs.index(var))
+            else: raise ValueError(f'Unexpected Error in Exporting Op {op.name}({op.type}).')
 
-            if related_op is not None and var in related_op.inputs:
-                graph.insert_op_between_var_and_op(created, up_var=var, down_op=related_op)
-            else: graph.insert_op_on_var(created, var=var.name)
+            graph.create_variable(name=None, value=scale, is_parameter=True, dest_ops=[created])
+            graph.create_variable(name=None, value=offset, is_parameter=True, dest_ops=[created])
 
             created.outputs[0].shape = var.shape
+            created.inputs[0].shape = var.shape
             return created
         
         else:
@@ -153,33 +153,35 @@ class ONNXRUNTIMExporter(OnnxExporter):
                 f'PPQ Can not export quantization information with variable {var.name}, '
                 'Unexpected Quantization property.')
 
-    def insert_dequant_on_variable(
-        self, graph: BaseGraph, var: QuantableVariable,
-        config: TensorQuantizationConfig, related_op: Operation) -> Operation:
+    def insert_dequantize_node(
+        self, graph: BaseGraph, 
+        var: Variable, config: TensorQuantizationConfig, 
+        op: Operation) -> Operation:
         """
         Insert a DeQuantize Node on given variable, according to given TensorQuantizationConfig.
         There is two basic type of DeQuantize Node: DeQuantizeLinear and DeQuantizeFloating.
         """
         if config.policy.has_property(QuantizationProperty.LINEAR):
-            offset_dtype, _ = self.infer_qtype(config)
+            offset_dtype, value_type = self.infer_qtype(config)
             scale  = convert_any_to_torch_tensor(config.scale.clone(), dtype=torch.float32)
             offset = ppq_tensor_round(config.offset.clone()).type(offset_dtype)
             
             created = graph.create_operation(op_type='DequantizeLinear', attributes={})
-            s_var = graph.create_variable(name=None, value=scale, is_parameter=True, dest_ops=[created])
-            z_var = graph.create_variable(name=None, value=offset, is_parameter=True, dest_ops=[created])
-
             if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
                 created.attributes['axis'] = config.channel_axis
+            else: created.attributes['axis'] = None
+            
+            if var in op.inputs:  graph.insert_op_before(A=created, B=op, input_idx=op.inputs.index(var))
+            elif var in op.outputs: graph.insert_op_after(A=created, B=op, output_idx=op.outputs.index(var))
+            else: raise ValueError(f'Unexpected Error in Exporting Op {op.name}({op.type}).')
+            
+            graph.create_variable(name=None, value=scale, is_parameter=True, dest_ops=[created])
+            graph.create_variable(name=None, value=offset, is_parameter=True, dest_ops=[created])
 
-            # PATCH 20220803, OPSET 13 REQUIRES AXIS = 0
-            if config.policy.has_property(QuantizationProperty.PER_TENSOR):
-                created.attributes['axis'] = 0
-
-            if var in related_op.inputs:
-                graph.insert_op_between_var_and_op(created, up_var=var, down_op=related_op)
-            else: graph.insert_op_on_var(created, var=var.name)
+            created.inputs[0].dtype = value_type
+            created.inputs[0].shape = var.shape
             created.outputs[0].shape = var.shape
+            created.outputs[0].dtype = torch.float32
 
             return created
 
@@ -194,16 +196,20 @@ class ONNXRUNTIMExporter(OnnxExporter):
                     'max': config.quant_max, 
                     'exponent': config.exponent_bits, 
                     'mantissa': config.mantissa_bits})
-            s_var = graph.create_variable(name=None, value=scale, is_parameter=True, dest_ops=[created])
-            z_var = graph.create_variable(name=None, value=offset, is_parameter=True, dest_ops=[created])
 
             if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
                 created.attributes['axis'] = config.channel_axis
+            else: created.attributes['axis'] = None
+            
+            if var in op.inputs:  graph.insert_op_before(A=created, B=op, input_idx=op.inputs.index(var))
+            elif var in op.outputs: graph.insert_op_after(A=created, B=op, output_idx=op.outputs.index(var))
+            else: raise ValueError(f'Unexpected Error in Exporting Op {op.name}({op.type}).')
 
-            if var in related_op.inputs:
-                graph.insert_op_between_var_and_op(created, up_var=var, down_op=related_op)
-            else: graph.insert_op_on_var(created, var=var.name)
+            graph.create_variable(name=None, value=scale, is_parameter=True, dest_ops=[created])
+            graph.create_variable(name=None, value=offset, is_parameter=True, dest_ops=[created])
+
             created.outputs[0].shape = var.shape
+            created.inputs[0].shape = var.shape
 
             return created
 
@@ -277,12 +283,12 @@ class ONNXRUNTIMExporter(OnnxExporter):
             graph.create_link_with_var(input_var, output_var)
 
             # insert quant & dequant op on var
-            self.insert_dequant_on_variable(
+            self.insert_dequantize_node(
                 graph=graph, var=input_var, config=quant_config, 
-                related_op=upstream_op)
-            self.insert_quant_on_variable(
+                op=upstream_op)
+            self.insert_quantize_node(
                 graph=graph, var=input_var, config=quant_config, 
-                related_op=upstream_op)
+                op=upstream_op)
 
         # formatter = GraphFormatter(graph)
         # formatter(GraphCommand(GraphCommandType.DELETE_ISOLATED))
@@ -300,7 +306,10 @@ class ONNXRUNTIMExporter(OnnxExporter):
 
         If inserted quant operations do not share a same zeropoint and scale,
         Then there is no way to remove any one of them.
+        
+        This function has been removed since PPQ 0.6.6, and can be replaced by function convert_operation.
         """
+        return graph
         interested_pairs = []
         for qt_op in graph.operations.values():
             if qt_op.type == 'QuantizeLinear':
@@ -364,8 +373,7 @@ class ONNXRUNTIMExporter(OnnxExporter):
                 graph.create_variable(name=None, value=split, is_parameter=True, dest_ops=[op])
     
     def convert_operation(self, graph: BaseGraph, op: QuantableOperation,
-                          process_activation: bool, process_parameter: bool,
-                          quant_param_to_int: bool):
+                          quantized_param: bool):
         """Convert an operation to onnx quant & dequant format by inserting
         necessary quant & dequant op around it. There are 2 ways to represent
         quantized ONNX models:
@@ -386,13 +394,14 @@ class ONNXRUNTIMExporter(OnnxExporter):
             op (Operation): Converting op
             process_activation (bool): Converting op's activation
             process_parameter (bool): Converting op's parameter
-            quant_param_to_int (bool): Quant op's parameter to int8
+            quantized_param (bool): Export parameter in quantized format.
         """
         # collect quantable vars, where we need to insert quant and dequant op
-        for config, var in op.config_with_variable:
+        for config, var in [_ for _ in op.config_with_variable]:
+            inserting, inserting_var = op, var
             if not QDQHelper.TQC_Exportable_Check(TQC=config, bounded_var=var): continue
 
-            if var.is_parameter and process_parameter:
+            if var.is_parameter:
                 assert len(var.dest_ops) == 1, (
                 f'Can not export variable {var.name}, cause it has more than 1 destination operations. '
                 'PPQ require all parameters to have only 1 destination operation.')
@@ -405,27 +414,43 @@ class ONNXRUNTIMExporter(OnnxExporter):
 
                 # if not quant parameter to int, all parameter should export as fp32.
                 # needs insert both quant and dequant op for them
-                if not quant_param_to_int:
-                    created = self.insert_quant_on_variable(
-                        graph=graph, var=var, config=config, related_op=op)
-                    var = created.outputs[0]
+                if not quantized_param:
+                    created = self.insert_quantize_node(
+                        graph=graph, var=inserting_var, config=config, op=inserting)
+                    inserting_var = created.outputs[0]
+                    inserting     = created
 
-                self.insert_dequant_on_variable(
-                    graph=graph, var=var, config=config, related_op=op)
-                if quant_param_to_int and config.policy.has_property(QuantizationProperty.LINEAR):
+                self.insert_dequantize_node(
+                    graph=graph, var=inserting_var, config=config, op=inserting)
+
+                if quantized_param and config.policy.has_property(QuantizationProperty.LINEAR):
                     var.value = PPQLinearQuant_toInt(tensor=var.value, config=config)
 
-            elif (not var.is_parameter) and process_activation:
-                created = self.insert_quant_on_variable(
-                    graph=graph, var=var, config=config, related_op=op)
-                self.insert_dequant_on_variable(
-                    graph=graph, var=created.outputs[0], config=config, 
-                    related_op=op)
+            elif (not var.is_parameter):
+                
+                # Patch 20230103:
+                # If var.source_op is DequantizeLinear, then we do not need to quantize it twice.
+                if var.source_op is not None and var.source_op.type in {'DequantizeLinear', 'DequantizeFloating'}:
+                    assert var.source_op.num_of_input == 3, 'Quantize Node Format Error, need as least 3 inputs.'
+                    assert isinstance(var.source_op, Operation)
+                    scale, offset = var.source_op.inputs[1].value, var.source_op.inputs[2].value
+                    
+                    scale_diff     = torch.max(torch.abs(scale - config.scale)).item()
+                    zeropoint_diff = torch.max(torch.abs(offset - config.offset)).item()
+                    if scale_diff < 1e-4 and zeropoint_diff < 1e-1:
+                        continue
+
+                created = self.insert_quantize_node(
+                    graph=graph, var=inserting_var, config=config, op=inserting)
+                inserting_var = created.outputs[0]
+                inserting     = created
+
+                self.insert_dequantize_node(
+                    graph=graph, var=inserting_var, 
+                    config=config, op=inserting)
 
     def prepare_graph(
         self, graph: BaseGraph,
-        process_activation: bool = True,
-        process_parameter: bool = True,
         remove_activation_fn: bool = True,
         quant_parameter_to_int: bool = True) -> BaseGraph:
         """Prepare your graph for exporting.
@@ -447,13 +472,14 @@ class ONNXRUNTIMExporter(OnnxExporter):
         self.convert_operation_from_opset11_to_opset13(graph)
 
         # mark quantable variables
-        for op in [op for op in graph.operations.values()]:
+        for op in graph.topological_sort():
             if not isinstance(op, QuantableOperation): continue
-            self.convert_operation(
-                graph=graph, op=op,
-                process_activation=process_activation,
-                process_parameter=process_parameter,
-                quant_param_to_int=quant_parameter_to_int)
+            if op.type in {'QuantizeLinear', 
+                           'DequantizeLinear', 
+                           'QuantizeFloating', 
+                           'DequantizeFloating'}: continue
+
+            self.convert_operation(graph=graph, op=op, quantized_param=quant_parameter_to_int)
 
         # remove activations
         if remove_activation_fn:
@@ -463,10 +489,10 @@ class ONNXRUNTIMExporter(OnnxExporter):
         return self.remove_duplicated_quant_op(graph)
 
     def export(self, file_path: str, graph: BaseGraph, config_path: str = None, 
-               export_QDQ_op: bool = True, quantized_param: bool = False,
-               remove_activation: bool = True, save_as_external_data: bool = False) -> None:
+               quantized_param: bool = False,remove_activation: bool = True, 
+               save_as_external_data: bool = False) -> None:
         """
-        Export PPQ Graph to Onnx format.
+        Export PPQ Graph to Onnx QDQ format.
             This function requires a set of parameters to configure onnx format.
         
         Args:
@@ -490,7 +516,9 @@ class ONNXRUNTIMExporter(OnnxExporter):
                 this option will split model into external param files.
         """
         # In prepare stage, quant & dequant node are inserted into graph.
-        graph = self.prepare_graph(graph)
+        graph = self.prepare_graph(
+            graph, remove_activation_fn=remove_activation, 
+            quant_parameter_to_int=quantized_param)
 
         # if a valid config path is given, export quantization config to there.
         if config_path is not None:
