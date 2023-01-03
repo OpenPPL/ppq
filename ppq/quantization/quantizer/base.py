@@ -66,7 +66,7 @@ class BaseQuantizer(metaclass = ABCMeta):
                     operation.platform = self.target_platform
                 else: operation.platform = TargetPlatform.FP32
 
-            if TargetPlatform.is_quantized_platform(operation.platform):
+            if operation.platform not in {TargetPlatform.FP32, TargetPlatform.SOI}:
                 self.quantize_operation(op_name)
 
         # quantize operation will modify network structure
@@ -102,12 +102,11 @@ class BaseQuantizer(metaclass = ABCMeta):
         if platform == TargetPlatform.UNSPECIFIED and converting_operation.type not in self.quant_operation_types:
             return self._graph.operations[op_name]
 
-        if TargetPlatform.is_quantized_platform(platform):
-            # create quantize config and convert operation.
-            self._processor(QuantizeOperationCommand(
-                op_name=op_name, target_platform=platform,
-                config=self.init_quantize_config(operation=converting_operation)
-            ))
+        # create quantize config and convert operation.
+        self._processor(QuantizeOperationCommand(
+            op_name=op_name, target_platform=platform,
+            config=self.init_quantize_config(operation=converting_operation)
+        ))
         return self._graph.operations[op_name]
 
     @ staticmethod

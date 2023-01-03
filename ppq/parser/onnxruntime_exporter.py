@@ -569,3 +569,18 @@ class ONNXRUNTIMExporter(OnnxExporter):
         onnx.save(onnx_model, file_path, size_threshold=size_threshold,
                   save_as_external_data=save_as_external_data,
                   all_tensors_to_one_file=(not save_as_external_data))
+
+        # Check Graph
+        unsupportable_quant_op = set()
+        for op in graph.operations.values():
+            if isinstance(op, QuantableOperation):
+                for cfg, var in op.config_with_variable:
+                    if not QDQHelper.TQC_Exportable_Check(TQC=cfg, bounded_var=var): continue
+                    if cfg.num_of_bits != 8 or cfg.policy.has_property(QuantizationProperty.FLOATING):
+                        unsupportable_quant_op.add(op)
+
+        if len(unsupportable_quant_op) != 0:
+            ppq_warning('Exported Onnx Model is not executable, following Op has onnxruntime-unsupported quant policy:')
+            for op in unsupportable_quant_op:
+                ppq_warning(f'{op.name} (bitwidth != 8)')
+            ppq_warning('For Generating onnxruntime-executable Model, use TargetPlatform = Onnxruntime or OnnxruntimeQuantizer instead.')

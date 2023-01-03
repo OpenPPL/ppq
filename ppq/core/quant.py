@@ -106,6 +106,7 @@ class TargetPlatform(Enum):
 
     @ classmethod
     def is_quantized_platform(cls, platform) -> bool:
+        # removed since PPQ 0.6.6
         return platform in {
             cls.PPL_DSP_INT8, cls.PPL_DSP_TI_INT8, cls.QNN_DSP_INT8, cls.TRT_INT8, cls.NCNN_INT8, cls.NXP_INT8,
             cls.SNPE_INT8, cls.PPL_CUDA_INT8, cls.PPL_CUDA_INT4, cls.EXTENSION, cls.PPL_CUDA_MIX, cls.RKNN_INT8,

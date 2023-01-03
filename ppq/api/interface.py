@@ -241,8 +241,6 @@ def quantize_onnx_model(
         BaseGraph: 量化后的IR，包含了后端量化所需的全部信息
                    The quantized IR, containing all information needed for backend execution
     """
-    if not TargetPlatform.is_quantized_platform(platform=platform):
-        raise ValueError(f'Target Platform {platform} is an non-quantable platform.')
     if do_quantize:
         if calib_dataloader is None or calib_steps is None:
             raise TypeError('Quantization needs a valid calib_dataloader and calib_steps setting.')
@@ -413,8 +411,6 @@ def quantize_caffe_model(
         BaseGraph: 量化后的IR，包含了后端量化所需的全部信息
                    The quantized IR, containing all information needed for backend execution
     """
-    if not TargetPlatform.is_quantized_platform(platform=platform):
-        raise ValueError(f'Target Platform {platform} is an non-quantable platform.')
     if do_quantize:
         if calib_dataloader is None or calib_steps is None:
             raise TypeError('Quantization needs a valid calib_dataloader and calib_steps setting.')
@@ -513,8 +509,6 @@ def quantize_native_model(
         BaseGraph: 量化后的IR，包含了后端量化所需的全部信息
                    The quantized IR, containing all information needed for backend execution
     """
-    if not TargetPlatform.is_quantized_platform(platform=platform):
-        raise ValueError(f'Target Platform {platform} is an non-quantable platform.')
     if do_quantize:
         if calib_dataloader is None or calib_steps is None:
             raise TypeError('Quantization needs a valid calib_dataloader and calib_steps setting.')

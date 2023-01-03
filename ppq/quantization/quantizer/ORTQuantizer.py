@@ -64,22 +64,9 @@ class OnnxruntimeQuantizer(BaseQuantizer):
                     QuantizationProperty.LINEAR +
                     QuantizationProperty.PER_CHANNEL
                 )
-                bias_config.num_of_bits = 32
-                bias_config.quant_max = int(pow(2, bias_config.num_of_bits - 1)) - 1
-                bias_config.quant_min = - int(pow(2, bias_config.num_of_bits - 1)) + 1
-                bias_config.state = QuantizationStates.PASSIVE_INIT
-                bias_config.channel_axis = 0
-                bias_config.observer_algorithm = 'minmax'
+                bias_config.state = QuantizationStates.FP32
 
         return base_quant_config
-
-    @ property
-    def target_platform(self) -> TargetPlatform:
-        return TargetPlatform.OPENVINO_INT8
-
-    @ property
-    def default_platform(self) -> TargetPlatform:
-        return TargetPlatform.FP32
 
     @ property
     def quant_operation_types(self) -> set:

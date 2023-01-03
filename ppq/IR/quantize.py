@@ -276,13 +276,7 @@ class QuantableGraph(GraphCommandProcessor):
         if operation_name not in self.graph.operations:
             raise KeyError(f'Operation {operation_name} is not in your graph, Please check your input.')
 
-        if not TargetPlatform.is_quantized_platform(target_platform):
-            raise ValueError(
-                f'You are trying to quantize a operation({operation_name})'\
-                f' to target platform {target_platform}, however it is an non-quantized platform.')
-
         operation = self._graph.operations[operation_name]
-
         quantized_operation = QuantableOperation(
             convert_from=operation,
             quantize_config=quantization_config,

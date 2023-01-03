@@ -21,7 +21,6 @@ from .base import *
 
 logger = NaiveLogger.get_logger('PPQ')
 
-
 def convert_onnx_pads_to_torch(onnx_pads: List[int], mode: str=None) -> List[int]:
     # Convert padding from onnx format to torch format
     # onnx format: [x1_begin, x2_begin, ... , x1_end, x2_end, ...]
@@ -595,12 +594,17 @@ def Eltwise_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackend
         assert len(values) == 2
         version = torch.__version__
         if version < '1.5.0' or version >= '1.7.0':
-            output = torch.div(*values)
-        else:
-            if values[0].dtype in [torch.uint8, torch.int8, torch.int16, torch.int32, torch.int64]:
-                output = torch.floor_divide(*values)
+            if (values[0].dtype in [torch.int32, torch.int64] and 
+                values[1].dtype in [torch.int32, torch.int64]):
+                if values[0].dtype == torch.int64 or values[1].dtype[1] == torch.int64:
+                    output = torch.floor_divide(*values).long()
+                else: output = torch.floor_divide(*values).int()
             else:
                 output = torch.div(*values)
+        else:
+            if values[0].dtype in [torch.uint8, torch.int8, torch.int16, torch.int32, torch.int64]:
+                output = torch.floor_divide(*values).int()
+            else: output = torch.div(*values)
     elif op.type == 'Max':
         output = torch.max(*values)
     elif op.type == 'Min':
