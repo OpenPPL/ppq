@@ -231,7 +231,7 @@ class ONNXRUNTIMExporter(OnnxExporter):
             activation_ops (List[Operation]): Removing activations.
         """
         removed_activations = []
-        for op in graph.operations.values():
+        for op in graph.topological_sort():
             if not isinstance(op, QuantableOperation): continue
             if op.type in {'Relu', 'Clip'}:
                 config = op.config.output_quantization_config[0]
@@ -265,7 +265,7 @@ class ONNXRUNTIMExporter(OnnxExporter):
         for op in removed_activations:
             if not isinstance(op, QuantableOperation): continue
             if len(graph.get_upstream_operations(op)) == 0: continue
-            quant_config = op.config.output_quantization_config[0]
+            config = op.config.output_quantization_config[0]
 
             upstream_op = graph.get_upstream_operations(op)[0]
             if not isinstance(upstream_op, QuantableOperation): continue
@@ -279,19 +279,36 @@ class ONNXRUNTIMExporter(OnnxExporter):
                 graph.outputs[input_var.name] = input_var
 
             input_var, output_var = op.inputs[0], op.outputs[0]
-            graph.remove_operation(op)
-            graph.create_link_with_var(input_var, output_var)
+            # Patch 20230103:
+            # If var.source_op is DequantizeLinear, then we do not need to quantize it twice.
+            if input_var.source_op is not None and input_var.source_op.type in {'DequantizeLinear', 'DequantizeFloating'}:
+                assert input_var.source_op.num_of_input == 3, 'Quantize Node Format Error, need as least 3 inputs.'
+                assert isinstance(input_var.source_op, Operation)
+                scale, offset = input_var.source_op.inputs[1].value, input_var.source_op.inputs[2].value
+                
+                scale_diff     = torch.max(torch.abs(scale - config.scale)).item()
+                zeropoint_diff = torch.max(torch.abs(offset - config.offset)).item()
+                if scale_diff < 1e-4 and zeropoint_diff < 1e-1:
+                    continue
+
+            if len(output_var.dest_ops) == 1 and output_var.dest_ops[0].type in {'QuantizeLinear', 'QuantizeFloating'}:
+                assert output_var.dest_ops[0].num_of_input == 3, 'Quantize Node Format Error, need as least 3 inputs.'
+                assert isinstance(output_var.dest_ops[0], Operation)
+                scale, offset = output_var.dest_ops[0].inputs[1].value, output_var.dest_ops[0].inputs[2].value
+                
+                scale_diff     = torch.max(torch.abs(scale - config.scale)).item()
+                zeropoint_diff = torch.max(torch.abs(offset - config.offset)).item()
+                if scale_diff < 1e-4 and zeropoint_diff < 1e-1:
+                    continue
 
             # insert quant & dequant op on var
+            created = self.insert_quantize_node(
+                graph=graph, var=input_var, config=config, op=op)
             self.insert_dequantize_node(
-                graph=graph, var=input_var, config=quant_config, 
-                op=upstream_op)
-            self.insert_quantize_node(
-                graph=graph, var=input_var, config=quant_config, 
-                op=upstream_op)
+                graph=graph, var=created.outputs[0], 
+                config=config, op=created)
+            graph.remove_operation(op, keep_coherence=True)
 
-        # formatter = GraphFormatter(graph)
-        # formatter(GraphCommand(GraphCommandType.DELETE_ISOLATED))
         return graph
 
     def remove_duplicated_quant_op(self, graph: BaseGraph) -> BaseGraph:
@@ -434,6 +451,16 @@ class ONNXRUNTIMExporter(OnnxExporter):
                     assert var.source_op.num_of_input == 3, 'Quantize Node Format Error, need as least 3 inputs.'
                     assert isinstance(var.source_op, Operation)
                     scale, offset = var.source_op.inputs[1].value, var.source_op.inputs[2].value
+                    
+                    scale_diff     = torch.max(torch.abs(scale - config.scale)).item()
+                    zeropoint_diff = torch.max(torch.abs(offset - config.offset)).item()
+                    if scale_diff < 1e-4 and zeropoint_diff < 1e-1:
+                        continue
+
+                if len(var.dest_ops) == 1 and var.dest_ops[0].type in {'QuantizeLinear', 'QuantizeFloating'}:
+                    assert var.dest_ops[0].num_of_input == 3, 'Quantize Node Format Error, need as least 3 inputs.'
+                    assert isinstance(var.dest_ops[0], Operation)
+                    scale, offset = var.dest_ops[0].inputs[1].value, var.dest_ops[0].inputs[2].value
                     
                     scale_diff     = torch.max(torch.abs(scale - config.scale)).item()
                     zeropoint_diff = torch.max(torch.abs(offset - config.offset)).item()
