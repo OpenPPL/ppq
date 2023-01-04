@@ -18,15 +18,6 @@ class QuantizationOptimizationPass(metaclass = ABCMeta):
     def __init__(self, name: str = 'Default Quanzation Optim') -> None:
         self.name = name
 
-    def apply(
-        self, graph: BaseGraph, **kwargs
-    ) -> None:
-        if not isinstance(graph, BaseGraph):
-            raise TypeError(
-                f'Incorrect graph object input, expect PPQ BaseGraph here, '
-                f'while {type(graph)} was given.')
-        self.optimize(graph, **kwargs)
-
     @ abstractmethod
     def optimize(
         self, graph: BaseGraph, **kwargs
@@ -87,7 +78,7 @@ class QuantizationOptimizationPipeline(Container, Iterable):
             if not isinstance(graph, BaseGraph): 
                 raise TypeError(f'parameter 1 should be an instance of PPQ BaseGraph when calling optim pass, '
                                 f'however {type(graph)} was given.')
-            optim_pass.apply(graph=graph, **kwargs)
+            optim_pass.optimize(graph=graph, **kwargs)
             if verbose: print(f'Finished.')
 
     def append_optimization_to_pipeline(self, optim_pass: QuantizationOptimizationPass, at_front:bool = False):

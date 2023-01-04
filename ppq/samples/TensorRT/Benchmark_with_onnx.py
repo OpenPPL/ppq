@@ -51,7 +51,6 @@ def infer_trt(model_path: str, samples: List[np.ndarray]) -> List[np.ndarray]:
                     outputs=outputs, stream=stream, batch_size=1)
     return results
 
-
 with ENABLE_CUDA_KERNEL():
     # export non-quantized model to tensorRT for benchmark
     non_quantized = quantize_onnx_model(
@@ -91,7 +90,7 @@ with ENABLE_CUDA_KERNEL():
         graph=quantized, 
         platform=TargetPlatform.TRT_INT8,
         graph_save_to='model_int8.onnx')
-    
+
     if CFG_VALID_RESULT:
         # compute simulating error
         trt_outputs = infer_trt(

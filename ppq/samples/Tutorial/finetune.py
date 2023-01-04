@@ -78,21 +78,11 @@ with ENABLE_CUDA_KERNEL():
         dataloader=CALIBRATION,
         collate_fn=collate_fn)
 
-# ------------------------------------------------------------
-# 下面我们向你展示另一种 PPQ 中提供的优化方法
-# 在 PPQ 0.6.5 之后，我们将这部分扩展性的方法移出了 QuantizationSetting
-# 现在，扩展性方法需要手动调用
-# ------------------------------------------------------------
+
 model = torchvision.models.mobilenet.mobilenet_v2(pretrained=True)
 model = model.to(DEVICE)
 
 QSetting = QuantizationSettingFactory.default_setting()
-# ------------------------------------------------------------
-# baking_parameter 将会在网络量化之后，将网络中所有参数静态量化
-# 参数静态量化将会显著提高 PPQ 的运行速度，但是一旦参数被静态量化，则其将无法被修改
-# 也无法参与后续的训练过程
-# ------------------------------------------------------------
-QSetting.quantize_parameter_setting.baking_parameter = False
 
 with ENABLE_CUDA_KERNEL():
     quantized = quantize_torch_model(
@@ -100,20 +90,6 @@ with ENABLE_CUDA_KERNEL():
         calib_steps=32, input_shape=INPUT_SHAPE,
         setting=QSetting, collate_fn=collate_fn, platform=PLATFORM,
         onnx_export_file='Output/model.onnx', device=DEVICE, verbose=0)
-
-    # ------------------------------------------------------------
-    # 让我们手动调用 AdaroundPass 优化过程
-    # 这一过程需要训练更多步数，同时你应当注意，训练过程应该放在网络量化过程之后
-    # 并且不允许使用 QSetting.quantize_parameter_setting.baking_parameter = True
-    # ------------------------------------------------------------
-    from ppq.quantization.optim import AdaroundPass, ParameterBakingPass
-    executor = TorchExecutor(graph=quantized, device=DEVICE)
-    AdaroundPass(steps=5000).optimize(
-        graph=quantized, dataloader=CALIBRATION, 
-        executor=executor, collate_fn=collate_fn)
-    ParameterBakingPass().optimize(
-        graph=quantized, dataloader=CALIBRATION, 
-        executor=executor, collate_fn=collate_fn)
 
     graphwise_error_analyse(
         graph=quantized, 

@@ -49,20 +49,7 @@ assert graph is not None, 'Graph Loading Error, Check your input again.'
 # 当你的网络量化误差过高时，你需要修改 SETTING 对象中的属性来进行特定的优化
 # -------------------------------------------------------------------
 QS = QuantizationSettingFactory.default_setting()
-if TARGET_PLATFORM == TargetPlatform.PPL_CUDA_INT8:
-    QS = QuantizationSettingFactory.pplcuda_setting()
-if TARGET_PLATFORM in {TargetPlatform.PPL_DSP_INT8, TargetPlatform.HEXAGON_INT8, TargetPlatform.SNPE_INT8}:
-    QS = QuantizationSettingFactory.dsp_setting()
-if TARGET_PLATFORM == TargetPlatform.METAX_INT8_T:
-    QS = QuantizationSettingFactory.metax_pertensor_setting()
-if TARGET_PLATFORM == TargetPlatform.NXP_INT8:
-    QS = QuantizationSettingFactory.nxp_setting()
-if TARGET_PLATFORM == TargetPlatform.FPGA_INT8:
-    QS = QuantizationSettingFactory.fpga_setting()
-if TARGET_PLATFORM == TargetPlatform.TRT_INT8:
-    QS = QuantizationSettingFactory.trt_setting()
-if TARGET_PLATFORM == TargetPlatform.ASC_INT8:
-    QS = QuantizationSettingFactory.ascend_setting()
+
 # -------------------------------------------------------------------
 # 下面向你展示了如何使用 finetuning 过程提升量化精度
 # 在 PPQ 中我们提供了十余种算法用来帮助你恢复精度
@@ -147,55 +134,13 @@ with ENABLE_CUDA_KERNEL():
         layerwise_error_analyse(graph=quantized, running_device=EXECUTING_DEVICE,
                                 interested_outputs=None,
                                 dataloader=dataloader, collate_fn=lambda x: x.to(EXECUTING_DEVICE))
-    def collect_data(data):
-        img = data
-        return img.cuda()
-    graphwise_error_analyse(quantized, 'cuda', dataloader, collect_data, 'cosine', steps=32)
+
     # -------------------------------------------------------------------
     # 使用 export_ppq_graph 函数来导出量化后的模型
-    # PPQ 会根据你所选择的导出平台来修改模型格式，请知悉：
-    # 如果你选择 tensorRT 作为导出平台，则我们将直接导出量化后的engine文件，tensorRT可以直接运行；
-    # 如果你选择 ppl 系列作为导出平台，则我们将优化后的onnx文件以及json格式的量化参数，ppl需要这两个东西以运行量化模型；
-    # 如果你选择 snpe 作为导出平台，量化参数将被写入caffe proto文件，snpe好像...可以直接运行；
-    # 如果你选择 metax 作为导出平台，他们还在写后端框架所以短时间内可能不能执行；
-    # 如果你选择 tengine 作为导出平台，他们还在写接口来读取ppq的输入，所以好像也不能执行；
-    # 如果你选择 nxp 作为导出格式，量化参数将被写入onnx，nxp可以直接运行；
-    # 如果你选择 onnxruntime 作为导出格式，我们将在网络中插入quant以及dequant节点，onnxruntime可以直接运行。
-    # 如果你选择 onnxruntime OOS 作为导出格式，我们将会弄出一些 com.microsoft 定义量化算子，onnxruntime可以直接运行。
-    # 如果你选择 onnx 作为导出格式，我们将导出一个ppq原生的格式，这个格式只是用来debug的。
-
-    # 如果你想最快速的看到结果，选择onnxruntime作为导出格式即可，你就可以在导出的onnx中看到量化结果。
-    # 请不要使用 onnxruntime 执行量化后的文件，那样无法加速。
-    # 如果你想加速你的网络，请使用 tensorRT, ncnn, openvino, openppl, tengine 等
-
-    # 所有导出平台被列举在ppq.api.interface.py文件中：
-    # EXPORTERS = {
-    # TargetPlatform.PPL_DSP_INT8:  PPLDSPCaffeExporter,
-    # TargetPlatform.PPL_DSP_TI_INT8: PPLDSPTICaffeExporter,
-    # TargetPlatform.QNN_DSP_INT8:  QNNDSPExporter,
-    # TargetPlatform.PPL_CUDA_INT8: PPLBackendExporter,
-    # TargetPlatform.SNPE_INT8:     SNPECaffeExporter,
-    # TargetPlatform.NXP_INT8:      NxpExporter,
-    # TargetPlatform.ONNX:          OnnxExporter,
-    # TargetPlatform.ONNXRUNTIME:   ONNXRUNTIMExporter,
-    # TargetPlatform.OPENVINO_INT8: ONNXRUNTIMExporter,
-    # TargetPlatform.CAFFE:         CaffeExporter,
-    # TargetPlatform.NATIVE:        NativeExporter,
-    # TargetPlatform.EXTENSION:     ExtensionExporter,
-    # TargetPlatform.ORT_OOS_INT8:  ORTOOSExporter,
-    # TargetPlatform.METAX_INT8_C:  MetaxExporter,
-    # TargetPlatform.METAX_INT8_T:  MetaxExporter,
-    # TargetPlatform.TRT_INT8:      TensorRTExporter,
-    # TargetPlatform.NCNN_INT8:     NCNNExporter
-    # }
+    # PPQ 会根据你所选择的导出平台来修改模型格式
     # -------------------------------------------------------------------
     print('网络量化结束，正在生成目标文件:')
     export_ppq_graph(
         graph=quantized, platform=TARGET_PLATFORM,
         graph_save_to = os.path.join(WORKING_DIRECTORY, 'quantized.onnx'),
         config_save_to = os.path.join(WORKING_DIRECTORY, 'quant_cfg.json'))
-
-    # 如果你需要导出 CAFFE 模型，使用下面的语句，caffe exporter 需要一个 input_shapes 参数。
-    # export(working_directory=WORKING_DIRECTORY,
-    #        quantized=quantized, platform=TargetPlatform.CAFFE,
-    #        input_shapes=NETWORK_INPUTSHAPE)

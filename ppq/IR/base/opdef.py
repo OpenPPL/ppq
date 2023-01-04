@@ -111,12 +111,8 @@ class OperationBase(metaclass=ABCMeta):
 
     @ property
     def meta_data(self) -> OperationMeta:
-        return self._meta
-
-    @ meta_data.setter
-    def meta_data(self, meta: OperationMeta) -> OperationMeta:
-        self._meta = meta
-
+        raise NotImplementedError('This property has been removed since PPQ 0.6.6')
+ 
     @ property
     def inputs(self) -> List[object]:
         return self._input_vars
@@ -133,7 +129,7 @@ class OperationBase(metaclass=ABCMeta):
         self._detail[attrib] = value
 
     @ property
-    def extension_attrib(self):
+    def extension_attrib(self) -> dict:
         return self._detail
 
     def __hash__(self) -> int:

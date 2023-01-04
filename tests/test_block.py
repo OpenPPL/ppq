@@ -1,7 +1,7 @@
-from tmodel  import *
-from tscheme import *
-from ppq     import *
-from ppq.api import *
+from tests.tmodel  import *
+from tests.tscheme import *
+from ..ppq     import *
+from ..ppq.api import *
 
 DEVICE = 'cuda'
 

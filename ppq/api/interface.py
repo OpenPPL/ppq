@@ -1,23 +1,29 @@
 import json
 import os
 from typing import Any, Callable, Iterable, List, Union
-from ppq.IR.quantize import QuantableOperation
-from ppq.core.quant import QuantizationStates
+
+import torch
+from torch.utils.data import DataLoader
 
 import ppq.lib as PFL
-import torch
 from ppq.api.setting import (DispatchingTable, QuantizationSetting,
                              QuantizationSettingFactory)
 from ppq.core import (PPQ_CONFIG, NetworkFramework, TargetPlatform,
                       empty_ppq_cache, ppq_warning)
+from ppq.core.common import (FORMATTER_FORMAT_CONSTANT_INPUT,
+                             FORMATTER_FUSE_BIAS_ADD, FORMATTER_FUSE_BN,
+                             FORMATTER_REPLACE_BN_TO_CONV,
+                             FORMATTER_REPLACE_REMOVE_IDENTITY,
+                             FORMATTER_REPLACE_REMOVE_ISOLATED)
 from ppq.executor import TorchExecutor
 from ppq.executor.base import BaseGraphExecutor
 from ppq.IR import (BaseGraph, GraphBuilder, GraphCommand, GraphCommandType,
-                    GraphFormatter, GraphMerger)
+                    GraphFormatter, GraphMerger, GraphReplacer)
+from ppq.IR.quantize import QuantableOperation
 from ppq.quantization.optim.base import QuantizationOptimizationPass
 from ppq.quantization.quantizer import BaseQuantizer
 from ppq.scheduler import DISPATCHER_TABLE, GraphDispatcher
-from torch.utils.data import DataLoader
+
 
 def load_graph(file_path: str, from_framework: NetworkFramework=NetworkFramework.ONNX, **kwargs) -> BaseGraph:
     parser = PFL.Parser(from_framework)
@@ -235,8 +241,6 @@ def quantize_onnx_model(
         BaseGraph: 量化后的IR，包含了后端量化所需的全部信息
                    The quantized IR, containing all information needed for backend execution
     """
-    if not TargetPlatform.is_quantized_platform(platform=platform):
-        raise ValueError(f'Target Platform {platform} is an non-quantable platform.')
     if do_quantize:
         if calib_dataloader is None or calib_steps is None:
             raise TypeError('Quantization needs a valid calib_dataloader and calib_steps setting.')
@@ -407,8 +411,6 @@ def quantize_caffe_model(
         BaseGraph: 量化后的IR，包含了后端量化所需的全部信息
                    The quantized IR, containing all information needed for backend execution
     """
-    if not TargetPlatform.is_quantized_platform(platform=platform):
-        raise ValueError(f'Target Platform {platform} is an non-quantable platform.')
     if do_quantize:
         if calib_dataloader is None or calib_steps is None:
             raise TypeError('Quantization needs a valid calib_dataloader and calib_steps setting.')
@@ -507,8 +509,6 @@ def quantize_native_model(
         BaseGraph: 量化后的IR，包含了后端量化所需的全部信息
                    The quantized IR, containing all information needed for backend execution
     """
-    if not TargetPlatform.is_quantized_platform(platform=platform):
-        raise ValueError(f'Target Platform {platform} is an non-quantable platform.')
     if do_quantize:
         if calib_dataloader is None or calib_steps is None:
             raise TypeError('Quantization needs a valid calib_dataloader and calib_steps setting.')
@@ -609,21 +609,34 @@ def format_graph(graph: BaseGraph) -> BaseGraph:
     We do not expect there is any shared parameter in your network, all of them will be copied and spilted.
     We do not expect any isolated operation in your network, all of them will be removed.
     """
-
+    
     # do graph level optimization
-    formatter = GraphFormatter(GraphMerger(graph))
-
-    formatter(GraphCommand(GraphCommandType.FORMAT_CONSTANT_INPUT))
-    formatter(GraphCommand(GraphCommandType.FUSE_BN))
-    formatter(GraphCommand(GraphCommandType.FORMAT_SNG_BN))
+    formatter = GraphReplacer(GraphFormatter(GraphMerger(graph)))
+    if FORMATTER_FORMAT_CONSTANT_INPUT:
+        formatter(GraphCommand(GraphCommandType.FORMAT_CONSTANT_INPUT))
+    formatter(GraphCommand(GraphCommandType.CONVERT_TO_TENSOR))
     formatter(GraphCommand(GraphCommandType.FORMAT_PARAMETERS))
+    
+    if FORMATTER_FUSE_BIAS_ADD:
+        formatter(GraphCommand(GraphCommandType.FUSE_BIAS_ADD))
+    
+    if FORMATTER_FUSE_BN:
+        formatter(GraphCommand(GraphCommandType.FUSE_BN))
+    
+    if FORMATTER_REPLACE_BN_TO_CONV:
+        formatter(GraphCommand(GraphCommandType.REPLACE_BATCHNORM_TO_CONV))
+
     formatter(GraphCommand(GraphCommandType.FORMAT_CAST))
     formatter(GraphCommand(GraphCommandType.FORMAT_SLICE))
     formatter(GraphCommand(GraphCommandType.FORMAT_CLIP))
     formatter(GraphCommand(GraphCommandType.FORMAT_PAD))
     formatter(GraphCommand(GraphCommandType.FORMAT_RESIZE))
-    formatter(GraphCommand(GraphCommandType.REMOVE_IDENTITY))
-    formatter(GraphCommand(GraphCommandType.DELETE_ISOLATED))
+    
+    if FORMATTER_REPLACE_REMOVE_IDENTITY:
+        formatter(GraphCommand(GraphCommandType.REMOVE_IDENTITY))
+    
+    if FORMATTER_REPLACE_REMOVE_ISOLATED:
+        formatter(GraphCommand(GraphCommandType.DELETE_ISOLATED))
 
     return graph
 
@@ -944,6 +957,7 @@ class DISABLE_CUDA_KERNEL:
 
 
 class DEQUANTIZE_GRAPH:
+    """ A short-cut function to dequantize given graph. """
     def __init__(self, graph: BaseGraph) -> None:
         self._graph          = graph
         self._state_recorder = {}
@@ -951,19 +965,11 @@ class DEQUANTIZE_GRAPH:
 
     def __enter__(self):
         for op in self._quantable_ops:
-            for cfg, _ in op.config_with_variable:
-                if cfg.state != QuantizationStates.BAKED:
-                    self._state_recorder[cfg] = cfg.state
-                    cfg.state = QuantizationStates.FP32
-                else:
-                    raise PermissionError(
-                        f'Dequantization Failure when processing with operation {op.name}. '
-                        'You are not allowed to dequantize graph when Quantization State is baked.')
+            op.dequantize()
 
     def __exit__(self, *args):
         for op in self._quantable_ops:
-            for cfg, _ in op.config_with_variable:
-                cfg.state = self._state_recorder[cfg]
+            op.restore_quantize_state()
 
 
 __all__ = ['load_graph', 'load_onnx_graph', 'load_caffe_graph',
