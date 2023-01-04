@@ -55,6 +55,7 @@ class TargetPlatform(Enum):
     UNSPECIFIED is a virtual platform, all operations are sent to this platform once they were created.
         Quantizer then dispatches them towards desired platform through its quantization logic.
     """
+    MNN_INT8      = 100
     TRT_INT8      = 101
     TRT_FP8       = 105
     NCNN_INT8     = 102
@@ -111,7 +112,7 @@ class TargetPlatform(Enum):
             cls.PPL_DSP_INT8, cls.PPL_DSP_TI_INT8, cls.QNN_DSP_INT8, cls.TRT_INT8, cls.NCNN_INT8, cls.NXP_INT8,
             cls.SNPE_INT8, cls.PPL_CUDA_INT8, cls.PPL_CUDA_INT4, cls.EXTENSION, cls.PPL_CUDA_MIX, cls.RKNN_INT8,
             cls.METAX_INT8_C, cls.METAX_INT8_T, cls.OPENVINO_INT8, cls.FPGA_INT8, cls.TENGINE_INT8, 
-            cls.FP8, cls.GRAPHCORE_FP8, cls.TRT_FP8, cls.ASC_INT8, cls.UNSPECIFIED, cls.INT8}
+            cls.FP8, cls.GRAPHCORE_FP8, cls.TRT_FP8, cls.ASC_INT8, cls.UNSPECIFIED, cls.INT8, cls.MNN_INT8}
 
 
 class RoundingPolicy(Enum):
@@ -576,11 +577,13 @@ class TensorQuantizationConfig(Serializable):
         super().__init__()
 
     def can_export(self, export_overlapped: bool = EXPORT_OVERLAPPED_CONFIG) -> bool:
-        if self.visibility == QuantizationVisibility.INTERNAL: return False
+        if self.visibility == QuantizationVisibility.INTERNAL: 
+            return False
         type_check  = isinstance(self.scale, torch.Tensor) and isinstance(self.offset, torch.Tensor)
         valid_states = {QuantizationStates.BAKED, QuantizationStates.PASSIVE_BAKED}
 
-        if export_overlapped: valid_states.add(QuantizationStates.OVERLAPPED)
+        if export_overlapped: 
+            valid_states.add(QuantizationStates.OVERLAPPED)
         state_check = QuantizationStates.is_activated(self.state) or self.state in valid_states
 
         if (state_check or self.visibility == QuantizationVisibility.FORCE_EXPORT):

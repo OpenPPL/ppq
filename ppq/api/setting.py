@@ -416,6 +416,12 @@ class QuantizationSettingFactory:
         default_setting.fusion = False
         return default_setting
 
+    @staticmethod
+    def mnn_setting() -> QuantizationSetting:
+        default_setting = QuantizationSetting()
+        default_setting.fusion = True
+        return default_setting
+
     @ staticmethod
     def pplcuda_setting() -> QuantizationSetting:
         default_setting = QuantizationSetting()

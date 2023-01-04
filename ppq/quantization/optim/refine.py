@@ -13,7 +13,6 @@ from ppq.quantization.observer.range import minmax_to_scale_offset
 
 from .base import QuantizationOptimizationPass
 
-
 class QuantizeSimplifyPass(QuantizationOptimizationPass):
     """
     ## PPQ Quantize Simplify Pass(通用量化精简过程)
@@ -197,7 +196,7 @@ class QuantizeFusionPass(QuantizationOptimizationPass):
                 if (not isinstance(computing_op, QuantableOperation) or 
                     computing_op.platform in {
                         TargetPlatform.TRT_INT8, TargetPlatform.OPENVINO_INT8, 
-                        TargetPlatform.NCNN_INT8}): 
+                        TargetPlatform.NCNN_INT8, TargetPlatform.MNN_INT8}): 
                     continue
 
                 if (computing_op.platform != act_op.platform and 
