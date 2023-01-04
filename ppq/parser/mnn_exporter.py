@@ -1,27 +1,28 @@
-
 import os
 from typing import List
 import json
 
-from ppq.core import (DataType, NetworkFramework, QuantizationProperty,
-                      QuantizationStates, ppq_warning, QuantizationPolicy)
-from ppq.IR import BaseGraph, GraphExporter, QuantableOperation
-
+from ppq.core import NetworkFramework
+from ppq.IR import BaseGraph,GraphExporter
 from .caffe_exporter import CaffeExporter
 from .onnx_exporter import OnnxExporter
-from .util import convert_value
+
 
 class MNNExporter(GraphExporter):
     def export_quantization_config(self, config_path: str, graph: BaseGraph):
         quant_info_json = {}
-
-        # opHasBeenVisited = []
+        shape = {}
         op_tensor_scales = []
         op_tensor_names = []
+        for input_name in graph.inputs.keys():
+            quant_var = graph.inputs[input_name]
+            shape["channels"] = quant_var.shape[1]
+            shape["height"] = quant_var.shape[2]
+            shape["width"] = quant_var.shape[3]
+        quant_info_json["shape"] = shape
 
         for op in graph.topological_sort():
-            # process the first conv
-            if op.type == "Conv":
+            if op.type in {"Conv", 'Add'}:
                 op_tensor_scales.clear()
                 op_tensor_names.clear()
                 for cfg, var in op.config_with_variable:
@@ -33,13 +34,16 @@ class MNNExporter(GraphExporter):
                     op_tensor_names.append(var.name)
                     
                 assert len(op_tensor_scales)==len(op_tensor_names)
-                
-                base_name = op_tensor_names[1]
-                input_tensor_name = base_name + "_input_tensor_0"
-                output_tensor_name = base_name + "_output_tensor_0"
-                quant_info_json[input_tensor_name] = op_tensor_scales[0]
-                quant_info_json[output_tensor_name] = op_tensor_scales[1]
-
+                if op.type == "Conv":
+                    base_name = op_tensor_names[1]
+                    input_tensor_name = base_name + " input_tensor_0"
+                    output_tensor_name = base_name + " output_tensor_0"
+                    quant_info_json[input_tensor_name] = op_tensor_scales[0]
+                    quant_info_json[output_tensor_name] = op_tensor_scales[1]
+                if op.type == "Add":
+                    base_name = op_tensor_names[2]
+                    output_tensor_name = base_name + " output_tensor_0"
+                    quant_info_json[output_tensor_name] = op_tensor_scales[1]
         json_qparams_str = json.dumps(quant_info_json, indent=4)
         with open(config_path, "w") as json_file:
             json_file.write(json_qparams_str)
@@ -48,9 +52,6 @@ class MNNExporter(GraphExporter):
     def export(self, file_path: str, graph: BaseGraph, config_path: str = None, input_shapes: List[List[int]] = [[1, 3, 224, 224]]):
         if config_path is not None:
             self.export_quantization_config(config_path, graph)
-
-        # import pdb
-        # pdb.set_trace()
 
         _, ext = os.path.splitext(file_path)
         if ext == '.onnx':
