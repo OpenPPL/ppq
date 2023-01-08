@@ -1,48 +1,198 @@
 from ppq.core import CUDA
-from ppq import ppq_tensor_round, RoundingPolicy
+from ppq.core.ffi import CUDA_COMPLIER
+from ppq import ppq_tensor_round, RoundingPolicy, ppq_numerical_round, torch_snr_error
+from typing import List
 import torch
 from math import sqrt
+from tqdm import tqdm
 
 EXECUTING_DEVICE = 'cuda'
 TEST_TIMES = 128
-Q_MIN, Q_MAX = -128, 127
+Q_MIN, Q_MAX = 0, 255
 ROUNDING_POLICY = RoundingPolicy.ROUND_HALF_EVEN
 
-# Test tensorwise quantize
-for i in range(TEST_TIMES):
-    t = torch.rand(size=[128, 3, 224, 224]).to(EXECUTING_DEVICE)
-    s = torch.rand(size=[1]).to(EXECUTING_DEVICE)
-    o = torch.randint(low=0, high=255, size=[1]).float().to(EXECUTING_DEVICE)
+CUDA_COMPLIER.complie()
 
-    # torch quantize
-    qt = ppq_tensor_round(t / s, policy=ROUNDING_POLICY) + o
-    qt = qt.clip(Q_MIN, Q_MAX)
-    qt = (qt - o) * s
 
-    # t = t.int()
-    cuda_qt = CUDA.LinearQuantize_T(
-        t, s, o, Q_MIN, Q_MAX, ROUNDING_POLICY.value)
+def __TEST_QUANTIZE_LT__(size: List[int], iterations: int, sym: bool):
+    for _ in tqdm(range(iterations), desc='QUANTIZE LT TESTING...'):
+        t = torch.rand(size=size).cuda() * 32
+        s = torch.rand(size=[1]).cuda()
+        if sym:
+            o = torch.zeros(size=[1]).cuda()
+        else:
+            o = torch.randint(low=0, high=255, size=[1]).float().cuda()
 
-    assert torch.abs(cuda_qt - qt).max().item() < 1e-6
+        # torch quantize
+        qt = ppq_tensor_round(t / s, policy=ROUNDING_POLICY) + o
+        qt = qt.clip(Q_MIN, Q_MAX)
+        qt = (qt - o) * s
 
-# Test channelwise quantize
-for i in range(TEST_TIMES):
-    t = torch.rand(size=[128, 3, 224, 224]).to(EXECUTING_DEVICE)
-    s = torch.rand(size=[3]).to(EXECUTING_DEVICE)
-    o = torch.randint(low=0, high=255, size=[3]).float().to(EXECUTING_DEVICE)
-    c = 1
+        # t = t.int()
+        cuda_qt = CUDA.LinearQuantize_T(
+            t, s, o, Q_MIN, Q_MAX, ROUNDING_POLICY.value)
 
-    # torch quantize
-    shape = [1 if axis != c else -1 for axis in range(t.ndim)]
-    s, o = s.view(shape), o.view(shape)
-    qt = ppq_tensor_round(t / s, policy=ROUNDING_POLICY) + o
-    qt = qt.clip(Q_MIN, Q_MAX)
-    qt = (qt - o) * s
+        diff = qt - cuda_qt
+        if diff.abs().max() != 0:
+            raise Exception('Test Failed.')
 
-    # t = t.int()
-    cuda_qt = CUDA.LinearQuantize_C(
-        t, s, o, c, Q_MIN, Q_MAX, ROUNDING_POLICY.value)
-    assert torch.abs(cuda_qt - qt).max().item() < 1e-6
+
+def __TEST_QUANTIZE_LC__(size: List[int], iterations: int, sym: bool, c: int=1):
+    for _ in tqdm(range(iterations), desc='QUANTIZE LC TESTING...'):
+        num_of_channel = size[c]
+        t = torch.rand(size=size).cuda() * 32
+        s = torch.rand(size=[num_of_channel]).cuda()
+        if sym:
+            o = torch.zeros(size=[num_of_channel]).cuda()
+        else:
+            o = torch.randint(low=0, high=255, size=[num_of_channel]).float().cuda()
+
+        shape = [1 if axis != c else -1 for axis in range(t.ndim)]
+        s, o = s.view(shape), o.view(shape)
+        qt = ppq_tensor_round(t / s, policy=ROUNDING_POLICY) + o
+        qt = qt.clip(Q_MIN, Q_MAX)
+        qt = (qt - o) * s
+
+        # t = t.int()
+        cuda_qt = CUDA.LinearQuantize_C(
+            t, s, o, c, Q_MIN, Q_MAX, ROUNDING_POLICY.value)
+
+        diff = qt - cuda_qt
+        if diff.abs().max() != 0:
+            print(diff)
+            raise Exception('Test Failed.')
+
+
+def __TEST_QUANTIZE_LT_B__(size: List[int], iterations: int, sym: bool):
+    def ref_grad_func(value: torch.Tensor, dy: torch.Tensor, 
+                      scale: torch.Tensor, offset: torch.Tensor):
+        
+        qt = ppq_tensor_round(value / scale, policy=ROUNDING_POLICY) + offset
+        clipped_qt = qt.clip(Q_MIN, Q_MAX)
+        
+        dx = torch.where(clipped_qt != qt, torch.zeros_like(dy), dy)
+        ds = torch.where(clipped_qt == qt, (((qt - offset) * scale) - value) * dy / scale, torch.zeros_like(dy))
+        ds += torch.where(qt > Q_MAX, (Q_MAX - offset) * dy, torch.zeros_like(dy))
+        ds += torch.where(qt < Q_MIN, (Q_MIN - offset) * dy, torch.zeros_like(dy))
+        ds = ds.sum() / sqrt(value.numel() * (Q_MAX - Q_MIN))
+        return dx, ds
+
+    for _ in tqdm(range(iterations), desc='QUANTIZE LT_B TESTING...'):
+        t = torch.rand(size=size).cuda() * 50
+        s = torch.rand(size=[1]).cuda()
+        if sym:
+            o = torch.zeros(size=[1]).cuda()
+        else:
+            o = torch.randint(low=0, high=255, size=[1]).float().cuda()
+        dy = torch.rand_like(t)
+        
+        cuda_grad_x, cuda_grad_s = CUDA.LinearQuantize_T_B(
+            t, s, o, dy, Q_MIN, Q_MAX, ROUNDING_POLICY.value)
+        
+        ref_grad_x, ref_grad_s = ref_grad_func(t, dy, s, o)
+        diff = ref_grad_x.flatten() - cuda_grad_x.flatten()
+        if diff.abs().max() != 0:
+            raise Exception('Test Failed.')
+
+        snr = torch_snr_error(cuda_grad_s.reshape([1, -1]), ref_grad_s.reshape([1, -1])).item()
+        if snr > 1e-3:
+            print(f'[Warning]. Floating Precision Error. {snr:.4f} {cuda_grad_s.item():4f} {ref_grad_s.item():4f}')
+            if cuda_grad_s.item() > 1:
+                raise Exception('Test Failed.')
+        
+def __TEST_QUANTIZE_LC_B__(size: List[int], iterations: int, sym: bool, c: int=1):
+    def ref_grad_func(value: torch.Tensor, dy: torch.Tensor, 
+                      scale: torch.Tensor, offset: torch.Tensor, c: int):
+
+        shape = [1 if axis != c else -1 for axis in range(t.ndim)]
+        scale = scale.view(shape)
+        offset = offset.view(shape)
+        
+        qt = ppq_tensor_round(value / scale, policy=ROUNDING_POLICY) + offset
+        clipped_qt = qt.clip(Q_MIN, Q_MAX)
+
+        dx = torch.where(clipped_qt != qt, torch.zeros_like(dy), dy)
+        ds = torch.where(clipped_qt == qt, (((qt - offset) * scale) - value) * dy / scale, torch.zeros_like(dy))
+        ds += torch.where(qt > Q_MAX, (Q_MAX - offset) * dy, torch.zeros_like(dy))
+        ds += torch.where(qt < Q_MIN, (Q_MIN - offset) * dy, torch.zeros_like(dy))
+        ds = ds.transpose(0, c).flatten(1).sum(dim=-1) / sqrt(value.numel() * (Q_MAX - Q_MIN))
+        return dx, ds
+
+    for _ in tqdm(range(iterations), desc='QUANTIZE LC_B TESTING...'):
+        num_of_channel = size[c]
+        t = torch.rand(size=size).cuda() * 32
+        s = torch.rand(size=[num_of_channel]).cuda()
+        if sym:o = torch.zeros(size=[num_of_channel]).cuda()
+        else: o = torch.randint(low=0, high=255, size=[num_of_channel]).float().cuda()
+        dy = torch.rand_like(t)
+        
+        cuda_grad_x, cuda_grad_s = CUDA.LinearQuantize_C_B(
+            t, s, o, dy, Q_MIN, Q_MAX, c, ROUNDING_POLICY.value)
+        
+        ref_grad_x, ref_grad_s = ref_grad_func(t, dy, s, o, c)
+        diff = ref_grad_x.flatten() - cuda_grad_x.flatten()
+        if diff.abs().max() != 0:
+            print(ref_grad_x)
+            print(cuda_grad_x)
+            raise Exception('Test Failed.')
+
+        snr = torch_snr_error(cuda_grad_s.reshape([1, -1]), ref_grad_s.reshape([1, -1])).item()
+        if snr > 1e-5:
+            print(f'[Warning]. Floating Precision Error. {snr:.4f} {cuda_grad_s.item():4f} {ref_grad_s.item():4f}')
+            if cuda_grad_s.item() > 1:
+                raise Exception('Test Failed.')
+
+__TEST_QUANTIZE_LT__(size=[1, 1, 1, 1], iterations=100, sym=True)
+__TEST_QUANTIZE_LT__(size=[1, 1, 1, 1], iterations=100, sym=False)
+__TEST_QUANTIZE_LT__(size=[5, 12, 13, 4], iterations=100, sym=True)
+__TEST_QUANTIZE_LT__(size=[1, 7, 15, 41], iterations=100, sym=False)
+__TEST_QUANTIZE_LT__(size=[50, 120, 130, 4], iterations=30, sym=True)
+__TEST_QUANTIZE_LT__(size=[12, 74, 15, 411], iterations=30, sym=False)
+__TEST_QUANTIZE_LT__(size=[50, 7, 130, 1], iterations=30, sym=True)
+__TEST_QUANTIZE_LT__(size=[12, 4, 15, 3], iterations=30, sym=False)
+__TEST_QUANTIZE_LT__(size=[5011, 7, 7, 1], iterations=30, sym=True)
+__TEST_QUANTIZE_LT__(size=[122552, 1, 10, 4], iterations=30, sym=False)
+__TEST_QUANTIZE_LT__(size=[10, 10, 124, 47], iterations=30, sym=True)
+__TEST_QUANTIZE_LT__(size=[19, 42, 150, 3], iterations=30, sym=False)
+
+__TEST_QUANTIZE_LC__(size=[1, 1, 1, 1], iterations=100, sym=True)
+__TEST_QUANTIZE_LC__(size=[1, 1, 1, 1], iterations=100, sym=False)
+__TEST_QUANTIZE_LC__(size=[5, 12, 13, 4], iterations=100, sym=True)
+__TEST_QUANTIZE_LC__(size=[1, 7, 15, 41], iterations=100, sym=False)
+__TEST_QUANTIZE_LC__(size=[50, 120, 130, 4], iterations=30, sym=True)
+__TEST_QUANTIZE_LC__(size=[12, 74, 15, 411], iterations=30, sym=False)
+__TEST_QUANTIZE_LC__(size=[50, 7, 130, 1], iterations=30, sym=True)
+__TEST_QUANTIZE_LC__(size=[12, 4, 15, 3], iterations=30, sym=False)
+__TEST_QUANTIZE_LC__(size=[5011, 7, 7, 1], iterations=30, sym=True, c=0)
+__TEST_QUANTIZE_LC__(size=[122552, 1, 10, 4], iterations=30, sym=False, c=0)
+__TEST_QUANTIZE_LC__(size=[10, 10, 124, 47], iterations=30, sym=True, c=3)
+__TEST_QUANTIZE_LC__(size=[19, 42, 150, 3], iterations=30, sym=False, c=3)
+
+__TEST_QUANTIZE_LT_B__(size=[1, 1, 1, 1], iterations=100, sym=True)
+__TEST_QUANTIZE_LT_B__(size=[1, 1, 1, 1], iterations=100, sym=False)
+__TEST_QUANTIZE_LT_B__(size=[5, 12, 13, 4], iterations=100, sym=True)
+__TEST_QUANTIZE_LT_B__(size=[1, 7, 15, 41], iterations=100, sym=False)
+__TEST_QUANTIZE_LT_B__(size=[5, 12, 2130, 4], iterations=30, sym=True)
+__TEST_QUANTIZE_LT_B__(size=[12, 74, 315, 41], iterations=30, sym=False)
+__TEST_QUANTIZE_LT_B__(size=[50, 17, 13, 1], iterations=30, sym=True)
+__TEST_QUANTIZE_LT_B__(size=[12, 41, 15, 3], iterations=30, sym=False)
+__TEST_QUANTIZE_LT_B__(size=[501, 7, 73, 1], iterations=30, sym=True)
+__TEST_QUANTIZE_LT_B__(size=[1222, 12, 10, 4], iterations=30, sym=False)
+__TEST_QUANTIZE_LT_B__(size=[10, 104, 14, 47], iterations=30, sym=True)
+__TEST_QUANTIZE_LT_B__(size=[19, 42, 120, 3], iterations=30, sym=False)
+
+__TEST_QUANTIZE_LC_B__(size=[1, 1, 1, 1], iterations=100, sym=True)
+__TEST_QUANTIZE_LC_B__(size=[1, 1, 1, 1], iterations=100, sym=False)
+__TEST_QUANTIZE_LC_B__(size=[5, 12, 14, 12], iterations=100, sym=True)
+__TEST_QUANTIZE_LC_B__(size=[1, 7, 15, 41], iterations=100, sym=False)
+__TEST_QUANTIZE_LC_B__(size=[5, 12, 130, 4], iterations=30, sym=True)
+__TEST_QUANTIZE_LC_B__(size=[12, 74, 15, 41], iterations=30, sym=False)
+__TEST_QUANTIZE_LC_B__(size=[50, 7, 13, 1], iterations=30, sym=True)
+__TEST_QUANTIZE_LC_B__(size=[12, 4, 15, 3], iterations=30, sym=False)
+__TEST_QUANTIZE_LC_B__(size=[501, 7, 7, 1], iterations=30, sym=True, c=0)
+__TEST_QUANTIZE_LC_B__(size=[1222, 1, 10, 4], iterations=30, sym=False, c=0)
+__TEST_QUANTIZE_LC_B__(size=[10, 10, 14, 47], iterations=30, sym=True, c=3)
+__TEST_QUANTIZE_LC_B__(size=[19, 42, 10, 3], iterations=30, sym=False, c=3)
 
 # Test Histogram
 for i in range(TEST_TIMES):
@@ -56,103 +206,3 @@ for i in range(TEST_TIMES):
     cuda_hist = torch.zeros(size=[50]).to(EXECUTING_DEVICE).int()
     cuda_hist = CUDA.Histogram_T(t, cuda_hist, s)
     assert torch.abs(hist - cuda_hist).max().item() < 100
-
-
-# Test Backwards
-t = torch.Tensor([112,75,3,5,-5,6,7,8,9,-25]*100).to(EXECUTING_DEVICE)
-s = torch.Tensor([2]).to(EXECUTING_DEVICE).float()
-o = torch.Tensor([0]).to(EXECUTING_DEVICE).float()
-qt = CUDA.LinearQuantize_T(t, s, o, Q_MIN, Q_MAX)
-g = torch.zeros_like(t) + 1
-t.requires_grad = True
-s.requires_grad = True
-o.requires_grad = True
-
-# print(qt)
-for i in range(50):
-    gs_eta = ((qt - t) / s * g).sum()
-    ga, gs, go = CUDA.LinearQuantize_T_B(t, qt, s, o, g, Q_MIN, Q_MAX)
-
-    # print(t)
-    # print(ga)
-    print(gs - gs_eta)
-    print(gs)
-    print(go)
-
-t = torch.rand(size=[3,3,224,224]).to(EXECUTING_DEVICE)
-s = torch.Tensor([1, 1, 1]).float().to(EXECUTING_DEVICE)
-o = torch.zeros(size=[3]).to(EXECUTING_DEVICE).float()
-
-# t = torch.Tensor([[112,75,3,5,-5],[5,7,8,9,-25],[600,7,8,9,-25],[600,7,8,9,-25],[600,7,8,9,-25],[600,7,8,9,-25]]).to(EXECUTING_DEVICE)
-# s = torch.Tensor([2, 3, 2, 2, 2, 2]).to(EXECUTING_DEVICE).float()
-# o = torch.Tensor([0, 0, 0, 0, 0, 0]).to(EXECUTING_DEVICE).float()
-qt = CUDA.LinearQuantize_C(t, s, o, 1, Q_MIN, Q_MAX)
-g = torch.zeros_like(t) + 1
-t.requires_grad = True
-s.requires_grad = True
-o.requires_grad = True
-
-# print(qt)
-for i in range(1):
-    ga, gs, go = CUDA.LinearQuantize_C_B(t, qt, s, o, g, Q_MIN, Q_MAX, 1)
-
-    # print(qt)
-    # print(ga)
-    print(gs)
-    print(go)
-
-
-# Test Clip
-t = torch.Tensor([-1, -2, -3, 1,2,3,4,5,6,7,8,9,10]).to(EXECUTING_DEVICE)
-r = torch.Tensor([0,0,0,0,0,0,0,0,0,0,0,0,0]).to(EXECUTING_DEVICE)
-l = torch.Tensor([2]).to(EXECUTING_DEVICE)
-t = CUDA.TensorClip_T(t, r, l)
-print(t)
-
-t = torch.Tensor([[1,2,3], [4,5,6], [-1,-2,-3]]).to(EXECUTING_DEVICE)
-r = torch.Tensor([[0,0,0], [4,5,6], [0,0,0]]).to(EXECUTING_DEVICE)
-l = torch.Tensor([1, 2, 2]).to(EXECUTING_DEVICE)
-t = CUDA.TensorClip_C(t, r, l, 0)
-print(t)
-
-for i in range(1000):
-    t = torch.rand(size=[10000]).to(EXECUTING_DEVICE)
-    r = torch.rand(size=[10000]).to(EXECUTING_DEVICE)
-    l = torch.rand(size=[1]).to(EXECUTING_DEVICE)
-
-    out = r + (t - r).clip(min=-l.item(), max=l.item())
-    print(torch.abs(CUDA.TensorClip_T(t, r, l) - out).sum())
-
-
-# Test Rounding loss
-for i in range(100):
-    t = torch.rand(size=[3,3,224,224]).to(EXECUTING_DEVICE)
-    s = torch.Tensor([1]).float().to(EXECUTING_DEVICE)
-    o = torch.zeros(size=[1]).to(EXECUTING_DEVICE).float()
-
-    t.requires_grad = True
-
-    qt = CUDA.LinearQuantize_T(t, s, o, Q_MIN, Q_MAX)
-    rl_torch = torch.sum(torch.abs(qt - t)) / sqrt(qt.numel())
-    rl_torch.backward()
-    rl = CUDA.RoundingLoss_LT(t, s, o, Q_MIN, Q_MAX)
-    rl_b = CUDA.RoundingLoss_LT_B(t, torch.Tensor([1]).float().to(EXECUTING_DEVICE), s, o, Q_MIN, Q_MAX)
-    print(rl_torch - rl)
-    print(rl_b - t.grad)
-
-
-# Test Rounding loss
-for i in range(100):
-    t = torch.rand(size=[3,3,224,224]).to(EXECUTING_DEVICE)
-    s = torch.Tensor([1, 2, 3]).float().to(EXECUTING_DEVICE)
-    o = torch.zeros(size=[3]).to(EXECUTING_DEVICE).float()
-
-    t.requires_grad = True
-
-    qt = CUDA.LinearQuantize_C(t, s, o, 1, Q_MIN, Q_MAX)
-    rl_torch = torch.sum(torch.abs(qt - t)) / sqrt(qt.numel())
-    rl_torch.backward()
-    rl = CUDA.RoundingLoss_LC(t, s, o, 1, Q_MIN, Q_MAX)
-    rl_b = CUDA.RoundingLoss_LC_B(t, torch.Tensor([1]).float().to(EXECUTING_DEVICE), s, o, 1, Q_MIN, Q_MAX)
-    print(rl_torch - rl)
-    print(rl_b - t.grad)
