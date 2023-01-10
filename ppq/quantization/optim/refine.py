@@ -148,6 +148,10 @@ class QuantizeFusionPass(QuantizationOptimizationPass):
     # fuse_passive_op(bool)
 
             Whether to fuse passive op so that the input variable and output variable will share a same scale.
+    
+    * fuse_matmul_add(bool)
+        
+            Fuse MatMul + Bias Add
 
     ### Usage
     This pass is included in PPQ Quantization Setting, you can calling this optimization by:
@@ -165,10 +169,12 @@ class QuantizeFusionPass(QuantizationOptimizationPass):
     def __init__(self,
                  activation_type: Set[str],
                  fuse_activation: bool = True,
+                 fuse_matmul_add: bool = True,
                  fuse_passive_op: bool = True) -> None:
         self.fuse_activation  = fuse_activation
         self.fuse_passive_op  = fuse_passive_op
         self.activation_types = activation_type
+        self.fuse_matmul_add  = fuse_matmul_add
         super().__init__(name='PPQ Quantization Fusion Pass')
 
     def is_same_platform(self, operations: List[Operation]):
@@ -179,8 +185,6 @@ class QuantizeFusionPass(QuantizationOptimizationPass):
     def optimize(
         self,
         graph: BaseGraph,
-        dataloader: Iterable,
-        executor: BaseGraphExecutor,
         **kwargs
     ) -> None:
         processor = SearchableGraph(graph)
@@ -191,25 +195,16 @@ class QuantizeFusionPass(QuantizationOptimizationPass):
                 patterns=[lambda x: x.is_computing_op, lambda x: x.type in self.activation_types],
                 edges=[[0, 1]], exclusive=True)
 
-            for pattern in patterns:
-                computing_op, act_op = pattern
-
-                if (not isinstance(computing_op, QuantableOperation) or 
-                    computing_op.platform in {
-                        TargetPlatform.TRT_INT8, TargetPlatform.OPENVINO_INT8, 
-                        TargetPlatform.NCNN_INT8, TargetPlatform.MNN_INT8}): 
-                    continue
-
+            for computing_op, act_op in patterns:
+                if not isinstance(act_op, QuantableOperation): continue
+                if not isinstance(computing_op, QuantableOperation): continue
+                
                 if (computing_op.platform != act_op.platform and 
                     computing_op.config.output_quantization_config[0].state != QuantizationStates.FP32):
                     ppq_warning(f'Unexpected dispatching was found: '
                                 f'Op {computing_op.name} and {act_op.name} should be send to a same platform.')
                     continue
-
-                if not isinstance(act_op, QuantableOperation):
-                    continue
-
-                assert isinstance(act_op, QuantableOperation)
+    
                 if (len(graph.get_downstream_operations(computing_op)) == 1 and 
                     len(graph.get_upstream_operations(act_op)) == 1):
                     computing_op.config.output_quantization_config[0].dominated_by = (
@@ -247,6 +242,29 @@ class QuantizeFusionPass(QuantizationOptimizationPass):
                     input_cfg = op.config.input_quantization_config[0]
                     for output_cfg in op.config.output_quantization_config:
                         output_cfg.dominated_by = input_cfg
+        
+        if self.fuse_matmul_add:
+            patterns = processor.pattern_matching(
+                patterns=[lambda x: x.type == 'MatMul', lambda x: x.type == 'Add'],
+                edges=[[0, 1]], exclusive=True)
+    
+            for matmul, add in patterns:
+                if add.num_of_parameter != 1: continue
+                if not isinstance(matmul, QuantableOperation): continue
+                if not isinstance(add, QuantableOperation): continue
+
+                if (matmul.platform != add.platform and
+                    matmul.config.output_quantization_config[0].state != QuantizationStates.FP32):
+                    ppq_warning(f'Unexpected dispatching was found: '
+                                f'Op {matmul.name} and {add.name} should be send to a same platform.')
+                    continue
+
+                if (len(graph.get_downstream_operations(matmul)) == 1 and 
+                    len(graph.get_upstream_operations(add)) == 1):
+                    matmul.config.output_quantization_config[0].dominated_by = (
+                        add.config.output_quantization_config[0])
+                    add.config.input_quantization_config[0].dominated_by = (
+                        add.config.output_quantization_config[0])
 
 
 class QuantAlignmentPass(QuantizationOptimizationPass):
@@ -381,7 +399,8 @@ class QuantAlignmentPass(QuantizationOptimizationPass):
         """
         master_config = op.config.input_quantization_config[0]
         for slave_config in op.config.output_quantization_config:
-            slave_config.master_by = master_config
+            if slave_config.state not in {QuantizationStates.FP32, QuantizationStates.SOI}:
+                slave_config.master_by = master_config
         return master_config
 
     def align_to_large(self, op: QuantableOperation) -> TensorQuantizationConfig:
@@ -393,6 +412,8 @@ class QuantAlignmentPass(QuantizationOptimizationPass):
         """
         global_min, global_max, master_config = 0, 0, op.config.input_quantization_config[0]
         for config in op.config.input_quantization_config:
+            if config.state in {QuantizationStates.FP32, QuantizationStates.SOI}: continue
+            
             assert config.policy.has_property(QuantizationProperty.PER_TENSOR), (
                 'Quant Alignment can only happen with per tensor quantization.')
             if config.policy.has_property(QuantizationProperty.FLOATING): return
@@ -427,7 +448,8 @@ class QuantAlignmentPass(QuantizationOptimizationPass):
         """
         master_config = op.config.output_quantization_config[0]
         for slave_config in op.config.input_quantization_config:
-            slave_config.master_by = master_config
+            if slave_config.state not in {QuantizationStates.FP32, QuantizationStates.SOI}:
+                slave_config.master_by = master_config
         return master_config
 
     def optimize(self, graph: BaseGraph, **kwargs) -> None:
