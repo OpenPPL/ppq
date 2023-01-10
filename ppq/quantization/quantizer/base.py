@@ -288,9 +288,9 @@ class BaseQuantizer(metaclass = ABCMeta):
         if setting.fusion:
             if fusion_setting.align_quantization:
                 list_of_passes.append(QuantAlignmentPass(
-                    elementwise_merge_method = fusion_setting.align_elementwise_to,
-                    concat_merge_method = fusion_setting.align_concat_to,
-                    averagepool_method  = fusion_setting.align_avgpooling_to,
+                    elementwise_alignment = fusion_setting.align_elementwise_to,
+                    concat_alignment = fusion_setting.align_concat_to,
+                    pooling_alignment  = fusion_setting.align_avgpooling_to,
                     force_overlap = fusion_setting.force_alignment_overlap
                 ))
 
