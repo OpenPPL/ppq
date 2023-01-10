@@ -1,7 +1,7 @@
 from typing import Iterable, List, Set
 
 import torch
-from ppq.core import (ALIGNMENT_MANUL_OVERRIDE, TYPES_FOR_ALIGNMENT,
+from ppq.core import (ALIGNMENT_MANUL_OVERRIDE, TYPES_FOR_ALIGNMENT, PASSIVE_OPERATIONS,
                       QuantizationProperty, QuantizationStates, RoundingPolicy,
                       TargetPlatform, TensorQuantizationConfig,
                       empty_ppq_cache, ppq_warning)
@@ -12,6 +12,7 @@ from ppq.IR.search import SearchableGraph
 from ppq.quantization.observer.range import minmax_to_scale_offset
 
 from .base import QuantizationOptimizationPass
+
 
 class QuantizeSimplifyPass(QuantizationOptimizationPass):
     """
@@ -236,8 +237,7 @@ class QuantizeFusionPass(QuantizationOptimizationPass):
             for op in graph.operations.values():
                 upstream_layers = graph.get_upstream_operations(op)
                 if len(upstream_layers) == 0: continue # beginning op, can not merge.
-                if (isinstance(op, QuantableOperation) and
-                    not op.config.is_active_quant_op and
+                if (isinstance(op, QuantableOperation) and op.type in PASSIVE_OPERATIONS and
                     self.is_same_platform(upstream_layers + [op])):
                     # There are many types of passive operations.
                     # 'Resize', 'MaxPool', 'GlobalMaxPool',
@@ -283,32 +283,39 @@ class QuantAlignmentPass(QuantizationOptimizationPass):
 
     ### Parameters:
 
-    * elementwise_merge_method(Set[str]):
+    * elementwise_alignment(Set[str]):
             
             Alignment method for elementwise ops.
             
-            PPQ Supports 3 types alignment method:
-                namely 'Align to Large', 'Align to Output', 'None'.
+            PPQ Supports 4 alignment methods:
+                namely 'Align to Input', 'Align to Large', 'Align to Output', 'None'.
             
             All elementwise ops are listed in ppq.core.common.py
 
-    * concat_merge_method(Set[str])
+    * concat_alignment(Set[str])
 
             Alignment method for concat-like ops.
             
-            PPQ Supports 3 types alignment method:
-                namely 'Align to Large', 'Align to Output', 'None'.
+            PPQ Supports 4 alignment methods:
+                namely 'Align to Input', 'Align to Large', 'Align to Output', 'None'.
             
             All concat-like ops are listed in ppq.core.common.py
 
-    * averagepool_method(Set[str])
+    * averagepool_alignment(Set[str])
 
             Alignment method for pooling-like ops.
 
-            PPQ Supports 3 types alignment method:
-                namely 'Align to Large', 'Align to Output', 'None'.
+            PPQ Supports 4 alignment methods:
+                namely 'Align to Input', 'Align to Large', 'Align to Output', 'None'.
             
             All pooling-like ops are listed in ppq.core.common.py
+
+    * resize_alignment(Set[str])
+
+            Alignment method for Resize op.
+
+            PPQ Supports 4 alignment methods:
+                namely 'Align to Input', 'Align to Large', 'Align to Output', 'None'.
 
     * force_overlap(bool)
 
@@ -345,21 +352,37 @@ class QuantAlignmentPass(QuantizationOptimizationPass):
         collate_fn=collate_fn)
     """
     def __init__(self,
-                 elementwise_merge_method: str = 'Align to Large',
-                 concat_merge_method: str = 'Align to Output',
-                 averagepool_method: str = 'None',
+                 elementwise_alignment: str = 'Align to Large',
+                 concat_alignment: str = 'Align to Output',
+                 pooling_alignment: str = 'None',
+                 resize_alignment: str = 'Align to Output',
                  force_overlap: bool = False) -> None:
-        self.averagepool_method       = averagepool_method
-        self.elementwise_merge_method = elementwise_merge_method
-        self.concat_merge_method      = concat_merge_method
-        self.force_overlap            = force_overlap
-        assert self.elementwise_merge_method in {'Align to Large', 'Align to Output', 'None'}, (
-            'elementwise_merge_method can only be (None), (Align to Large) or (Align to Output)')
-        assert self.concat_merge_method in {'Align to Large', 'Align to Output', 'None'}, (
-            'concat_merge_method can only be (None), (Align to Large) or (Align to Output)')
-        assert self.averagepool_method in {'Align to Output', 'None'}, (
-            'concat_merge_method can only be (None) or (Align to Output)')
+        self.pooling_alignment       = pooling_alignment
+        self.elementwise_alignment   = elementwise_alignment
+        self.concat_alignment        = concat_alignment
+        self.resize_alignment        = resize_alignment
+        self.force_overlap           = force_overlap
+        assert self.elementwise_alignment in {'Align to Large', 'Align to Output', 'None'}, (
+            'Elementwise Alignment can only be (None), (Align to Large) or (Align to Output)')
+        assert self.concat_alignment in {'Align to Large', 'Align to Output', 'None'}, (
+            'Concat Alignment can only be (None), (Align to Large) or (Align to Output)')
+        assert self.pooling_alignment in {'Align to Output', 'None', 'Align to Input'}, (
+            'Alignment method can only be (None), (Align to Input) or (Align to Output)')
+        assert self.resize_alignment in {'Align to Output', 'None', 'Align to Input'}, (
+            'concat_merge_method can only be (None), (Align to Input) or (Align to Output)')
         super().__init__(name='PPQ Quantization Alignment Pass')
+
+    def align_to_input(self, op: QuantableOperation) -> TensorQuantizationConfig:
+        """Align quant scale and offset to input config. All output configs
+        would share a same scale and offset with output config. (as a slave to
+        input config)
+
+        Any change to slave config will be rejected since then.
+        """
+        master_config = op.config.input_quantization_config[0]
+        for slave_config in op.config.output_quantization_config:
+            slave_config.master_by = master_config
+        return master_config
 
     def align_to_large(self, op: QuantableOperation) -> TensorQuantizationConfig:
         """Align quant scale and offset to larger input config. The first input
@@ -407,39 +430,47 @@ class QuantAlignmentPass(QuantizationOptimizationPass):
             slave_config.master_by = master_config
         return master_config
 
-    def optimize(
-        self, graph: BaseGraph,
-        dataloader: Iterable,
-        executor: BaseGraphExecutor, **kwargs) -> None:
+    def optimize(self, graph: BaseGraph, **kwargs) -> None:
 
         for operation in graph.operations.values():
             if not isinstance(operation, QuantableOperation): continue
 
             master_config = None
             if operation.type in TYPES_FOR_ALIGNMENT['Elementwise']:
-                if self.elementwise_merge_method == 'None': continue
-                if self.elementwise_merge_method == 'Align to Large':
+                if self.elementwise_alignment == 'None': continue
+                if self.elementwise_alignment == 'Align to Large':
                     master_config = self.align_to_large(operation)
                 else: master_config = self.align_to_output(operation)
 
             elif operation.type in TYPES_FOR_ALIGNMENT['Concat']:
-                if self.concat_merge_method == 'None': continue
-                if self.concat_merge_method == 'Align to Large':
+                if self.concat_alignment == 'None': continue
+                if self.concat_alignment == 'Align to Large':
                     master_config = self.align_to_large(operation)
                 else: master_config = self.align_to_output(operation)
 
             elif operation.type in TYPES_FOR_ALIGNMENT['Pooling']:
-                if self.averagepool_method == 'None': continue
-                if self.averagepool_method == 'Align to Output':
+                if self.pooling_alignment == 'None': continue
+                if self.pooling_alignment == 'Align to Input':
+                    self.align_to_input(operation) # do not set master_config
+                if self.pooling_alignment == 'Align to Output':
                     master_config = self.align_to_output(operation)
-                if self.averagepool_method == 'Align to Large':
+                if self.pooling_alignment == 'Align to Large':
                     raise ValueError('Alignment Method Error, Pooling Op can not align to lager input.')
 
+            elif operation.type == 'Resize':
+                if self.resize_alignment == 'None': continue
+                if self.resize_alignment == 'Align to Output':
+                    master_config = self.align_to_output(operation)
+                if self.resize_alignment == 'Align to Input':
+                    self.align_to_input(operation) # do not set master_config
+                if self.resize_alignment == 'Align to Large':
+                    raise ValueError('Alignment Method Error, Resize Op can not align to lager.')
+                
             elif ALIGNMENT_MANUL_OVERRIDE in operation.extension_attrib:
                 method = operation.extension_attrib[ALIGNMENT_MANUL_OVERRIDE]
-                if self.concat_merge_method == 'Align to Large':
+                if self.concat_alignment == 'Align to Large':
                     master_config = self.align_to_large(operation)
-                elif self.concat_merge_method == 'Align to Large': 
+                elif self.concat_alignment == 'Align to Large': 
                     master_config = self.align_to_output(operation)
                 else:
                     ppq_warning(f'Unrecognized Alignment Method {method} for operation {operation.name}')
