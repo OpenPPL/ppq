@@ -544,11 +544,11 @@ class GraphMerger(GraphCommandProcessor):
                 w = computing_op.parameters[0].value  # no bias.
                 assert isinstance(w, torch.Tensor), 'values of parameters are assumed as torch Tensor'
                 if computing_op.type == 'ConvTranspose':
-                    b = torch.zeros(size=w.shape[1] * computing_op.attributes.get('group', 1))
+                    b = torch.zeros(w.shape[1] * computing_op.attributes.get('group', 1))
                 elif computing_op.type == 'Gemm' and computing_op.attributes.get('transB', 0) == 0:
-                    b = torch.zeros(size=w.shape[1])
+                    b = torch.zeros(w.shape[1])
                 else:
-                    b = torch.zeros(size=w.shape[0])
+                    b = torch.zeros(w.shape[0])
             else:
                 w, b = [var.value for var in computing_op.parameters[: 2]]  # has bias.
 
