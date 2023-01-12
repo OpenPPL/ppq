@@ -33,8 +33,9 @@ class TorchMetaDataTracingHook(RuntimeHook):
 
     def post_forward_hook(self, outputs: List[torch.Tensor], **kwargs) -> list:
         for tensor, var in zip(outputs, self._hook_to.outputs):
-            var.shape = tensor.shape
-            var.dtype = tensor.dtype
+            if tensor is not None:
+                var.shape = tensor.shape
+                var.dtype = tensor.dtype
 
         return outputs
 
@@ -559,7 +560,7 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
                     if output_var.name in output_names:
                         result_collector[output_names.index(output_var.name)] = outputs[output_idx]
             except Exception as _:
-                raise RuntimeError(f'Error happens when dealing with operation {str(operation)}') from _
+                raise RuntimeError(f'Op Execution Error: {str(operation)}') from _
 
             # remove useless value(runtime clear).
             visited_op.append(operation)

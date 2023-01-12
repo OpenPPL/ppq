@@ -21,14 +21,16 @@ import os
 import sys
 import time
 from collections import defaultdict
+from typing import Iterable, Callable
 
-import pycuda.autoinit
 import pycuda.driver as cuda
 import tensorrt as trt
 import torch
 from tqdm import tqdm
 
-from ppq import convert_any_to_numpy
+from ppq.api import ENABLE_CUDA_KERNEL
+from ppq import convert_any_to_numpy, convert_any_to_torch_tensor, TorchExecutor, torch_snr_error
+from ppq.IR import BaseGraph
 from ppq.quantization.analyse.util import MeasurePrinter
 
 logging.basicConfig(level=logging.INFO)
@@ -281,6 +283,8 @@ class MyProfiler(trt.IProfiler):
 def Benchmark(engine_file: str, steps: int = 10000) -> float:
     """ Benckmark TensorRT Engine """
     logger = trt.Logger(trt.Logger.INFO)
+    import pycuda.autoinit
+    
     with open(engine_file, 'rb') as f, trt.Runtime(logger) as runtime:
         engine = runtime.deserialize_cuda_engine(f.read())
 
@@ -302,6 +306,8 @@ def Benchmark(engine_file: str, steps: int = 10000) -> float:
 def Profiling(engine_file: str, steps: int = 1000):
     """ Profiling TensorRT Engine """
     logger = trt.Logger(trt.Logger.ERROR)
+    import pycuda.autoinit
+    
     with open(engine_file, 'rb') as f, trt.Runtime(logger) as runtime:
         engine = runtime.deserialize_cuda_engine(f.read())
 
@@ -317,3 +323,58 @@ def Profiling(engine_file: str, steps: int = 1000):
                 context, bindings=bindings, inputs=inputs, 
                 outputs=outputs, stream=stream)
         context.profiler.report()
+
+
+def TestAlignment(engine_file: str, graph: BaseGraph, samples: Iterable, collate_fn: Callable = None) -> dict:
+    """ Test Alignment with TensorRT Engine and PPQ Graph. """
+    logger = trt.Logger(trt.Logger.ERROR)
+
+    feed_dicts = []
+    for sample in samples:
+        if collate_fn is not None: sample = collate_fn(sample)
+        feed_dict = {}
+        if isinstance(sample, torch.Tensor):
+            assert len(graph.inputs) == 1, 'Graph Needs More than 1 input tensor, however only 1 was given.'
+            for name in graph.inputs:
+                feed_dict[name] = sample
+        elif isinstance(sample, list):
+            for name, value in zip(graph.inputs, sample):
+                feed_dict[name] = value
+        elif isinstance(sample, dict):
+            feed_dict = sample
+        else:
+            raise TypeError('Given Sample is Invalid.')
+        feed_dicts.append(feed_dict)
+    
+    TensorRT_Results, PPQ_Results = [], []
+    with ENABLE_CUDA_KERNEL():
+        executor = TorchExecutor(graph)
+        for feed_dict in tqdm(feed_dicts, desc='PPQ Infer...'):
+            PPQ_Results.append([value.cpu() for value in executor.forward(feed_dict)])
+    
+    import pycuda.autoinit
+    with open(engine_file, 'rb') as f, trt.Runtime(logger) as runtime:
+        engine = runtime.deserialize_cuda_engine(f.read())
+
+    with engine.create_execution_context() as context:
+        inputs, outputs, bindings, stream = allocate_buffers(context.engine)
+
+        for feed_dict in tqdm(feed_dicts, desc='TensorRT Infer...'):
+            for name, input in zip(graph.inputs, inputs):
+                input.host = convert_any_to_numpy(feed_dict[name])
+
+            results = do_inference_v2(
+                context, bindings=bindings, inputs=inputs, 
+                outputs=outputs, stream=stream)
+            
+            TensorRT_Results.append([convert_any_to_torch_tensor(value) for value in results])
+
+    collector = {}
+    for ref, pred in zip(TensorRT_Results, PPQ_Results):
+        for name in graph.outputs: collector[name] = 0.0
+        for name, ref_, pred_ in zip(graph.outputs, ref, pred):
+            collector[name] += torch_snr_error(pred_.reshape([1, -1]), ref_.reshape([1, -1])).item()
+
+    for name, value in collector.items():
+        collector[name] = value / len(samples)
+    return collector

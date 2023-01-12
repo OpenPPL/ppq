@@ -20,14 +20,14 @@ class TensorRTQuantizer(BaseQuantizer):
 
     def init_quantize_config(
         self, operation: Operation) -> OperationQuantizationConfig:
-        base_quant_config = self.create_default_quant_config(
+        OQC = self.create_default_quant_config(
             policy=self.quantize_policy, rounding=self.rounding_policy,
             op=operation, num_of_bits=self._num_of_bits, exponent_bits=0,
             quant_max=self._quant_max, quant_min=self._quant_min,
             observer_algorithm='percentile'
         )
 
-        if operation.type in {'Conv', 'ConvTranspose', 'Gemm', 'MatMul'}:
+        if operation.type in {'Conv', 'ConvTranspose', 'Gemm', 'MatMul', 'PPQBiasFusedMatMul'}:
             # base_quant_config.output_quantization_config[0].state = QuantizationStates.FP32
             # set all parameters within Conv, ConvTranspose, Gemm to per-channel quant-config.
             assert operation.num_of_input > 0, 'Seems you got a Conv layer with no parameters.'
@@ -36,7 +36,7 @@ class TensorRTQuantizer(BaseQuantizer):
             # layout: [out_channel, in_channel, kernel_size, kernel_size]
             if operation.type in {'Conv', 'ConvTranspose'}:
                 if operation.inputs[1].is_parameter:
-                    conv_weight_config = base_quant_config.input_quantization_config[1]
+                    conv_weight_config = OQC.input_quantization_config[1]
                     conv_weight_config.policy = QuantizationPolicy(
                         QuantizationProperty.SYMMETRICAL +
                         QuantizationProperty.LINEAR +
@@ -44,11 +44,12 @@ class TensorRTQuantizer(BaseQuantizer):
                     )
                     conv_weight_config.channel_axis = (1 if operation.type == 'ConvTranspose' else 0)
                     conv_weight_config.observer_algorithm = 'minmax'
+
             # first parameter must exits, for gemm layer it will be gemm_weight
             # layout: [in_dim, out_dim]
-            elif operation.type in {'Gemm', 'MatMul'}:
+            elif operation.type in {'Gemm', 'MatMul', 'PPQBiasFusedMatMul'}:
                 if operation.inputs[1].is_parameter:
-                    gemm_weight_config = base_quant_config.input_quantization_config[1]
+                    gemm_weight_config = OQC.input_quantization_config[1]
                     gemm_weight_config.policy = QuantizationPolicy(
                         QuantizationProperty.SYMMETRICAL +
                         QuantizationProperty.LINEAR +
@@ -58,21 +59,24 @@ class TensorRTQuantizer(BaseQuantizer):
                     gemm_weight_config.observer_algorithm = 'minmax'
 
             if operation.num_of_input > 2:
-                bias_config = base_quant_config.input_quantization_config[-1]
+                bias_config = OQC.input_quantization_config[-1]
                 bias_config.state = QuantizationStates.FP32
 
-        if operation.type in PASSIVE_OPERATIONS:
-            # Those op are not active op.
-            base_quant_config.is_active_quant_op = False
-        return base_quant_config
+        if operation.type == 'LayerNormalization':
+            # Layernorm - gamma and beta need to be FP32
+            for TQC in OQC.input_quantization_config[1: ]:
+                TQC.state = QuantizationStates.FP32
+
+        if operation.type == 'Attention':
+            # Attention - Only input and weight need to be quantized.
+            for TQC in OQC.input_quantization_config[2: ]:
+                TQC.state = QuantizationStates.FP32
+
+        return OQC
 
     @ property
     def target_platform(self) -> TargetPlatform:
         return TargetPlatform.TRT_INT8
-
-    @ property
-    def default_platform(self) -> TargetPlatform:
-        return TargetPlatform.FP32
 
     @ property
     def quant_operation_types(self) -> set:
@@ -83,7 +87,9 @@ class TensorRTQuantizer(BaseQuantizer):
             'Mul', 'Add', 'Max', 'Sub', 'Div', 'Reshape',
             'LeakyRelu', 'Concat', 'Sigmoid', 'Interp',
             'ReduceMean', 'Transpose', 'Slice', 'Flatten',
-            'HardSwish', 'HardSigmoid', 'MatMul'
+            'HardSwish', 'HardSigmoid', 'MatMul',
+            'Attention', 'LayerNormalization', 'Gelu',
+            'PPQBiasFusedMatMul'
         }
 
     @ property
@@ -100,7 +106,7 @@ class TensorRTQuantizer(BaseQuantizer):
 
     @ property
     def activation_fusion_types(self) -> set:
-        return {'Relu', 'Clip', 'Swish', 'Clip', 'SoftPlus', 'Sigmoid'}
+        return {'Relu', 'Clip', 'Swish', 'Clip', 'SoftPlus', 'Sigmoid', 'Gelu'}
 
 
 class TensorRTQuantizer_InputOnly(BaseQuantizer):
@@ -125,7 +131,7 @@ class TensorRTQuantizer_InputOnly(BaseQuantizer):
             quant_max=self._quant_max, quant_min=self._quant_min,
             observer_algorithm='percentile')
 
-        if operation.type in {'Conv', 'ConvTranspose', 'Gemm', 'MatMul'}:
+        if operation.type in {'Conv', 'ConvTranspose', 'Gemm', 'MatMul', 'PPQBiasFusedMatMul'}:
             base_quant_config.output_quantization_config[0].state = QuantizationStates.FP32
             # set all parameters within Conv, ConvTranspose, Gemm to per-channel quant-config.
             assert operation.num_of_input > 0, 'Seems you got a Conv layer with no parameters.'
@@ -144,7 +150,7 @@ class TensorRTQuantizer_InputOnly(BaseQuantizer):
                     conv_weight_config.observer_algorithm = 'minmax'
             # first parameter must exits, for gemm layer it will be gemm_weight
             # layout: [in_dim, out_dim]
-            elif operation.type in {'Gemm', 'MatMul'}:
+            elif operation.type in {'Gemm', 'MatMul', 'PPQBiasFusedMatMul'}:
                 if operation.inputs[1].is_parameter:
                     gemm_weight_config = base_quant_config.input_quantization_config[1]
                     gemm_weight_config.policy = QuantizationPolicy(
@@ -172,7 +178,8 @@ class TensorRTQuantizer_InputOnly(BaseQuantizer):
     def quant_operation_types(self) -> set:
         return {
             'Conv', 'Gemm', 'ConvTranspose', 'MatMul',
-            'AveragePool', 'GlobalAveragePool'}
+            'AveragePool', 'GlobalAveragePool', 
+            'PPQBiasFusedMatMul'}
 
     @ property
     def quantize_policy(self) -> QuantizationPolicy:
