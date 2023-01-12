@@ -62,11 +62,6 @@ int64_t NUM_OF_BLOCK(const int64_t elements, const int threads_per_block){
     return std::min((elements + threads_per_block - 1) / threads_per_block, CUDA_TARGET_BLOCKS);
 }
 
-__host__ __inline__
-int64_t NUM_OF_BLOCK_NOLIMIT(const int64_t elements, const int threads_per_block){
-    return (elements + threads_per_block - 1) / threads_per_block;
-}
-
 template<typename Dtype>
 __device__ __inline__
 Dtype CLIP(const Dtype v, const Dtype min, const Dtype max){
@@ -78,10 +73,12 @@ Dtype CLIP(const Dtype v, const Dtype min, const Dtype max){
 __host__ __inline__
 void CheckTensor(const Tensor &tensor, const c10::ScalarType &type, const std::string &name){
     if(at::typeMetaToScalarType(tensor.dtype()) != type){
-        throw ValueTypeException("Kernel Failure, Invalid dtype of Input tensor: " + name);
+        throw ValueTypeException(
+            std::move("Kernel Failure, Invalid dtype of Input tensor: " + name));
     }
     if(tensor.numel() == 0){
-        throw InvalidValueException("Kernel Failure, Tensor is empty: " + name);
+        throw InvalidValueException(
+            std::move("Kernel Failure, Tensor is empty: " + name));
     }
 }
 

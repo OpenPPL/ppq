@@ -87,6 +87,99 @@ def Abs_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
     return x.abs()
 
 
+def Attention_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
+    """
+    com.microsoft.Attention
+        Multi-Head Self Attention that can be either unidirectional (like GPT-2) or bidirectional (like BERT). 
+        The mask_index input is optional. Besides raw attention mask with shape 
+        (batch_size, past_sequence_length + sequence_length) or 
+        (batch_size, sequence_length, past_sequence_length + sequence_length) with value 0 for masked and 1 otherwise, 
+        
+        we also support other two formats: When input has right-side padding, 
+        mask_index is one dimension with shape (batch_size), where value of each element is the end position, 
+        or valid length of actual sequence excluding padding. When input has left-side padding, mask_index has shape (2 * batch_size), 
+        where the values are the exclusive end positions followed by the inclusive start positions. When unidirectional is 1, 
+        and each token only attend to previous tokens. For GPT-2, both past and present state are optional. 
+        
+        Present state could appear in output even when past state is not in input.
+
+    Version
+        This version of the operator has been available since version 1 of the 'com.microsoft' operator set.
+
+    Attributes
+        num_heads : int (required)
+            Number of attention heads
+    
+        qkv_hidden_sizes : list of ints
+            Hidden layer sizes of Q, K, V paths in Attention
+        
+        unidirectional : int
+            Whether every token can only attend to previous tokens. Default value is 0.
+    
+    Inputs (3 - 6)
+        input : T
+            3D input tensor with shape (batch_size, sequence_length, input_hidden_size)
+    
+        weight : T
+            2D input tensor with shape (input_hidden_size, 3 * hidden_size), where hidden_size = num_heads * head_size
+    
+        bias : T
+            1D input tensor with shape (3 * hidden_size)
+    
+        mask_index (optional) : M
+            Attention mask with shape (batch_size, 1, max_sequence_length, max_sequence_length), 
+            (batch_size, past_sequence_length + sequence_length)  
+            or (batch_size, sequence_length, past_sequence_length + sequence_length), 
+            or index with shape (batch_size) or (2 * batch_size).
+
+        past (optional) : T
+            past state for key and value with shape (2, batch_size, num_heads, past_sequence_length, head_size).
+    
+        extra_add (optional) : T
+            additional add to QxK' with shape (batch_size, num_heads, sequence_length, sequence_length).
+    
+    Outputs (1 - 2)
+        output : T
+            3D output tensor with shape (batch_size, sequence_length, hidden_size)
+    
+        present (optional) : T
+            present state for key and value with shape 
+            (2, batch_size, num_heads, past_sequence_length + sequence_length, head_size)
+    """
+    ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=3, max_num_of_input=6)
+    num_heads        = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='num_heads', compulsive=True)
+    qkv_hidden_sizes = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='qkv_hidden_sizes', default=0)
+    unidirectional   = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='unidirectional', default=0)
+    if unidirectional != 0:
+        raise NotImplementedError('Attention Layer with unidirectional != 0 is not implemented.')
+    
+    input, weight, bias = values[:3]
+    mask_index          = values[3] if len(values) >= 4 else None
+    past                = values[4] if len(values) >= 5 else None
+    extra_add           = values[5] if len(values) >= 6 else None
+
+    if mask_index is not None or past is not None:
+        raise NotImplementedError('Attention Layer with mask_index and past != None is not implemented.')
+
+    BATCHSIZE, NUM_OF_HEADS, HIDDEN_SIZE = input.shape[0], num_heads, qkv_hidden_sizes
+    HEAD_SIZE = HIDDEN_SIZE // NUM_OF_HEADS
+
+    qkv = torch.matmul(input, weight) + bias
+    q   = qkv[:, :, HIDDEN_SIZE * 0: HIDDEN_SIZE * 1]
+    k   = qkv[:, :, HIDDEN_SIZE * 1: HIDDEN_SIZE * 2]
+    v   = qkv[:, :, HIDDEN_SIZE * 2: HIDDEN_SIZE * 3]
+
+    q = q.reshape(BATCHSIZE, -1, NUM_OF_HEADS, HEAD_SIZE).permute(0, 2, 1, 3)
+    k = k.reshape(BATCHSIZE, -1, NUM_OF_HEADS, HEAD_SIZE).permute(0, 2, 1, 3)
+    v = v.reshape(BATCHSIZE, -1, NUM_OF_HEADS, HEAD_SIZE).permute(0, 2, 1, 3)
+
+    attn_score = (q @ k.transpose(-2, -1)) * (HEAD_SIZE ** -0.5) + extra_add
+    attn_score = torch.softmax(attn_score, dim=-1)
+
+    feat = (attn_score @ v).transpose(1, 2).reshape(BATCHSIZE, -1, HIDDEN_SIZE)
+    return feat
+
+
 def Conv_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
     """The convolution operator consumes an input tensor and a filter, and
     computes the output.
@@ -1362,7 +1455,7 @@ def Resize_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendC
     # Not used roi
     # roi  = input_value[1] if len(input_value) > 1 else None
     scale_factor = values[2].cpu() if len(values) > 2 else None
-    size = values[-1].cpu().tolist() if (len(values) == 4 and values[-1] is not None) else None
+    size = values[-1].cpu().tolist() if (len(values) == 4 and values[-1] != None) else None
     mode = op.attributes.get('mode', 'nearest')
     if mode == 'cubic':
         mode = 'bicubic'
@@ -1963,6 +2056,26 @@ def Gemm_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
 
 
 def MatMul_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
+    """
+    Matrix product that behaves like numpy.matmul: 
+        https://docs.scipy.org/doc/numpy-1.13.0/reference/generated/numpy.matmul.html
+
+    Version
+        This version of the operator has been available since version 13 of the default ONNX operator set.
+
+        Other versions of this operator: 1, 9
+
+    Inputs
+        A (differentiable) : T
+            N-dimensional matrix A
+    
+        B (differentiable) : T
+            N-dimensional matrix B
+    
+    Outputs
+        Y (differentiable) : T
+            Matrix multiply results from A * B
+    """
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=2, max_num_of_input=2)
     values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
     output = torch.matmul(values[0], values[1])
@@ -2110,6 +2223,69 @@ def LayerNorm_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
     output = F.layer_norm(x, normalized_shape, weight, bias, eps)
     return output
 
+
+def skipLayerNormPlugin_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
+    """
+    User should check this: http://nvidia.zhidx.com/content-6-1543-1.html
+    and this: https://github.com/microsoft/onnxruntime/blob/rel-1.13.1/docs/ContribOperators.md
+
+    Skip Layernorm Plugin is one of Onnx Contrib Operators.
+    It is supported by TensorRT, Openvino and Onnxruntime.
+
+    com.microsoft.SkipLayerNormalization
+        Skip and Layer Normalization Fusion
+
+    Version
+        This version of the operator has been available since version 1 of the 'com.microsoft' operator set.
+
+    Attributes
+        epsilon : float
+            The epsilon value to use to avoid division by zero.
+
+    Inputs (3 - 5)
+        input : T
+            3D input tensor with shape (batch_size, sequence_length, hidden_size)
+
+        skip : T
+            3D skip tensor with shape (batch_size, sequence_length, hidden_size)
+
+        gamma : T
+            1D input tensor with shape (hidden_size)
+
+        beta (optional) : T
+            1D skip tensor with shape (hidden_size)
+
+        bias (optional) : T
+            1D bias tensor with shape (hidden_size)
+
+    Outputs (1 - 3)
+        output : T
+            3D output tensor with shape (batch_size, sequence_length, hidden_size)
+
+        mean (optional) : U
+            Saved mean used during training to speed up gradient computation
+
+        inv_std_var (optional) : U
+            Saved inverse standard variance used during training to speed up gradient computation.
+    """
+    ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=3, max_num_of_input=4)
+    values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
+
+    x, skip, gamma = values[0], values[1], values[2]
+    print(x.shape, skip.shape)
+    if len(values) >= 4: bias = values[3]
+    else: bias = None
+
+    eps  = op.attributes.get('epsilon', 1e-5)
+    axis = op.attributes.get('axis', -1)
+
+    if axis != -1 and axis != x.ndim - 1:
+        raise ValueError('Unsupported Layernorm axis. We will implement it soon.')
+    
+    normalized_shape = gamma.shape
+    output = F.layer_norm(x + skip, normalized_shape, gamma, bias, eps)
+    return output
+    
 
 def Pad_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
     """
@@ -3413,12 +3589,53 @@ def Erf_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
     return torch.erf(x) # may require a higher version pytorch
 
 
+def PPQBiasFusedMatMul_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
+    """
+    PPQ Special Edition of MatMul
+        Matrix product that behaves like numpy.matmul: 
+        https://docs.scipy.org/doc/numpy-1.13.0/reference/generated/numpy.matmul.html
+
+    Version
+        This version of the operator has been available since version 13 of the default ONNX operator set.
+
+        Other versions of this operator: 1, 9
+
+    Inputs
+        A (differentiable) : T
+            N-dimensional matrix A
+    
+        B (differentiable) : T
+            N-dimensional matrix B
+            
+        C (Optional) (differentiable) : T
+            Bias Tensor Of MatMul
+    
+    Outputs
+        Y (differentiable) : T
+            Matrix multiply results from A * B
+
+    Args:
+        op (Operation): _description_
+        values (List[torch.Tensor]): _description_
+        ctx (TorchBackendContext, optional): _description_. Defaults to None.
+
+    Returns:
+        torch.Tensor: _description_
+    """
+    ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=2, max_num_of_input=3)
+    values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
+    output = torch.matmul(values[0], values[1])
+    if len(values) == 3: output += values[-1]
+    return output
+
+
 DEFAULT_BACKEND_TABLE = {
     'Abs': Abs_forward,
     'AdaptiveAvgPool2d': AdaptiveAvgPool2d_forward,
     'And':And_forward,
     'Add': Add_forward,
     'ArgMax': ArgMax_forward,
+    'Attention': Attention_forward,
     'AveragePool': AveragePool_forward,
     'BatchNormalization': BatchNormalization_forward,
     'Cast': Cast_forward,
@@ -3458,6 +3675,7 @@ DEFAULT_BACKEND_TABLE = {
     'NonZero': NonZero_forward,
     'Not': Not_forward,
     'Pad': Pad_forward,
+    'PPQBiasFusedMatMul': PPQBiasFusedMatMul_forward,
     'PRelu': PRelu_forward,
     'Range': Range_forward,
     'ReduceL2': ReduceL2_forward,
@@ -3473,6 +3691,7 @@ DEFAULT_BACKEND_TABLE = {
     'Sigmoid': UnaryEltwise_forward,
     'Sin': Sin_forward,
     'Slice': Slice_forward,
+    'skipLayerNormPlugin': skipLayerNormPlugin_forward,
     'Softmax': Softmax_forward,
     'Softplus': Softplus_forward,
     'Split': Split_forward,

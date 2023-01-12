@@ -132,8 +132,7 @@ def LinearQuantizationConfig(
         num_of_bits = num_of_bits,
         quant_min = quant_min,
         quant_max = quant_max,
-        observer_algorithm = calibration,
-        channel_axis=channel_axis)
+        observer_algorithm = calibration)
 
 
 def FloatingQuantizationConfig(

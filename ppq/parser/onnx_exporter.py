@@ -38,11 +38,25 @@ class OOSExporter(OperationExporter):
         operation.attributes['domain'] = 'com.microsoft'
         return operation
 
+class AttentionExporter(OperationExporter):
+    def export(self, operation: Operation, graph: BaseGraph, **kwargs) -> Operation:
+        # MMCV operation must have a domain attribute.
+        operation.attributes['domain'] = 'com.microsoft'
+        return operation
+
+class FusedMatMulExporter(OperationExporter):
+    def export(self, operation: Operation, graph: BaseGraph, **kwargs) -> Operation:
+        # MMCV operation must have a domain attribute.
+        operation.attributes['domain'] = 'com.microsoft'
+        return operation
+
 OPERATION_EXPORTERS = {
     'ConstantOfShape': ConstantOfShapeExporter,
     'MMCVRoiAlign': MMCVExporter,
     'grid_sampler': MMCVExporter,
     'Interp': InterpExporter,
+    'Attention': AttentionExporter,
+    'FusedMatMul': FusedMatMulExporter,
     'QAttention': OOSExporter,
     'QGemm': OOSExporter,
     'QLinearAdd': OOSExporter,
@@ -199,6 +213,9 @@ class OnnxExporter(GraphExporter):
                 var_shape     = variable.value.shape
                 pytorch_dtype = variable.value.dtype
                 onnx_dtype    = DataType.convert_from_torch(pytorch_dtype).value
+            else:
+                var_shape     = var_shape  = variable.shape
+                onnx_dtype    = variable.dtype.value
  
         # Non Parameter
         else:
