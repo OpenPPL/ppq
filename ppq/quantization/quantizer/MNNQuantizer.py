@@ -60,7 +60,7 @@ class MNNQuantizer(BaseQuantizer):
     @ property
     def quant_operation_types(self) -> set:
         return {
-            'Conv', 'Add'
+            'Conv', 'Add', 'Gemm'
         }
 
     @ property
