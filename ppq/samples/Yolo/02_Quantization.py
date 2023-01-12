@@ -8,8 +8,8 @@ from PIL import Image
 from ppq import *
 from ppq.api import *
 
-ONNX_PATH        = 'models/yolov6s.onnx'       # 你的模型位置
-ENGINE_PATH      = 'Output/yolov5s6.onnx'      # 生成的 Engine 位置
+ONNX_PATH        = 'models/yolov5s6.onnx'      # 你的模型位置
+OUTPUT_PATH      = 'Output'                    # 生成的量化模型的位置
 CALIBRATION_PATH = 'imgs'                      # 校准数据集
 BATCHSIZE        = 1
 EXECUTING_DEVICE = 'cuda'
@@ -47,12 +47,14 @@ with ENABLE_CUDA_KERNEL():
 
     export_ppq_graph(
         qir, platform=TargetPlatform.TRT_INT8, 
-        graph_save_to=ENGINE_PATH, 
-        config_save_to='qparam.json')
+        graph_save_to=OUTPUT_PATH.join('/INT8.onnx'), 
+        config_save_to=OUTPUT_PATH.join('/INT8.json'))
+    
+    from ppq.utils.TensorRTUtil import build_engine, Benchmark, Profiling
+    build_engine(
+        onnx_file=OUTPUT_PATH.join('/INT8.onnx'), 
+        engine_file=OUTPUT_PATH.join('/INT8.engine'), int8=True, 
+        int8_scale_file=OUTPUT_PATH.join('/INT8.json'))
 
-    # -------------------------------------------------------------------
-    # 完成量化后，你可以使用 create_engine.py 生成 trt engine.
-    # 它位于 ppq / samples / TensorRT 文件夹下
-    # 你可以使用 trt_infer.py 文件执行 engine 的推理
-    # 你可以使用 Example_Profiling.py 文件执行 engine 的性能分析
-    # -------------------------------------------------------------------
+    Benchmark(OUTPUT_PATH.join('/INT8.engine'))
+    Profiling(OUTPUT_PATH.join('/INT8.engine'))

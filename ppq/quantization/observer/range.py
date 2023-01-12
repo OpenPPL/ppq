@@ -291,6 +291,9 @@ class TorchPercentileObserver(BaseTensorObserver):
 
     @ torch.no_grad()
     def observe(self, value: torch.Tensor):
+        assert value is not None, (
+            'You are observing an Empty Tensor. '
+            '(This Error is usually due to you have a wrong Quantizer configuration.)')
         assert value.numel() > 0, (f'You are observing an empty tensor({self._watch_on.name}).')
         assert isinstance(value, torch.Tensor), 'TorchMinMaxObserver can only deal with torch Tensor values'
         if self._quant_cfg.state == QuantizationStates.INITIAL:

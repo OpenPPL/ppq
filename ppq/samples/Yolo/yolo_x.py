@@ -1,12 +1,3 @@
-# ---------------------------------------------------------------
-# 这个脚本向你展示了如何使用 openvino 对 PPQ 导出的模型进行推理
-# 你需要注意，openvino 也可以运行各种各样的量化方案，你甚至可以用 tensorRT 的 policy
-# 但总的来说，openvino 需要非对称量化的 activation 和对称量化的 weights
-# 现在的写法针对单输入网络哦，多输入的你得自己改改
-# ---------------------------------------------------------------
-
-# For this onnx inference test, all test data is randomly picked.
-# If you want to use real data, just rewrite the defination of SAMPLES
 import numpy as np
 import openvino
 import torch

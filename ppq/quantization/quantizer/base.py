@@ -98,6 +98,9 @@ class BaseQuantizer(metaclass = ABCMeta):
         if platform is not None: converting_operation.platform = platform
         else: platform = converting_operation.platform
 
+        if platform == TargetPlatform.FP32: 
+            return self._graph.operations[op_name]
+
         # if platform == TargetPlatform.UNSPECIFIED we can skip its quantization when type is not supported.
         if platform == TargetPlatform.UNSPECIFIED and converting_operation.type not in self.quant_operation_types:
             return self._graph.operations[op_name]
