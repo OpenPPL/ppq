@@ -14,35 +14,64 @@ from ppq.IR.quantize import QuantableOperation
 
 
 class ConstantOfShapeExporter(OperationExporter):
-    def export(self, operation: Operation, graph: BaseGraph, **kwargs) -> Operation:
+    def export(self, op: Operation, graph: BaseGraph, **kwargs) -> Operation:
         # PATCH 20211203, ConstantOfShape Op causes an export error.
         # 这一问题是由 ConstantOfShape 中的 value 格式问题引发的，下面的代码将导出正确的格式
-        operation.attributes['value'] = numpy_helper.from_array(operation.attributes['value'])
-        return operation
+        op.attributes['value'] = numpy_helper.from_array(op.attributes['value'])
+        return op
 
 class MMCVExporter(OperationExporter):
-    def export(self, operation: Operation, graph: BaseGraph, **kwargs) -> Operation:
+    def export(self, op: Operation, graph: BaseGraph, **kwargs) -> Operation:
         # MMCV operation must have a domain attribute.
-        operation.attributes['domain'] = 'mmcv'
-        return operation
+        op.attributes['domain'] = 'mmcv'
+        return op
 
 class InterpExporter(OperationExporter):
-    def export(self, operation: Operation, graph: BaseGraph, **kwargs) -> Operation:
+    def export(self, op: Operation, graph: BaseGraph, **kwargs) -> Operation:
         # PATCH 20211216, interp op can not export input_shape attribute.
-        operation.attributes.pop('input_shape')
-        return operation
+        op.attributes.pop('input_shape')
+        return op
 
 class OOSExporter(OperationExporter):
-    def export(self, operation: Operation, graph: BaseGraph, **kwargs) -> Operation:
+    def export(self, op: Operation, graph: BaseGraph, **kwargs) -> Operation:
         # MMCV operation must have a domain attribute.
-        operation.attributes['domain'] = 'com.microsoft'
-        return operation
+        op.attributes['domain'] = 'com.microsoft'
+        return op
 
-OPERATION_EXPORTERS = {
+class AttentionExporter(OperationExporter):
+    def export(self, op: Operation, graph: BaseGraph, **kwargs) -> Operation:
+        # MMCV operation must have a domain attribute.
+        op.attributes['domain'] = 'com.microsoft'
+        return op
+
+class PPQBiasFusedMatMulExporter(OperationExporter):
+    def export(self, op: Operation, graph: BaseGraph, **kwargs) -> Operation:
+        if op.num_of_input == 3: bias = op.inputs[-1]
+        assert bias.is_parameter and bias.value is not None, 'MatMul Format Error'
+ 
+        bias_op = graph.create_operation(op_type='Add')
+        op.type = 'MatMul'
+        graph.insert_op_after(bias_op, op)
+        graph.create_variable(value=bias.value, is_parameter=True, dest_ops=[bias_op])
+        graph.remove_variable(op.inputs[-1])
+
+class PPQBiasFusedMatMulExporter(OperationExporter):
+    def export(self, op: Operation, graph: BaseGraph, **kwargs) -> Operation:
+        if op.num_of_input == 3: bias = op.inputs[-1]
+        assert bias.is_parameter and bias.value is not None, 'MatMul Format Error'
+ 
+        bias_op = graph.create_operation(op_type='Add')
+        op.type = 'MatMul'
+        graph.insert_op_after(bias_op, op)
+        graph.create_variable(value=bias.value, is_parameter=True, dest_ops=[bias_op])
+        graph.remove_variable(op.inputs[-1])
+
+OP_CONVERTERS = {
     'ConstantOfShape': ConstantOfShapeExporter,
     'MMCVRoiAlign': MMCVExporter,
     'grid_sampler': MMCVExporter,
     'Interp': InterpExporter,
+    'Attention': AttentionExporter,
     'QAttention': OOSExporter,
     'QGemm': OOSExporter,
     'QLinearAdd': OOSExporter,
@@ -54,6 +83,7 @@ OPERATION_EXPORTERS = {
     'QLinearMul': OOSExporter,
     'QLinearReduceMean': OOSExporter,
     'QLinearSigmoid': OOSExporter,
+    'PPQBiasFusedMatMul': PPQBiasFusedMatMulExporter
 }
 
 def convert_value(value: Union[int, float, np.ndarray, torch.Tensor]) -> str:
@@ -120,8 +150,17 @@ class OnnxExporter(GraphExporter):
 
         # Ready to export onnx graph defination.
         _inputs, _outputs, _initilizers, _nodes, _value_info = [], [], [], [], []
-        for operation in graph.topological_sort():
-            _nodes.append(self.build_operator_proto(operation))
+        
+        # before we can export them, we firstly convert all ops to proper format.
+        for op in [_ for _ in graph.topological_sort()]:
+            if op.type in OP_CONVERTERS:
+                exporter = OP_CONVERTERS[op.type]()
+                assert isinstance(exporter, OperationExporter), (
+                    f'Expected an OpExporter here, however {type(exporter)} was given.')
+                op = exporter.export(op=op, graph=graph)
+        
+        for op in graph.topological_sort():
+            _nodes.append(self.build_operator_proto(op))
 
         for variable in graph.variables.values():
             tensor_proto = self.build_variable_proto(variable)
@@ -163,12 +202,6 @@ class OnnxExporter(GraphExporter):
         Convert PPQ Op to Onnx Operation
         An Op consumes zero or more Tensors, and produces zero or more Tensors.
         """
-        if operation.type in OPERATION_EXPORTERS:
-            exporter = OPERATION_EXPORTERS[operation.type]()
-            assert isinstance(exporter, OperationExporter), (
-                f'Expected an OpExporter here, however {type(exporter)} was given.')
-            operation = exporter.export(operation=operation, graph=None)
-
         attributes = operation.attributes
         for key in attributes:
             value = attributes[key]

@@ -38,9 +38,9 @@ FORMATTER_FUSE_BN = True
 # 读取 Onnx 图时，将单独的 Batchnorm 替换为卷积
 FORMATTER_REPLACE_BN_TO_CONV = True
 # 读取 Onnx 图时，移除图中的 Identity 节点
-FORMATTER_REPLACE_REMOVE_IDENTITY = True
+FORMATTER_REMOVE_IDENTITY = True
 # 读取 Onnx 图时，移除图中的孤立节点
-FORMATTER_REPLACE_REMOVE_ISOLATED = True
+FORMATTER_REMOVE_ISOLATED = True
 
 # PASSIVE OPERATIONS 是那些不参与计算的 Op, 这些 op 的输入与输出将直接共享 scale
 # 同时这些 op 前后的定点过程将被直接停用

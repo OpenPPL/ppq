@@ -13,7 +13,7 @@ from ppq.IR import (BaseGraph, Operation, QuantableOperation,
 from ppq.quantization.qfunction.linear import PPQLinearQuant_toInt
 from ppq.utils.round import ppq_tensor_round
 
-from .onnx_exporter import OnnxExporter
+from .onnx_exporter import OnnxExporter, OP_CONVERTERS, OperationExporter
 
 
 class QDQHelper():
@@ -550,6 +550,14 @@ class ONNXRUNTIMExporter(OnnxExporter):
         # if a valid config path is given, export quantization config to there.
         if config_path is not None:
             super().export_quantization_config(config_path, graph)
+
+        # before we can export them, we firstly convert all ops to proper format.
+        for op in [_ for _ in graph.topological_sort()]:
+            if op.type in OP_CONVERTERS:
+                exporter = OP_CONVERTERS[op.type]()
+                assert isinstance(exporter, OperationExporter), (
+                    f'Expected an OpExporter here, however {type(exporter)} was given.')
+                op = exporter.export(op=op, graph=graph)
 
         name = graph._name
         if not name: name = 'PPL Quantization Tool - Onnx Export'
