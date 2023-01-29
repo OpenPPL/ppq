@@ -20,7 +20,7 @@ from ppq.executor import (BaseGraphExecutor, TorchExecutor,
                           TorchQuantizeDelegator)
 from ppq.IR import (BaseGraph, GraphBuilder, GraphCommand, GraphExporter,
                     GraphFormatter, Operation, QuantableGraph, SearchableGraph,
-                    Variable, TrainableGraph)
+                    TrainableGraph, Variable)
 from ppq.IR.deploy import RunnableGraph
 from ppq.IR.quantize import QuantableOperation, QuantableVariable
 from ppq.IR.search import SearchableGraph
@@ -35,6 +35,7 @@ from ppq.quantization.measure import (torch_cosine_similarity,
                                       torch_mean_square_error, torch_snr_error)
 from ppq.quantization.optim import (BiasCorrectionPass, GRUSplitPass,
                                     HorizontalLayerSplitPass,
+                                    IsotoneCalibrationPass,
                                     LayerwiseEqualizationPass,
                                     MetaxGemmSplitPass, MishFusionPass,
                                     NxpInputRoundingRefinePass,
