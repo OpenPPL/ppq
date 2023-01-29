@@ -28,6 +28,10 @@ OBSERVER_MSE_HIST_BINS = 2048
 OBSERVER_MSE_COMPUTE_INTERVAL = 8
 # Floating MSE Observer 的样本个数
 OBSERVER_FLOATING_MSE_FETCHES = 4096
+# Isotone Observer 的监听轴
+# 对于 Softmax 激活函数而言，Isotone Observer 的监听轴应该与 Softmax 操作所规约的轴相同
+# 对于 Sigmoid 激活函数而言，Isotone Observer 的监听轴应该设置为 Batch 所在的轴
+OBSERVER_ISOTONE_OBSERVER_AXIS = 'OBSERVER_ISOTONE_OBSERVER_AXIS'
 
 # 读取 Onnx 图时，将图中所有以 Constant 节点作为输入的变量转换为 Parameter Variable
 FORMATTER_FORMAT_CONSTANT_INPUT = True

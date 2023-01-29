@@ -25,6 +25,22 @@ def minmax_to_scale_offset(
     config: TensorQuantizationConfig,
     scale_threshold: float=OBSERVER_MIN_SCALE
 ) -> Tuple[float, float]:
+    """
+    Solve scale and offset with given min, max value.
+    For Symmetrical Quantization, offset is set to 0.
+    For ASymmetrical Quantization, offset is limited by [config.quant_min, config.quant_max].
+
+    Scale is limited by [scale_threshold, +inf].
+
+    Args:
+        min_val (float): min value
+        max_val (float): max value
+        config (TensorQuantizationConfig): Corresponding TQC.
+        scale_threshold (float, optional): minimum scale.
+
+    Returns:
+        Tuple[float, float]: Solved scale and offset.
+    """
     if OBSERVER_MIN_SCALE_MANUL_OVERRIDE in config.detail:
         scale_threshold = config.detail[OBSERVER_MIN_SCALE_MANUL_OVERRIDE]
     
@@ -60,6 +76,7 @@ def minmax_to_scale_offset(
 
 
 class TorchMinMaxObserver(BaseTensorObserver):
+    """ TorchMinMaxObserver collects min and max value of given tensor. """
     def __init__(self, watch_on: Variable, quant_cfg: TensorQuantizationConfig):
         super().__init__(watch_on, quant_cfg)
         self._min_val_collector = []
@@ -118,6 +135,10 @@ class TorchMinMaxObserver(BaseTensorObserver):
 
 
 class TorchHistObserver(TorchMinMaxObserver):
+    """ TorchHistObserver collects histogram of given tensor. 
+
+    It is designed for per-tensor quantization or activation quantization.
+    """
     def __init__(self, watch_on: Variable, quant_cfg: TensorQuantizationConfig,
                  hist_bins: int = OBSERVER_KL_HIST_BINS):
         self._phase = 'Detecting Minmax'
@@ -280,6 +301,10 @@ class TorchHistObserver(TorchMinMaxObserver):
 
 
 class TorchPercentileObserver(BaseTensorObserver):
+    """ TorchPercentileObserver collects percentile data of given tensor. 
+
+    It is designed for activation quantization.
+    """
     def __init__(self, watch_on: Variable, quant_cfg: TensorQuantizationConfig):
         super().__init__(watch_on, quant_cfg)
         if not OBSERVER_PERCENTILE_MANUL_OVERRIDE in quant_cfg.detail:

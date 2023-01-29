@@ -39,38 +39,29 @@ class QDQHelper():
 
 
 class ONNXRUNTIMExporter(OnnxExporter):
-    """ONNXRUNTIME int8 QDQ format exporter, no further actions should be
-    applied to the graph because we will modify the graph in-place, and the
-    modified graph can't be executed. We remove Clip and Relu ops(fuse into
-    computing op) here when asym quantization for activation is applied, and
-    following the official implementation, when an variable has multiple
-    outputs, we assume the same quantization scales and offset. For parameters,
-    we pre-quantize the value and only insert DequantizeLinear op, both per-
-    layer/per-channel and asym/sym quantizations are supported for export, the
-    exported onnx model is tested to align with PPQ monitor when
-    CUDAExecutionProvider is applied in onnxruntime-gpu >= 1.8.1, i.e., to run
-    the model correctly if you have gpu and onnxruntime-gpu version installed.
-
-    X     W      b             X        quant(W)   quant(b)
-    \     |     /               \         |          /
-     \    |    /                quant    dequant  dequant
-        Conv             ->       \       |        /
-          |                      dequant  |       /
-          |                         \     |      /
-                                         Conv
-                                          |
-                                        quant
-                                          |
-                                        dequant
-                                          |
-
-    ```
-    import onnxruntime as ort
-
-    sess_options = ort.SessionOptions()
-    sess = ort.InferenceSession(file_path, sess_options, providers=['CUDAExecutionProvider'])
-    res = sess.run(None, {sess.get_inputs()[0].name : dummy_input.cpu().numpy()})
-    ```
+    """
+    PPQ 可以将 TQC 中的量化信息导出为 Onnx QDQ 节点。
+    
+    对于 INT8 量化，PPQ 可以导出符合 Onnx 量化要求的量化信息，这要求 
+        
+        * TQC.quant_min   = -128
+        * TQC.quant_max   = 127
+        * TQC.num_of_bits = 8
+    
+    不符合规范的量化信息将不会被导出，并且 PPQ 将给出警告。
+    
+    Onnx QDQ 格式具有较高的灵活性，因此 PPQ 与推理框架可能在一些细节格式问题上出现分歧。
+    例如对于节点 A 而言，假设它有两个下游节点 B, C。此时 QDQ 节点可以插入在 A 的输出端，也可以分别插入在 B, C 的输入端。
+    因此导出模型的格式可能存在不一致，这也有可能导致推理框架解析模型时发生错误。出现上述情况时，用户需要手动对导出逻辑进行干预。
+    
+    对于激活值非对称量化的策略而言，激活函数 relu, clip 的功能可以被 QDQ 节点代替，因此通常情况下它们是可省的。
+    PPQ 会自动探测上述情况，在确保省略激活函数不会对网络结果产生影响时移除非对称量化中的激活函数。
+    
+    PPQ 会移除冗余的 QDQ 节点，即前后相邻的两组 Q-DQ 节点，如果它们的量化参数一致，则只会导出上游节点的量化信息。
+    
+    对于浮点量化而言，PPQ 会导出自定义节点 QuantizeFloating, DequantizeFloating， 这些节点不被推理框架识别，仅作可视化用途。
+    
+    任何导出器的导出逻辑都是原地进行的，它们将对传入的计算图对象进行原地修改，因此在导出之前你需要手动克隆计算图。
     """
 
     def __init__(self, removed_activation_types: List[str] = ['Relu', 'Clip']) -> None:

@@ -65,6 +65,12 @@ def convert_value(value: Union[int, float, np.ndarray, torch.Tensor]) -> str:
 
 
 class OnnxExporter(GraphExporter):
+    """
+    PPQ 可以将 计算图 导出成 Onnx 标准格式，Onnx Exporter 不会导出 QDQ 节点。
+    如需导出带有 QDQ 节点的 Onnx 文件，用户需要使用 OnnxRuntime Exporter
+    
+    任何导出器的导出逻辑都是原地进行的，它们将对传入的计算图对象进行原地修改，因此在导出之前你需要手动克隆计算图。
+    """
     def __init__(self) -> None:
         super().__init__()
 

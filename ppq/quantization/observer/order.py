@@ -1,22 +1,26 @@
 import torch
-from ppq.core import (CUDA, PPQ_CONFIG, QuantizationProperty,
-                      QuantizationStates, TensorQuantizationConfig,
-                      ppq_warning)
+
+from ppq.core import (QuantizationProperty, QuantizationStates,
+                      TensorQuantizationConfig, ppq_warning, OBSERVER_ISOTONE_OBSERVER_AXIS)
 from ppq.IR.base.graph import Variable
 
 from .base import BaseTensorObserver
 
 
 class TorchIsotoneObserver(BaseTensorObserver):
-    def __init__(self, watch_on: Variable, quant_cfg: TensorQuantizationConfig):
-        super().__init__(watch_on, quant_cfg)
+    def __init__(self, watch_on: Variable, TQC: TensorQuantizationConfig):
+        super().__init__(watch_on, TQC)
         self._cache = []
-    """For softmax or sigmoid activations, usually we just need
-    argmax(softmax(x)) == argmax(softmax(quant(x))) which is argmax(x) ==
-    argmax(quant(x))
+        if OBSERVER_ISOTONE_OBSERVER_AXIS not in TQC:
+            ppq_warning('Initializing Torch Isotone Observer without an explicit axis is not recommended.')
+            self.axis = 0
+        else: self.axis = TQC.detail[OBSERVER_ISOTONE_OBSERVER_AXIS]
 
-    Inspired by this Property, we designed an order-preserving calibration method,
-        which cares only about max(x) [or min(x)]
+    """For softmax or sigmoid activations, usually we just need
+    argmax(softmax(x)) == argmax(softmax(quant(x)))
+
+    Inspired by this Property, Isotone Observer is designed to provide an order-preserving calibration method,
+        which cares only about argmax(x) [or argmin(x)]
 
     To keep argmax(x) == argmax(quant(x)), we only need to
         distinguish the largest element and the second largert element with quantization
@@ -26,11 +30,8 @@ class TorchIsotoneObserver(BaseTensorObserver):
 
         For symmetric quantization:
         We want
-            quant(L1, scale) > quant(L2, scale)
-            clip(round(L1 / scale)) > clip(round(L2 / scale))
-        Which means:
-            1. L1 - L2 > 0.5 * scale
-            2. round(L2 / scale) < clip_max - 1
+            1. L1 - L2 > scale
+            2. round(L1 / scale) <= quant_max
     Args:
         BaseTensorObserver ([type]): [description]
     """
@@ -41,13 +42,12 @@ class TorchIsotoneObserver(BaseTensorObserver):
             if self._quant_cfg.policy.has_property(QuantizationProperty.PER_TENSOR):
                 # flatten value as [batch, num_of_elements]
                 value = value.flatten(start_dim=1)
-                value, _ = torch.topk(value, k=2, dim=-1, largest=True, sorted=True)
+                value, _ = torch.topk(value, k=2, dim=self.axis, largest=True, sorted=True)
                 self._cache.append(value)
             elif self._quant_cfg.policy.has_property(QuantizationProperty.PER_CHANNEL):
-                raise TypeError('IsotoneObserver is not designed for channelwise quantization.')
+                raise TypeError('Isotone Observer is not designed for channelwise quantization.')
             else:
-                raise TypeError('Min-max Observer only work with per-tensor or per-channel quantize policy.')
-
+                raise TypeError('Isotone Observer only work with per-tensor or per-channel quantize policy.')
 
     def render_quantization_config(self):
         device = self._cache[-1].device

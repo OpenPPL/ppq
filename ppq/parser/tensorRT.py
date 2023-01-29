@@ -54,6 +54,13 @@ class TensorRTExporter_QDQ(ONNXRUNTIMExporter):
 
 
 class TensorRTExporter_JSON(GraphExporter):
+    """
+    使用该导出器导出符合 TensorRT 格式要求的量化模型。
+    
+    PPQ 可以将 TQC 中的量化信息导出到 json，并遵循 TensorRT 支持的格式。
+    用户可以通过 Json 文件将图中所有 variable 的 min, max 传递给 TensorRT
+    所有未写入 min, max 的变量将保持 fp32(fp16) 精度执行。
+    """
     def export_quantization_config(self, config_path: str, graph: BaseGraph):
         act_quant_info = {}
         for op in graph.topological_sort():
