@@ -32,7 +32,7 @@ To keep argmax(x) == argmax(quant(x)), we only need to
         
         2. round(L2 / scale) < quant_max
         
-    Hence that, we will have:
+    Hence, we will have:
         
         1. scale < 2 * (L1 - L2)
         
@@ -44,7 +44,7 @@ To keep argmax(x) == argmax(quant(x)), we only need to
 
         2. round(L2 / scale) + offset < quant_max
 
-    Hence that, we will have:
+    Hence, we will have:
         
         1. scale < 2 * (L1 - L2)
         
