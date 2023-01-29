@@ -7,6 +7,7 @@ from .processer import GraphCommandProcessor
 
 
 class TrainableGraph(GraphCommandProcessor):
+    """ Trainable Graph offers a bunch of functions that provide training interfaces. """
 
     def __init__(self, graph_or_processor: Union[BaseGraph, Callable]) -> None:
         super().__init__(graph_or_processor)

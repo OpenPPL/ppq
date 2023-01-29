@@ -14,6 +14,7 @@ from .defs import ppq_warning, SingletonMeta
 
 
 class ComplieHelper(metaclass=SingletonMeta):
+    """ PPQ-Torch Compile Wrapper. """
     def __init__(self) -> None:
         self.__CUDA_EXTENTION__ = None
 
