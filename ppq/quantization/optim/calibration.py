@@ -321,7 +321,7 @@ class PPLDSPTIReCalibrationPass(RuntimeCalibrationPass):
                     cfg.detail.update({'range_min': min_val, 'range_max': max_val})
 
 
-class IsotoneCalibrationPass(QuantizationOptimizationPass):
+class IsotoneCalibrationPass(RuntimeCalibrationPass):
     """
     ## Isotone Calibration Pass(保序量化校准过程)
 
@@ -379,11 +379,12 @@ class IsotoneCalibrationPass(QuantizationOptimizationPass):
         
         Time Complexity: O(nlogn)
     """
-    def __init__(self, variables: List[str] = None, axis: int = -1, verbose: bool = True) -> None:
+    def __init__(self, variables: List[str] = None, axis: int = -1, verbose: bool = True, calib_steps: int = 32) -> None:
+        super().__init__(calib_steps=calib_steps)
+        self.name = "Isotone Calibration Pass"
         self.variables = variables
         self.axis      = axis
         self.verbose   = verbose
-        super().__init__("Isotone Calibration Pass")
 
     def optimize(self, graph: BaseGraph, **kwargs) -> None:
         if self.variables is None:
@@ -408,9 +409,13 @@ class IsotoneCalibrationPass(QuantizationOptimizationPass):
                     raise TypeError('Isotone Calibration Pass needs a list of variable name as its input.')
                 if var not in graph.variables:
                     raise ValueError(f'Variable {var} not in current graph.')
-
+                
+                var = graph.variables[var]
                 if isinstance(var, QuantableVariable):
+                    var.source_op_config.state = QuantizationStates.INITIAL
                     var.source_op_config.observer_algorithm = 'Isotone'
                     var.source_op_config.detail[OBSERVER_ISOTONE_OBSERVER_AXIS] = self.axis
                     if self.verbose: print(
                         f'Calibration Method of Variable {var.name} has been changed to Isotone[axis={self.axis}].')
+        
+        super().optimize(graph=graph, **kwargs)

@@ -10,13 +10,13 @@ from .range import minmax_to_scale_offset
 
 
 class TorchIsotoneObserver(BaseTensorObserver):
-    def __init__(self, watch_on: Variable, TQC: TensorQuantizationConfig):
-        super().__init__(watch_on, TQC)
+    def __init__(self, watch_on: Variable, quant_cfg: TensorQuantizationConfig):
+        super().__init__(watch_on, quant_cfg)
         self._cache = []
-        if OBSERVER_ISOTONE_OBSERVER_AXIS not in TQC.detail:
+        if OBSERVER_ISOTONE_OBSERVER_AXIS not in quant_cfg.detail:
             ppq_warning('Initializing Torch Isotone Observer with implicit axis is not recommended.')
             self.axis = -1
-        else: self.axis = TQC.detail[OBSERVER_ISOTONE_OBSERVER_AXIS]
+        else: self.axis = quant_cfg.detail[OBSERVER_ISOTONE_OBSERVER_AXIS]
 
     """For softmax or sigmoid activations, usually we just need
     argmax(softmax(x)) == argmax(softmax(quant(x)))
