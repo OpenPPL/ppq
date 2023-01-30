@@ -13,8 +13,8 @@ from ppq.core import (PPQ_CONFIG, NetworkFramework, TargetPlatform,
 from ppq.core.common import (FORMATTER_FORMAT_CONSTANT_INPUT,
                              FORMATTER_FUSE_BIAS_ADD, FORMATTER_FUSE_BN,
                              FORMATTER_REPLACE_BN_TO_CONV,
-                             FORMATTER_REPLACE_REMOVE_IDENTITY,
-                             FORMATTER_REPLACE_REMOVE_ISOLATED)
+                             FORMATTER_REMOVE_IDENTITY,
+                             FORMATTER_REMOVE_ISOLATED)
 from ppq.executor import TorchExecutor
 from ppq.executor.base import BaseGraphExecutor
 from ppq.IR import (BaseGraph, GraphBuilder, GraphCommand, GraphCommandType,
@@ -632,10 +632,10 @@ def format_graph(graph: BaseGraph) -> BaseGraph:
     formatter(GraphCommand(GraphCommandType.FORMAT_PAD))
     formatter(GraphCommand(GraphCommandType.FORMAT_RESIZE))
     
-    if FORMATTER_REPLACE_REMOVE_IDENTITY:
+    if FORMATTER_REMOVE_IDENTITY:
         formatter(GraphCommand(GraphCommandType.REMOVE_IDENTITY))
     
-    if FORMATTER_REPLACE_REMOVE_ISOLATED:
+    if FORMATTER_REMOVE_ISOLATED:
         formatter(GraphCommand(GraphCommandType.DELETE_ISOLATED))
 
     return graph

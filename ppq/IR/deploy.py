@@ -12,8 +12,7 @@ from .quantize import QuantableOperation
 
 class RunnableGraph(GraphCommandProcessor):
     def __init__(self, graph: BaseGraph, device: str = None):
-        """RunnableGraph object aims at dealing things related with graph
-        executing.
+        """RunnableGraph deals with values related with graph executing.
 
         Literally it helps you move values of your graph towards device and vice versa.
             And give an executable order of all operations in your graph which actual executor will follow.

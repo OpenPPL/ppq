@@ -705,6 +705,15 @@ class TensorQuantizationConfig(Serializable):
 
     @ property
     def visibility(self) -> QuantizationVisibility:
+        """ Export Visibility of this TQC.
+        
+        * QuantizationVisibility.EXPORT_WHEN_ACTIVE - Export this TQC when it is active.
+        
+        * QuantizationVisibility.FORCE_EXPORT - Force Export this TQC.
+        
+        * QuantizationVisibility.INTERNAL - Never Export this TQC.
+        
+        """
         return self._visibility
 
     @ visibility.setter
@@ -713,45 +722,67 @@ class TensorQuantizationConfig(Serializable):
 
     @ property
     def scale(self) -> torch.Tensor:
+        """ Get Quantization Scale of this TQC.
+        
+        If current TQC is dominated by other, return father TQC's scale instead.
+        """
         if self.dominated_by == self: return self._scale
         else: return self.dominated_by.scale
 
     @ property
     def offset(self) -> torch.Tensor:
+        """ Get Quantization Offset of this TQC.
+        
+        If current TQC is dominated by other, return father TQC's offset instead.
+        """
         if self.dominated_by == self: return self._offset
         else: return self.dominated_by.offset
 
     @ property
     def policy(self) -> QuantizationPolicy:
+        """ Get Quantization Policy of this TQC. """
         return self._policy
 
     @ property
     def num_of_bits(self) -> int:
+        """ Get bit-width of this TQC. """
         return self._num_of_bits
 
     @ property
     def rounding(self) -> RoundingPolicy:
+        """ Get Rounding Policy of this TQC. """
         return self._rounding
 
     @ property
     def quant_min(self) -> int:
+        """ Get minimum quant value of this TQC. """
         return self._quant_min
 
     @ property
     def quant_max(self) -> int:
+        """ Get maximum quant value of this TQC. """
         return self._quant_max
 
     @ property
     def exponent_bits(self) -> int:
+        """ Get exponent bit-width of current TQC. 
+        
+        num_of_bits = exponent_bits + mantissa_bits
+        """
         return self._exponent_bits
 
     @ property
     def mantissa_bits(self) -> int:
+        """ Get mantissa bit-width of current TQC. 
+        
+        num_of_bits = exponent_bits + mantissa_bits
+        """
         # there is one bit for sign.
         return self.num_of_bits - self._exponent_bits - 1
     
     @ property
     def channel_axis(self) -> int:
+        """ Get Quantization Axis, For Per-tensor Quantization, it returns None. """
         return self._channel_axis
 
     @ scale.setter

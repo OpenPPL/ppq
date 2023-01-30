@@ -14,6 +14,7 @@ from .processer import GraphCommandProcessor
 
 
 class GraphReplacer(GraphCommandProcessor):
+    """ Graph Replacer offers a bunch of graph editing functions that helps replacing operation or variable in your graph. """
     def process(self, command: GraphCommand) -> Any:
         if command.command_type == GraphCommandType.REPLACE_OP:
             assert isinstance(command, ReplaceOperationCommand), \
@@ -152,6 +153,7 @@ class GraphReplacer(GraphCommandProcessor):
 
 
 class GraphFormatter(GraphCommandProcessor):
+    """ Graph Formatter offers a bunch of graph editing functions that helps modifying your graph. """
     def _acceptable_command_types(self) -> List[GraphCommandType]:
         return [
             GraphCommandType.FORMAT_CLIP,

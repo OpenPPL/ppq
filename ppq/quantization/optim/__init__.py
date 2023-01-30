@@ -1,7 +1,8 @@
 from .baking import ParameterBakingPass
 from .base import (QuantizationOptimizationPass,
                    QuantizationOptimizationPipeline)
-from .calibration import PPLDSPTIReCalibrationPass, RuntimeCalibrationPass
+from .calibration import (IsotoneCalibrationPass, PPLDSPTIReCalibrationPass,
+                          RuntimeCalibrationPass)
 from .equalization import ChannelwiseSplitPass, LayerwiseEqualizationPass
 from .extension import ExtensionPass
 from .legacy import AdaroundPass

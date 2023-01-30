@@ -1,4 +1,6 @@
-"""这是一个 PPQ 量化的入口脚本，将你的模型和数据按要求进行打包:
+"""这是一个高度自动化的 PPQ 量化的入口脚本，将你的模型和数据按要求进行打包:
+
+在自动化 API 中，我们使用 QuantizationSetting 对象传递量化参数。
 
 This file will show you how to quantize your network with PPQ
     You should prepare your model and calibration dataset as follow:
@@ -27,7 +29,6 @@ NETWORK_INPUTSHAPE    = [1, 3, 224, 224]                  # input shape of your 
 CALIBRATION_BATCHSIZE = 16                                # batchsize of calibration dataset
 EXECUTING_DEVICE      = 'cuda'                            # 'cuda' or 'cpu'.
 REQUIRE_ANALYSE       = False
-DUMP_RESULT           = False
 TRAINING_YOUR_NETWORK = True                              # 是否需要 Finetuning 一下你的网络
 
 # -------------------------------------------------------------------
