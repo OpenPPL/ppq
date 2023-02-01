@@ -66,9 +66,6 @@ export PYTHONPATH=${PWD}:${PYTHONPATH}
 
 * Install PPQ from Pip(Optional):
 
-**Note that this installation method currently does not support tensorrt write parameter quantization, we haven't updated yet**.
-Wait for Python finish its installation and pray for bug free.
-pre-built wheels are maintained in [PPQ](https://pypi.org/project/ppq/), you could simply install ppq with the following command(**You should notice that install from pypi might get an outdated version ...**.)
 ```bash
 python3 -m pip install ppq
 ```
