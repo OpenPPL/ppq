@@ -252,7 +252,7 @@ class QuantizationFusionSetting():
         self.align_avgpooling_to     = 'None'
         self.align_elementwise_to    = 'Align to Large'
         self.align_concat_to         = 'Align to Output'
-        self.force_alignment_overlap = True
+        self.force_alignment_overlap = False
 
 
 class LSQSetting():
