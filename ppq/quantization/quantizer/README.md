@@ -4,6 +4,7 @@ PPQ has supported many backends, you can check [quant.py](../ppq/core/quant.py) 
 platforms, this tutorial illustrates you how to add your own quantization backend support in PPQ. For simplicity,
 the *TargetPlatform.ACADEMIC_INT8* platform will be given as an example here.
 
+Executable Example are provided here: [MyQuantizer.py](https://github.com/openppl-public/ppq/blob/master/ppq/quantization/quantizer/MyQuantizer.py).
 
 ## Create Your Platform
 
@@ -55,19 +56,12 @@ self._quant_max   = 127
 
 You need to specify your target platform and default platform of your quantizer, these platforms will be dispatched
 to different operations by PPQ graph dispatcher when PPQ loads and schedules your model. The target platform should
-be your created platform, and the default platform, in almost all circumstances you may leave it as *TargetPlatform.FP32*
+be your created platform.
 ```python
 @ property
 def target_platform(self) -> TargetPlatform:
 
     return TargetPlatform.ACADEMIC_INT8
-
-@ property
-def default_platform(self) -> TargetPlatform:
-
-    return TargetPlatform.FP32
-
-```
 
 You also need to specify quantable operation types of your backend, for example, in most academic settings, only computing
 operations(Conv, Gemm, ConvTranspose) need quantization, then you only need to specify those quantable operation types in
@@ -82,8 +76,8 @@ def quant_operation_types(self) -> set:
 
 To implement the whole quantizer, you should confirm the quantization scheme(per tensor/ per channel, symmetric / asymmetric)
 of your backend platform, and in many platforms weight parameters and activations may take different quantization schemes.
-Please see [QuantizationProperty](../ppq/core/quant.py) for all supported quantization schemes. Your quantizer class should 
-implement the abstract funtion *quantize_policy* to identify the quantization scheme of activation 
+Please see [QuantizationProperty](https://github.com/openppl-public/ppq/tree/master/ppq/core/quant.py) for all supported quantization schemes. Your quantizer class should 
+implement the funtion *quantize_policy* to identify the quantization scheme of activation 
 ```python
 @ property
 def quantize_policy(self) -> QuantizationPolicy:
@@ -105,12 +99,11 @@ and your real backend.
 def rounding_policy(self) -> RoundingPolicy:
 
     return RoundingPolicy.ROUND_HALF_EVEN
-
 ```
+
 ## Correct Quantization Details
 
-In most circumstances, weight parameters may take different quantization scheme from activation, thus we need to correct quantization scheme for weight parameter and special operations in  *init_quantize_config*, note that this func generates quantization configs for
-every quantable operation in your graph, you need firstly generate quantization config for common activation
+In most circumstances, weight parameters may take different quantization scheme from activation, thus we need to correct quantization scheme for weight parameter and special operations in  *init_quantize_config*, note that this func generates quantization configs for every quantable operation in your graph, you need firstly generate quantization config for common activation
 ```python
 def init_quantize_config(self, operation: Operation) -> OperationQuantizationConfig:
 
@@ -168,29 +161,32 @@ which means PPQ will skip the quantization of output activation of every quantab
 
 ## Register Your Quantizer And Platform
 
-Now that you have created your platform and corresponding quantizer, then you need to register your platform so that PPQ knows
-how to execute operations dispatched to your platform. Most platforms in PPQ uses the same operation executing table implemented
-by PyTorch, since it's very difficult to write a platform-specific executing table for tens of different supported platforms in
-PPQ, and the real backend executing behavior is almost impossible to replicate in a simulator like PPQ. The default executing
-table should do all the good and all you need is to append your platform in the [GLOBAL_DISPATCHING_TABLE](../ppq/executor/base.py) 
-```python
+Now that you have created your platform and corresponding quantizer, then you need to register your with [ppq.lib.common](https://github.com/openppl-public/ppq/blob/master/ppq/lib/common.py) :
 
-GLOBAL_DISPATCHING_TABLE[TargetPlatform.ACADEMIC_INT8] = ACADEMIC_BACKEND_TABLE # could also be DEFAULT_BACKEND_TABLE
+```python
+    # 示例代码
+    from ppq.IR import Operation
+    from ppq.core import OperationQuantizationConfig
+    from ppq.quantization.quantizer import BaseQuantizer
+    from ppq.core import TargetPlatform
+
+    class MyQuantizer(BaseQuantizer):
+        def init_quantize_config(self, operation: Operation) -> OperationQuantizationConfig:
+            # Implement this function first!
+            return super().init_quantize_config(operation)
+        
+        def quant_operation_types(self) -> set:
+            return {'Conv', 'Gemm'}
+
+    # register this quantizer to PPL_CUDA_INT8
+    register_network_quantizer(quantizer=MyQuantizer, platform=TargetPlatform.PPL_CUDA_INT8)
 ```
-then when PPQ executor encounters operations dispatched to ypur platform, it will search in the registered table, find the operation
-implementation and execute.
 
-To use PPQ to run your platform like any other in-position platforms, the last thing you need to do is to register your platform
-and corresponding quantizer in the API table [QUANTIZER_COLLECTION](../ppq/api/interface.py) so that PPQ will treat your platform
-like any one else
-```python
-QUANTIZER_COLLECTION[TargetPlatform.ACADEMIC_INT8] = ACADEMICQuantizer
-```
+After that you can invoke your quantizer via ppq.api functions:
 
-then you can call your quantizer to run the quantization simulation as specified in [how_to_use](./how_to_use.md)
 ```python
 
-from ppq.api.interface import QUANTIZER_COLLECTION
+from ppq.lib import Quantizer
 from ppq.executor import TorchExecutor
 from ppq.api import load_onnx_graph, load_caffe_graph
 from ppq.api.interface import dispatch_graph
@@ -203,7 +199,7 @@ ppq_graph_ir = dispatch_graph(ppq_graph_ir, target_platform, setting) # schedule
 
 executor = TorchExecutor(ppq_graph_ir, device=EXECUTING_DEVICE) # initialize executor
 
-quantizer = QUANTIZER_COLLECTION[target_platform](graph=ppq_graph_ir) # your quantizer
+quantizer = Quantizer(target_platform, ppq_graph_ir) # your quantizer
 quantizer.quantize(
         inputs=dummy_input,                         # some random input tensor, should be list or dict for multiple inputs
         calib_dataloader=dataloader,                # calibration dataloader
