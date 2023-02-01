@@ -32,13 +32,9 @@ def register_operation_handler(handler: Callable, operation_type: str, platform:
         new handler will replace the old one without warrning.
 
     Args:
-        handler (Callable): _description_
-        operation_type (str): _description_
-        platform (TargetPlatform): _description_
-
-    Raises:
-        ValueError: _description_
-        ValueError: _description_
+        handler (Callable): Callable function, which interface follows restriction above.
+        operation_type (str): Operation type.
+        platform (TargetPlatform): Register platform.
     """
     if platform not in OPERATION_FORWARD_TABLE:
         raise ValueError('Unknown Platform detected, Please check your platform setting.')

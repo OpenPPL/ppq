@@ -28,7 +28,7 @@ def Quantizer(platform: TargetPlatform, graph: BaseGraph) -> BaseQuantizer:
     在 PPQ 中，量化器是一个用于为算子初始化量化信息 Tensor Quantization Config 的对象
         - 量化器决定了你的算子是如何被量化的，你也可以设计新的量化器来适配不同的后端推理框架
     
-    在 PPQ 中我们为不同的推理后端设计好了一些预定义的量化器，你可以通过 ppq.foundation.Quantizer 来访问它们
+    在 PPQ 中我们为不同的推理后端设计好了一些预定义的量化器，你可以通过 ppq.lib.Quantizer 来访问它们
     """
     if platform not in __QUANTIZER_COLLECTION__:
         raise KeyError(f'Target Platform {platform} has no related quantizer for now.')
@@ -37,11 +37,9 @@ def Quantizer(platform: TargetPlatform, graph: BaseGraph) -> BaseQuantizer:
 
 def Pipeline(optims: List[QuantizationOptimizationPass]) -> QuantizationOptimizationPipeline:
     """
-    
     Build a Pipeline with given Optimization Passes Collection
-
-    Args:
-        optims (List[QuantizationOptimizationPass]): A collection of optimization passes
+    
+    使用给定的量化过程集合创建量化管线。
     """
     return QuantizationOptimizationPipeline(optims)
 
@@ -50,14 +48,9 @@ def Observer(
     quant_config: TensorQuantizationConfig, 
     variable: Variable = None) -> BaseTensorObserver:
     """
-    Get a Tensor Observer.
-
-    Args:
-        quant_config (TensorQuantizationConfig): _description_
-        variable (Variable, optional): _description_. Defaults to None.
-
-    Returns:
-        BaseTensorObserver: _description_
+    Get a Calibration Observer based on quant_config.observer_algorithm attribute.
+    
+    根据 TQC 中 observer_algorithm 属性获取对应的 Observer.
     """
     return TensorObserverFactroy.build_observer(variable=variable, config=quant_config)
 
@@ -120,6 +113,11 @@ def LinearQuantizationConfig(
     num_of_bits = 8,
     calibration: str = 'minmax',
     rounding: RoundingPolicy = RoundingPolicy.ROUND_HALF_EVEN) -> TensorQuantizationConfig:
+    """
+    Create a Linear Quantization Config.
+    
+    创建线性量化配置信息。
+    """
 
     sym = QuantizationProperty.SYMMETRICAL if symmetrical else QuantizationProperty.ASYMMETRICAL
     dyn = QuantizationProperty.DYNAMIC if dynamic else 0
@@ -146,6 +144,11 @@ def FloatingQuantizationConfig(
     mantissa: int = 3,
     calibration: str = 'constant',
     rounding: RoundingPolicy = RoundingPolicy.ROUND_HALF_EVEN) -> TensorQuantizationConfig:
+    """
+    Create a Floating Quantization Config.
+    
+    创建浮点量化配置信息。
+    """
 
     sym = QuantizationProperty.SYMMETRICAL if symmetrical else QuantizationProperty.ASYMMETRICAL
     pw2 = QuantizationProperty.POWER_OF_2 if power_of_2 else 0
@@ -162,12 +165,24 @@ def FloatingQuantizationConfig(
 
 
 def Dispatcher(graph: BaseGraph, method: str='conservative') -> GraphDispatcher:
+    """
+    Get a Graph Dispatcher.
+    
+    获取一个指定的调度器。
+    """
     if method not in DISPATCHER_TABLE:
         raise KeyError(f'Can not find a dispatcher named {method}, check your input again.')
     return DISPATCHER_TABLE[method](graph)
 
 
-def OperationForwardFunction(optype: str, platform: TargetPlatform) -> Callable:
+def OperationForwardFunction(optype: str, platform: TargetPlatform = TargetPlatform.FP32) -> Callable:
+    """
+    Get an Operation forward function. Same Op are allows to have different forward function on different platform,
+    to get a default forward function, use platform=TargetPlatform.FP32.
+    
+    获取一个算子前向传播执行函数。在 PPQ 中，相同的算子可以在不同的平台上注册成不同的执行逻辑，
+    使用 platform = TargetPlatform.FP32 来获取默认执行逻辑。
+    """
     if not isinstance(platform, TargetPlatform):
         raise TypeError('Wrong parameter type for invoking this function.')
     if optype not in OPERATION_FORWARD_TABLE[platform]:
@@ -177,6 +192,11 @@ def OperationForwardFunction(optype: str, platform: TargetPlatform) -> Callable:
 
 
 def Exporter(platform: TargetPlatform) -> GraphExporter:
+    """
+    Get an network Exporter.
+    
+    获取一个网络导出器。
+    """
     if not isinstance(platform, TargetPlatform):
         raise TypeError('Wrong parameter type for invoking this function.')
     if platform not in __EXPORTERS__:
@@ -185,6 +205,11 @@ def Exporter(platform: TargetPlatform) -> GraphExporter:
 
 
 def Parser(framework: NetworkFramework) -> GraphExporter:
+    """
+    Get an network Parser.
+    
+    获取一个网络解析器。
+    """
     if not isinstance(framework, NetworkFramework):
         raise TypeError('Parameter framework has invalid type, Check your parameter again.')
     if framework not in __PARSERS__:

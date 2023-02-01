@@ -156,16 +156,9 @@ Here we give a brief description of each quantization state:
         For padding value and clip value, it shares the same scale with its input.
     Those parameters will have a PASSIVE_INIT state when created.
 
-    ATTENTION: if there is any quantization configuration with INITIAL or PASSIVE_INIT state, PPQ will refuse
+    if there is any quantization configuration with INITIAL or PASSIVE_INIT state, PPQ will refuse
         to deploy your model and an error will be thrown.
         This inspection will be ignored when PPQ.core.config.DEBUG set as True.
-
-    OVERLAPPED: state OVERLAPPED means there is someone else takes control of current tensor,
-    and overlapped tensor quantization configuration will be ignored by optimization algorithms and executor.
-
-    Graph fusion always generate overlapped quantization, for a typical conv - relu fusion,
-    the output quantization of convolution will be overlapped by the output tensor of relu.
-    State OVERLAPPED cares only about quantization behaviour that cross layers.
 
     DEACTIVATED: state DEACTIVATED is related with "dequantize" function, once an operation is dequantized,
     all related tensor configurations will be replaced as DEACTIVATED, so that skipping all quantization during

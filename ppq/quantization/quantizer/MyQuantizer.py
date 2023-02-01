@@ -112,15 +112,6 @@ class ExtQuantizer(BaseQuantizer):
         return TargetPlatform.EXTENSION
 
     @ property
-    def default_platform(self) -> TargetPlatform:
-        """default_platform 属性是提供给子图切分使用的， 所有冲突区的算子将被调度到这个设备上。
-
-        Property default_platform is acquired by graph dispather.     It states
-        where non-quantable operation depoly.
-        """
-        return TargetPlatform.FP32
-
-    @ property
     def quant_operation_types(self) -> set:
         """quant_operation_types 指明了所有可以被量化的算子类型。
 
