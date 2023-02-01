@@ -158,7 +158,7 @@ python3 -m pip install ppq
 | WeChat Official Account | QQ Group |
 | :----:| :----: |
 | OpenPPL | 627853444 |
-| ![OpenPPL](assets/img/OpenPPL.jpg)| ![QQGroup](assets/img/QQGroup.jpg) |
+| ![OpenPPL](assets/OpenPPL.jpg)| ![QQGroup](assets/QQGroup.jpg) |
 
 Email: openppl.ai@hotmail.com
 
@@ -208,6 +208,6 @@ PPQ is tested with models from mmlab-classification, mmlab-detection, mmlab-sega
 
 ### License
 
-![Logo](assets/img/logo.png)
+![Logo](assets/logo.png)
 
 This project is distributed under the [Apache License, Version 2.0](LICENSE).
