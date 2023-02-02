@@ -100,6 +100,9 @@ class TorchMinMaxObserver(BaseTensorObserver):
                 raise TypeError('Min-max Observer only work with per-tensor or per-channel quantize policy.')
 
     def render_quantization_config(self):
+        # If TQC is not prepared for calibration, just skip this execution.
+        if self._quant_cfg.state not in {QuantizationStates.INITIAL}: return
+
         if len(self._max_val_collector) == 0:
             raise ValueError('Can not render quantization config yet, Observer data collator is empty. ' \
                 'Invoke observe() function before render config.')
@@ -152,6 +155,9 @@ class TorchHistObserver(TorchMinMaxObserver):
         super().__init__(watch_on, quant_cfg)
 
     def observe(self, value: torch.Tensor):
+        # If TQC is not prepared for calibration, just skip this execution.
+        if self._quant_cfg.state not in {QuantizationStates.INITIAL}: return
+
         assert value.numel() > 0, (f'You are observing an empty tensor({self._watch_on.name}).')
 
         if self._phase == 'Detecting Minmax':
@@ -276,6 +282,9 @@ class TorchHistObserver(TorchMinMaxObserver):
         return scale, offset
 
     def render_quantization_config(self):
+        # If TQC is not prepared for calibration, just skip this execution.
+        if self._quant_cfg.state not in {QuantizationStates.INITIAL}: return
+
         if not self._quant_cfg.policy.has_property(QuantizationProperty.PER_TENSOR):
             raise ValueError('Hist observer can only apply with per-tensor quantization config.')
 
@@ -316,6 +325,9 @@ class TorchPercentileObserver(BaseTensorObserver):
 
     @ torch.no_grad()
     def observe(self, value: torch.Tensor):
+        # If TQC is not prepared for calibration, just skip this execution.
+        if self._quant_cfg.state not in {QuantizationStates.INITIAL}: return
+
         assert value is not None, (
             'You are observing an Empty Tensor. '
             '(This Error is usually due to you have a wrong Quantizer configuration.)')
@@ -346,12 +358,15 @@ class TorchPercentileObserver(BaseTensorObserver):
                 raise TypeError('Min-max Observer only work with per-tensor or per-channel quantize policy.')
 
     def render_quantization_config(self):
+        # If TQC is not prepared for calibration, just skip this execution.
+        if self._quant_cfg.state not in {QuantizationStates.INITIAL}: return
+
         if self._quant_cfg.policy.has_property(QuantizationProperty.PER_TENSOR):
             if len(self._percentile_collector) == 0:
                 raise ValueError('Can not render quantization config yet, Observer data collator is empty. ' \
                     'Invoke observe() function before render config.')
             device = self._percentile_collector[-1].device
-            self._percentile_collector = torch.cat(self._percentile_collector, dim=0).mean(dim=0).cpu()
+            self._percentile_collector = torch.cat(self._percentile_collector, dim=0).float().mean(dim=0).cpu()
             scale, offset = minmax_to_scale_offset(
                 min_val = self._percentile_collector[1].item(),
                 max_val = self._percentile_collector[0].item(),
