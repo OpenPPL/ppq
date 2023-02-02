@@ -98,7 +98,7 @@ class BaseQuantizer(metaclass = ABCMeta):
         if platform is not None: converting_operation.platform = platform
         else: platform = converting_operation.platform
 
-        if platform == TargetPlatform.FP32: 
+        if platform in {TargetPlatform.FP32, TargetPlatform.SOI}: 
             return self._graph.operations[op_name]
 
         # if platform == TargetPlatform.UNSPECIFIED we can skip its quantization when type is not supported.
@@ -292,8 +292,9 @@ class BaseQuantizer(metaclass = ABCMeta):
             if fusion_setting.align_quantization:
                 list_of_passes.append(QuantAlignmentPass(
                     elementwise_alignment = fusion_setting.align_elementwise_to,
-                    concat_alignment = fusion_setting.align_concat_to,
-                    pooling_alignment  = fusion_setting.align_avgpooling_to,
+                    concat_alignment      = fusion_setting.align_concat_to,
+                    pooling_alignment     = fusion_setting.align_avgpooling_to,
+                    resize_alignment      = fusion_setting.align_resize_to,
                     force_overlap = fusion_setting.force_alignment_overlap
                 ))
 

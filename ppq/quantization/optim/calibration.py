@@ -33,7 +33,8 @@ class RuntimeCalibrationPass(QuantizationOptimizationPass):
 
     Runtime Calibration Pass will write estimated scales and offsets to tensor quantization configs, and set their state to ACTIVATED.
 
-    Unlike constant tensors such as weights and biases, variable tensors such as model input, activations (outputs of intermediate layers) and model output cannot be calibrated unless we run a few inference cycles. 
+    Unlike constant tensors such as weights and biases, variable tensors such as model input, 
+    activations (outputs of intermediate layers) and model output cannot be calibrated unless we run a few inference cycles. 
     
     As a result, PPQ Runtime Calibration Pass requires a representative dataset to calibrate them. 
 
@@ -417,5 +418,5 @@ class IsotoneCalibrationPass(RuntimeCalibrationPass):
                     var.source_op_config.detail[OBSERVER_ISOTONE_OBSERVER_AXIS] = self.axis
                     if self.verbose: print(
                         f'Calibration Method of Variable {var.name} has been changed to Isotone[axis={self.axis}].')
-        
+
         super().optimize(graph=graph, **kwargs)

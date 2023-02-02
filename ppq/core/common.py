@@ -49,7 +49,7 @@ FORMATTER_REMOVE_ISOLATED = True
 # PASSIVE OPERATIONS 是那些不参与计算的 Op, 这些 op 的输入与输出将直接共享 scale
 # 同时这些 op 前后的定点过程将被直接停用
 PASSIVE_OPERATIONS = {
-    'Resize', 'MaxPool', 'GlobalMaxPool', 'Reshape', 'Flatten', 'Identity', 'Dropout'
+    'MaxPool', 'GlobalMaxPool', 'Reshape', 'Flatten', 'Identity', 'Dropout'
     'Slice', 'Pad', 'Split', 'Transpose', 'Interp', 'Squeeze', 'Unsqueeze'}
 # COPUTING OP 是所有计算层，该属性被用于联合定点和子图切分
 COMPUTING_OP = {'Conv', 'Gemm', 'ConvTranspose', 'MatMul', 'Attention', 'PPQBiasFusedMatMul'}

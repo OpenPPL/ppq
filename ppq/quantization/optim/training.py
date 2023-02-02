@@ -590,15 +590,21 @@ class LearnedStepSizePass(TrainingBasedPass):
     The formula of calculating the derivatives of y and scale_Y:
 
         if y > scale_Y * -128 and y < scale_Y * 127:
+        
         dQuant(y, scale_Y)/dy       = dQuant(y, scale_Y)
+        
         dQuant(y, scale_Y)/dscale_Y = Quant(y, scale_Y) - y
 
         if y < scale_Y * -128:
+        
         dQuant(y, scale_Y)/dy       = 0
+        
         dQuant(y, scale_Y)/dscale_Y = -128
 
         if y > scale_Y * 127:
+        
         dQuant(y, scale_Y)/dy       = 0
+        
         dQuant(y, scale_Y)/dscale_Y = 127
 
     ### Parameters:
@@ -690,7 +696,7 @@ class LearnedStepSizePass(TrainingBasedPass):
 
     Parameter block_size will controls the maximum size of created blocks.
 
-    If block_size = 1, then each block will contains exactly 1 layer within it, blockwise optimization will degenerate to layerwise optimization then.
+    If block_size = 1, then each block will contains exactly 1 layer within it, blockwise optimization will degenerate to layerwise optimization.
 
     If block_size is set to a large value, training progress will be unstable since batchnorm layers have been merged at first.
 

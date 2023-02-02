@@ -13,9 +13,11 @@ from .common import EXPORT_OVERLAPPED_CONFIG
 from .defs import ppq_warning
 from .storage import Serializable
 
-MAX_RECURSION_DEPTH = 100000
+
+MAX_RECURSION_DEPTH = 10000
 import sys
 sys.setrecursionlimit(MAX_RECURSION_DEPTH)
+
 
 class QuantizationVisibility(Enum):
     FORCE_EXPORT       = 1

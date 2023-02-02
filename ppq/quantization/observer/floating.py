@@ -19,10 +19,16 @@ class ConstantObserver(BaseTensorObserver):
 
     @ torch.no_grad()
     def observe(self, value: torch.Tensor):
+        # If TQC is not prepared for calibration, just skip this execution.
+        if self._quant_cfg.state not in {QuantizationStates.INITIAL}: return
+
         self._value_shape  = value.shape # Do nothing here.
         self._value_device = value.device
 
     def render_quantization_config(self):
+        # If TQC is not prepared for calibration, just skip this execution.
+        if self._quant_cfg.state not in {QuantizationStates.INITIAL}: return
+
         device = self._value_device
         if self._quant_cfg.policy.has_property(QuantizationProperty.FLOATING):
             if self._quant_cfg.policy.has_property(QuantizationProperty.PER_TENSOR):
@@ -68,6 +74,9 @@ class DirectMSEObserver(BaseTensorObserver):
 
     @ torch.no_grad()
     def observe(self, value: torch.Tensor):
+        # If TQC is not prepared for calibration, just skip this execution.
+        if self._quant_cfg.state not in {QuantizationStates.INITIAL}: return
+
         if self._quant_cfg.policy.has_property(QuantizationProperty.PER_CHANNEL):
             if self._watch_on.is_parameter:
                 value = torch.transpose(value, dim0=0, dim1=self._quant_cfg.channel_axis)
@@ -81,6 +90,9 @@ class DirectMSEObserver(BaseTensorObserver):
             self._collector.append(tensor_random_fetch(value, num_of_fetches=self._fetches))
 
     def render_quantization_config(self):
+        # If TQC is not prepared for calibration, just skip this execution.
+        if self._quant_cfg.state not in {QuantizationStates.INITIAL}: return
+
         device = self._value_device
         scale_candidates = [.0078125, .03125, .125, 1.0, 4.0, 16.0, 64.0]
         

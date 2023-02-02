@@ -409,7 +409,7 @@ class QuantAlignmentPass(QuantizationOptimizationPass):
                  elementwise_alignment: str = 'Align to Large',
                  concat_alignment: str = 'Align to Output',
                  pooling_alignment: str = 'None',
-                 resize_alignment: str = 'Align to Output',
+                 resize_alignment: str = 'None',
                  force_overlap: bool = False) -> None:
         self.pooling_alignment       = pooling_alignment
         self.elementwise_alignment   = elementwise_alignment
@@ -468,7 +468,7 @@ class QuantAlignmentPass(QuantizationOptimizationPass):
 
         device = master_config.scale.device
         master_config._dominator = master_config
-        master_config.state  = QuantizationStates.ACTIVATED
+        master_config.state  = QuantizationStates.PASSIVE
         master_config.scale  = torch.tensor(scale, dtype=torch.float32, device=device)
         master_config.offset = torch.tensor(offset, dtype=torch.float32, device=device)
 
@@ -545,7 +545,7 @@ class QuantAlignmentPass(QuantizationOptimizationPass):
                     if len(graph.get_downstream_operations(up_op)) != 1 and not self.force_overlap: continue
                     for cfg, var in up_op.config_with_variable:
                         if operation in var.dest_ops:
-                            cfg._dominator = master_config
+                            cfg.dominated_by = master_config
 
 
 class SwishFusionPass(QuantizationOptimizationPass):

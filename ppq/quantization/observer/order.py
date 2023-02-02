@@ -38,6 +38,9 @@ class TorchIsotoneObserver(BaseTensorObserver):
         BaseTensorObserver ([type]): [description]
     """
     def observe(self, value: torch.Tensor):
+        # If TQC is not prepared for calibration, just skip this execution.
+        if self._quant_cfg.state not in {QuantizationStates.INITIAL}: return
+
         assert isinstance(value, torch.Tensor), 'IsotoneObserver can only deal with torch Tensor values'
         assert value.numel() > 0, (f'You are observing an empty tensor({self._watch_on.name}).')
         if self._quant_cfg.state == QuantizationStates.INITIAL:
@@ -55,6 +58,9 @@ class TorchIsotoneObserver(BaseTensorObserver):
                 raise TypeError('Isotone Observer only work with per-tensor or per-channel quantize policy.')
 
     def render_quantization_config(self):
+        # If TQC is not prepared for calibration, just skip this execution.
+        if self._quant_cfg.state not in {QuantizationStates.INITIAL}: return
+
         device = self._cache[-1].device
         collected = torch.cat(self._cache, dim=0)
         collected = collected.cpu().numpy()
@@ -77,7 +83,7 @@ class TorchIsotoneObserver(BaseTensorObserver):
             self._quant_cfg.offset = torch.tensor([offset], dtype=torch.float32, device=device).squeeze(0)
             self._quant_cfg.state  = QuantizationStates.ACTIVATED
             ppq_warning(
-                f'There is no way to classify variable {self._watch_on.name} under int8 quantization.\n'
+                f'There is no way to make clear classification on {self._watch_on.name} under int8 quantization.\n'
                 f'变量 {self._watch_on.name} 无法进行保序校准，在校准数据集上无法保证分类正确性，请检查数据。')
             return
     
