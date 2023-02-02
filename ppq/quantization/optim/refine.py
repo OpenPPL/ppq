@@ -468,7 +468,7 @@ class QuantAlignmentPass(QuantizationOptimizationPass):
 
         device = master_config.scale.device
         master_config._dominator = master_config
-        master_config.state  = QuantizationStates.ACTIVATED
+        master_config.state  = QuantizationStates.PASSIVE
         master_config.scale  = torch.tensor(scale, dtype=torch.float32, device=device)
         master_config.offset = torch.tensor(offset, dtype=torch.float32, device=device)
 
