@@ -64,10 +64,10 @@ class AggresiveDispatcher(GraphDispatcher):
             quant_platform (TargetPlatform):
                 platform object where quantable parts will goes to.
 
-            fp32_platform (TargetPlatform):
+            SOI_platform (TargetPlatform): 
                 platform object where SOI parts will goes to.
 
-            SOI_platform (TargetPlatform):
+            fp32_platform (TargetPlatform):
                 platform object where remaining parts will goes to.
 
         Returns:
@@ -327,10 +327,10 @@ class PPLNNDispatcher(GraphDispatcher):
             quant_platform (TargetPlatform): =
                 platform object where quantable parts will goes to.
 
-            fp32_platform (TargetPlatform):
+            SOI_platform (TargetPlatform):
                 platform object where SOI parts will goes to.
 
-            SOI_platform (TargetPlatform):
+            fp32_platform (TargetPlatform):
                 platform object where remaining parts will goes to.
 
         Returns:
@@ -466,10 +466,10 @@ class PointDispatcher(ConservativeDispatcher):
             quant_platform (TargetPlatform): =
                 platform object where quantable parts will goes to.
 
-            fp32_platform (TargetPlatform):
+            SOI_platform (TargetPlatform):
                 platform object where SOI parts will goes to.
 
-            SOI_platform (TargetPlatform):
+            fp32_platform (TargetPlatform):
                 platform object where remaining parts will goes to.
 
         Returns:
