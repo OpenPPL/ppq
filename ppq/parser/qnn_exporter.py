@@ -1,8 +1,9 @@
 import json
+import torch
 from typing import List
 
 from ppq.core import (DataType, QuantizationStates,
-                      QuantizationVisibility, NetworkFramework)
+                      QuantizationVisibility, NetworkFramework, ppq_warning)
 from ppq.IR import BaseGraph, GraphExporter
 from ppq.IR.quantize import QuantableOperation
 
@@ -30,6 +31,10 @@ class QNNDSPExporter(GraphExporter):
                     QuantizationStates.FP32,
                     QuantizationStates.SOI
                 }: continue
+
+                if var.source_op is not None and var.source_op.type in {"Softmax", "Sigmoid"}:
+                    # fix output range greater than 1
+                    config.scale = torch.clamp(config.scale, max=1.0 / (config.quant_max - config.quant_min))
 
                 if config.state == QuantizationStates.PASSIVE and var.name in activation_info: continue
                 info =  [{
