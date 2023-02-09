@@ -214,7 +214,9 @@ class OnnxExporter(GraphExporter):
             if isinstance(value, DataType):
                 attributes[key] = value.value
             if isinstance(value, torch.Tensor):
-                attributes[key] = convert_any_to_numpy(value)
+                if value.numel() == 0: attributes[key] = None
+                elif value.numel() == 1: attributes[key] = value.item()
+                else: attributes[key] = convert_any_to_numpy(value)
 
         if PPQ_CONFIG.EXPORT_PPQ_INTERNAL_INFO:
             attributes['platform'] = operation.platform.name
