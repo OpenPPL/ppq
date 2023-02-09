@@ -33,8 +33,9 @@ class QNNDSPExporter(GraphExporter):
                 }: continue
 
                 if var.source_op is not None and var.source_op.type in {"Softmax", "Sigmoid"}:
-                    # fix output range greater than 1
-                    config.scale = torch.clamp(config.scale, max=1.0 / (config.quant_max - config.quant_min))
+                    if config.dominated_by == config: # changeable.
+                        # fix output range greater than 1
+                        config.scale = torch.clamp(config.scale, max=1.0 / (config.quant_max - config.quant_min))
 
                 if config.state == QuantizationStates.PASSIVE and var.name in activation_info: continue
                 info =  [{
