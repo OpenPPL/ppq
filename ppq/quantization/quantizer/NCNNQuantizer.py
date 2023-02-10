@@ -47,7 +47,7 @@ class NCNNQuantizer(BaseQuantizer):
                     QuantizationProperty.LINEAR +
                     QuantizationProperty.PER_CHANNEL
                 )
-                conv_weight_config.channel_axis = 1
+                conv_weight_config.channel_axis = 0
                 conv_weight_config.observer_algorithm = 'minmax'
 
                 group        = operation.attributes.get('group', 1)
