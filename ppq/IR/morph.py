@@ -445,6 +445,7 @@ class GraphFormatter(GraphCommandProcessor):
     def format_parameter(self) -> None:
         """ Split parameter that has more than 1 dest ops """
         for var in [_ for _ in self.graph.variables.values()]:
+            var.value = convert_any_to_torch_tensor(var.value)
             if var.is_parameter and len(var.dest_ops) > 1:
                 for op in var.dest_ops:
                     created = self.graph.create_variable(
