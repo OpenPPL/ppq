@@ -93,7 +93,7 @@ class GraphReplacer(GraphCommandProcessor):
                 mean  = op.parameters[2].value
                 var   = op.parameters[3].value
                 epsilon = op.attributes.get("epsilon", 1e-5)
-                
+
                 with torch.no_grad():
                     w = alpha / torch.sqrt(var + epsilon)
                     w = w.reshape([-1, 1] + [1] * dimension)
@@ -116,8 +116,8 @@ class GraphReplacer(GraphCommandProcessor):
                     op.inputs[2].value = b
 
     def replace_batchnorm_to_scale(self, dimension: int = 4):
-        """ Replace Batchnorm to Mul + Add. 
-        
+        """ Replace Batchnorm to Mul + Add.
+
         By default this function created a 4d mul + add corresponding to NCHW layout.
         """
         graph = self.graph
@@ -126,7 +126,7 @@ class GraphReplacer(GraphCommandProcessor):
             if op.type == 'BatchNormalization':
                 ppq_warning(f'Isolated BatchNormalization({op.name}) was detected, '
                             f'PPQ will replace it to Mul + Add({dimension}D).')
-                
+
                 assert len(op.parameters) == 4, "BatchNorm should have 4 parameters, namely alpha, beta, mean, var"
                 alpha = op.parameters[0].value
                 beta  = op.parameters[1].value
@@ -146,7 +146,7 @@ class GraphReplacer(GraphCommandProcessor):
                 add = graph.create_operation(op_type='Add')
                 graph.insert_op_after(A=add, B=op)
                 graph.create_variable(value=bias, is_parameter=True, dest_ops=[add])
-                
+
                 if dimension > 1:
                     op.parameters[0].value = op.parameters[0].value.reshape([1, -1] + [1] * (dimension - 2))
                     add.parameters[0].value = add.parameters[0].value.reshape([1, -1] + [1] * (dimension - 2))
@@ -345,7 +345,7 @@ class GraphFormatter(GraphCommandProcessor):
     def remove_constant_input(self) -> None:
         """部分部署平台不支持 Constant Op 作为算子的输入
             在这种情况下我们使用这个 pass 把它们切换成 Parameter Variable
-        
+
         Some backend platform doesn't support Constant
         Op, we use this pass to replace it by forcing its value to be a
         parameter variable."""
@@ -445,6 +445,7 @@ class GraphFormatter(GraphCommandProcessor):
     def format_parameter(self) -> None:
         """ Split parameter that has more than 1 dest ops """
         for var in [_ for _ in self.graph.variables.values()]:
+            var.value = convert_any_to_torch_tensor(var.value)
             if var.is_parameter and len(var.dest_ops) > 1:
                 for op in var.dest_ops:
                     created = self.graph.create_variable(
@@ -486,7 +487,7 @@ class GraphFormatter(GraphCommandProcessor):
         removing_ops = []
         for op in self.graph.operations.values():
             if op.type == 'Identity': removing_ops.append(op)
-        
+
         for op in removing_ops:
             self.graph.remove_operation(op, keep_coherence=True)
 
@@ -690,10 +691,10 @@ class GraphMerger(GraphCommandProcessor):
 
     def fuse_layernorm(self, exclusive_search: bool = False):
         """Fuse Layernormalization with pattern matching."""
-        
-        def _fuse(rm1: Operation, rm2: Operation, 
-                  eps: Operation, scale: torch.Tensor, 
-                  bias: torch.Tensor, layernorm_input_var: Variable, 
+
+        def _fuse(rm1: Operation, rm2: Operation,
+                  eps: Operation, scale: torch.Tensor,
+                  bias: torch.Tensor, layernorm_input_var: Variable,
                   layernorm_output_var: Variable) -> Operation:
 
             if rm2.type == rm1.type == 'ReduceMean':
@@ -701,7 +702,7 @@ class GraphMerger(GraphCommandProcessor):
                 if 'axes' not in rm2.attributes: return None
                 if rm1.attributes['axes'] != rm2.attributes['axes']: return None
                 layernorm_axis = rm1.attributes['axes']
-                if isinstance(layernorm_axis, list): 
+                if isinstance(layernorm_axis, list):
                     if len(layernorm_axis) != 1: return None
                     layernorm_axis = layernorm_axis[0]
                 if not isinstance(layernorm_axis, int): return None
@@ -722,21 +723,21 @@ class GraphMerger(GraphCommandProcessor):
 
             if bias is not None:
                 self.graph.create_link_with_op(
-                    variable=self.graph.create_variable(value=bias, is_parameter=True), 
+                    variable=self.graph.create_variable(value=bias, is_parameter=True),
                     A=None, B=layernorm)
             return layernorm
 
         search_engine = SearchableGraph(graph=self.graph)
         fused         = False
-        
+
         # pattern 1:
         #                                 ---     ---     ---      ---        ---       ---    ---    --
         #                               |                                                              |
         # ***(0) --- ReduceMean(1) --- Sub(2) --- Pow(3) --- ReduceMean(4) --- Add(5) --- Sqrt(6) --- Div(7) --- Mul(8) --- (Add)(9)
         #      |                     |
-        #       ---   ---   ---   ---       
+        #       ---   ---   ---   ---
         matches = search_engine.pattern_matching(
-            patterns=[lambda x: True, lambda x: x.type in {'ReduceMean', 'GlobalAveragePool'}, 'Sub', 'Pow', 
+            patterns=[lambda x: True, lambda x: x.type in {'ReduceMean', 'GlobalAveragePool'}, 'Sub', 'Pow',
                       lambda x: x.type in {'ReduceMean', 'GlobalAveragePool'}, 'Add', 'Sqrt', 'Div', 'Mul'],
             edges=[[0, 1], [0, 2], [1, 2], [2, 3], [2, 7], [3, 4], [4, 5], [5, 6], [6, 7], [7, 8]], exclusive=exclusive_search)
 
@@ -757,10 +758,10 @@ class GraphMerger(GraphCommandProcessor):
                     layernorm_output_var = bias_op.outputs[0]
                     layernorm_ops.append(bias_op)
 
-            layernorm = _fuse(rm1=rm1, rm2=rm2, eps=add, scale=layernorm_scale, 
-                bias=layernorm_bias, layernorm_input_var=layernorm_input_var, 
+            layernorm = _fuse(rm1=rm1, rm2=rm2, eps=add, scale=layernorm_scale,
+                bias=layernorm_bias, layernorm_input_var=layernorm_input_var,
                 layernorm_output_var=layernorm_output_var)
-            
+
             if layernorm is not None:
                 # delete merged ops
                 for op in layernorm_ops:
@@ -780,12 +781,12 @@ class GraphMerger(GraphCommandProcessor):
         #             v                                                                                                             ^
         #             --   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---  ---  --- --
         matches = search_engine.pattern_matching(
-            patterns=[lambda x: True, lambda x: x.type in {'ReduceMean', 'GlobalAveragePool'}, 'Sub', 
-                      'Mul', lambda x: x.type in {'ReduceMean', 'GlobalAveragePool'}, 'Add', 'Sqrt', 
-                      'Reciprocal', 'Mul', 'Mul', 
+            patterns=[lambda x: True, lambda x: x.type in {'ReduceMean', 'GlobalAveragePool'}, 'Sub',
+                      'Mul', lambda x: x.type in {'ReduceMean', 'GlobalAveragePool'}, 'Add', 'Sqrt',
+                      'Reciprocal', 'Mul', 'Mul',
                       'Sub', 'Mul', 'Add'],
-            edges=[[0, 1], [0, 2], [0, 11], [1, 2], [1, 9], [2, 3], [3, 4], 
-                   [4, 5], [5, 6], [6, 7], [7, 8], [8, 9], 
+            edges=[[0, 1], [0, 2], [0, 11], [1, 2], [1, 9], [2, 3], [3, 4],
+                   [4, 5], [5, 6], [6, 7], [7, 8], [8, 9],
                    [8, 11], [9, 10], [11, 12], [10, 12]], exclusive=exclusive_search)
 
         for _, rm1, sub1, mul, rm2, add1, sqrt, recipro, mul2, mul3, sub2, mul4, add2 in matches:
@@ -798,8 +799,8 @@ class GraphMerger(GraphCommandProcessor):
             layernorm_input_var  = sub1.inputs[0]
             layernorm_bias       = sub2.inputs[0].value
 
-            layernorm = _fuse(rm1=rm1, rm2=rm2, eps=add1, scale=layernorm_scale, 
-                bias=layernorm_bias, layernorm_input_var=layernorm_input_var, 
+            layernorm = _fuse(rm1=rm1, rm2=rm2, eps=add1, scale=layernorm_scale,
+                bias=layernorm_bias, layernorm_input_var=layernorm_input_var,
                 layernorm_output_var=layernorm_output_var)
 
             if layernorm is not None:
@@ -811,7 +812,7 @@ class GraphMerger(GraphCommandProcessor):
                             self.graph.remove_variable(var)
                     self.graph.remove_operation(op)
                 fused = True
-        
+
         # final check, if no valid pattern was found, we give a warning.
         if not fused:
             ppq_warning('No valid layernorm pattern was found, check your graph again.')
@@ -820,7 +821,7 @@ class GraphMerger(GraphCommandProcessor):
         """ Fuse Add + Layernorm to SkipLayernorm, SkipLayernorm is a plugin operation defined by TensorRT """
         fused         = False
         search_engine = SearchableGraph(graph=self.graph)
-        
+
         matches = search_engine.pattern_matching(patterns=['Add', 'LayerNormalization'], edges=[[0, 1]], exclusive=True)
         for add, layernorm in matches:
             # Skip connection can not be constant.
@@ -829,7 +830,7 @@ class GraphMerger(GraphCommandProcessor):
                 output_var = add.outputs[0]
                 self.graph.remove_operation(add)
                 self.graph.remove_variable(output_var)
-                
+
                 for var in input_vars:
                     var.dest_ops.append(layernorm)
                     layernorm.inputs.append(var)
@@ -842,18 +843,18 @@ class GraphMerger(GraphCommandProcessor):
 
     def fuse_gelu(self):
         """ Fuse Gelu
-        
+
         Pattern: * - Div - Erf - Add - Mul - Mul
                    |                 |
                    -------------------
         """
         fused         = False
         search_engine = SearchableGraph(graph=self.graph)
-        
+
         matches = search_engine.pattern_matching(
-            patterns=[lambda x: True, 'Div', 'Erf', 'Add', 'Mul', 'Mul'], 
+            patterns=[lambda x: True, 'Div', 'Erf', 'Add', 'Mul', 'Mul'],
             edges=[[0, 1], [1, 2], [2, 3], [3, 4], [0, 4], [4, 5]], exclusive=True)
-        
+
         for _, div, erf, add, mul1, mul2 in matches:
             removing_var = []
             removing_var.extend(div.outputs)
@@ -881,7 +882,7 @@ class GraphMerger(GraphCommandProcessor):
             ppq_warning('No valid Gelu pattern was found, check your graph again.')
 
     def fuse_bias_add(self):
-        """ 
+        """
         Fuse Pattern like Conv + Add, ConvTranspose + Add, Gemm + Add
         This fusion will require a constant input as bias.
         """
@@ -893,10 +894,10 @@ class GraphMerger(GraphCommandProcessor):
                 if op.type == 'Gemm': channel_dimension
                 if len(graph.get_downstream_operations(op)) == 1:
                     down = graph.get_downstream_operations(op)[0]
-                    
+
                     if down.type == 'Add':
                         if down.num_of_parameter != 1: continue
-                        
+
                         bias = down.parameters[0]
                         if op.type not in {'Gemm'}:
                             # check if it is a bias add
@@ -908,7 +909,7 @@ class GraphMerger(GraphCommandProcessor):
                             # Gemm bias can be any shape.
                             # see https://github.com/onnx/onnx/blob/main/docs/Changelog.md#Gemm-11
                             pass
-                    
+
                         # ready for fusion
                         if op.num_of_input == 3: # already has a bias
                             pass
@@ -926,7 +927,7 @@ class GraphMerger(GraphCommandProcessor):
     def fuse_selfattention(self):
         search_engine = SearchableGraph(graph=self.graph)
         matches = search_engine.pattern_matching(
-            patterns=['MatMul', 'Add', 'Softmax', 'MatMul'], 
+            patterns=['MatMul', 'Add', 'Softmax', 'MatMul'],
             edges=[[0, 1], [1, 2], [2, 3]], exclusive=False)
 
         for m1, add, softmax, m2 in matches:
@@ -936,25 +937,25 @@ class GraphMerger(GraphCommandProcessor):
             # check pattern
             if m1.num_of_parameter != 0 or m2.num_of_parameter != 0: continue
             if m2.inputs[0].source_op != softmax: continue
-            
+
             # source op of Q
             sq = m1.inputs[0].source_op
             if sq is not None and sq.type == 'Transpose':
                 trans_Q = sq
                 perm_Q  = trans_Q.attributes['perm']
 
-            # source op of K                
+            # source op of K
             sk = m1.inputs[1].source_op
             if sk is not None and sq.type == 'Transpose':
                 trans_K = sk
                 perm_K  = trans_K.attributes['perm']
-            
+
             # source op of V
             sv = m2.inputs[1].source_op
             if sv is not None and sv.type == 'Transpose':
                 trans_V = sv
                 perm_V  = trans_V.attributes['perm']
-            
+
             # output op of O
             oo = m2.outputs[0].dest_ops
             if len(oo) == 1 and oo[0].type == 'Transpose':
@@ -968,14 +969,14 @@ class GraphMerger(GraphCommandProcessor):
 
             Q_var, K_var, V_var = m1.inputs[0], m1.inputs[1], m2.inputs[1]
             mask_var, O_var     = add.inputs[0], m2.outputs[0]
-            
+
             for op in m1, add, m2:
                 self.graph.remove_operation(op)
-            
+
             op = self.graph.create_operation(op_type='SelfAttention', attributes={
                 'TransQ': perm_Q, 'TransK': perm_K, 'TransV': perm_V, 'TransO': perm_O
             }, inputs=[Q_var, K_var, V_var, mask_var], outputs=[O_var])
-            
+
             # remove empty transpose
             non_empty_attr = {}
             for k, v in op.attributes.values():
@@ -983,7 +984,7 @@ class GraphMerger(GraphCommandProcessor):
             op._attributes = non_empty_attr
 
         matches = search_engine.pattern_matching(
-            patterns=['MatMul', 'Softmax', 'MatMul'], 
+            patterns=['MatMul', 'Softmax', 'MatMul'],
             edges=[[0, 1], [1, 2]], exclusive=False)
 
         # self-attention with no mask
@@ -994,25 +995,25 @@ class GraphMerger(GraphCommandProcessor):
             # check pattern
             if m1.num_of_parameter != 0 or m2.num_of_parameter != 0: continue
             if m2.inputs[0].source_op != softmax: continue
-            
+
             # source op of Q
             sq = m1.inputs[0].source_op
             if sq is not None and sq.type == 'Transpose':
                 trans_Q = sq
                 perm_Q  = trans_Q.attributes['perm']
 
-            # source op of K                
+            # source op of K
             sk = m1.inputs[1].source_op
             if sk is not None and sq.type == 'Transpose':
                 trans_K = sk
                 perm_K  = trans_K.attributes['perm']
-            
+
             # source op of V
             sv = m2.inputs[1].source_op
             if sv is not None and sv.type == 'Transpose':
                 trans_V = sv
                 perm_V  = trans_V.attributes['perm']
-            
+
             # output op of O
             oo = m2.outputs[0].dest_ops
             if len(oo) == 1 and oo[0].type == 'Transpose':
@@ -1026,14 +1027,14 @@ class GraphMerger(GraphCommandProcessor):
 
             Q_var, K_var, V_var = m1.inputs[0], m1.inputs[1], m2.inputs[1]
             O_var               = m2.outputs[0]
-            
+
             for op in m1, m2:
                 self.graph.remove_operation(op)
-            
+
             op = self.graph.create_operation(op_type='SelfAttention', attributes={
                 'TransQ': perm_Q, 'TransK': perm_K, 'TransV': perm_V, 'TransO': perm_O
             }, inputs=[Q_var, K_var, V_var, self.graph.create_variable()], outputs=[O_var])
-            
+
             # remove empty transpose
             non_empty_attr = {}
             for k, v in op.attributes.values():
@@ -1052,28 +1053,28 @@ class GraphDecomposer(GraphCommandProcessor):
 
     B' = transpose(B) if transB else B
 
-    Compute Y = alpha * A' * B' + beta * C, where input tensor A has shape (M, K) or (K, M), 
-        input tensor B has shape (K, N) or (N, K), input tensor C is broadcastable to shape (M, N), 
-        and output tensor Y has shape (M, N). A will be transposed before doing the computation if attribute transA is non-zero, 
-        same for B and transB. 
-    
-    This operator supports unidirectional broadcasting (tensor C should be unidirectional broadcastable to tensor A * B); 
-        for more details please check the doc. This operator has optional inputs/outputs. 
-        
-    See the doc for more details about the representation of optional arguments. 
-    An empty string may be used in the place of an actual argument's name to indicate a missing argument. 
+    Compute Y = alpha * A' * B' + beta * C, where input tensor A has shape (M, K) or (K, M),
+        input tensor B has shape (K, N) or (N, K), input tensor C is broadcastable to shape (M, N),
+        and output tensor Y has shape (M, N). A will be transposed before doing the computation if attribute transA is non-zero,
+        same for B and transB.
+
+    This operator supports unidirectional broadcasting (tensor C should be unidirectional broadcastable to tensor A * B);
+        for more details please check the doc. This operator has optional inputs/outputs.
+
+    See the doc for more details about the representation of optional arguments.
+    An empty string may be used in the place of an actual argument's name to indicate a missing argument.
     Trailing optional arguments (those not followed by an argument that is present) may also be simply omitted.
 
     Attributes
         alpha : float (default is 1.0)
         Scalar multiplier for the product of input tensors A * B.
-    
+
         beta : float (default is 1.0)
         Scalar multiplier for input tensor C.
-    
+
         transA : int (default is 0)
         Whether A should be transposed
-    
+
         transB : int (default is 0)
         Whether B should be transposed
     """
