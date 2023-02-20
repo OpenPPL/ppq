@@ -7,13 +7,13 @@ This document describes the quantization deployment process of the MNN and how P
 - Docker image is recommended:
 
 ```bash
-docker pull stephen222/ppq:mnn_0104_update
+docker pull stephen222/ppq:mnn_0219_update
 ```
 
 - Create a docker container:
 
 ```bash
-docker run -it --rm --ipc=host --cap-add=SYS_PTRACE --security-opt seccomp=unconfined -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --gpus all --mount type=bind,source=用户自定义路径,target=/workspace stephen222/ppq:mnn_0104_update /bin/bash
+docker run -it --rm --ipc=host --cap-add=SYS_PTRACE --security-opt seccomp=unconfined -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --gpus all --mount type=bind,source=用户自定义路径,target=/workspace stephen222/ppq:mnn_0219_update /bin/bash
 ```
 
 ## Prepare data and models to quantify your network
@@ -66,6 +66,10 @@ for caffe:
 ```
 The quantized mnn model can be obtained: resnet18_quant.mnn
 
+## It is recommended to use the inference tool we compiled, because sometimes the inference tool will affect the inference results
+## ./inference resnet18_quant.mnn data.bin
+## inference result: output.bin
+## Note that data.bin should be preprocessed data
 
 ## If there is a bad case of the model accuracy dropping, please contact us.
 
