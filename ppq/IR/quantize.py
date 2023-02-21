@@ -310,13 +310,13 @@ class QuantableGraph(GraphCommandProcessor):
         if not isinstance(operation, QuantableOperation): return operation
         else: return operation.dequantize()
 
-    def dequantize_graph(self):
+    def dequantize_graph(self, expire_device: str = 'cpu'):
         """一个方便懒人的函数."""
         for operation in self.graph.operations.values():
             if isinstance(operation, QuantableOperation):
                 operation.dequantize()
 
-    def restore_quantize_state(self):
+    def restore_quantize_state(self, expire_device: str = 'cpu'):
         """一个方便懒人的函数."""
         for operation in self.graph.operations.values():
             if isinstance(operation, QuantableOperation):

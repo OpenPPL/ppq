@@ -215,17 +215,19 @@ class OnnxExporter(GraphExporter):
                 attributes[key] = value.value
             if isinstance(value, torch.Tensor):
                 if value.numel() == 0: attributes[key] = None
-                elif value.numel() == 1: attributes[key] = value.item()
+                elif value.numel() == 1: attributes[key] = convert_any_to_numpy([value.item()]) # convert to 1d array
                 else: attributes[key] = convert_any_to_numpy(value)
 
         if PPQ_CONFIG.EXPORT_PPQ_INTERNAL_INFO:
             attributes['platform'] = operation.platform.name
+
         op_proto = helper.make_node(
             op_type=operation.type,
             inputs=[_.name for _ in operation.inputs],
             outputs=[_.name for _ in operation.outputs],
             name=operation.name,
             **attributes)
+
         return op_proto
 
     def build_variable_proto(self, variable: Variable) -> onnx.TensorProto:

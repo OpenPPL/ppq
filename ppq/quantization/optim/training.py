@@ -223,8 +223,8 @@ class TrainingBasedPass(QuantizationOptimizationPass):
 
     def collect(
         self, graph: BaseGraph, block: TrainableBlock, executor: TorchExecutor, 
-        dataloader: Iterable, collate_fn: Callable, collecting_device: str, steps: int = None
-        ) -> Tuple[List[Dict[str, torch.Tensor]], List[Dict[str, torch.Tensor]]]:
+        dataloader: Iterable, collate_fn: Callable, collecting_device: str, steps: int = None,
+        expire_device: str = 'cpu') -> Tuple[List[Dict[str, torch.Tensor]], List[Dict[str, torch.Tensor]]]:
         """
         Collect training data for given block.
         This function will collect fp32 output and quantized input data by
@@ -273,7 +273,7 @@ class TrainingBasedPass(QuantizationOptimizationPass):
             
             cur_iter = 0
             # dequantize graph, collect fp32 outputs
-            quant_graph.dequantize_graph()
+            quant_graph.dequantize_graph(expire_device=expire_device)
             for data in dataloader:
                 if collate_fn is not None: data = collate_fn(data)
                 fp_output = executor.forward(data, [var.name for var in block.ep.outputs])
@@ -284,7 +284,7 @@ class TrainingBasedPass(QuantizationOptimizationPass):
 
             cur_iter = 0
             # restore quantization state, collect quant inputs
-            quant_graph.restore_quantize_state()
+            quant_graph.restore_quantize_state(expire_device=expire_device)
             for data in dataloader:
                 if collate_fn is not None: data = collate_fn(data)
                 # PATCH 20220829, 有些 computing op 权重并非定值
@@ -709,12 +709,13 @@ class LearnedStepSizePass(TrainingBasedPass):
     def __init__(
         self, name: str = 'PPQ LSQ Optimization', interested_layers: List[str] = [],
         steps: int = 500, gamma: float = 0.0, is_scale_trainable: bool = True,
-        lr: float = 5e-5, block_size: int = None,
+        lr: float = 5e-5, block_size: int = None, expire_device: str = 'cpu',
         collecting_device: str = 'cuda', loss_fn: Callable = torch_mean_square_error,
     ) -> None:
         super().__init__(name=name)
         self.interested_layers  = interested_layers
         self.collecting_device  = collecting_device
+        self.expire_device      = expire_device
         self.is_scale_trainable = is_scale_trainable
         self.block_size         = block_size
         self.loss_fn            = loss_fn

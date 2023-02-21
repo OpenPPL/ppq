@@ -460,7 +460,6 @@ class TorchMSEObserver(TorchHistObserver):
         config: TensorQuantizationConfig,
         scale_threshold: float = OBSERVER_MIN_SCALE
     ) -> Tuple[float, int]:
-        from tqdm import tqdm
         if OBSERVER_MIN_SCALE_MANUL_OVERRIDE in config.detail:
             scale_threshold = config.detail[OBSERVER_MIN_SCALE_MANUL_OVERRIDE]
         histogram = convert_any_to_numpy(histogram).tolist()

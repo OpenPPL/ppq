@@ -604,6 +604,7 @@ class GraphMerger(GraphCommandProcessor):
             computing_op.inputs.pop(0)
             bn_op.outputs.clear()
             self.graph.remove_operation(computing_op)
+            self.graph.remove_operation(bn_op)
 
             # insert new
             self.graph.append_operation(merged_op)

@@ -111,7 +111,7 @@ class FinetuneCheckPoint:
 
     def push(self, tensor: torch.Tensor, is_reference: bool) -> None:
         if self.random_fetch:
-            tensor = batch_random_fetch(tensor, seed=self.seed, fetchs_per_batch=self.fetchs)
+            tensor = batch_random_fetch(tensor, seed=self.seed, fetches_per_batch=self.fetchs)
         if is_reference: self.references.append(tensor)
         else: self.outputs.append(tensor)
 

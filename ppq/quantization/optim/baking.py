@@ -39,8 +39,6 @@ class ParameterBakingPass(QuantizationOptimizationPass):
     def optimize(
         self,
         graph: BaseGraph,
-        dataloader: Iterable,
-        executor: BaseGraphExecutor,
         **kwargs
     ) -> None:
 

@@ -26,7 +26,7 @@ class OutputRecorder(RuntimeHook):
         assert isinstance(output_tensor, torch.Tensor), (
             'Output of monitoring operation is not a torch.Tensor')
         self.fetched = batch_random_fetch(
-            output_tensor, seed=10086, fetchs_per_batch=self.fetchs
+            output_tensor, seed=10086, fetches_per_batch=self.fetchs
         ).to('cpu')
         return super().post_forward_hook(outputs, **kwargs)
 
