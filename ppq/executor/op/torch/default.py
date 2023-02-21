@@ -3220,8 +3220,8 @@ def LSTM_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
             device=x.device, dtype=torch.float32)
 
     result = _VF.lstm(
-        x,                                       # x
-        (initial_h, initial_c),                  # initial hidden state
+        x.contiguous(),                                   # x
+        (initial_h.contiguous(), initial_c.contiguous()), # initial hidden state
         op._detail[LSTM_FLATTEN_WEIGHT_ATTRIB],  # flatten weights
         has_bias,                                # has bias
         1,                                       # num of layer

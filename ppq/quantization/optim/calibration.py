@@ -252,9 +252,9 @@ class PPLDSPTIReCalibrationPass(RuntimeCalibrationPass):
                 input_cfg = operation.config.input_quantization_config[0]
                 sym_input_cfg = TensorQuantizationConfig(
                     policy=QuantizationPolicy(
-                    QuantizationProperty.SYMMETRICAL +
-                    QuantizationProperty.LINEAR +
-                    QuantizationProperty.PER_TENSOR
+                        QuantizationProperty.SYMMETRICAL +
+                        QuantizationProperty.LINEAR +
+                        QuantizationProperty.PER_TENSOR
                     ),
                     rounding=input_cfg.rounding,
                     num_of_bits=input_cfg.num_of_bits,

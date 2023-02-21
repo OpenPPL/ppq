@@ -19,15 +19,6 @@ class BaseQuantizer(metaclass = ABCMeta):
         graph: BaseGraph,
         verbose: bool = True
     ) -> None:
-        """
-
-        Args:
-            graph (BaseGraph): _description_
-            verbose (bool, optional): _description_. Defaults to True.
-
-        Raises:
-            TypeError: _description_
-        """
         if not isinstance(graph, BaseGraph):
             raise TypeError(f'To initialize a Quantizer, a BaseGraph instance is needed.'\
                 f' While {type(graph)} was givne, if your graph is maintained by GraphCommandProcessor, '\
@@ -114,10 +105,18 @@ class BaseQuantizer(metaclass = ABCMeta):
 
     @ staticmethod
     def create_default_quant_config(
-        op: Operation, num_of_bits: int,
-        quant_min: Union[int, float], quant_max: Union[int, float], 
-        observer_algorithm: str, policy: QuantizationPolicy, 
-        rounding: RoundingPolicy, exponent_bits: int = 0,
+        op: Operation, 
+        num_of_bits: int = 8,
+        quant_min: Union[int, float] = -127, 
+        quant_max: Union[int, float] = 128, 
+        observer_algorithm: str = 'percentile', 
+        policy: QuantizationPolicy = 
+            QuantizationPolicy(
+                QuantizationProperty.PER_TENSOR + 
+                QuantizationProperty.LINEAR + 
+                QuantizationProperty.SYMMETRICAL), 
+        rounding: RoundingPolicy = RoundingPolicy.ROUND_HALF_EVEN, 
+        exponent_bits: int = 0,
     ) -> OperationQuantizationConfig:
         """
         为你的算子创建一个默认量化信息
