@@ -257,6 +257,8 @@ class BlockBuilder:
         def _find_multi_input_ep(op: Operation):
             # 如果当前节点后继节点存在多个，层序遍历寻找阻断节点
             least_first_queue = PriorityQueue()
+            least_first_queue.push(self.depth[op], op)
+            least_first_queue.pop()
 
             for down_op in self.graph.get_downstream_operations(op):
                 least_first_queue.push(self.depth[down_op], down_op)
