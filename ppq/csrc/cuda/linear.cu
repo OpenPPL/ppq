@@ -303,7 +303,7 @@ __host__ std::vector<Tensor> QuantizeTensor_LT_B(
     constexpr int TPB = 1024;
     Tensor grad_s = at::zeros_like(scale);
     Tensor grad_x = at::empty_like(grad_contiguous);
-    float grad_factor = rsqrtf((float)(num_of_element * (clip_max - clip_min)));
+    float grad_factor = rsqrtf(((double)num_of_element * (clip_max - clip_min)));
 
     _QuantizeTensor_LT_B<TPB>
         <<<NUM_OF_BLOCK_NOLIMIT(num_of_element, TPB), TPB, 0, at::cuda::getCurrentCUDAStream()>>>
@@ -399,7 +399,7 @@ __host__ std::vector<Tensor> QuantizeTensor_LC_B(
     int32_t num_of_element = NUM_OF_ELEMENT(value);
 
     if(num_of_element > 0x7fffffff) throw InvalidValueException("There are too many element in your tensor(more than 2*10^9)");
-    float grad_factor = rsqrtf((float)(num_of_element * clip_max));
+    float grad_factor = rsqrtf(((double)num_of_element * clip_max));
 
     Tensor grad_s = at::zeros_like(scale);
     Tensor grad_x = at::empty_like(grad_y);
