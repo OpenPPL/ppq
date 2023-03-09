@@ -30,6 +30,8 @@
 ~/QuantZoo/Data/Coco
 ~/QuantZoo/Data/DIV2K
 ~/QuantZoo/Data/IC15
+~/QuantZoo/Data/Imagenet
+~/QuantZoo/Model/yolo
 ~/QuantZoo/Model/Imagenet
 ~/QuantZoo/Model/mmedit
 ~/QuantZoo/Model/mmseg
@@ -198,7 +200,7 @@ OnnxQuant 使用相对误差评估模型量化误差，对于量化网络中的�
 
   * 模型输出最大量化误差(OQE)：模型中所有输出层的量化误差最大值
 
-图例：❗: 量化精度很差的模型；💔: 很差的单一指标
+图例：❗: 模型性能下降超过 1% 的模型；💔: 误差显著指标
 
 ### INT8 PERCHANNEL
 
