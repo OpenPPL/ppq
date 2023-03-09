@@ -82,7 +82,7 @@ class EqualizationHelper():
         # ----------------------------------
         # step - 3, extract activation from op:
         # ----------------------------------
-        if including_act and op.inputs[0].value is not None:
+        if including_act and op.outputs[0].value is not None:
             a = op.outputs[0].value * act_multiplier
             buffer.append(a)
 

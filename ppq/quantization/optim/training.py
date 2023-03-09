@@ -709,8 +709,9 @@ class LearnedStepSizePass(TrainingBasedPass):
     def __init__(
         self, name: str = 'PPQ LSQ Optimization', interested_layers: List[str] = [],
         steps: int = 500, gamma: float = 0.0, is_scale_trainable: bool = True,
-        lr: float = 5e-5, block_size: int = None, expire_device: str = 'cpu',
+        lr: float = 5e-5, block_size: int = 5, expire_device: str = 'cpu',
         collecting_device: str = 'cuda', loss_fn: Callable = torch_mean_square_error,
+        optimizer: Any = None
     ) -> None:
         super().__init__(name=name)
         self.interested_layers  = interested_layers
@@ -722,6 +723,7 @@ class LearnedStepSizePass(TrainingBasedPass):
         self.gamma              = gamma
         self.steps              = steps
         self.lr                 = lr
+        self.optimizer          = optimizer
 
     def finetune(
         self, steps: int, learning_rate: float, block: TrainableBlock, executor: TorchExecutor,
@@ -764,8 +766,9 @@ class LearnedStepSizePass(TrainingBasedPass):
             return 0, 0
 
         # initilize optimizer.
-        if optimizer is None:
+        if self.optimizer is None:
             optimizer = torch.optim.Adam(tensors, lr=learning_rate)
+        else: optimizer = self.optimizer(tensors, lr=learning_rate)
 
         dataset_length = len(qt_inputs)
         if dataset_length == 0: raise ValueError('Dataset is empty.')

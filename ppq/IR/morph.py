@@ -1042,6 +1042,38 @@ class GraphMerger(GraphCommandProcessor):
                 if v is not None: non_empty_attr[k] = v
             op._attributes = non_empty_attr
 
+    def fuse_matmul_add(self, verbose: bool = True):
+        """
+        Fuse Matmul + bias add to PPQBiasFusedMatMul
+        
+        PPQBiasFusedMatMul is a temporary operation which will be splited when exporting.
+        """
+        graph, fused = self.graph, False
+        for current_op in [_ for _ in graph.operations.values()]:
+            if current_op.type != 'MatMul': continue
+            
+            # check down-stream op is add
+            next_ops = graph.get_downstream_operations(current_op)
+            if len(next_ops) != 1: continue
+            if next_ops[0].type != 'Add': continue
+            
+            # check if is a constant add
+            fusing_op = next_ops[0]
+            if fusing_op.num_of_parameter == 1:
+
+                # do graph fusion
+                bias = fusing_op.parameters[0].value
+                graph.remove_operation(fusing_op, keep_coherence=True)
+                graph.create_variable(value=bias, is_parameter=True, dest_ops=[current_op])
+                current_op.type = 'PPQBiasFusedMatMul'
+                fused = True
+
+                if verbose:
+                    print(f'Fusing graph op: {current_op.name} + {fusing_op.name}')
+
+        if not fused:
+            ppq_warning("No suitable matmul + add was found, check your graph again.")
+
 
 class GraphDecomposer(GraphCommandProcessor):
     """Since PPQ 0.6.4, GraphDecomposer is introduced to split some complex
