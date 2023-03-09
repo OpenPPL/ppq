@@ -240,7 +240,7 @@ class TorchHistObserver(TorchMinMaxObserver):
 
         losses, quant_bins = [], 2 ** (config.num_of_bits - 1)
 
-        # following code is curcial, do not move
+        # following code is curcial, do not remove
         histogram[: int(hist_bins * .002)] = 0
         histogram[int(hist_bins * .002)] = 1
 

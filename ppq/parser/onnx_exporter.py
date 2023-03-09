@@ -55,17 +55,6 @@ class PPQBiasFusedMatMulExporter(OperationExporter):
         graph.create_variable(value=bias.value, is_parameter=True, dest_ops=[bias_op])
         graph.remove_variable(op.inputs[-1])
 
-class PPQBiasFusedMatMulExporter(OperationExporter):
-    def export(self, op: Operation, graph: BaseGraph, **kwargs) -> Operation:
-        if op.num_of_input == 3: bias = op.inputs[-1]
-        assert bias.is_parameter and bias.value is not None, 'MatMul Format Error'
- 
-        bias_op = graph.create_operation(op_type='Add')
-        op.type = 'MatMul'
-        graph.insert_op_after(bias_op, op)
-        graph.create_variable(value=bias.value, is_parameter=True, dest_ops=[bias_op])
-        graph.remove_variable(op.inputs[-1])
-
 OP_CONVERTERS = {
     'ConstantOfShape': ConstantOfShapeExporter,
     'MMCVRoiAlign': MMCVExporter,
@@ -83,7 +72,7 @@ OP_CONVERTERS = {
     'QLinearMul': OOSExporter,
     'QLinearReduceMean': OOSExporter,
     'QLinearSigmoid': OOSExporter,
-    'PPQBiasFusedMatMul': PPQBiasFusedMatMulExporter
+    # 'PPQBiasFusedMatMul': PPQBiasFusedMatMulExporter
 }
 
 def convert_value(value: Union[int, float, np.ndarray, torch.Tensor]) -> str:

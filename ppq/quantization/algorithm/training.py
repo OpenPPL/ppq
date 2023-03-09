@@ -332,7 +332,7 @@ class LSQDelegator(TorchQuantizeDelegator):
         if self.is_parameter and is_parameter_trainable:
             self.param_backup = self.var.value.clone()
 
-        # There is 4 checks for training scale:
+        # There is 4 checks for scale training:
         #   1. scale is valid
         #   2. state is active
         #   3. do not have POWER_OF_2 policy but Must have Linear policy
@@ -348,7 +348,7 @@ class LSQDelegator(TorchQuantizeDelegator):
                 self.is_scale_trainable = True
                 self.scale_backup = self.config.scale.detach().clone()
 
-        # There is 4 checks for training offset:
+        # There is 4 checks for offset training:
         #   1. offset is valid
         #   2. state is active
         #   3. do not have SYMMETRICAL policy
@@ -419,4 +419,4 @@ class LSQDelegator(TorchQuantizeDelegator):
             quantized = (quantized - offset.detach()) * scale
             quantized = quantized
             return quantized
-            
+
