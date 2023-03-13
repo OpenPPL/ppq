@@ -237,7 +237,8 @@ class QuantableVariable(Variable):
 
     def copy(self, copy_value: bool = False):
         clone = QuantableVariable(super().copy(copy_value))
-        if copy_value: clone._fp32_value = self._fp32_value.clone()
+        if copy_value and self._fp32_value is not None: 
+            clone._fp32_value = self._fp32_value.clone()
         else: clone._fp32_value = self._fp32_value
         return clone
 
@@ -314,10 +315,10 @@ class QuantableGraph(GraphCommandProcessor):
         """一个方便懒人的函数."""
         for operation in self.graph.operations.values():
             if isinstance(operation, QuantableOperation):
-                operation.dequantize()
+                operation.dequantize(expire_device=expire_device)
 
     def restore_quantize_state(self, expire_device: str = 'cpu'):
         """一个方便懒人的函数."""
         for operation in self.graph.operations.values():
             if isinstance(operation, QuantableOperation):
-                operation.restore_quantize_state()
+                operation.restore_quantize_state(expire_device=expire_device)
