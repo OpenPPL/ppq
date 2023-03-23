@@ -1,5 +1,12 @@
 # Test Quantization System Performance on Detection Models with Coco Dataset
 
+# Quantizer Configuration
+SYMMETRICAL = True
+PER_CHANNEL = False
+POWER_OF_2  = True
+BIT_WIDTH   = 8
+FP8         = False
+
 # Should contains model file(.onnx)
 MODEL_DIR = 'QuantZoo/Model/yolo'
 
@@ -11,17 +18,11 @@ TEST_ANN_FILE  = 'QuantZoo/Data/Coco/Test/DetectionAnnotation.json'
 PRED_ANN_FILE  = 'QuantZoo/Data/Coco/Test/DetectionPrediction.json'
 VALID_DIR      = '/mnt/hpc/share/wangpeiqi/COCO/val2017'
 VALID_ANN_FILE = '/mnt/hpc/share/wangpeiqi/COCO/annotations/instances_val2017.json'
-EVAL_MODE      = True # for coco evaluation
+EVAL_MODE      = True # only for evaluation, it will slow down the system.
 
 # calibration & test batchsize
 # yolo requires batchsize = 1
 BATCHSIZE   = 1
-
-# Quantizer Configuration
-SYMMETRICAL = True
-PER_CHANNEL = True
-POWER_OF_2  = False
-BIT_WIDTH   = 8
 
 # write report to here
 REPORT_DIR = 'QuantZoo/Reports'
@@ -128,6 +129,12 @@ with ENABLE_CUDA_KERNEL():
                 graph.mark_variable_as_graph_output(graph.variables[var])
             editor.delete_isolated()
         else:
+            if model in {'rtmdet_s', 'rtmdet_tiny'}:
+                # 别问我为什么，只是因为大家的输出都叫 '/Split_output_1'，但是 rtmdet 的不叫这个
+                # rename variable 'onnx::Shape_1182' to '/Split_output_1'
+                graph.variables['/Split_output_1'] = graph.variables['onnx::Shape_1182']
+                graph.variables['/Split_output_1']._name = '/Split_output_1'
+
             editor = GraphFormatter(graph)
             graph.outputs.pop('scores')
             graph.outputs.pop('num_dets')
@@ -137,7 +144,7 @@ with ENABLE_CUDA_KERNEL():
         quantizer = MyInt8Quantizer(graph=graph, sym=SYMMETRICAL, 
                                     per_channel=PER_CHANNEL, power_of_2=POWER_OF_2, 
                                     num_of_bits=BIT_WIDTH)
-        # quantizer = MyFP8Quantizer(graph=graph)
+        if FP8: quantizer = MyFP8Quantizer(graph=graph, calibration='floating')
 
         # convert op to quantable-op
         for name, op in graph.operations.items():
@@ -161,13 +168,14 @@ with ENABLE_CUDA_KERNEL():
             calib_steps=32, collate_fn=collate_fn, 
             executor=executor)
 
-        # evaluation 好像 batchsize != 1 会错
-        evaluate_ppq_module_with_coco(
-            ann_file=TEST_ANN_FILE,
-            output_file=PRED_ANN_FILE,
-            executor=executor, 
-            dataloader=test_loader,
-            collate_fn=collate_fn)
+        if EVAL_MODE:
+            # evaluation 好像 batchsize != 1 会错
+            evaluate_ppq_module_with_coco(
+                ann_file=TEST_ANN_FILE,
+                output_file=PRED_ANN_FILE,
+                executor=executor, 
+                dataloader=test_loader,
+                collate_fn=collate_fn)
 
         # error analyze
         performance = error_analyze(

@@ -16,7 +16,7 @@
 1. 图像分类: https://pan.baidu.com/s/1CIrQBvMkPaI-19M8IpVP8w?pwd=z5z8
 2. 图像超分: https://pan.baidu.com/s/1u7ZAVNtlaMHBzDzzq-1eCw?pwd=gzsb
 3. 图像分割: https://pan.baidu.com/s/1LAS8LYyklz7kgkVUuxDlLg?pwd=db6s
-4. 目标检测: https://pan.baidu.com/s/1uBvK-Wm1AKVrNgvA9E4lhA?pwd=9n06
+4. 目标检测: https://pan.baidu.com/s/1uBvK-Wm1AKVrNgvA9E4lhA?pwd=9n06(还在努力补档)
 5. 姿态检测: 
 6. 图像-文字识别: https://pan.baidu.com/s/1GyYvLbhibLL6kPIA1J0X7Q?pwd=vpxi
 7. NLP:
@@ -117,7 +117,7 @@ apt-get install ninja-build
   * Test 数据为 Cityscapes val 中随机抽取的 200 张图片。
   * 提供数据切分脚本。
 
-模型：全部来自 mmedit
+模型：全部来自 mmseg
 
 模型测试标准：Miou。
 
@@ -161,6 +161,19 @@ apt-get install ninja-build
 
 模型测试标准：峰值信噪比。
 
+### 3.6 姿态检测
+
+数据集：Coco 2017
+
+数据切分方式：
+
+  * Calibration 数据为 Coco validation 数据集中随机抽取的 1500 张人像。
+  * Test 数据为 Coco validation 数据集中随机抽取的 ~500 张人像。
+
+模型：全部来自 mmpose
+
+模型测试标准：仅提供量化误差测试，不提供模型准确度测试。
+
 ## 4. OnnxQuant 模型量化规则
 
 ### 4.1 综述：
@@ -192,7 +205,7 @@ OnnxQuant 关注以下三类量化细则下的模型性能：
   * Output Quantization Error(OQE): 模型输出最大量化误差
 
 OnnxQuant 使用相对误差评估模型量化误差，对于量化网络中的任意一个卷积层、全连接层、Layernormalization 层而言，OnnxQuant 取该层的输出结果 A 与浮点网络对应层的输出结果 B 进行对比。
-相对误差等于 || A - B || / || B ||，其中 || B || 表示向量 B 的 F-范数。
+相对误差等于 || A - B || 除以 || B ||，其中 || B || 表示向量 B 的 F-范数。
 
   * 模型平均量化误差(AQE)：模型中所有层的量化误差均值
 

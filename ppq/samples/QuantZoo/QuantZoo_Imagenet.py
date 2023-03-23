@@ -1,4 +1,14 @@
 # Test Quantization System Performace on Image Classification Models with ILSVRC2012 Dataset
+#
+#   1. How to use: 
+#      Run this script with python directly.
+
+# Quantizer Configuration
+SYMMETRICAL = True
+POWER_OF_2  = True
+PER_CHANNEL = False
+FP8         = True
+BIT_WIDTH   = 8
 
 # Should contains model file(.onnx)
 MODEL_DIR = 'QuantZoo/Model/Imagenet'
@@ -10,16 +20,14 @@ TEST_DIR  = 'QuantZoo/Data/Imagenet/Test'
 # calibration & test batchsize
 BATCHSIZE = 32
 
-# Quantizer Configuration
-SYMMETRICAL = True
-PER_CHANNEL = True
-POWER_OF_2  = False
-BIT_WIDTH   = 8
-
 # write report to here
 REPORT_DIR = 'QuantZoo/Reports'
 
 CONFIGS = [
+{
+    'Model': 'repvgg',
+    'Output': ['input.172']
+},
 {
     'Model': 'efficientnet_v1_b0',
     'Output': ['/features/features.8/features.8.2/Mul_output_0']
@@ -70,10 +78,20 @@ CONFIGS = [
     'Output': ['471']
 },
 {
+    'Model': 'lcnet_050',
+    'Output': ['/act2/Mul_output_0']
+},
+{
+    'Model': 'lcnet_100',
+    'Output': ['/act2/Mul_output_0']
+},
+
+
+{
     # vit_b_16 requires BATCHSIZE = 1!
     'Model': 'vit_b_16',
     'Output': ['onnx::Gather_1703']
-}
+},
 ]
 
 import os
@@ -125,8 +143,8 @@ with ENABLE_CUDA_KERNEL():
         quantizer = MyInt8Quantizer(
             graph=graph, sym=SYMMETRICAL, power_of_2=POWER_OF_2, 
             num_of_bits=BIT_WIDTH, per_channel=PER_CHANNEL)
-        # quantizer = MyFP8Quantizer(graph=graph)
-        
+        if FP8: quantizer = MyFP8Quantizer(graph=graph, calibration='floating')
+
         # convert op to quantable-op
         for name, op in graph.operations.items():
             if op.type in {'Conv', 'ConvTranspose', 'MatMul', 'Gemm', 

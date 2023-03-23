@@ -1,4 +1,15 @@
 # Test Quantization System Performace on OCR Models with IC15 Dataset
+#
+#   1. How to use: 
+#      Run this script with python directly.
+#
+
+# Quantizer Configuration
+SYMMETRICAL = True
+PERCHANNEL  = True
+POWER_OF_2  = False
+FP8         = False
+BIT_WIDTH   = 8
 
 # Should contains model file(.onnx)
 MODEL_DIR = 'QuantZoo/Model/ocr'
@@ -12,12 +23,6 @@ CHAR_DIR    = 'QuantZoo/Data/IC15/ic15_dict.txt'
 
 # calibration & test batchsize
 BATCHSIZE = 32
-
-# Quantizer Configuration
-SYMMETRICAL = True
-PERCHANNEL  = True
-POWER_OF_2  = False
-BIT_WIDTH   = 8
 
 # write report to here
 REPORT_DIR = 'QuantZoo/Reports'
@@ -73,7 +78,7 @@ import os
 import torch
 
 import ppq.lib as PFL
-from ppq import convert_any_to_torch_tensor, graphwise_error_analyse
+from ppq import convert_any_to_torch_tensor
 from ppq.api import ENABLE_CUDA_KERNEL, load_onnx_graph
 from ppq.core import TargetPlatform
 from ppq.executor import TorchExecutor
@@ -113,8 +118,8 @@ with ENABLE_CUDA_KERNEL():
 
         quantizer = MyInt8Quantizer(graph=graph, sym=SYMMETRICAL, power_of_2=POWER_OF_2, 
                                     num_of_bits=BIT_WIDTH, per_channel=PERCHANNEL)
-        # quantizer = MyFP8Quantizer(graph=graph)
-        
+        if FP8: quantizer = MyFP8Quantizer(graph=graph, calibration='floating')
+
         # convert op to quantable-op
         for name, op in graph.operations.items():
             if op.type in {'Conv', 'ConvTranspose', 'MatMul', 'Gemm'}:

@@ -1,4 +1,11 @@
-# Test Quantization System Performance on Detection Models with Coco Dataset
+# Test Quantization System Performance on SuperRes Task(DIV2K)
+
+# Quantizer Configuration
+SYMMETRICAL = True
+PER_CHANNEL = True
+POWER_OF_2  = False
+BIT_WIDTH   = 8
+FP8         = True
 
 # Should contains model file(.onnx)
 MODEL_DIR = 'QuantZoo/Model/mmedit'
@@ -12,12 +19,6 @@ VALID_LR_DIR = 'QuantZoo/Data/DIV2K/DIV2K_valid_LR_bicubic'
 # calibration & test batchsize
 # super resolution model must have batchsize = 1
 BATCHSIZE = 1
-
-# Quantizer Configuration
-SYMMETRICAL = True
-PER_CHANNEL = True
-POWER_OF_2  = False
-BIT_WIDTH   = 8
 
 # write report to here
 REPORT_DIR = 'QuantZoo/Reports'
@@ -48,11 +49,11 @@ import torch
 from tqdm import tqdm
 
 import ppq.lib as PFL
-from ppq import convert_any_to_numpy, graphwise_error_analyse
+from ppq import convert_any_to_numpy
 from ppq.api import ENABLE_CUDA_KERNEL, load_onnx_graph
 from ppq.core import TargetPlatform
 from ppq.executor import TorchExecutor
-from ppq.IR import BaseGraph, GraphFormatter
+from ppq.IR import BaseGraph
 from ppq.quantization.optim import (LayerwiseEqualizationPass,
                                     LearnedStepSizePass, ParameterQuantizePass,
                                     RuntimeCalibrationPass)
@@ -99,7 +100,7 @@ with ENABLE_CUDA_KERNEL():
 
         quantizer = MyInt8Quantizer(graph=graph, sym=SYMMETRICAL, per_channel=PER_CHANNEL,
                                     power_of_2=POWER_OF_2, num_of_bits=BIT_WIDTH)
-        # quantizer = MyFP8Quantizer(graph=graph)
+        if FP8: quantizer = MyFP8Quantizer(graph=graph, calibration='floating')
         
         # convert op to quantable-op
         for name, op in graph.operations.items():
