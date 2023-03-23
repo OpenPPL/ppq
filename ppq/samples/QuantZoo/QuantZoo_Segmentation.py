@@ -1,4 +1,11 @@
-# Test Quantization System Performace on Image Classification Models with ILSVRC2012 Dataset
+# Test Quantization System Performace on MMEditing models with CityScapes
+
+# Quantizer Configuration
+SYMMETRICAL = True
+PERCHANNEL  = True
+POWER_OF_2  = False
+BIT_WIDTH   = 8
+FP8         = True
 
 # Should contains model file(.onnx)
 MODEL_DIR = 'QuantZoo/Model/mmseg'
@@ -9,12 +16,6 @@ TEST_DIR  = 'QuantZoo/Data/Cityscapes/Test'
 
 # calibration & test batchsize
 BATCHSIZE = 1
-
-# Quantizer Configuration
-SYMMETRICAL = True
-PERCHANNEL  = True
-POWER_OF_2  = False
-BIT_WIDTH   = 8
 
 # write report to here
 REPORT_DIR = 'QuantZoo/Reports'
@@ -103,7 +104,7 @@ with ENABLE_CUDA_KERNEL():
         quantizer = MyInt8Quantizer(
             graph=graph, sym=SYMMETRICAL, power_of_2=POWER_OF_2, 
             num_of_bits=BIT_WIDTH, per_channel=PERCHANNEL)
-        # quantizer = MyFP8Quantizer(graph=graph)
+        if FP8: quantizer = MyFP8Quantizer(graph=graph, calibration='floating')
         
         # convert op to quantable-op
         for name, op in graph.operations.items():
