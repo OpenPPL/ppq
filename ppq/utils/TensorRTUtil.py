@@ -223,7 +223,7 @@ def build_engine(
     Flag int8, fp16 specifies the precision of layer:
         For building FP32 engine: set int8 = False, fp16 = False, int8_scale_file = None
         For building FP16 engine: set int8 = False, fp16 = True, int8_scale_file = None
-        For building INT8 engine: set True = False, fp16 = True, int8_scale_file = 'json file name'
+        For building INT8 engine: set int8 = True, fp16 = True, int8_scale_file = 'json file name'
 
     """
 
