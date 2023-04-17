@@ -2113,8 +2113,7 @@ def Softmax_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackend
     Returns:
         torch.Tensor: [description]
     """
-    if op.opset.onnx_opset_version() >= 13: default_axis = -1
-    else: default_axis = 1
+    default_axis = -1 if op.opset.onnx_opset_version() >= 13 else 1
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
     [input] = values
     axis = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='axis', default=default_axis)
