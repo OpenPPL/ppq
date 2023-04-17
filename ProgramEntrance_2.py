@@ -13,11 +13,8 @@
     
     * 自定义优化过程，并控制量化管线
 
-<<<<<<< Updated upstream
-=======
     * 自定义导出格式
 
->>>>>>> Stashed changes
 """
 
 import os
@@ -27,12 +24,6 @@ import torch
 import torchvision
 
 import ppq.lib as PFL
-<<<<<<< Updated upstream
-from ppq import TargetPlatform, TorchExecutor, graphwise_error_analyse
-from ppq.api import ENABLE_CUDA_KERNEL, export_ppq_graph, load_torch_model
-from ppq.quantization.optim import *
-
-=======
 from ppq import (BaseGraph, BaseQuantizer, GraphExporter, Operation,
                  OperationQuantizationConfig, QuantableOperation,
                  TargetPlatform, TorchExecutor, graphwise_error_analyse)
@@ -90,7 +81,6 @@ class MyQuantizer(BaseQuantizer):
         return super().init_quantize_config(operation)
 
 
->>>>>>> Stashed changes
 # 你需要自己写一个函数来加载数据
 calibration_dataloader = []
 for file in os.listdir('imagenet'):

@@ -548,11 +548,7 @@ class QuantAlignmentPass(QuantizationOptimizationPass):
                     if len(graph.get_downstream_operations(up_op)) != 1 and not self.force_overlap: continue
                     for cfg, var in up_op.config_with_variable:
                         if operation in var.dest_ops:
-<<<<<<< Updated upstream
-                            cfg.dominated_by = master_config
-=======
                             cfg.master_by = master_config
->>>>>>> Stashed changes
 
 
 class SwishFusionPass(QuantizationOptimizationPass):
