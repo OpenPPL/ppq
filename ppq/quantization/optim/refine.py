@@ -169,9 +169,11 @@ class QuantizeFusionPass(QuantizationOptimizationPass):
     def __init__(self,
                  activation_type: Set[str],
                  fuse_activation: bool = True,
-                 fuse_passive_op: bool = True) -> None:
+                 fuse_passive_op: bool = True,
+                 fuse_relu_clip: bool = True) -> None:
         self.fuse_activation  = fuse_activation
         self.fuse_passive_op  = fuse_passive_op
+        self.fuse_relu_clip   = fuse_relu_clip
         self.activation_types = activation_type
         super().__init__(name='PPQ Quantization Fusion Pass')
 
@@ -288,6 +290,21 @@ class QuantizeFusionPass(QuantizationOptimizationPass):
                     for output_cfg in op.config.output_quantization_config:
                         output_cfg.dominated_by = TQC
 
+        if self.fuse_relu_clip:
+            patterns = processor.pattern_matching(
+                patterns=[lambda x: True, lambda x: x.type in {'Relu', 'Clip'}],
+                edges=[[0, 1]], exclusive=True)
+            for computing_op, act_op in patterns:
+                if not isinstance(act_op, QuantableOperation): continue
+                if not isinstance(computing_op, QuantableOperation): continue
+
+                if (len(graph.get_downstream_operations(computing_op)) == 1 and 
+                    len(graph.get_upstream_operations(act_op)) == 1):
+                    computing_op.config.output_quantization_config[0].dominated_by = (
+                        act_op.config.output_quantization_config[0])
+                    act_op.config.input_quantization_config[0].dominated_by = (
+                        act_op.config.output_quantization_config[0])
+  
 
 class QuantAlignmentPass(QuantizationOptimizationPass):
     """
@@ -531,7 +548,7 @@ class QuantAlignmentPass(QuantizationOptimizationPass):
                     if len(graph.get_downstream_operations(up_op)) != 1 and not self.force_overlap: continue
                     for cfg, var in up_op.config_with_variable:
                         if operation in var.dest_ops:
-                            cfg.dominated_by = master_config
+                            cfg.master_by = master_config
 
 
 class SwishFusionPass(QuantizationOptimizationPass):

@@ -298,6 +298,8 @@ class ONNXRUNTIMExporter(OnnxExporter):
             self.insert_dequantize_node(
                 graph=graph, var=created.outputs[0], 
                 config=config, op=created)
+        
+        for op in removed_activations:
             graph.remove_operation(op, keep_coherence=True)
 
         return graph
@@ -506,8 +508,10 @@ class ONNXRUNTIMExporter(OnnxExporter):
 
         return self.remove_duplicated_quant_op(graph)
 
-    def export(self, file_path: str, graph: BaseGraph, config_path: str = None, 
-               quantized_param: bool = False,remove_activation: bool = True, 
+    def export(self, file_path: str, graph: BaseGraph, 
+               config_path: str = None, 
+               quantized_param: bool = True,
+               remove_activation: bool = True, 
                save_as_external_data: bool = False) -> None:
         """
         Export PPQ Graph to Onnx QDQ format.

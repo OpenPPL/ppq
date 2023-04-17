@@ -13,6 +13,8 @@
     
     * 自定义优化过程，并控制量化管线
 
+    * 自定义导出格式
+
 """
 
 import os
@@ -22,9 +24,62 @@ import torch
 import torchvision
 
 import ppq.lib as PFL
-from ppq import TargetPlatform, TorchExecutor, graphwise_error_analyse
+from ppq import (BaseGraph, BaseQuantizer, GraphExporter, Operation,
+                 OperationQuantizationConfig, QuantableOperation,
+                 TargetPlatform, TorchExecutor, graphwise_error_analyse)
 from ppq.api import ENABLE_CUDA_KERNEL, export_ppq_graph, load_torch_model
 from ppq.quantization.optim import *
+
+
+class MyExporter(GraphExporter):
+    def export(self, file_path: str, graph: BaseGraph, config_path: str = None, **kwargs):
+        print('This exporter does not export quantitative information to file, '
+              'it only prints quantitative information to the console.')
+        for opname, op in graph.operations.items():
+            # Skip those operators that are not involved in quantization.
+            # They do not have a quantization configuration.
+            if not isinstance(op, QuantableOperation): continue
+
+            print(f'### Quantization Configuration of {opname}: ')
+            for idx, config in enumerate(op.config.input_quantization_config):
+                print(f'\t #### Input {idx}: ')
+                print(f'\t Scale: {config.scale.tolist()}')
+                print(f'\t Offset: {config.offset.tolist()}')
+                print(f'\t State: {config.state}')
+                print(f'\t Bitwidth: {config.num_of_bits}')
+                print(f'\t Quant_min: {config.quant_min}')
+                print(f'\t Quant_max: {config.quant_max}')
+            
+            for idx, config in enumerate(op.config.output_quantization_config):
+                print(f'\t #### Output {idx}: ')
+                print(f'\t Scale: {config.scale.tolist()}')
+                print(f'\t Offset: {config.offset.tolist()}')
+                print(f'\t State: {config.state}')
+                print(f'\t Bitwidth: {config.num_of_bits}')
+                print(f'\t Quant_min: {config.quant_min}')
+                print(f'\t Quant_max: {config.quant_max}')
+
+
+class MyQuantizer(BaseQuantizer):
+    def init_quantize_config(self, operation: Operation) -> OperationQuantizationConfig:
+        """
+        When implementing a custom quantizer, you need to initialize the quantization 
+        information structure(TQC) for each type of operators.
+        
+        Check Predefined Quantizers within ppq.quantization.quantizer folder, see how to implements a
+        customized quantizer.
+        
+        TQC is made up of input_quantization_config and output_quantization_config.
+        The quantization information includes 
+            quantization policy, 
+            quantization bit width, 
+            quantization maximum and minimum values,
+            and scale & offset.
+
+        Scale and offset are generated and maintained by the calibration pass.
+        """
+        return super().init_quantize_config(operation)
+
 
 # 你需要自己写一个函数来加载数据
 calibration_dataloader = []
