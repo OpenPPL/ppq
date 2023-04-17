@@ -8,5 +8,4 @@ jobs:
     steps:
       - name: pre-commit hook
         run: |
-          scl enable rh-ruby27 bash
           ruby -v
