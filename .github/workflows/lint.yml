@@ -10,3 +10,4 @@ jobs:
         run: |
           pwd
           ruby -v
+          pre-commit install
