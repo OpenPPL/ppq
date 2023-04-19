@@ -13,4 +13,5 @@ jobs:
           ppq_dir=${config_yaml_file%/*}
           echo $ppq_dir
           cd $ppq_dir
+          pwd
           pre-commit run --files ProgramEntrance_1.py
