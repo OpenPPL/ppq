@@ -9,3 +9,4 @@ jobs:
       - name: pre-commit hook
         run: |
           pwd
+          which git
