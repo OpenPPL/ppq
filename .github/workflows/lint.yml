@@ -9,4 +9,3 @@ jobs:
       - name: pre-commit hook
         run: |
           pwd
-          ruby -v
