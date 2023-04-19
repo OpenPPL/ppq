@@ -9,4 +9,10 @@ jobs:
       - name: pre-commit hook
         run: |
           pwd
-          ruby -v
+          sleep 15
+          new_dir=`ls -lt .|awk '{print $9}'|sed -n 2p`
+          cd $new_dir
+          pwd
+          git ruu
+          pre-commit run --files ProgramEntrance_1.py
+          pre-commit run --from-ref origin/HEAD --to-ref HEAD
