@@ -8,5 +8,11 @@ jobs:
     steps:
       - name: pre-commit hook
         run: |
-          pwd
-          ruby -v
+          pwd&&ls
+          dirNum=`ls -l |grep "^d"|wc -l`
+          echo "The number of folders in the current directory is ${dirNum}"
+          config_yaml_file=$(sudo find . -name .pre-commit-config.yaml)
+          ppq_dir=${config_yaml_file%/*}
+          echo $ppq_dir
+          cd $ppq_dir
+          pre-commit run --from-ref origin/HEAD --to-ref HEAD
