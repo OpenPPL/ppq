@@ -8,5 +8,4 @@ jobs:
     steps:
       - name: pre-commit hook
         run: |
-          pwd
-          ruby -v
+          pre-commit run --from-ref origin/HEAD --to-ref HEAD
