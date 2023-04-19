@@ -16,9 +16,21 @@ if you are using caffe model:
 
 quantized model will be generated at: ~/working/quantized.onnx
 """
-from ppq import *                                       
-from ppq.api import *
+from ppq import *                   
+from ppq.api import *                     
 import os
+
+
+
+
+
+
+
+
+
+
+
+
 
 # modify configuration below:
 WORKING_DIRECTORY = 'working'                             # choose your working directory
@@ -145,3 +157,19 @@ with ENABLE_CUDA_KERNEL():
         graph=quantized, platform=TARGET_PLATFORM,
         graph_save_to = os.path.join(WORKING_DIRECTORY, 'quantized.onnx'),
         config_save_to = os.path.join(WORKING_DIRECTORY, 'quant_cfg.json'))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
