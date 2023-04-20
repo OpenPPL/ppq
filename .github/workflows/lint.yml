@@ -8,5 +8,18 @@ jobs:
     steps:
       - name: pre-commit hook
         run: |
-          pwd
-          ruby -v
+          pwd&&ls
+          sleep 15
+          pwd&&ls
+          new_dir=`ls -lt .|awk '{print $9}'|sed -n 2p`
+          echo $new_dir
+          cd $new_dir
+          git fetch
+          updated_files=`git diff --name-status remotes/origin/master HEAD|awk '{print$ 2}'`
+          for file in $updated_files
+          do
+            if [ "${file##*.}" = "py" ]; then
+              echo $file
+              pre-commit run --files $file
+            fi
+          done
