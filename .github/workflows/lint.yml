@@ -4,9 +4,20 @@ on: [push, pull_request]
 
 jobs:
   lint:
-    runs-on: Linux-centos-10-198-4-167
+    runs-on: ubuntu-18.04
     steps:
-      - name: pre-commit hook
+      - uses: actions/checkout@v2
+      - name: Set up Python 3.7
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.7
+      - name: Install pre-commit hook
         run: |
-          pwd
-          ruby -v
+          # markdownlint requires ruby >= 2.7
+          sudo apt-add-repository ppa:brightbox/ruby-ng -y
+          sudo apt-get update
+          sudo apt-get install -y ruby2.7
+          pip install pre-commit
+          pre-commit install
+          pwd&&ls
+
