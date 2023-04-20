@@ -20,9 +20,11 @@ jobs:
     steps:
       - name: Create Checkout Directory
         run: |
+          pwd
           echo "Create Checkout Directory: ${{ github.run_id }}."
           [ -z "${{ github.run_id }}" ] || rm -rf ${{ github.run_id }}
           mkdir ${{ github.run_id }}
+          pwd&&ls
       - name: Checkout
         uses: actions/checkout@v2
         with:
@@ -30,5 +32,4 @@ jobs:
 
       - name: Test
         run: |
-          pwd
           cd ../../ && ./test_ppq.sh ${{ github.run_id }}
