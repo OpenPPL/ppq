@@ -16,7 +16,7 @@ if you are using caffe model:
 
 quantized model will be generated at: ~/working/quantized.onnx
 """
-from ppq import *                
+from ppq import *
 from ppq.api import *
 import os
 
@@ -81,7 +81,7 @@ print(f'CALIBRATION BATCHSIZE: {CALIBRATION_BATCHSIZE}')
 # 请注意，任何可遍历对象都可以作为 ppq 的数据集作为输入
 # 比如下面这个 dataloader = [torch.zeros(size=[1,3,224,224]) for _ in range(32)]
 # 当前这个函数的数据将从 WORKING_DIRECTORY/data 文件夹中进行数据加载
-# 
+#
 # 如果你的数据不在这里
 # 你同样需要自己写一个 load_calibration_dataset 函数
 # -------------------------------------------------------------------
@@ -107,7 +107,7 @@ with ENABLE_CUDA_KERNEL():
         platform=TARGET_PLATFORM,
         device=EXECUTING_DEVICE,
         do_quantize=True)
-    
+
     # -------------------------------------------------------------------
     # 如果你需要执行量化后的神经网络并得到结果，则需要创建一个 executor
     # 这个 executor 的行为和 torch.Module 是类似的，你可以利用这个东西来获取执行结果

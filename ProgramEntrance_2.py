@@ -1,23 +1,21 @@
-"""
-这是一个可高度定制化的 PPQ 程序入口脚本
+"""这是一个可高度定制化的 PPQ 程序入口脚本.
 
 与 ProgramEntrance_1 相比，新的 API 允许你控制量化的所有细节。
 
 你可以：
 
     * 自定义与注册新的量化器
-    
+
     * 干预网络调度逻辑
-    
+
     * 在量化之前修改网络结构
-    
+
     * 自定义优化过程，并控制量化管线
 
     * 自定义导出格式
-
 """
 
-import os               
+import os
 
 import numpy as np
 import torch
@@ -55,7 +53,7 @@ class MyExporter(GraphExporter):
                 print(f'\t Bitwidth: {config.num_of_bits}')
                 print(f'\t Quant_min: {config.quant_min}')
                 print(f'\t Quant_max: {config.quant_max}')
-            
+
             for idx, config in enumerate(op.config.output_quantization_config):
                 print(f'\t #### Output {idx}: ')
                 print(f'\t Scale: {config.scale.tolist()}')
@@ -68,17 +66,16 @@ class MyExporter(GraphExporter):
 
 class MyQuantizer(BaseQuantizer):
     def init_quantize_config(self, operation: Operation) -> OperationQuantizationConfig:
-        """
-        When implementing a custom quantizer, you need to initialize the quantization 
-        information structure(TQC) for each type of operators.
-        
+        """When implementing a custom quantizer, you need to initialize the
+        quantization information structure(TQC) for each type of operators.
+
         Check Predefined Quantizers within ppq.quantization.quantizer folder, see how to implements a
         customized quantizer.
-        
+
         TQC is made up of input_quantization_config and output_quantization_config.
-        The quantization information includes 
-            quantization policy, 
-            quantization bit width, 
+        The quantization information includes
+            quantization policy,
+            quantization bit width,
             quantization maximum and minimum values,
             and scale & offset.
 
@@ -137,14 +134,14 @@ with ENABLE_CUDA_KERNEL():
 
     # 调用管线完成量化
     pipeline.optimize(
-        graph=graph, dataloader=calibration_dataloader, verbose=True, 
+        graph=graph, dataloader=calibration_dataloader, verbose=True,
         calib_steps=32, collate_fn=collate_fn, executor=executor)
 
     graphwise_error_analyse(
-        graph=graph, running_device='cuda', dataloader=calibration_dataloader, 
+        graph=graph, running_device='cuda', dataloader=calibration_dataloader,
         collate_fn=lambda x: x.cuda())
 
     export_ppq_graph(
-        graph=graph, platform=TargetPlatform.TRT_INT8, 
-        graph_save_to='Output/quantized.onnx', 
+        graph=graph, platform=TargetPlatform.TRT_INT8,
+        graph_save_to='Output/quantized.onnx',
         config_save_to='Output/quantized.json')
