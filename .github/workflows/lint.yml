@@ -4,9 +4,30 @@ on: [push, pull_request]
 
 jobs:
   lint:
-    runs-on: Linux-centos-10-198-4-167
+    runs-on: ubuntu-latest
     steps:
-      - name: pre-commit hook
+      - uses: actions/checkout@v2
+      - name: Set up Python 3.7
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.7
+      - name: Install pre-commit hook
         run: |
-          pwd
-          ruby -v
+          pwd&&ls
+          pip install pre-commit
+          pre-commit --version
+      - name: pre-commit checking
+        run: |
+          git fetch
+          git branch -a
+          git diff --name-status remotes/origin/master HEAD
+          updated_files=`git diff --name-status remotes/origin/master HEAD|awk '{print$ 2}'` 
+          echo $updated_files
+          for file in $updated_files
+          do
+            if [ "${file##*.}" = "py" ]; then
+              echo $file
+              pre-commit run --files $file --show-diff-on-failure
+            fi
+          done
+
