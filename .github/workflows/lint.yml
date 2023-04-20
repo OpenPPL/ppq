@@ -20,6 +20,6 @@ jobs:
           # pip install pre-commit
           # pre-commit install
           pwd&&ls
-          ruby --version
+          pip install pre-commit
           pre-commit --version
 
