@@ -22,5 +22,14 @@ jobs:
           pwd&&ls
           pip install pre-commit
           pre-commit --version
+          git fetch
           git branch -a
-
+      - name: pre-commit checking
+        run: |
+          updated_files=`git diff --name-status remotes/origin/master HEAD|awk '{print$ 2}'`          for file in $updated_files
+          do
+            if [ "${file##*.}" = "py" ]; then
+              echo $file
+              pre-commit run --files $file --show-diff-on-failure
+            fi
+          done
