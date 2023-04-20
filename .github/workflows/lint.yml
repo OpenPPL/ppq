@@ -14,9 +14,11 @@ jobs:
       - name: Install pre-commit hook
         run: |
           # markdownlint requires ruby >= 2.7
-          sudo apt-add-repository ppa:brightbox/ruby-ng -y
-          sudo apt-get update
-          sudo apt-get install -y ruby2.7
-          pip install pre-commit
-          pre-commit install
+          # sudo apt-add-repository ppa:brightbox/ruby-ng -y
+          # sudo apt-get update
+          # sudo apt-get install -y ruby2.7
+          # pip install pre-commit
+          # pre-commit install
           pwd&&ls
+          ruby --version
+          pre-commit --version
