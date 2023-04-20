@@ -22,4 +22,5 @@ jobs:
           pwd&&ls
           pip install pre-commit
           pre-commit --version
+          git branch -a
 
