@@ -618,9 +618,6 @@ class BaseGraph(Serializable):
                 self.variables.pop(parameter.name)
 
         related_vars = [var for var in removing_op.inputs + removing_op.outputs]
-        input_var, output_var = (
-            removing_op.inputs[0] if removing_op.num_of_input >= 1 else None, 
-            removing_op.outputs[0] if removing_op.num_of_output >= 1 else None)
         
         # remove operation from its output variables
         for output_var in removing_op.outputs:
@@ -632,6 +629,10 @@ class BaseGraph(Serializable):
             if removing_op in input_var.dest_ops:
                 input_var.dest_ops.remove(removing_op)
         removing_op.inputs.clear()
+
+        input_var, output_var = (
+            removing_op.inputs[0] if removing_op.num_of_input >= 1 else None, 
+            removing_op.outputs[0] if removing_op.num_of_output >= 1 else None)
 
         if (input_var is not None and 
             output_var is not None and 
