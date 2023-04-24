@@ -93,10 +93,9 @@ class Variable(Serializable):
 
     @ property
     def shape(self) -> List[Union[Text, int, None]]:
-        """ Return tensor shape of this variable
-        It is modifiable when current variable is not a paramter.
-        """
-        if self.value is not None: 
+        """Return tensor shape of this variable It is modifiable when current
+        variable is not a paramter."""
+        if self.value is not None:
             if isinstance(self.value, torch.Tensor):
                 return list(self.value.shape)
             else: return self._shape
@@ -117,16 +116,15 @@ class Variable(Serializable):
 
     @ property
     def dtype(self) -> DataType:
-        """ Return tensor shape of this variable
-        It is modifiable when current variable is not a paramter.
-        """
+        """Return tensor shape of this variable It is modifiable when current
+        variable is not a paramter."""
         if self.value is not None:
             if isinstance(self.value, torch.Tensor):
                 return DataType.convert_from_torch(self.value.dtype)
             if isinstance(self.value, np.ndarray):
                 return DataType.convert_from_numpy(self.value.dtype)
         return self._dtype
-        
+
     @ dtype.setter
     def dtype(self, T: DataType):
         if isinstance(T, np.dtype):
@@ -141,7 +139,7 @@ class Variable(Serializable):
     def copy(self, copy_value: bool = False):
         if not copy_value or self.value is None:
             cloned = Variable(
-                name=self.name, value=self.value, 
+                name=self.name, value=self.value,
                 is_parameter=self.is_parameter, shape=self.shape, dtype=self.dtype)
             return cloned
 
@@ -152,7 +150,7 @@ class Variable(Serializable):
             self.value = convert_any_to_torch_tensor(self.value)
         if isinstance(self.value, torch.Tensor):
             value = self.value.clone()
-        return Variable(name=self.name, value=value, 
+        return Variable(name=self.name, value=value,
                         is_parameter=self.is_parameter, shape=self.shape, dtype=self.dtype)
 
 
@@ -170,7 +168,7 @@ class Operation(OperationBase, Serializable):
     def socket(self) -> OpSocket:
         if self.type in DEFAULT_SOCKET_TABLE:
             return DEFAULT_SOCKET_TABLE[self.type](self)
-        else: 
+        else:
             return DEFAULT_SOCKET_CREATOR(self)
 
     @ property
@@ -219,10 +217,10 @@ class Operation(OperationBase, Serializable):
 
     def copy(self):
         clone = Operation(
-            name=self.name, 
-            op_type=self.type, 
-            attributes=self.attributes.copy(), 
-            platform=self.platform, 
+            name=self.name,
+            op_type=self.type,
+            attributes=self.attributes.copy(),
+            platform=self.platform,
             opset=self.opset)
         clone._detail = self._detail.copy()
         return clone
@@ -280,7 +278,7 @@ class BaseGraph(Serializable):
     def parameters(self) -> List[torch.Tensor]:
         parameters = []
         for var in self.variables.values():
-            if var.is_parameter: 
+            if var.is_parameter:
                 parameters.append(var.value)
         return parameters
 
@@ -358,7 +356,7 @@ class BaseGraph(Serializable):
             return sort_ret
         else:
             raise RuntimeError(
-                'Topological Sort failed. Some operation can not be sorted (might due to circular reference).\n' + 
+                'Topological Sort failed. Some operation can not be sorted (might due to circular reference).\n' +
                 ''.join(op_name + '\n' for op_name in visited if visited[op_name] == False)
             )
 
@@ -414,14 +412,13 @@ class BaseGraph(Serializable):
         raise Exception('This Function is removed from PPQ Since 0.6.6')
 
     def insert_op_before(self, A: Operation, B: Operation, input_idx: int = 0):
-        """
-        Insert an op just before given op.
-        This function will insert given op A to variable B.inputs[input_idx]
+        """Insert an op just before given op. This function will insert given
+        op A to variable B.inputs[input_idx]
 
         Args:
             A (Operation): Inserting Op, should has no input and output variable that links to it.
             B (Operation): before this op.
-            input_idx (int, optional): For case that B has more than 1 input variable, 
+            input_idx (int, optional): For case that B has more than 1 input variable,
                 user should use parameter input_idx to identify which variable is used.
         """
         if input_idx >= B.num_of_input:
@@ -429,24 +426,23 @@ class BaseGraph(Serializable):
         if A.num_of_input != 0 or A.num_of_output != 0:
             raise ValueError('Can only insert op that has no input and output variable.')
         var = B.inputs[input_idx]
-        
+
         var.dest_ops[var.dest_ops.index(B)] = A
         B.inputs[input_idx] = self.create_variable()
         B.inputs[input_idx].source_op = A
         B.inputs[input_idx].dest_ops.append(B)
-    
+
         A.inputs.append(var)
         A.outputs.append(B.inputs[input_idx])
 
     def insert_op_after(self, A: Operation, B: Operation, output_idx: int = 0):
-        """
-        Insert an op just after given op.
-        This function will insert given op A to variable B.outputs[output_idx]
+        """Insert an op just after given op. This function will insert given op
+        A to variable B.outputs[output_idx]
 
         Args:
             A (Operation): Inserting Op, should has no input and output variable that links to it.
             B (Operation): after this op.
-            output_idx (int, optional): For case that B has more than 1 output variable, 
+            output_idx (int, optional): For case that B has more than 1 output variable,
                 user should use parameter output_idx to identify which variable is used.
         """
         if output_idx >= B.num_of_output:
@@ -454,12 +450,12 @@ class BaseGraph(Serializable):
         if A.num_of_input != 0 or A.num_of_output != 0:
             raise ValueError('Can only insert op that has no input and output variable.')
         var = B.outputs[output_idx]
-        
+
         var.source_op = A
         B.outputs[output_idx] = self.create_variable()
         B.outputs[output_idx].source_op = B
         B.outputs[output_idx].dest_ops.append(A)
-        
+
         A.outputs.append(var)
         A.inputs.append(B.outputs[output_idx])
 
@@ -552,7 +548,7 @@ class BaseGraph(Serializable):
         if B is not None and variable not in B.inputs:
             variable.dest_ops.append(B)
             B.inputs.append(variable)
-        else: 
+        else:
             variable.dest_ops.append(B)
             B.inputs.append(variable)
             ppq_warning(f'You are trying to link variable with operation, '
@@ -573,7 +569,7 @@ class BaseGraph(Serializable):
             raise KeyError(f'Can not find your variable {A.name} in current graph.')
         if B is not None and B.name not in self.variables:
             raise KeyError(f'Can not find your variable {B.name} in current graph.')
-        
+
         if B.source_op is not None:
             raise PermissionError(
                 f'Can not create link with variable {A.name} & {B.name}, '
@@ -587,8 +583,8 @@ class BaseGraph(Serializable):
         self.remove_variable(B)
         return self
 
-    def remove_operation(self, removing_op: Operation, 
-                         keep_coherence: bool = False, 
+    def remove_operation(self, removing_op: Operation,
+                         keep_coherence: bool = False,
                          remove_unlinked_variable: bool = False):
         """Remove operation from graph, this function will unlink removing
         operation from current graph, pop it from graph.operations, and remove
@@ -598,8 +594,8 @@ class BaseGraph(Serializable):
 
         Args:
             removing_op (Operation): [description]
-            
-            keep_coherence (bool): if keep_coherence = True, 
+
+            keep_coherence (bool): if keep_coherence = True,
                 PPQ will link downstream operations of removing op to the upstream operation.
                 if there is more than 1 input and output variable, ppq will link input[0] with output[0]
         """
@@ -618,7 +614,7 @@ class BaseGraph(Serializable):
                 self.variables.pop(parameter.name)
 
         related_vars = [var for var in removing_op.inputs + removing_op.outputs]
-        
+
         # remove operation from its output variables
         for output_var in removing_op.outputs:
             output_var.source_op = None
@@ -631,17 +627,17 @@ class BaseGraph(Serializable):
         removing_op.inputs.clear()
 
         input_var, output_var = (
-            removing_op.inputs[0] if removing_op.num_of_input >= 1 else None, 
+            removing_op.inputs[0] if removing_op.num_of_input >= 1 else None,
             removing_op.outputs[0] if removing_op.num_of_output >= 1 else None)
 
-        if (input_var is not None and 
-            output_var is not None and 
+        if (input_var is not None and
+            output_var is not None and
             keep_coherence):
 
             removing_var = output_var
             dest_ops     = removing_var.dest_ops
             is_graph_output = removing_var.name in self.outputs
-            
+
             for op in dest_ops:
                 op.inputs[op.inputs.index(removing_var)] = input_var
                 input_var.dest_ops.append(op)
@@ -653,7 +649,7 @@ class BaseGraph(Serializable):
                 self.mark_variable_as_graph_output(input_var)
 
         self.operations.pop(removing_op.name)
-        
+
         if remove_unlinked_variable:
             for var in related_vars:
                 if var.source_op is None and len(var.dest_ops) == 0 and var.name in self.variables:
@@ -746,13 +742,13 @@ class BaseGraph(Serializable):
             outputs=outputs
         )
         self.append_operation(created)
-        
+
         for item in inputs:
             if not isinstance(item, Variable):
                 raise TypeError(f'A list contains variables is required for creating operation, '
                                 f'however there is a {type(item)} in your input list.')
             item.dest_ops.append(created)
-        
+
         if not isinstance(outputs, list):
             raise TypeError(f'A list of output variable is required for creating operation, '
                             f'however {type(inputs)} was given')
@@ -795,7 +791,7 @@ class BaseGraph(Serializable):
             is_parameter=is_parameter,
             dest_ops=dest_ops,
             source_op=source_op)
-        
+
         if dest_ops is not None:
             if not isinstance(dest_ops, list):
                 raise TypeError(f'Parameter dest ops should be a list of Operation, however {type(dest_ops)} was given.')
@@ -803,7 +799,7 @@ class BaseGraph(Serializable):
                 if not isinstance(op, Operation):
                     raise TypeError(f'Parameter dest ops should be a list of Operation, however {type(op)} was given.')
                 op.inputs.append(created)
-        
+
         if source_op is not None:
             if not isinstance(source_op, Operation):
                 raise TypeError(f'Parameter dest ops should be an Operation, however {type(source_op)} was given.')
@@ -839,14 +835,14 @@ class BaseGraph(Serializable):
         return state
 
     def copy(self, copy_value: bool = False):
-        """Clone current graph. 
-        Use parameter copy_value to control whether to do a Shallow Copy or Deep Copy.
-        
+        """Clone current graph. Use parameter copy_value to control whether to
+        do a Shallow Copy or Deep Copy.
+
         For copy_value = True, there will be a copy of each parameter in your network.
             ATTENTION: it might cause gpu memory overflow.
         For copy_value = False, cloned network will share the same parameter tensor of current one.
-        
-        ATTENTION: all quantization config will be cloned, 
+
+        ATTENTION: all quantization config will be cloned,
             all scales and offsets will be cloned even with copy_valye = False.
 
         Shallow Copy: Shallow repetition is quicker.
@@ -862,7 +858,7 @@ class BaseGraph(Serializable):
         cloned = BaseGraph(name=self._name, built_from=self._built_from)
         for op in self.operations.values(): cloned.append_operation(op.copy())
         for var in self.variables.values(): cloned.append_variable(var.copy(copy_value=copy_value))
-        
+
         # notice that all operations is copyed without link, so do all variables
         # relink them with following code
         config_dict = {}
