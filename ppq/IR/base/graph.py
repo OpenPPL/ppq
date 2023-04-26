@@ -614,21 +614,20 @@ class BaseGraph(Serializable):
                 self.variables.pop(parameter.name)
 
         related_vars = [var for var in removing_op.inputs + removing_op.outputs]
-
-        # remove operation from its output variables
-        for output_var in removing_op.outputs:
-            output_var.source_op = None
-        removing_op.outputs.clear()
-
-        # remove operation from its input variables
-        for input_var in removing_op.inputs:
-            if removing_op in input_var.dest_ops:
-                input_var.dest_ops.remove(removing_op)
-        removing_op.inputs.clear()
-
         input_var, output_var = (
             removing_op.inputs[0] if removing_op.num_of_input >= 1 else None,
             removing_op.outputs[0] if removing_op.num_of_output >= 1 else None)
+
+        # remove operation from its output variables
+        for _output_var in removing_op.outputs:
+            _output_var.source_op = None
+        removing_op.outputs.clear()
+
+        # remove operation from its input variables
+        for _input_var in removing_op.inputs:
+            if removing_op in _input_var.dest_ops:
+                _input_var.dest_ops.remove(removing_op)
+        removing_op.inputs.clear()
 
         if (input_var is not None and
             output_var is not None and
