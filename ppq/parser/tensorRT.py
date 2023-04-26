@@ -121,7 +121,7 @@ class TensorRTExporter_JSON(GraphExporter):
             "build_engine(onnx_file='Quantized.onnx', int8_scale_file='Quantized.json', engine_file='Quantized.engine', int8=True)\n")
         if config_path is not None:
             self.export_quantization_config(config_path, graph)
-        self.export_weights(graph, config_path)
+            self.export_weights(graph, config_path)
         _, ext = os.path.splitext(file_path)
         if ext == '.onnx':
             exporter = OnnxExporter()
