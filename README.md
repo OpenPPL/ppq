@@ -30,7 +30,8 @@ PPQ 的开发与推理框架关系密切，这使得我们能够了解硬件推�
 2. Install Complier
 
 ```bash
-apt-get install ninja-build
+apt-get install ninja-build # for debian/ubuntu user
+yum install ninja-build # for redhat/centos user
 ```
 
 For Windows User:
