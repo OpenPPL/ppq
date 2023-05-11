@@ -1,11 +1,11 @@
 import operator
 from functools import reduce
-from typing import List, Tuple
+from typing import List
 
-import numpy as np
-from ppq.core import DataType, convert_any_to_python_primary_type
+from ppq.core import (GRU_FLATTEN_WEIGHT_ATTRIB, LSTM_FLATTEN_WEIGHT_ATTRIB,
+                      DataType, TargetPlatform,
+                      convert_any_to_python_primary_type)
 from ppq.IR import Operation
-from ppq.core.common import GRU_FLATTEN_WEIGHT_ATTRIB, LSTM_FLATTEN_WEIGHT_ATTRIB
 from ppq.log import NaiveLogger
 from ppq.utils import process_attribute
 
@@ -20,7 +20,6 @@ from .base import *
 # torch func: https://pytorch.org/docs/stable/nn.functional.html
 
 logger = NaiveLogger.get_logger('PPQ')
-
 
 def convert_onnx_pads_to_torch(onnx_pads: List[int], mode: str=None) -> List[int]:
     # Convert padding from onnx format to torch format
@@ -83,10 +82,102 @@ def Abs_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
     Returns:
         torch.Tensor: _description_
     """
-    ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
     [x] = values
     return x.abs()
+
+
+def Attention_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
+    """
+    com.microsoft.Attention
+        Multi-Head Self Attention that can be either unidirectional (like GPT-2) or bidirectional (like BERT). 
+        The mask_index input is optional. Besides raw attention mask with shape 
+        (batch_size, past_sequence_length + sequence_length) or 
+        (batch_size, sequence_length, past_sequence_length + sequence_length) with value 0 for masked and 1 otherwise, 
+        
+        we also support other two formats: When input has right-side padding, 
+        mask_index is one dimension with shape (batch_size), where value of each element is the end position, 
+        or valid length of actual sequence excluding padding. When input has left-side padding, mask_index has shape (2 * batch_size), 
+        where the values are the exclusive end positions followed by the inclusive start positions. When unidirectional is 1, 
+        and each token only attend to previous tokens. For GPT-2, both past and present state are optional. 
+        
+        Present state could appear in output even when past state is not in input.
+
+    Version
+        This version of the operator has been available since version 1 of the 'com.microsoft' operator set.
+
+    Attributes
+        num_heads : int (required)
+            Number of attention heads
+    
+        qkv_hidden_sizes : list of ints
+            Hidden layer sizes of Q, K, V paths in Attention
+        
+        unidirectional : int
+            Whether every token can only attend to previous tokens. Default value is 0.
+    
+    Inputs (3 - 6)
+        input : T
+            3D input tensor with shape (batch_size, sequence_length, input_hidden_size)
+    
+        weight : T
+            2D input tensor with shape (input_hidden_size, 3 * hidden_size), where hidden_size = num_heads * head_size
+    
+        bias : T
+            1D input tensor with shape (3 * hidden_size)
+    
+        mask_index (optional) : M
+            Attention mask with shape (batch_size, 1, max_sequence_length, max_sequence_length), 
+            (batch_size, past_sequence_length + sequence_length)  
+            or (batch_size, sequence_length, past_sequence_length + sequence_length), 
+            or index with shape (batch_size) or (2 * batch_size).
+
+        past (optional) : T
+            past state for key and value with shape (2, batch_size, num_heads, past_sequence_length, head_size).
+    
+        extra_add (optional) : T
+            additional add to QxK' with shape (batch_size, num_heads, sequence_length, sequence_length).
+    
+    Outputs (1 - 2)
+        output : T
+            3D output tensor with shape (batch_size, sequence_length, hidden_size)
+    
+        present (optional) : T
+            present state for key and value with shape 
+            (2, batch_size, num_heads, past_sequence_length + sequence_length, head_size)
+    """
+    ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=3, max_num_of_input=6)
+    num_heads        = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='num_heads', compulsive=True)
+    qkv_hidden_sizes = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='qkv_hidden_sizes', default=0)
+    unidirectional   = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='unidirectional', default=0)
+    if unidirectional != 0:
+        raise NotImplementedError('Attention Layer with unidirectional != 0 is not implemented.')
+    
+    input, weight, bias = values[:3]
+    mask_index          = values[3] if len(values) >= 4 else None
+    past                = values[4] if len(values) >= 5 else None
+    extra_add           = values[5] if len(values) >= 6 else None
+
+    if mask_index is not None or past is not None:
+        raise NotImplementedError('Attention Layer with mask_index and past != None is not implemented.')
+
+    BATCHSIZE, NUM_OF_HEADS, HIDDEN_SIZE = input.shape[0], num_heads, qkv_hidden_sizes
+    HEAD_SIZE = HIDDEN_SIZE // NUM_OF_HEADS
+
+    qkv = torch.matmul(input, weight) + bias
+    q   = qkv[:, :, HIDDEN_SIZE * 0: HIDDEN_SIZE * 1]
+    k   = qkv[:, :, HIDDEN_SIZE * 1: HIDDEN_SIZE * 2]
+    v   = qkv[:, :, HIDDEN_SIZE * 2: HIDDEN_SIZE * 3]
+
+    q = q.reshape(BATCHSIZE, -1, NUM_OF_HEADS, HEAD_SIZE).permute(0, 2, 1, 3)
+    k = k.reshape(BATCHSIZE, -1, NUM_OF_HEADS, HEAD_SIZE).permute(0, 2, 1, 3)
+    v = v.reshape(BATCHSIZE, -1, NUM_OF_HEADS, HEAD_SIZE).permute(0, 2, 1, 3)
+
+    attn_score = (q @ k.transpose(-2, -1)) * (HEAD_SIZE ** -0.5) + extra_add
+    attn_score = torch.softmax(attn_score, dim=-1)
+
+    feat = (attn_score @ v).transpose(1, 2).reshape(BATCHSIZE, -1, HIDDEN_SIZE)
+    return feat
 
 
 def Conv_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
@@ -174,9 +265,9 @@ def Conv_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
     Returns:
         [type]: [description]
     """
-    ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=2, max_num_of_input=3)
-
+    values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
+    
     groups    = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='group', default=1)
     onnx_pads = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='pads', default=0)
     dilation  = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='dilations', default=1)
@@ -329,10 +420,10 @@ def ConvTranspose_forward(op: Operation, values: List[torch.Tensor], ctx: TorchB
         T : tensor(float16), tensor(float), tensor(double)
         Constrain input and output types to float tensors.
     """
-    ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=2, max_num_of_input=3)
+    values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
+    
     process_attribute(op.attributes, values[0].shape[2:], values[1].shape[2:], 'ConvTranspose')
-
     groups    = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='group', default=1)
     onnx_pads = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='pads', default=0)
     dilation  = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='dilations', default=1)
@@ -396,7 +487,6 @@ def ConvTranspose_forward(op: Operation, values: List[torch.Tensor], ctx: TorchB
 
 
 def MaxPool2d_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
     process_attribute(op.attributes, values[0].shape[2:])
 
@@ -450,6 +540,7 @@ def MaxPool2d_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
 
 def BatchNormalization_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=5, max_num_of_input=5)
+    values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
     input_data, weight, bias, running_mean, running_var = values
 
     # Default momentum in pytorch is 0.1 while onnx is 0.9, caffe is 0.999
@@ -486,8 +577,8 @@ def Mul_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
     Returns:
         torch.Tensor: [description]
     """
-    ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=2, max_num_of_input=2)
+    values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
     multiplicand, multiplier = values
     return multiplicand * multiplier
 
@@ -510,6 +601,7 @@ def MultiHeadAttention_forward(op: Operation, values: List[torch.Tensor], ctx: T
     if len(values) != 11:
         raise NotImplementedError('Not implement simplified MultiHeadAttention')
 
+    values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
     q_in,k_in,v_in,q_w,q_b,k_w,k_b,v_w,v_b,o_w,o_b = values
     embed_dim = op.attributes.get('embed_dim')
     num_heads = op.attributes.get('num_heads')
@@ -567,20 +659,21 @@ def Add_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
     Returns:
         torch.Tensor: [description]
     """
-    ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=2, max_num_of_input=2)
+    values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
     a, b = values
     return a + b
 
 
 def And_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=2, max_num_of_input=2)
+    values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
     a, b = values
     return a & b
 
 
 def Eltwise_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
+    values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
     if op.type == 'Add':
         assert len(values) == 2
         output = torch.add(*values).float()
@@ -594,12 +687,17 @@ def Eltwise_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackend
         assert len(values) == 2
         version = torch.__version__
         if version < '1.5.0' or version >= '1.7.0':
-            output = torch.div(*values)
-        else:
-            if values[0].dtype in [torch.uint8, torch.int8, torch.int16, torch.int32, torch.int64]:
-                output = torch.floor_divide(*values)
+            if (values[0].dtype in [torch.int32, torch.int64] and 
+                values[1].dtype in [torch.int32, torch.int64]):
+                if values[0].dtype == torch.int64 or values[1].dtype[1] == torch.int64:
+                    output = torch.floor_divide(*values).long()
+                else: output = torch.floor_divide(*values).int()
             else:
                 output = torch.div(*values)
+        else:
+            if values[0].dtype in [torch.uint8, torch.int8, torch.int16, torch.int32, torch.int64]:
+                output = torch.floor_divide(*values).int()
+            else: output = torch.div(*values)
     elif op.type == 'Max':
         output = torch.max(*values)
     elif op.type == 'Min':
@@ -623,7 +721,7 @@ def Reshape_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackend
         the dimension will be set explicitly to zero (i.e. not taken from input tensor)
 
     Attributes
-        allowzero : int (default is 0) (Not implemented)
+        allowzero : int (default is 0)
         (Optional) By default, when any value in the 'shape' input is equal to zero
             the corresponding dimension value is copied from the input tensor dynamically.
 
@@ -648,15 +746,20 @@ def Reshape_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackend
         torch.Tensor: [description]
     """
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=2, max_num_of_input=2)
-    ASSERT_ALL_TENSORS_AT_CPU(op=op, values=[None, values[-1]])
-    if 'allowzero' in op.attributes: raise NotImplemented('Not implemented yet.')
+    values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
     data, shape = values
+    shape = shape.cpu()
+
+    # Avoid the element 0 in the shape that comes with onnx, such as [0,-1]
     shape = [shape[i] if shape[i] != 0 else data.shape[i] for i in range(len(shape))]
+
+    # If the element in shape is a tensor, convert it to a value, for example,
+    # convert [1, tensor(-1)] to [1, -1]
+    shape = [shape[i].item() if hasattr(shape[i], 'item') else shape[i] for i in range(len(shape))]
     return data.reshape(shape)
 
 
 def AveragePool_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
     process_attribute(op.attributes, values[0].shape[2:])
 
@@ -749,7 +852,6 @@ def Transpose_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
     Returns:
         torch.Tensor: [description]
     """
-    ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
     perm = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='perm', compulsive=True)
     [data] = values
@@ -784,9 +886,9 @@ def Concat_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendC
     Returns:
         torch.Tensor: [description]
     """
-    ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1)
     axis = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='axis', compulsive=True)
+    values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
 
     # zero-dimensional tensor cannot be concatenated
     # must extend 1 dimension for concat.
@@ -859,6 +961,7 @@ def Tile_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
         torch.Tensor: [description]
     """
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=2, max_num_of_input=2)
+    values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
     input, repeats = values
     # the repeats parameter is a 1D tensor in onnx,
     # the tiles parameter is a scalar in caffe
@@ -912,10 +1015,8 @@ def Squeeze_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackend
 
         if len(values) > 1:
             axes = values[1]
-            ASSERT_ALL_TENSORS_AT_CPU(op=op, values=[axes])
             axes = axes.tolist()
     else:
-        ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
         ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
         [squeezing_tensor], axes = values, GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='axes', compulsive=False, default=None)
     
@@ -980,16 +1081,14 @@ def Unsqueeze_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
     if op.opset.onnx_opset_version() >= 13:
         ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=2, max_num_of_input=2)
         unsqueezing_tensor, axes = values
-        ASSERT_ALL_TENSORS_AT_CPU(op=op, values=[axes])
         axes = axes.tolist()
     else:
-        ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
         ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
         [unsqueezing_tensor] = values
         axes = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='axes', compulsive=True)
 
     if isinstance(axes, list):
-        for squeezing_dim in sorted(axes, reverse=True):
+        for squeezing_dim in sorted(axes):
             unsqueezing_tensor = torch.unsqueeze(unsqueezing_tensor, squeezing_dim)
     elif isinstance(axes, int):
         unsqueezing_tensor = torch.unsqueeze(unsqueezing_tensor, axes)
@@ -999,7 +1098,82 @@ def Unsqueeze_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
 
 
 def Gather_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
+    """Given data tensor of rank r >= 1, and indices tensor of rank q, 
+    gather entries of the axis dimension of data (by default outer-most one as axis=0) indexed by indices, 
+    and concatenates them in an output tensor of rank q + (r - 1).
+
+    axis = 0 :
+
+    Let k = indices[i_{0}, ..., i_{q-1}] 
+        Then output[i_{0}, ..., i_{q-1}, j_{0}, ..., j_{r-2}] = input[k , j_{0}, ..., j_{r-2}]
+
+        data = [
+            [1.0, 1.2],
+            [2.3, 3.4],
+            [4.5, 5.7],
+        ]
+        indices = [
+            [0, 1],
+            [1, 2],
+        ]
+        output = [
+            [
+                [1.0, 1.2],
+                [2.3, 3.4],
+            ],
+            [
+                [2.3, 3.4],
+                [4.5, 5.7],
+            ],
+        ]
+    
+    axis = 1 :
+
+    Let k = indices[i_{0}, ..., i_{q-1}] 
+        Then output[j_{0}, i_{0}, ..., i_{q-1}, j_{1}, ..., j_{r-2}] = input[j_{0}, k, j_{1}, ..., j_{r-2}]
+
+        data = [
+            [1.0, 1.2, 1.9],
+            [2.3, 3.4, 3.9],
+            [4.5, 5.7, 5.9],
+        ]
+        indices = [
+            [0, 2],
+        ]
+        axis = 1,
+        output = [
+                [[1.0, 1.9]],
+                [[2.3, 3.9]],
+                [[4.5, 5.9]],
+        ]
+    
+    Version
+        This version of the operator has been available since version 13 of the default ONNX operator set.
+
+        Other versions of this operator: 1, 11
+
+    Attributes
+        axis : int (default is 0)
+            Which axis to gather on. Negative value means counting dimensions from the back. 
+            Accepted range is [-r, r-1] where r = rank(data).
+    
+    Inputs
+        data (differentiable) : T
+            Tensor of rank r >= 1.
+    
+        indices (non-differentiable) : Tind
+            Tensor of int32/int64 indices, of any rank q. All index values are expected to be 
+            within bounds [-s, s-1] along axis of size s. 
+            
+            It is an error if any of the index values are out of bounds.
+    
+    Outputs
+        output (differentiable) : T
+            Tensor of rank q + (r - 1).
+    """
+    values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
     input_data, indices = values
+
     indices = indices.long()
     axis = op.attributes.get('axis', 0)
     if op.type == 'Gather':
@@ -1017,7 +1191,9 @@ def Gather_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendC
 def GatherND_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
     # y[i_1, ..., i_b, j_1, ..., j_n, k_1, ..., k_m] =
     #        x[i_1, ...,i_b, *idx[i_1, ..., i_b, j_1, ...,j_n, :], k_1,...,k_m]
+    values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
     input_data, indices = values
+
     batch_dims = op.attributes.get('batch_dims', 0)
     data_rank = len(input_data.shape)
     assert indices.shape[-1] <= data_rank
@@ -1052,13 +1228,17 @@ def GatherND_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacken
 
     # reshaped output
     reshaped_output = output.reshape(*shape_i, *shape_j, *shape_k)
-    return output
+    return reshaped_output
+
 
 def Gelu_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
+    ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
     [input_value] = values
     return F.gelu(input_value)
 
+
 def Greater_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
+    values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
     input_a, input_b = values
     if input_a.dim() >= input_b.dim() or input_a.shape > input_b.shape:
         output = torch.gt(input_a, input_b)
@@ -1068,6 +1248,7 @@ def Greater_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackend
 
 
 def Less_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
+    values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
     input_a, input_b = values
     if input_a.dim() >= input_b.dim() or input_a.shape > input_b.shape:
         output = torch.lt(input_a, input_b)
@@ -1109,7 +1290,6 @@ def ConstantOfShape_forward(op: Operation, values: List[torch.Tensor], ctx: Torc
     Returns:
         torch.Tensor: [description]
     """
-    ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
     value = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='value', compulsive=False, default=0.0)
     [shape], fill_value = values, convert_any_to_python_primary_type(value)
     output = torch.Tensor().new_full(
@@ -1142,6 +1322,7 @@ def NonZero_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackend
 
 
 def Clip_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
+    values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
     if len(values) == 1:
         values.append(op.attributes.get('min', float('-inf')))
         values.append(op.attributes.get('max', float('+inf')))
@@ -1201,10 +1382,9 @@ def Slice_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCo
     Returns:
         [type]: [description]
     """
-    ASSERT_ALL_TENSORS_AT_CPU(op=op, values=[None] + values[1: ])
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=3, max_num_of_input=5)
     data, starts, ends = values[: 3]
-    axes  = values[3] if len(values) > 3 else None
+    axes  = values[3] if len(values) > 3 else torch.tensor([int(_) for idx, _ in enumerate(starts.tolist())])
     steps = values[4] if len(values) > 4 else torch.ones_like(starts)
     if axes is not None: axes = axes.tolist()
     starts, ends, steps = starts.tolist(), ends.tolist(), steps.tolist()
@@ -1214,7 +1394,7 @@ def Slice_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCo
         if step < 0:
             flip_dims.append(axis)
             start, end, step = -start - 1, -end - 1, -step
-        slices[axis] = slice(start, end, step)
+        slices[axis] = slice(int(start), int(end), int(step))
 
     pos_axes_slices = list(slices.get(a, slice(None, None)) for a in range(max(axes) + 1))
     neg_axes_slices = list(slices.get(a, slice(None, None)) for a in range(min(axes), 0))
@@ -1224,39 +1404,6 @@ def Slice_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCo
     if pos_axes_slices: data = data[pos_axes_slices]
     if neg_axes_slices: data = data[neg_axes_slices]
     return data
-
-    ''' Legacy implementation
-    data, starts, ends = values[: 3]
-    axes  = values[3] if len(values) > 3 else None
-    steps = values[4] if len(values) > 4 else torch.ones_like(starts)
-    if axes is not None: axes = axes.tolist()
-    starts, ends, steps = starts.tolist(), ends.tolist(), steps.tolist()
-
-    slice_args = list(zip(starts, ends, steps))
-    if axes is not None and all([_ != 0 for _ in axes]):
-        assert len(axes) == len(slice_args)
-        new_axes = [data if data >= 0 else data.dim() + data for data in axes]
-        full_axes = [i for i in range(data.dim())]
-        slice_args = [slice_args[new_axes.index(i)] if i in new_axes else (None,) for i in full_axes]
-
-    # slice function 里面有些时候会出现 list
-    # 虽然我们也不知道是为什么，但是我们可以强行展开 list
-    for args in slice_args:
-        for i in range(len(args)):
-            if type(args[i]) in {list, tuple}:
-                args[i] = args[i][0]
-    slice_func = [slice(*args) for args in slice_args]
-
-    if any([step < 0 for step in steps]):
-        negative_axes = []
-        for idx, step in enumerate(steps):
-            if step < 0: negative_axes.append(idx)
-            slice_func[idx] = slice(- slice_func[idx].start - 1, - slice_func[idx].stop + 1, -slice_func[idx].step)
-        data = torch.flip(data, dims=axes)
-
-    output = data[slice_func]
-    return output
-    '''
 
 
 def Interp_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
@@ -1304,11 +1451,11 @@ def Interp_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendC
 
 
 def Resize_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    input_data = values[0]
+    value = values[0]
     # Not used roi
     # roi  = input_value[1] if len(input_value) > 1 else None
-    scales = values[2] if len(values) > 2 else None
-    sizes = values[-1].tolist() if len(values) == 4 else None
+    scale_factor = values[2].cpu() if len(values) > 2 else None
+    size = values[-1].cpu().tolist() if (len(values) == 4 and values[-1] != None) else None
     mode = op.attributes.get('mode', 'nearest')
     if mode == 'cubic':
         mode = 'bicubic'
@@ -1316,50 +1463,50 @@ def Resize_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendC
     linear_mode_map = {1: 'linear', 2: 'bilinear', 3: 'trilinear'}
 
     # If 'size' is specified, then set scales to empty data (zero shape) in this operator's input list.
-    if sizes is None or len(sizes) == 0:
-        sizes = None
-        if scales.numel() == 1:
-            scales = scales.item()
+    if size is None or len(size) == 0:
+        size = None
+        if scale_factor.numel() == 1:
+            scale_factor = scale_factor.item()
         else:
-            scales = scales.cpu().tolist()
-            if len(scales) == 2:
+            scale_factor = scale_factor.tolist()
+            if len(scale_factor) == 2:
                 # 大家相安无事，和平共处
                 pass
-            elif len(scales) == 4:
-                if scales[:2] != [1, 1]:
+            elif len(scale_factor) == 4:
+                if scale_factor[:2] != [1, 1]:
                     raise NotImplementedError(
                         'Can not resize your image with current op, '
                         'cause 4-dimension resize is not implemented with pytorch.')
-                scales = scales[2:]
+                scale_factor = scale_factor[2:]
             else:
                 raise NotImplementedError(
                     'Can not resize your image with current op, '
-                    f'cause {len(scales)}-dimension resize is not implemented with pytorch.')
+                    f'cause {len(scale_factor)}-dimension resize is not implemented with pytorch.')
     else:
         # the sizes in onnx is 4-D while in pytorch is 2-D
         # check the dim.0 & dim.1 is equal, then remain dim.2 and dim.3
-        scales = None
-        assert (sizes[:2] == list(input_data.shape[:2]))
-        sizes = sizes[2:]
-        mode = linear_mode_map[len(sizes)] if mode == 'linear' else mode
+        scale_factor = None
+        assert (size[:2] == list(value.shape[:2]))
+        size = size[2:]
+        mode = linear_mode_map[len(size)] if mode == 'linear' else mode
 
         if mode == 'cubic':
             logger.warning('Only support bicubic now')
-            assert (len(sizes[2:]) == 2)
+            assert (len(size[2:]) == 2)
             mode = 'bicubic'
 
     # PATCH 2022.04.22
     # ONNX DO NOT HAVE BILINEAR MODE, FOR 4D INPUT, WE OVERRIDE MODE TO BILINEAR
-    if len(input_data.shape) == 4 and mode == 'linear':
+    if len(value.shape) == 4 and mode == 'linear':
         mode = 'bilinear'
 
     trans_mode = op.attributes.get(
         'coordinate_transformation_mode', 'half_pixel')
     if trans_mode == 'align_corners':
-        output = F.interpolate(input_data, sizes, scales,
+        output = F.interpolate(value, size, scale_factor,
                                mode, align_corners=True)
     else:
-        output = F.interpolate(input_data, sizes, scales, mode)
+        output = F.interpolate(value, size, scale_factor, mode)
     return output
 
 
@@ -1416,7 +1563,7 @@ def _NMS_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
         values (List[torch.Tensor]): [description]
     """
     import mmcv.ops
-
+    values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
     boxes, scores = values[:2]
     max_output_boxes_per_class = values[2].item() if len(values) > 2 else 0
     iou_threshold = values[3].item() if len(values) > 3 else 0
@@ -1496,10 +1643,10 @@ def ReduceMean_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBack
 def ReduceSum_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
     if op.opset.onnx_opset_version() >= 13:
         ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=2)
+        values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
         input_value, dim = values[0], None
         if len(values) > 1:
             dim = values[1]
-            ASSERT_ALL_TENSORS_AT_CPU(op=op, values=[dim])
         keepdim, noop_with_empty_axes = bool(op.attributes.get('keepdims', 1)), op.attributes.get('noop_with_empty_axes', 0)
 
         if dim is None:
@@ -1611,16 +1758,16 @@ def TopK_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
         [type]: [description]
     """
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=2, max_num_of_input=2)
-    ASSERT_ALL_TENSORS_AT_CPU(op=op, values=[None, values[-1]])
-    axis = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='axis', default=-1)
+    values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
+    axis    = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='axis', default=-1)
     largest = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='largest', default=1)
-    sorted = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='sorted', default=1)
+    sorted  = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='sorted', default=1)
     largest, sorted = bool(largest), bool(sorted)
 
     x, k = values
     k = convert_any_to_python_primary_type(k)
     values, indices = torch.topk(input=x, k=k, dim=axis, largest=largest, sorted=sorted)
-    return values.to('cpu'), indices.to('cpu')
+    return values, indices
 
 
 def Expand_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
@@ -1655,13 +1802,15 @@ def Expand_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendC
     Returns:
         [type]: [description]
     """
+    values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
     tensor, shape = values
     # TODO torch.ones 将会引起设备间同步
-    output = tensor * torch.ones(tuple(shape.int().tolist()), dtype=tensor.dtype, device=tensor.device)
+    output = tensor * torch.ones(convert_any_to_python_primary_type(shape), dtype=tensor.dtype, device=tensor.device)
     return output
 
 
 def Equal_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
+    values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
     input_a, input_b = values
     output = torch.eq(input_a, input_b)
     return output
@@ -1678,23 +1827,125 @@ def Flatten_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackend
 
 
 def Range_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
+    """
+    Generate a tensor containing a sequence of numbers that 
+        begin at start and extends by increments of delta up to limit (exclusive).
+
+    The number of elements in the output of range is computed as below-
+
+    number_of_elements = max( ceil( (limit - start) / delta ) , 0 )
+
+    The pseudocode determining the contents of the output is shown below-
+
+    for(int i=0; i<number_of_elements; ++i)
+
+    {
+
+        output[i] = start + (i * delta);
+
+    }
+
+    Example 1 Inputs: start = 3, limit = 9, delta = 3 Output: [3, 6]
+
+    Example 2 Inputs: start = 10, limit = 4, delta = -2 Output: [10, 8, 6]
+
+    Inputs
+        start : T
+            Scalar. First entry for the range of output values.
+    
+        limit : T
+            Scalar. Exclusive upper limit for the range of output values.
+    
+        delta : T
+            Scalar. Value to step by.
+    
+    Outputs
+        output : T
+            A 1-D tensor with same type as the inputs containing generated range of values.
+    """
     start, limit, delta = values
+    start = start.item()
+    limit = limit.item()
+    delta = delta.item()
     output = torch.arange(start, limit, delta, device=ctx.executing_device)
     return output
 
 
 def Where_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
+    values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
     condition, x, y = values
     output = torch.where(condition, x, y)
     return output
 
 
 def ScatterElements_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
-    input_data, indices, updates = values
+    """
+    ScatterElements takes three inputs data, updates, 
+    and indices of the same rank r >= 1 and an optional attribute axis that identifies an axis of data 
+    (by default, the outer-most axis, that is axis 0). 
+    
+    The output of the operation is produced by creating a copy of the input data, 
+    and then updating its value to values specified by updates at specific index positions specified by indices. 
+    Its output shape is the same as the shape of data.
+
+    For each entry in updates, 
+    the target index in data is obtained by combining the corresponding entry in indices with the index of the entry itself: 
+        the index-value for dimension = axis is obtained from the value of the corresponding entry in indices and the index-value 
+    for dimension != axis is obtained from the index of the entry itself.
+
+    reduction allows specification of an optional reduction operation, 
+        which is applied to all values in updates tensor into output at the specified indices.
+    In cases where reduction is set to "none", indices should not have duplicate entries: that is, 
+        if idx1 != idx2, then indices[idx1] != indices[idx2]. 
+    
+    For instance, in a 2-D tensor case, the update corresponding to the [i][j] entry is performed as below:
+
+    output[indices[i][j]][j] = updates[i][j] if axis = 0,
+    output[i][indices[i][j]] = updates[i][j] if axis = 1,
+    When reduction is set to "add", the update corresponding to the [i][j] entry is performed as below:
+
+    output[indices[i][j]][j] += updates[i][j] if axis = 0,
+    output[i][indices[i][j]] += updates[i][j] if axis = 1,
+    When reduction is set to "mul", the update corresponding to the [i][j] entry is performed as below:
+
+    output[indices[i][j]][j] *= updates[i][j] if axis = 0,
+    output[i][indices[i][j]] *= updates[i][j] if axis = 1,
+    This operator is the inverse of GatherElements. It is similar to Torch's Scatter operation.
+
+    Attributes
+        axis : int (default is 0)
+            Which axis to scatter on. Negative value means counting dimensions from the back.
+                Accepted range is [-r, r-1] where r = rank(data).
+            reduction : string (default is none)
+            Type of reduction to apply: none (default), add, mul. 
+
+            'none': no reduction applied. 
+            'add': reduction using the addition operation. 
+            'mul': reduction using the multiplication operation.
+
+    Inputs
+        data (differentiable) : T
+            Tensor of rank r >= 1.
+
+        indices (non-differentiable) : Tind
+            Tensor of int32/int64 indices, of r >= 1 (same rank as input). 
+            All index values are expected to be within bounds [-s, s-1] along axis of size s. 
+            It is an error if any of the index values are out of bounds.
+
+        updates (differentiable) : T
+            Tensor of rank r >=1 (same rank and shape as indices)
+
+    Outputs
+        output (differentiable) : T
+            Tensor of rank r >= 1 (same rank as input).
+    """
+    values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
+    value, indices, updates = values
+
     dim = op.attributes.get('axis', 0)
     # Negative indices
-    indices[indices < 0] += input_data.shape[dim]
-    output = input_data.scatter(dim, indices, updates)
+    indices[indices < 0] += value.shape[dim]
+    output = value.scatter(dim, indices, updates)
     return output
 
 
@@ -1747,12 +1998,10 @@ def ScatterND_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
     """
     # device = kwargs['ctx'].executing_device
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=3, max_num_of_input=3)
-    ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=[values[0], None, values[-1]])
-    ASSERT_ALL_TENSORS_AT_CPU(op=op, values=[None, values[1], None])
+    values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
+    value, indices, updates = values
 
-    data, indices, updates = values
-
-    output = data.clone()
+    output = value.clone()
     ind_dim = indices.dim()
     # last dimension is a partial-index into data
     indices = indices.reshape((-1, indices.shape[-1])).T.tolist()
@@ -1765,28 +2014,27 @@ def ScatterND_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
 def Split_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
     if op.opset.onnx_opset_version() >= 13:
         ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=2)
-        input_value = values[0]
+        values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
+        value = values[0]
         axis = op.attributes.get('axis', 0)
-        split = input_value.shape[axis] // len(op.outputs)
+        split = value.shape[axis] // len(op.outputs)
         if len(values) > 1:
             split = values[1]
-            ASSERT_ALL_TENSORS_AT_CPU(op=op, values=[split])
             split = split.tolist()
     else:
-        ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
         ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
         axis = op.attributes.get('axis', 0)
         split = op.attributes.get('split', 0)
-        [input_value] = values
+        [value] = values
         if 'split' not in op.attributes:
-            split = input_value.shape[axis] // len(op.outputs)
-    outputs = torch.split(input_value, split, axis)
+            split = value.shape[axis] // len(op.outputs)
+    outputs = torch.split(value, split, axis)
     return outputs
 
 
 def Gemm_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
-    ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=2, max_num_of_input=3)
+    values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
 
     A, B = values[:2]
 
@@ -1806,11 +2054,33 @@ def Gemm_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
     output = alpha * torch.matmul(A, B) + beta * C
     return output
 
+
 def MatMul_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
+    """
+    Matrix product that behaves like numpy.matmul: 
+        https://docs.scipy.org/doc/numpy-1.13.0/reference/generated/numpy.matmul.html
+
+    Version
+        This version of the operator has been available since version 13 of the default ONNX operator set.
+
+        Other versions of this operator: 1, 9
+
+    Inputs
+        A (differentiable) : T
+            N-dimensional matrix A
+    
+        B (differentiable) : T
+            N-dimensional matrix B
+    
+    Outputs
+        Y (differentiable) : T
+            Matrix multiply results from A * B
+    """
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=2, max_num_of_input=2)
+    values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
     output = torch.matmul(values[0], values[1])
     return output
+
 
 def Softmax_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
     """The operator computes the normalized exponential values for the given
@@ -1843,10 +2113,10 @@ def Softmax_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackend
     Returns:
         torch.Tensor: [description]
     """
-    ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
+    default_axis = -1 if op.opset.onnx_opset_version() >= 13 else 1
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
     [input] = values
-    axis = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='axis', default=-1)
+    axis = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='axis', default=default_axis)
     output = F.softmax(input, axis)
     return output
 
@@ -1875,37 +2145,223 @@ def LeakyRelu_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
 
 
 def LayerNorm_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
-    if len(values) != 3:
-        raise ValueError('Unsupported LayerNorm without affine')
+    """
+    This is layer normalization defined in ONNX as function. 
+    The overall computation can be split into two stages. 
+    The first stage is standardization, which makes the normalized elements have zero mean and unit variances. 
+    The computation required by standardization can be described by the following equations. 
+    Mean = ReduceMean<axes=normalized_axes>(X) D = Sub(X, Mean) DD = Mul(Diff, Diff) 
+    Var = ReduceMean<axes=normalized_axes>(DD) VarEps = Add(Var, epsilon) 
+    StdDev = Sqrt(VarEps) InvStdDev = Reciprocal(StdDev) 
+    Normalized = Mul(D, InvStdDev) where normalized_axes is [axis, ..., rank of X - 1]. 
+    
+    The variables Var and StdDev stand for variance and standard deviation, respectively. 
+    The second output is Mean and the last one is InvStdDev. Depending on stash_type attribute, 
+    the actual computation must happen in different floating-point precision. 
+    
+    For example, if stash_type is 1, this operator casts all input variables to 32-bit float, perform the computation, 
+    and finally cast Normalized back to the original type of X. 
+    
+    The second stage then scales and shifts the outcome of the first stage using
+        NormalizedScaled = Mul(Normalized, Scale) 
+        Y = Add(NormalizedScaled, B) 
+    The second stage doesn't depends on stash_type. All equations are in this syntax. 
+    
+    The same variable (i.e., input, output, and attribute) uses the same name in the equations above and this operator's definition. 
+    Let d[i] indicate the i-th dimension of X. If X's shape is [d[0], ..., d[axis-1], d[axis], ..., d[rank-1]], 
+    the shape of Mean and InvStdDev is [d[0], ..., d[axis-1], 1, ..., 1]. Y and X have the same shape.
 
-    input_data, weight, bias = values
-    eps = op.attributes.get('epsilon', 1e-5)
+    Version
+    This version of the operator has been available since version 17 of the default ONNX operator set.
+
+    Attributes
+        axis : int (default is -1)
+            The first normalization dimension. If rank(X) is r, axis' allowed range is [-r, r]. 
+            Negative value means counting dimensions from the back.
+
+        epsilon : float (default is 1e-05)
+            The epsilon value to use to avoid division by zero.
+
+        stash_type : int (default is 1)
+            Type of Mean and InvStdDev. 
+            This also specifies stage one's computation precision.
+
+    Inputs (2 - 3)
+        X : T
+            Tensor to be normalized.
+        
+        Scale : T
+            Scale tensor.
+        
+        B (optional) : T
+            Bias tensor.
+    
+    Outputs (1 - 3)
+        Y : T
+            Normalized tensor.
+    
+        Mean (optional) : U
+            Saved mean used during training to speed up gradient computation
+        
+        InvStdDev (optional) : U
+            Saved inverse standard deviation used during training to speed up gradient computation.
+
+    """
+    ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=2, max_num_of_input=3)
+    values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
+
+    x, weight = values[0], values[1]
+    if len(values) == 3: bias = values[-1]
+    else: bias = None
+
+    eps  = op.attributes.get('epsilon', 1e-5)
+    axis = op.attributes.get('axis', -1)
+
+    if axis != -1 and axis != x.ndim - 1:
+        raise ValueError('Unsupported Layernorm axis. We will implement it soon.')
+    
     normalized_shape = weight.shape
-
-    output = F.layer_norm(input_data, normalized_shape, weight, bias, eps)
+    output = F.layer_norm(x, normalized_shape, weight, bias, eps)
     return output
 
 
+def skipLayerNormPlugin_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
+    """
+    User should check this: http://nvidia.zhidx.com/content-6-1543-1.html
+    and this: https://github.com/microsoft/onnxruntime/blob/rel-1.13.1/docs/ContribOperators.md
+
+    Skip Layernorm Plugin is one of Onnx Contrib Operators.
+    It is supported by TensorRT, Openvino and Onnxruntime.
+
+    com.microsoft.SkipLayerNormalization
+        Skip and Layer Normalization Fusion
+
+    Version
+        This version of the operator has been available since version 1 of the 'com.microsoft' operator set.
+
+    Attributes
+        epsilon : float
+            The epsilon value to use to avoid division by zero.
+
+    Inputs (3 - 5)
+        input : T
+            3D input tensor with shape (batch_size, sequence_length, hidden_size)
+
+        skip : T
+            3D skip tensor with shape (batch_size, sequence_length, hidden_size)
+
+        gamma : T
+            1D input tensor with shape (hidden_size)
+
+        beta (optional) : T
+            1D skip tensor with shape (hidden_size)
+
+        bias (optional) : T
+            1D bias tensor with shape (hidden_size)
+
+    Outputs (1 - 3)
+        output : T
+            3D output tensor with shape (batch_size, sequence_length, hidden_size)
+
+        mean (optional) : U
+            Saved mean used during training to speed up gradient computation
+
+        inv_std_var (optional) : U
+            Saved inverse standard variance used during training to speed up gradient computation.
+    """
+    ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=3, max_num_of_input=4)
+    values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
+
+    x, skip, gamma = values[0], values[1], values[2]
+    print(x.shape, skip.shape)
+    if len(values) >= 4: bias = values[3]
+    else: bias = None
+
+    eps  = op.attributes.get('epsilon', 1e-5)
+    axis = op.attributes.get('axis', -1)
+
+    if axis != -1 and axis != x.ndim - 1:
+        raise ValueError('Unsupported Layernorm axis. We will implement it soon.')
+    
+    normalized_shape = gamma.shape
+    output = F.layer_norm(x + skip, normalized_shape, gamma, bias, eps)
+    return output
+    
+
 def Pad_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
+    """
+    Given a tensor containing the data to be padded (data), 
+        a tensor containing the number of start and end pad values for axis (pads), 
+        (optionally) a mode, and (optionally) constant_value, a padded tensor (output) is generated.
+
+    The three supported modes are (similar to corresponding modes supported by numpy.pad):
+
+        constant(default) - pads with a given constant value as specified by constant_value 
+            (which defaults to 0, empty string, or False)
+
+        reflect - pads with the reflection of the vector mirrored on the first and last values of the vector along each axis
+
+        edge - pads with the edge values of array
+
+    Version
+        This version of the operator has been available since version 18 of the default ONNX operator set.
+
+        Other versions of this operator: 1, 2, 11, 13
+
+    Attributes
+        mode : string (default is constant)
+        Supported modes: `constant`(default), `reflect`, `edge`
+    
+    Inputs (2 - 4)
+        data (differentiable) : T
+            Input tensor.
+    
+        pads (non-differentiable) : tensor(int64)
+            Tensor of integers indicating the number of padding elements to add or remove 
+            (if negative) at the beginning and end of each axis. For 2D input tensor, it is the number of pixels. 
+            `pads` should be a 1D tensor of shape [2 * num_axes] where `num_axes` refers to the number of elements 
+            in the `axes` input or the input rank if `axes` are not provided explicitly. 
+            
+            `pads` format should be: [x1_begin, x2_begin, ..., x1_end, x2_end,...], 
+            where xi_begin is the number of pad values added at the beginning of 
+            axis `axes[i]` and xi_end, the number of pad values added at the end of axis `axes[i]`.
+    
+        constant_value (optional, non-differentiable) : T
+            (Optional) A scalar value to be used if the mode chosen is `constant` (by default it is 0, empty string or False).
+        
+        axes (optional, non-differentiable) : Tind
+            1-D tensor of axes that `pads` apply to. Negative value means counting dimensions from the back. 
+            Accepted range is [-r, r-1] where r = rank(data). Behavior is undefined if an axis is repeated. 
+            If not provided, all axes are assumed (`[0, 1, ..., input_rank-1]`).
+    
+    Outputs
+        output (differentiable) : T
+            Tensor after padding.
+
+    """
+    values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
+
     mode = op.attributes.get('mode', 'constant')
-    input_data = values[0]
-    pads = values[1] if len(values) > 1 else op.attributes['pads']
-    if isinstance(pads, torch.Tensor):
-        assert pads.device.type == 'cpu', 'Oops'
-        pads = pads.tolist()
+    value, pads = values[0], values[1]
+    if len(values) > 3: raise ValueError('Unsupported pad version, except at most 2 input variable.')
+
+    pads = pads.tolist()
     pads = convert_onnx_pads_to_torch(pads)
 
     if mode == 'constant':
-        constant_value = values[-1] if len(values) == 3 else 0
-        output = F.pad(input_data, pads, mode, constant_value)
+        # default value is 0
+        if len(values) == 3 and values[-1] is None:
+            constant_value = 0
+        else: constant_value = values[-1].item() if len(values) == 3 else 0
+        output = F.pad(value, pads, mode, constant_value)
     elif mode == 'reflect':
-        output = input_data
+        output = value
         while len(pads) > 4:
-            output = F.pad(input_data, pads[-4:], mode)
+            output = F.pad(value, pads[-4:], mode)
             pads   = pads[: -4]
-        output = F.pad(input_data, pads, mode)
+        output = F.pad(value, pads, mode)
     elif mode == 'edge':
-        output = F.pad(input_data, pads, 'replicate')
+        output = F.pad(value, pads, 'replicate')
     else:
         raise TypeError(f'Unsupported mode {mode} in Pad op')
     return output
@@ -1924,8 +2380,8 @@ def Log_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
 
 
 def Mod_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
-    ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=2, max_num_of_input=2)
+    values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
     fmod = op.attributes.get('fmod', 0)
     if values[0].dtype in {torch.float, torch.float16, torch.float32, torch.float64}:
         assert fmod, 'fmod must equals to 1 when operands are floats'
@@ -1937,7 +2393,6 @@ def Mod_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
 
 
 def Softplus_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
-    ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op, values=values)
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
     input_data = values[0]
     output = torch.log(torch.exp(input_data) + 1)
@@ -1952,9 +2407,11 @@ def Floor_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCo
 
 def RoiAlign_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
     from torchvision.ops import roi_align as torch_roi_align
+    values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
 
-    input_data = values[0]
+    value = values[0]
     rois = values[1]
+    rois = rois.to(value.device)
 
     # TODO: batch_indices and mode may be used in the future
     # batch_indices = input_value[2]
@@ -1977,15 +2434,14 @@ def RoiAlign_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacken
 
     output_size = (output_height, output_width)
     output = torch_roi_align(
-        input_data, boxes, output_size, spatial_scale, sampling_ratio)
+        value, boxes, output_size, spatial_scale, sampling_ratio)
     return output
 
 
 def MMCVRoiAlign_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
     from mmcv.ops import roi_align as mmcv_roi_align
-
-    # ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=2, max_num_of_input=2)
+    values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
 
     data, rois = values
     rois = FORCE_CONVERT_DEVICE(rois, device=data.device)
@@ -2008,6 +2464,7 @@ def MMCVRoiAlign_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBa
 
 
 def SpaceToDepth_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
+    values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
     # SubpixelDown in caffe
     input_data = values[0]
     downsample = op.attributes.get('blocksize', 1)
@@ -2019,6 +2476,7 @@ def SpaceToDepth_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBa
 
 
 def DepthToSpace_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
+    values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
     # SubpixelUp in caffe
     input_data = values[0]
     upsample = op.attributes.get('blocksize', 1)
@@ -2032,6 +2490,7 @@ def DepthToSpace_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBa
 
 
 def Scale_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
+    values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
     # if just one bottom is given, scale is a learned parameter
     assert len(values) >= 2
     input_data = values[0]
@@ -2074,6 +2533,7 @@ def Tan_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
     return output
 
 def Pow_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
+    values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
     input_data = values[0]
     power = op.attributes.get('power', 1)
     scale = op.attributes.get('scale', 1)
@@ -2085,27 +2545,6 @@ def Pow_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
 
     output = torch.pow(input_data * scale + shift, power)
     return output
-
-
-def Crop_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
-    logger.error('Not support Crop op yet.')
-    exit(-1)
-    pass
-    # TODO
-    '''
-    ! Not implemented yet
-    input_data = input_value[0]
-    shape = input_value[1].shape
-
-    crop_param = op.attributes.get('crop_param', None)
-    axis = crop_param.axis
-
-    offset = crop_param.offset
-
-    assert axis == len(shape) - len(offset)
-
-    output =
-    '''
 
 
 def ChannelShuffle_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
@@ -2121,6 +2560,7 @@ def ChannelShuffle_forward(op: Operation, values: List[torch.Tensor], ctx: Torch
 
 
 def InstanceNormalization_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
+    values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
     num_features = op.attributes.get('num_features', 1)
     eps = op.attributes.get('eps', 1e-5)
     affine = op.attributes.get('affine', False)
@@ -2177,9 +2617,55 @@ def CaffeArgMax_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBac
     '''
 
 
-def Grid_sampler_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    # ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
+def GridSampler_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
+    """
+    Given an input and a flow-field grid, computes the output using input values and pixel locations from grid. 
+    Currently, only spatial (4-D) inputs are supported. 
+    For input with shape (N, C, H, W) and grid with shape (N, H_out, W_out, 2), 
+    the output will have shape (N, C, H_out, W_out). 
+    For each output location output[N, C, H_out, W_out], 
+    the size-2 vector grid[N, H_out, W_out] specifies input pixel locations x and y, 
+    which are used to interpolate the output value output[N, C, H_out, W_out].
+
+    The GridSample operator is often used in doing grid generator and sampler in the Spatial Transformer Networks. 
+    See also in torch.nn.functional.grid_sample.
+
+    Attributes
+        align_corners : int (default is 0)
+            If align_corners=1, the extrema (-1 and 1) are considered as referring to the center points of the input's corner pixels. 
+            If align_corners=0, they are instead considered as referring to the corner points of the input's corner pixels,
+            making the sampling more resolution agnostic.
+
+        mode : string (default is bilinear)
+            Three interpolation modes: bilinear (default), nearest and bicubic.
+    
+        padding_mode : string (default is zeros)
+            Support padding modes for outside grid values: `zeros`(default), `border`, `reflection`. 
+            zeros: use 0 for out-of-bound grid locations, border: use border values for out-of-bound grid locations, 
+            reflection: use values at locations reflected by the border for out-of-bound grid locations.
+            If index 0 represents the margin pixel, the reflected value at index -1 will be the same as the value at index 1. 
+            For location far away from the border, it will keep being reflected until becoming in bound. 
+            If pixel location x = -3.5 reflects by border -1 and becomes x' = 1.5, then reflects by border 1 and becomes x'' = 0.5.
+    
+    Inputs
+        X (differentiable) : T1
+            4-D tensor of shape (N, C, H, W), where N is the batch size, C is the numbers of channels, 
+            H and W are the height and width of the input data.
+        
+        grid (non-differentiable) : T1
+            Input offset, 4-D tensor of shape (N, H_out, W_out, 2), 
+            where H_out and W_out are the height and width of grid and output, 
+            Grid specifies the sampling pixel locations normalized by the input spatial dimensions. Therefore,
+            it should have most values in the range of [-1, 1]. 
+            If grid has values outside the range of [-1, 1], 
+            the corresponding outputs will be handled as defined by padding_mode.
+    
+    Outputs
+        Y (differentiable) : T2
+            4-D tensor of shape (N, C, H_out, W_out).
+    """
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=2, max_num_of_input=2)
+    values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
     # domain is mmcv
     value, grid = values
     output = F.grid_sample(value, grid, align_corners=False)
@@ -2187,21 +2673,53 @@ def Grid_sampler_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBa
 
 
 def Not_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
     [value] = values
     return ~value
 
 
 def HardSigmoid_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
+    """
+    HardSigmoid takes one input data (Tensor) and produces one output data (Tensor) where the HardSigmoid function, 
+    y = max(0, min(1, alpha * x + beta)), is applied to the tensor elementwise.
+
+    Attributes
+        alpha : float (default is 0.2)
+            Value of alpha.
+    
+        beta : float (default is 0.5)
+            Value of beta.
+    
+    Inputs
+        X (differentiable) : T
+            Input tensor
+    
+    Outputs
+        Y (differentiable) : T
+            Output tensor
+    """
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
+    alpha = GET_ATTRIBUTE_FROM_OPERATION(op, 'alpha', default=0.2)
+    beta  = GET_ATTRIBUTE_FROM_OPERATION(op, 'beta', default=0.5)
     [value] = values
-    return F.hardsigmoid(value)
+    value = alpha * value + beta
+    return torch.clip(value, 0, 1)
 
 
 def HardSwish_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
+    """
+    HardSwish takes one input data (Tensor) and produces one output data (Tensor) where the HardSwish function, 
+        y = x * max(0, min(1, alpha * x + beta)) = x * HardSigmoid<alpha, beta>(x), 
+        where alpha = 1/6 and beta = 0.5, is applied to the tensor elementwise.
+
+    Inputs
+        X (differentiable) : T
+            Input tensor
+    
+    Outputs
+        Y (differentiable) : T
+        Output tensor
+    """
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
     [value] = values
     return F.hardswish(value)
@@ -2328,6 +2846,7 @@ def GRU_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
     Constrain seq_lens to integer tensor.
     """
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=3, max_num_of_input=6)
+    values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
     # first 3 are mandatory input
     x, w, r   = values[: 3]
     b         = GET_VALUE_FROM_INPUTS(values, 3)
@@ -2603,6 +3122,7 @@ def LSTM_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
             It has shape `[num_directions, batch_size, hidden_size]`.
     """
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=3, max_num_of_input=8)
+    values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
     # first 3 are mandatory input
     x, w, r   = values[: 3]
     b         = GET_VALUE_FROM_INPUTS(values, 3)
@@ -2701,8 +3221,8 @@ def LSTM_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
             device=x.device, dtype=torch.float32)
 
     result = _VF.lstm(
-        x,                                       # x
-        (initial_h, initial_c),                  # initial hidden state
+        x.contiguous(),                                   # x
+        (initial_h.contiguous(), initial_c.contiguous()), # initial hidden state
         op._detail[LSTM_FLATTEN_WEIGHT_ATTRIB],  # flatten weights
         has_bias,                                # has bias
         1,                                       # num of layer
@@ -2765,7 +3285,6 @@ def Sigmoid_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackend
     Returns:
         torch.Tensor: [description]
     """
-    ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
     return torch.sigmoid(values[0])
 
@@ -2776,7 +3295,6 @@ def PPQDeviceSwitch_forward(op: Operation, values: List[torch.Tensor], ctx: Torc
 
 
 def Identity_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
     return values[0]
 
@@ -2836,6 +3354,7 @@ def Onehot_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendC
     """
     # implementation from https://github.com/ToriML/onnx2pytorch/blob/master/onnx2pytorch/operations/onehot.py
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=3, max_num_of_input=3)
+    values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
     axis = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='axis', default=-1)
     indices, depth, values = values
 
@@ -2868,14 +3387,12 @@ def Reciprocal_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBack
 
     Constrain input and output types to float tensors.
     """
-    ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
     [x] = values
     return 1 / x
 
 
 def LogSoftmax_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
  
     x = Softmax_forward(op=op, values=values, ctx=ctx, kwargs=kwargs)
@@ -2998,10 +3515,13 @@ def Sum_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
     Returns:
         torch.Tensor: _description_
     """
-    ASSERT_ALL_TENSORS_AT_SAME_DEVICE(op=op, values=values)
-    output = torch.zeros_like(values[0])
+    if op.platform != TargetPlatform.SOI:
+        target_device = ctx.executing_device
+    else: target_device = 'cpu'
+
+    output = torch.zeros_like(values[0]).to(target_device)
     for value in values:
-        output += value
+        output += value.to(target_device)
     return output
 
 
@@ -3070,12 +3590,53 @@ def Erf_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
     return torch.erf(x) # may require a higher version pytorch
 
 
+def PPQBiasFusedMatMul_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
+    """
+    PPQ Special Edition of MatMul
+        Matrix product that behaves like numpy.matmul: 
+        https://docs.scipy.org/doc/numpy-1.13.0/reference/generated/numpy.matmul.html
+
+    Version
+        This version of the operator has been available since version 13 of the default ONNX operator set.
+
+        Other versions of this operator: 1, 9
+
+    Inputs
+        A (differentiable) : T
+            N-dimensional matrix A
+    
+        B (differentiable) : T
+            N-dimensional matrix B
+            
+        C (Optional) (differentiable) : T
+            Bias Tensor Of MatMul
+    
+    Outputs
+        Y (differentiable) : T
+            Matrix multiply results from A * B
+
+    Args:
+        op (Operation): _description_
+        values (List[torch.Tensor]): _description_
+        ctx (TorchBackendContext, optional): _description_. Defaults to None.
+
+    Returns:
+        torch.Tensor: _description_
+    """
+    ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=2, max_num_of_input=3)
+    values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
+    output = torch.matmul(values[0], values[1])
+    if len(values) == 3: output += values[-1]
+    return output
+
+
 DEFAULT_BACKEND_TABLE = {
     'Abs': Abs_forward,
     'AdaptiveAvgPool2d': AdaptiveAvgPool2d_forward,
     'And':And_forward,
     'Add': Add_forward,
     'ArgMax': ArgMax_forward,
+    'Attention': Attention_forward,
     'AveragePool': AveragePool_forward,
     'BatchNormalization': BatchNormalization_forward,
     'Cast': Cast_forward,
@@ -3096,11 +3657,12 @@ DEFAULT_BACKEND_TABLE = {
     'GatherND': GatherND_forward,
     'Gelu': Gelu_forward,
     'Gemm': Gemm_forward,
-    'grid_sampler': Grid_sampler_forward,
+    'grid_sampler': GridSampler_forward,
     'GlobalAveragePool': AveragePool_forward,
     'GlobalMaxPool': MaxPool2d_forward,
     'Greater': Greater_forward,
-    'LayerNorm': LayerNorm_forward,
+    'LayerNorm': LayerNorm_forward, # mmdepoly op
+    'LayerNormalization': LayerNorm_forward,
     'LeakyRelu': LeakyRelu_forward,
     'Less': Less_forward,
     'LogSoftmax': LogSoftmax_forward,
@@ -3114,6 +3676,7 @@ DEFAULT_BACKEND_TABLE = {
     'NonZero': NonZero_forward,
     'Not': Not_forward,
     'Pad': Pad_forward,
+    'PPQBiasFusedMatMul': PPQBiasFusedMatMul_forward,
     'PRelu': PRelu_forward,
     'Range': Range_forward,
     'ReduceL2': ReduceL2_forward,
@@ -3129,6 +3692,7 @@ DEFAULT_BACKEND_TABLE = {
     'Sigmoid': UnaryEltwise_forward,
     'Sin': Sin_forward,
     'Slice': Slice_forward,
+    'skipLayerNormPlugin': skipLayerNormPlugin_forward,
     'Softmax': Softmax_forward,
     'Softplus': Softplus_forward,
     'Split': Split_forward,
@@ -3150,7 +3714,6 @@ DEFAULT_BACKEND_TABLE = {
     'Tanh': Tanh_forward,
     'Tan': Tan_forward,
     'Pow': Pow_forward,
-    'Crop': Crop_forward,  # caffe op
     'ChannelShuffle': ChannelShuffle_forward,  # caffe op
     'InstanceNormalization': InstanceNormalization_forward,
     'Parameter': Parameter_forward,  # caffe op

@@ -1,7 +1,7 @@
 # ------------------------------------------------------------
 # PPQ 最佳实践示例工程，在这个工程中，我们将向你展示如何充分调动 PPQ 的各项功能
 # ------------------------------------------------------------
-
+import torch
 from ppq import *
 from ppq.api import *
 import torchvision
@@ -55,8 +55,9 @@ for op_name, _ in sensitivity[: 10]:
 # 这一过程需要你手动调整 QS 中的校准算法，需要反复执行和对比
 # 在这里我们只推荐你更改激活值的校准算法，对于参数而言
 # 在 INT8 的量化场景中，minmax 往往都是最好的校准策略
+# 在这个场景下，不能使用 isotone 策略
 # ------------------------------------------------------------
-for calib_algo in {'minmax', 'percentile', 'kl', 'mse', 'isotone'}:
+for calib_algo in {'minmax', 'percentile', 'kl', 'mse'}:
     QS.quantize_activation_setting.calib_algorithm = calib_algo
 
     with ENABLE_CUDA_KERNEL():

@@ -14,22 +14,21 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Dict
+import json
+import os
+import struct
+from typing import List
 
-import torch
-from ppq.core import (PPQ_CONFIG, ChannelwiseTensorQuantizationConfig,
-                      DataType, OperationMeta, QuantizationProperty,
-                      QuantizationStates, TensorMeta, TensorQuantizationConfig,
-                      convert_any_to_torch_tensor)
-from ppq.IR import BaseGraph
-from ppq.IR.morph import GraphDeviceSwitcher
-from ppq.IR.quantize import QuantableOperation, QuantableVariable
-from ppq.utils.round import ppq_tensor_round
+from ppq.core import (NetworkFramework, QuantizationPolicy,
+                      QuantizationProperty, ppq_info, ppq_warning)
+from ppq.IR import BaseGraph, GraphExporter
+from ppq.IR.quantize import QuantableOperation
 
-from .onnxruntime_exporter import ONNXRUNTIMExporter
+from .caffe_exporter import CaffeExporter
+from .onnxruntime_exporter import OnnxExporter, ONNXRUNTIMExporter
 
 
-class TensorRTExporter(ONNXRUNTIMExporter):
+class TensorRTExporter_QDQ(ONNXRUNTIMExporter):
     """
     TensorRT PPQ 0.6.4 以来新加入的功能
     
@@ -45,214 +44,97 @@ class TensorRTExporter(ONNXRUNTIMExporter):
     Args:
         ONNXRUNTIMExporter (_type_): _description_
     """
-    def insert_quant_dequant_on_variable(
-        self, graph: BaseGraph, var: QuantableVariable, op: QuantableOperation,
-        config: TensorQuantizationConfig) -> None:
-        """Insert Quant & Dequant Operation to graph This insertion will
-        strictly follows tensorRT format requirement.
-
-        Inserted Quant & Dequant op will just between upstream variable and downstream operation,
-
-        Example 1, Insert quant & dequant between var1 and op1:
-
-        Before insertion:
-            var1 --> op1
-
-        After insertion:
-            var1 --> quant --> generated_var --> dequant --> generated_var --> op1
-
-        Args:
-            graph (BaseGraph): PPQ IR graph.
-            var (Variable): upstream variable.
-            config (TensorQuantizationConfig, optional): quantization config.
-            op (Operation, optional): downstream operation.
-        """
-        meta = var.meta
-
-        scale  = convert_any_to_torch_tensor(config.scale, dtype=torch.float32)
-        offset = ppq_tensor_round(config.offset).type(torch.int8)
-
-        qt_op = graph.create_operation(op_type='QuantizeLinear', attributes={})
-        dq_op = graph.create_operation(op_type='DequantizeLinear', attributes={})
-
-        graph.insert_op_between_var_and_op(dq_op, up_var=var, down_op=op)
-        graph.insert_op_between_var_and_op(qt_op, up_var=var, down_op=dq_op)
-
-        graph.create_link_with_op(graph.create_variable(value=scale, is_parameter=True), upstream_op=None, downstream_op=qt_op)
-        graph.create_link_with_op(graph.create_variable(value=offset, is_parameter=True), upstream_op=None, downstream_op=qt_op)
-        graph.create_link_with_op(graph.create_variable(value=scale, is_parameter=True), upstream_op=None, downstream_op=dq_op)
-        graph.create_link_with_op(graph.create_variable(value=offset, is_parameter=True), upstream_op=None, downstream_op=dq_op)
-
-        if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
-            assert isinstance(config, ChannelwiseTensorQuantizationConfig)
-            qt_op.attributes['axis'] = config.channel_axis
-            dq_op.attributes['axis'] = config.channel_axis
-
-        # create meta data for qt_op, dq_op
-        qt_meta = OperationMeta(
-            input_metas    = [TensorMeta(dtype=DataType.FP32, shape=meta.shape),
-                              TensorMeta(dtype=DataType.FP32, shape=config.scale.shape),
-                              TensorMeta(dtype=DataType.INT8, shape=config.offset.shape)],
-            output_metas   = [TensorMeta(dtype=DataType.INT8, shape=meta.shape)],
-            operation_name = qt_op.name, operation_type=qt_op.type, executing_order=-1)
-        dq_meta = OperationMeta(
-            input_metas    = [TensorMeta(dtype=DataType.INT8, shape=meta.shape),
-                              TensorMeta(dtype=DataType.FP32, shape=config.scale.shape),
-                              TensorMeta(dtype=DataType.INT8, shape=config.offset.shape)],
-            output_metas   = [TensorMeta(dtype=DataType.FP32, shape=meta.shape)],
-            operation_name = dq_op.name, operation_type=dq_op.type, executing_order=-1)
-
-        qt_op.meta_data = qt_meta
-        dq_op.meta_data = dq_meta
-
-    def prepare_graph(self, graph: BaseGraph) -> BaseGraph:
-        """TensorRT Demands a custimized QAT model format as it input. With
-        this particular format, we only need export input quant config from
-        ppq, and only a part of operations is required  to dump its quant
-        config.
-
-        Which are:
-            _DEFAULT_QUANT_MAP = [_quant_entry(torch.nn, "Conv1d", quant_nn.QuantConv1d),
-                      _quant_entry(torch.nn, "Conv2d", quant_nn.QuantConv2d),
-                      _quant_entry(torch.nn, "Conv3d", quant_nn.QuantConv3d),
-                      _quant_entry(torch.nn, "ConvTranspose1d", quant_nn.QuantConvTranspose1d),
-                      _quant_entry(torch.nn, "ConvTranspose2d", quant_nn.QuantConvTranspose2d),
-                      _quant_entry(torch.nn, "ConvTranspose3d", quant_nn.QuantConvTranspose3d),
-                      _quant_entry(torch.nn, "Linear", quant_nn.QuantLinear),
-                      _quant_entry(torch.nn, "LSTM", quant_nn.QuantLSTM),
-                      _quant_entry(torch.nn, "LSTMCell", quant_nn.QuantLSTMCell),
-                      _quant_entry(torch.nn, "AvgPool1d", quant_nn.QuantAvgPool1d),
-                      _quant_entry(torch.nn, "AvgPool2d", quant_nn.QuantAvgPool2d),
-                      _quant_entry(torch.nn, "AvgPool3d", quant_nn.QuantAvgPool3d),
-                      _quant_entry(torch.nn, "AdaptiveAvgPool1d", quant_nn.QuantAdaptiveAvgPool1d),
-                      _quant_entry(torch.nn, "AdaptiveAvgPool2d", quant_nn.QuantAdaptiveAvgPool2d),
-                      _quant_entry(torch.nn, "AdaptiveAvgPool3d", quant_nn.QuantAdaptiveAvgPool3d),]
-
-        Reference:
-        https://github.com/NVIDIA/TensorRT/blob/main/tools/pytorch-quantization/pytorch_quantization/quant_modules.py
-
-        ATTENTION: MUST USE TENSORRT QUANTIZER TO GENERATE A TENSORRT MODEL.
-        """
-        self.convert_operation_from_opset11_to_opset13(graph)
-
-        # remove switchers.
-        if not PPQ_CONFIG.EXPORT_DEVICE_SWITCHER:
-            processor = GraphDeviceSwitcher(graph)
-            processor.remove_switcher()
-
-        # find all quantable operations:
-        for operation in [op for op in graph.operations.values()]:
-            if not isinstance(operation, QuantableOperation): continue
-            if operation.type in {'Conv', 'Gemm', 'ConvTranspose', 'MatMul'}:
-                # for Conv, Gemm, ConvTranspose, TensorRT wants their weight to be quantized,
-                # however bias remains fp32.
-                assert len(operation.config.input_quantization_config) >= 2, (
-                    f'Oops seems operation {operation.name} has less than 2 input.')
-
-                i_config, w_config = operation.config.input_quantization_config[: 2]
-                i_var, w_var       = operation.inputs[: 2]
-
-                if QuantizationStates.is_activated(i_config.state):
-                    self.insert_quant_dequant_on_variable(graph=graph, var=i_var, config=i_config, op=operation)
-                self.insert_quant_dequant_on_variable(graph=graph, var=w_var, config=w_config, op=operation)
-
-            elif operation.type in {'AveragePool', 'GlobalAveragePool'}:
-                # for Average pool, tensorRT requires their input quant config.
-
-                assert len(operation.config.input_quantization_config) >= 1, (
-                    f'Oops seems operation {operation.name} has less than 1 input.')
-                i_config = operation.config.input_quantization_config[0]
-                i_var    = operation.inputs[0]
-
-                if QuantizationStates.is_activated(i_config.state):
-                    self.insert_quant_dequant_on_variable(graph=graph, var=i_var, config=i_config, op=operation)
-
-            else:
-                super().convert_operation(
-                    graph=graph, op=operation, 
-                    process_activation=True, 
-                    process_parameter=True, 
-                    quant_param_to_int=False)
-
-        return graph
 
     def export(self, file_path: str, graph: BaseGraph,
-               config_path: str = None, input_shapes: Dict[str, list] = None) -> None:
+               save_as_external_data: bool = False) -> None:
         # step 1, export onnx file.
-        super().export(file_path=file_path, graph=graph, config_path=None)
+        super().export(
+            file_path=file_path, graph=graph, quantized_param=False,
+            config_path=None, save_as_external_data=save_as_external_data)
 
-        # step 2, convert onnx file to tensorRT engine.
-        try:
-            import tensorrt as trt
-            TRT_LOGGER = trt.Logger(trt.Logger.INFO)
-        except Exception as e:
-            raise Exception('TensorRT is not successfully loaded, Exporter can not create tensorRT engine directly, '
-                            f'a model named {file_path} has been created so that you can send it to tensorRT manually.')
-        network_flags = 1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)
-        network_flags = network_flags | (1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_PRECISION))
 
-        # step 3, build profile input shape
-        # Notice that for each input you should give 3 shapes: (min shape), (opt shape), (max shape)
-        if input_shapes is None:
-            input_shapes = {input_var.name: [input_var.meta.shape, input_var.meta.shape, input_var.meta.shape]
-                            for input_var in graph.inputs.values()}
+class TensorRTExporter_JSON(GraphExporter):
+    """
+    使用该导出器导出符合 TensorRT 格式要求的量化模型。
+    
+    PPQ 可以将 TQC 中的量化信息导出到 json，并遵循 TensorRT 支持的格式。
+    用户可以通过 Json 文件将图中所有 variable 的 min, max 传递给 TensorRT
+    所有未写入 min, max 的变量将保持 fp32(fp16) 精度执行。
+    """
+    def export_quantization_config(self, config_path: str, graph: BaseGraph):
+        act_quant_info = {}
+        for op in graph.topological_sort():
+            if not isinstance(op, QuantableOperation): continue
+            if op.type in {"Gather", "Unsqueeze", "Concat", "Reshape", "Squeeze"}: continue
 
-        with trt.Builder(TRT_LOGGER) as builder, builder.create_network(flags=network_flags) as network, trt.OnnxParser(network, TRT_LOGGER) as parser:
+            for cfg, var in op.config_with_variable:
+                if not cfg.can_export(export_overlapped=True): continue
+                if var.is_parameter: continue
 
-            with open(file_path, 'rb') as model:
-                if not parser.parse(model.read()):
-                    print ('ERROR: Failed to parse the ONNX file.')
-                    for error in range(parser.num_errors):
-                        print (parser.get_error(error))
-                    return None
+                if cfg.policy != QuantizationPolicy(
+                    QuantizationProperty.LINEAR + 
+                    QuantizationProperty.SYMMETRICAL + 
+                    QuantizationProperty.PER_TENSOR):
+                    ppq_warning(f'Can not export quantization config on variable {var.name}, '
+                                'Quantization Policy is invalid.')
+                    continue
 
-            config = builder.create_builder_config()
-            config.max_workspace_size = 8 << 30
-            config.flags = config.flags | 1 << int(trt.BuilderFlag.INT8)
+                if cfg.num_of_bits != 8 or cfg.quant_max != 127 or cfg.quant_min != -128:
+                    ppq_warning(f'Can not export quantization config on variable {var.name}, '
+                                'Tensor Quantization Config has unexpected setting.')
+                    continue
 
-            profile = builder.create_optimization_profile()
+                act_quant_info[var.name] = cfg.scale.item() * 127
 
-            # build TensorRT Profile
-            for idx in range(network.num_inputs):
-                inp = network.get_input(idx)
+        json_qparams_str = json.dumps({'act_quant_info': act_quant_info}, indent=4)
+        with open(config_path, "w") as json_file:
+            json_file.write(json_qparams_str)
 
-                if inp.is_shape_tensor:
-                    if inp.name in input_shapes:
-                        shapes = input_shapes[inp.name]
-                    else: shapes = None
+    def export_weights(self, graph: BaseGraph, config_path: str = None):
+        topo_order =  graph.topological_sort()
+        weights_list = []
+        for index, op in enumerate(topo_order):
+            if op.type in {"Conv", "Gemm"}:
+                weights_list.extend(op.parameters)
 
-                    if not shapes:
-                        shapes = [(1, ) * inp.shape[0]] * 3
-                        print('Setting shape input to {:}. '
-                              'If this is incorrect, for shape input: {:}, '
-                              'please provide tuples for min, opt, '
-                              'and max shapes'.format(shapes[0], inp.name))
+        weight_file_path = os.path.join(os.path.dirname(config_path), "quantized.wts")
 
-                    if not isinstance(shapes, list) or len(shapes) != 3:
-                        raise ValueError(f'Profiling shape must be a list with exactly 3 shapes(tuples of int), '
-                                         f'while received a {type(shapes)} for input {inp.name}, check your input again.')
+        f = open(weight_file_path, 'w')
+        f.write("{}\n".format(len(weights_list)))
 
-                    min, opt, max = shapes
-                    profile.set_shape_input(inp.name, min, opt, max)
+        for param in weights_list:
+            weight_name = param.name
+            weight_value = param.value.reshape(-1).cpu().numpy()
+            f.write("{} {}".format(weight_name, len(weight_value)))
+            for value in weight_value:
+                f.write(" ")
+                f.write(struct.pack(">f", float(value)).hex())
+            f.write("\n")
+        ppq_info(f'Parameters have been saved to file: {weight_file_path}')
 
-                elif -1 in inp.shape:
-                    if inp.name in input_shapes:
-                        shapes = input_shapes[inp.name]
-                    else: shapes = None
 
-                    if not shapes:
-                        shapes = [(1 if s <= 0 else s for s in inp.shape)] * 3
+    def export(self, file_path: str, graph: BaseGraph, config_path: str = None, input_shapes: List[List[int]] = [[1, 3, 224, 224]]):
+        ppq_info(
+            'You are exporting PPQ Graph to TensorRT(Onnx + Json). \n'
+            'Please Compile the TensorRT INT8 engine manually: \n\n'
+            'from ppq.utils.TensorRTUtil import build_engine \n'
+            "build_engine(onnx_file='Quantized.onnx', int8_scale_file='Quantized.json', engine_file='Quantized.engine', int8=True)\n")
+        if config_path is not None:
+            self.export_quantization_config(config_path, graph)
+            self.export_weights(graph, config_path)
+        _, ext = os.path.splitext(file_path)
+        if ext == '.onnx':
+            exporter = OnnxExporter()
+            exporter.export(file_path=file_path, graph=graph, config_path=None)
+        elif ext in {'.prototxt', '.caffemodel'}:
+            exporter = CaffeExporter()
+            exporter.export(file_path=file_path, graph=graph, config_path=None, input_shapes=input_shapes)
 
-                    min, opt, max = shapes
-                    profile.set_shape(inp.name, min, opt, max)
-
-            config.add_optimization_profile(profile)
-            trt_engine = builder.build_engine(network, config)
-
-            # end for
-
-        # end with
-
-        engine_file = file_path.replace('.onnx', '.engine')
-        with open(engine_file, 'wb') as file:
-            file.write(trt_engine.serialize())
+        # no pre-determined export format, we export according to the
+        # original model format
+        elif graph._built_from == NetworkFramework.CAFFE:
+            exporter = CaffeExporter()
+            exporter.export(file_path=file_path, graph=graph, config_path=None, input_shapes=input_shapes)
+        elif graph._built_from == NetworkFramework.ONNX:
+            exporter = OnnxExporter()
+            exporter.export(file_path=file_path, graph=graph, config_path=None)

@@ -1,15 +1,16 @@
 from math import ceil
 from typing import Callable, Dict, Iterable, List
 
-from ppq.core import (ChannelwiseTensorQuantizationConfig, QuantizationStates,
-                      QuantizationPolicy, QuantizationProperty,
-                      TensorQuantizationConfig, empty_ppq_cache)
-from ppq.executor import BaseGraphExecutor, RuntimeHook
-from ppq.IR import BaseGraph, QuantableOperation
-from ppq.quantization.observer import (CalibrationHook, OperationObserver,
-                                       TensorObserverFactroy, TorchMinMaxObserver,
-                                       TorchHistObserver, TorchMSEObserver)
 import torch
+from ppq.core import (QuantizationPolicy, QuantizationProperty,
+                      QuantizationStates, TensorQuantizationConfig,
+                      empty_ppq_cache, OBSERVER_ISOTONE_OBSERVER_AXIS)
+from ppq.executor import BaseGraphExecutor, RuntimeHook
+from ppq.IR import BaseGraph, QuantableOperation, QuantableVariable
+from ppq.quantization.observer import (CalibrationHook, OperationObserver,
+                                       TensorObserverFactroy,
+                                       TorchHistObserver, TorchMinMaxObserver,
+                                       TorchMSEObserver)
 from tqdm import tqdm
 
 from .base import QuantizationOptimizationPass
@@ -32,7 +33,8 @@ class RuntimeCalibrationPass(QuantizationOptimizationPass):
 
     Runtime Calibration Pass will write estimated scales and offsets to tensor quantization configs, and set their state to ACTIVATED.
 
-    Unlike constant tensors such as weights and biases, variable tensors such as model input, activations (outputs of intermediate layers) and model output cannot be calibrated unless we run a few inference cycles. 
+    Unlike constant tensors such as weights and biases, variable tensors such as model input, 
+    activations (outputs of intermediate layers) and model output cannot be calibrated unless we run a few inference cycles. 
     
     As a result, PPQ Runtime Calibration Pass requires a representative dataset to calibrate them. 
 
@@ -95,20 +97,12 @@ class RuntimeCalibrationPass(QuantizationOptimizationPass):
     This feature requires PPQ > 0.6.5
 
     """
-    def __init__(self, method: str = None, override: bool = False) -> None:
-        """
-        Args:
-            method (str, optional): calibration method, if is not None, will override quantizer's setting.
-                Defaults to None.
-
-            override (bool, optional): whether to override existing quantization configurations.
-        """
-
+    def __init__(self, method: str = None, override: bool = False, calib_steps: int = 32) -> None:
         super().__init__(name='PPQ Runtime Calibration Pass')
         self._method = method
-        self._observers = {}
-        self._collate_fn = None
-        self._calib_steps = None
+        self._observers   = {}
+        self._collate_fn  = None
+        self._calib_steps = calib_steps
         self._override = override
 
     def calibrate(self, desc: str, dataloader: Iterable, executor: BaseGraphExecutor,
@@ -132,19 +126,20 @@ class RuntimeCalibrationPass(QuantizationOptimizationPass):
         graph: BaseGraph,
         dataloader: Iterable,
         executor: BaseGraphExecutor,
-        calib_steps: int,
-        collate_fn: Callable,
+        calib_steps: int = 32,
+        collate_fn: Callable = None,
         **kwargs
     ) -> None:
-        self._collate_fn = collate_fn
-        self._calib_steps = calib_steps
-        assert calib_steps >= 8, 'Insufficient Calibration Detected, to better quantize your network, '\
-            'more calibration steps is required, we strongly recommend you to prepare more calibration data '\
-            'and more calibration steps is preferred here. (at least 8)'
+        if collate_fn is not None: self._collate_fn = collate_fn
+        if calib_steps is not None: self._calib_steps = calib_steps
 
-        assert calib_steps <= 512, 'Calibration steps is too large, ppq is capable for quantizing your network within 8-512 '\
-            'calibration steps. More calibration steps will greatly delay ppq\'s calibration procedure. '\
-            'Reset your calib_steps parameter please.'
+        assert calib_steps >= 8, ('Insufficient Calibration Detected, to get a better quantization performance, '
+            'more calibration steps is required, we strongly recommend you to prepare more calibration data '
+            'and more calibration steps is preferred here. (at least 8)')
+
+        assert calib_steps <= 512, ('Calibration steps is too large, ppq can quantize your network within 8-512 '
+            'calibration steps. More calibration steps will greatly delay ppq\'s calibration procedure. '
+            'Reset your calib_steps parameter please.')
 
         # -------------------------------------------------
         # Override existing quantization configurations
@@ -257,9 +252,9 @@ class PPLDSPTIReCalibrationPass(RuntimeCalibrationPass):
                 input_cfg = operation.config.input_quantization_config[0]
                 sym_input_cfg = TensorQuantizationConfig(
                     policy=QuantizationPolicy(
-                    QuantizationProperty.SYMMETRICAL +
-                    QuantizationProperty.LINEAR +
-                    QuantizationProperty.PER_TENSOR
+                        QuantizationProperty.SYMMETRICAL +
+                        QuantizationProperty.LINEAR +
+                        QuantizationProperty.PER_TENSOR
                     ),
                     rounding=input_cfg.rounding,
                     num_of_bits=input_cfg.num_of_bits,
@@ -283,7 +278,7 @@ class PPLDSPTIReCalibrationPass(RuntimeCalibrationPass):
                 master_operation = downstream_ops[0]
                 master_var = downstream_ops[0].outputs[0]
 
-            master_cfg_per_channel = ChannelwiseTensorQuantizationConfig(
+            master_cfg_per_channel = TensorQuantizationConfig(
                 policy=QuantizationPolicy(
                     QuantizationProperty.SYMMETRICAL +
                     QuantizationProperty.LINEAR +
@@ -325,3 +320,103 @@ class PPLDSPTIReCalibrationPass(RuntimeCalibrationPass):
                     min_val = torch.min(torch.cat(observer._min_val_collector, dim=0)).cpu().item(),
                     max_val = torch.max(torch.cat(observer._max_val_collector, dim=0)).cpu().item(),
                     cfg.detail.update({'range_min': min_val, 'range_max': max_val})
+
+
+class IsotoneCalibrationPass(RuntimeCalibrationPass):
+    """
+    ## Isotone Calibration Pass(保序量化校准过程)
+
+    在神经网络中，一些算子的输出并不需要保证总体的精确性，而只关注于最大最小值所在的位置，
+    例如图像分类网络中，网络的输出通常是一个1000维的向量，用于表达图像属于特定类别的概率。
+    为了保证分类的正确性，我们并不需要这个1000维的向量在量化后是整体准确的，只需要其中的最大值出现在正确的位置上。
+    因此我们希望最大值与次大值之间相差至少半个 scale，并且次大值能够不被截断。
+
+    因此传统的 min-max, percentile, kl 方法在这一情景中并不能得到最高的分类精度，
+    保序量化是为了解决这一问题而设计的，在这一校准过程中，程序将网络输出变量的校准方式改写为 Isotone(保序校准)。
+    默认设置下，该过程只对 softmax 算子的输出进行保序校准。对于其他情况，用户需要手动指定需要进行保序校准的变量名。
+
+    保序量化需要设定一个分类轴，同样地以分类网络为例，其输出形为 [Batch, 1000]。
+    分类操作将在数据的最后一维展开，因此需要设置保序轴为 -1。
+    
+    Algorithm:
+    
+        For softmax or sigmoid activations, usually we just need
+        argmax(softmax(x)) == argmax(softmax(quant(x)))
+
+        Inspired by this Property, Isotone Observer is designed to provide an order-preserving calibration method,
+            which cares only about argmax(x) [or argmin(x)]
+
+        To keep argmax(x) == argmax(quant(x)), we only need to
+            distinguish the largest element and the second largert element with quantization
+
+            let L1 represents the largest element of x,
+            while L2 represents the second largest.
+
+            For Symmetrical Quantization, We want:
+                
+                1. round(L1 / scale) - round(L2 / scale) > 0
+                
+                2. round(L2 / scale) < quant_max
+                
+            Hence that, we will have:
+                
+                1. scale < 2 * (L1 - L2)
+                
+                2. scale > L2 / (self._quant_cfg.quant_max - .5)
+                
+            For Asymmetircal Quantization, We want:
+
+                1. round(L1 / scale) + offset - round(L2 / scale) - offset > 0
+
+                2. round(L2 / scale) + offset < quant_max
+
+            Hence that, we will have:
+                
+                1. scale < 2 * (L1 - L2)
+                
+                2. scale > L2 / (self._quant_cfg.quant_max - offset - .5)
+
+        The best setting of scale, offset can be solved by PPQ Isotone observer.
+        
+        Time Complexity: O(nlogn)
+    """
+    def __init__(self, variables: List[str] = None, axis: int = -1, verbose: bool = True, calib_steps: int = 32) -> None:
+        super().__init__(calib_steps=calib_steps)
+        self.name = "Isotone Calibration Pass"
+        self.variables = variables
+        self.axis      = axis
+        self.verbose   = verbose
+
+    def optimize(self, graph: BaseGraph, **kwargs) -> None:
+        if self.variables is None:
+            for op in graph.operations.values():
+                if op.type == 'Softmax' and isinstance(op, QuantableOperation):
+
+                    # had not been dominated.
+                    if op.output_quant_config[0].dominated_by == op.output_quant_config[0]:
+                        op.output_quant_config[0].state = QuantizationStates.INITIAL
+                        op.output_quant_config[0].observer_algorithm = 'Isotone'
+                        op.output_quant_config[0].detail[OBSERVER_ISOTONE_OBSERVER_AXIS] = op.attributes.get('axis', -1)
+
+                        if self.verbose: 
+                            print(f'Calibration Method of Op {op.name} '
+                                  f'has been changed to Isotone[axis={op.attributes.get("axis", -1)}].')
+
+        else: # self.variables is not None
+            if not isinstance(self.variables, list):
+                raise TypeError('Isotone Calibration Pass needs a list of variable name as its input.')
+            for var in self.variables:
+                if not isinstance(var, str):
+                    raise TypeError('Isotone Calibration Pass needs a list of variable name as its input.')
+                if var not in graph.variables:
+                    raise ValueError(f'Variable {var} not in current graph.')
+                
+                var = graph.variables[var]
+                if isinstance(var, QuantableVariable):
+                    var.source_op_config.state = QuantizationStates.INITIAL
+                    var.source_op_config.observer_algorithm = 'Isotone'
+                    var.source_op_config.detail[OBSERVER_ISOTONE_OBSERVER_AXIS] = self.axis
+                    if self.verbose: print(
+                        f'Calibration Method of Variable {var.name} has been changed to Isotone[axis={self.axis}].')
+
+        super().optimize(graph=graph, **kwargs)

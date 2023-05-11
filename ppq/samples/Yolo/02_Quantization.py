@@ -8,9 +8,9 @@ from PIL import Image
 from ppq import *
 from ppq.api import *
 
-ONNX_PATH        = 'models/yolov6s.onnx'       # 你的模型位置
-ENGINE_PATH      = 'Output/yolov5s6.onnx'  # 生成的 Engine 位置
-CALIBRATION_PATH = 'imgs'                         # 校准数据集
+ONNX_PATH        = 'models/yolov5s6.onnx'      # 你的模型位置
+OUTPUT_PATH      = 'Output'                    # 生成的量化模型的位置
+CALIBRATION_PATH = 'imgs'                      # 校准数据集
 BATCHSIZE        = 1
 EXECUTING_DEVICE = 'cuda'
 # create dataloader
@@ -45,8 +45,16 @@ with ENABLE_CUDA_KERNEL():
         graph=qir, running_device=EXECUTING_DEVICE, 
         dataloader=dataloader, collate_fn=lambda x: x.to(EXECUTING_DEVICE))
 
-    '''
     export_ppq_graph(
         qir, platform=TargetPlatform.TRT_INT8, 
-        graph_save_to=ENGINE_PATH)
-    '''
+        graph_save_to=OUTPUT_PATH.join('/INT8.onnx'), 
+        config_save_to=OUTPUT_PATH.join('/INT8.json'))
+    
+    from ppq.utils.TensorRTUtil import build_engine, Benchmark, Profiling
+    build_engine(
+        onnx_file=OUTPUT_PATH.join('/INT8.onnx'), 
+        engine_file=OUTPUT_PATH.join('/INT8.engine'), int8=True, 
+        int8_scale_file=OUTPUT_PATH.join('/INT8.json'))
+
+    Benchmark(OUTPUT_PATH.join('/INT8.engine'))
+    Profiling(OUTPUT_PATH.join('/INT8.engine'))

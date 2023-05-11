@@ -49,7 +49,9 @@ class MeasureRecorder():
 class MeasurePrinter():
     """Helper class for print top-k record."""
     def __init__(self, data: Dict[str, float], measure: str, label: str = 'Layer',
-                 k: int = None, order: str = 'large_to_small') -> None:
+                 k: int = None, order: str = 'large_to_small', 
+                 percentage: bool = False) -> None:
+
         if order not in {'large_to_small', 'small_to_large', None}:
             raise ValueError('Parameter "order" can only be "large_to_small" or "small_to_large"')
         self.collection = [(name, value) for name, value in data.items()]
@@ -73,6 +75,7 @@ class MeasurePrinter():
         self.max_name_length = max_name_length
         self.measure_str = measure
         self.label = label
+        self.percentage = percentage
 
     def print(self, max_blocks: int = 20):
         print(f'{self.label}{" " * (self.max_name_length - len(self.label))}  | {self.measure_str} ')
@@ -82,6 +85,12 @@ class MeasurePrinter():
                 ppq_warning('MeasurePrinter found an NaN value in your data.')
                 normalized_value = 0
             num_of_blocks = round(normalized_value * max_blocks)
-            print(f'{name}:{" " * (self.max_name_length - len(name))} | '
-                  f'{"█" * num_of_blocks}{" " * (max_blocks - num_of_blocks)} | '
-                  f'{value:.6f}')
+            
+            if not self.percentage:
+                print(f'{name}:{" " * (self.max_name_length - len(name))} | '
+                    f'{"█" * num_of_blocks}{" " * (max_blocks - num_of_blocks)} | '
+                    f'{value:.4f}')
+            else:
+                print(f'{name}:{" " * (self.max_name_length - len(name))} | '
+                    f'{"█" * num_of_blocks}{" " * (max_blocks - num_of_blocks)} | '
+                    f'{value * 100:.3f}%')

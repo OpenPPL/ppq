@@ -44,6 +44,7 @@ class OnnxParser(GraphBuilder):
                 op.outputs.append(graph.variables[var_name])
         return graph
 
+
     def initialize_params(self, graph: BaseGraph, initializer: Dict[str, Any]) -> BaseGraph:
         for var in graph.variables.values():
             if var.name in initializer:
@@ -112,11 +113,13 @@ class OnnxParser(GraphBuilder):
         for non_input_var in graph_initializers: graph.inputs.pop(non_input_var)
         return graph
 
+
     def convert_opsets_to_str(self, opsets: Iterable) -> List[Dict[str, str]]:
         results = []
         for opset in opsets:
             results.append({'domain': opset.domain, 'version': opset.version})
         return results
+
 
     def build(self, file_path: str) -> BaseGraph:
         _rand_seed = 0 # used for name generation.

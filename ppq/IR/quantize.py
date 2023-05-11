@@ -63,8 +63,6 @@ class QuantableOperation(Operation):
         )
 
         self._config            = quantize_config
-        # meta data is a crucial attribute for quantization
-        self._meta              = convert_from.meta_data
         self._dequantized       = False
 
     @ property
@@ -120,7 +118,7 @@ class QuantableOperation(Operation):
                 # convert var.value to torch.Tensor
                 # notice here we set device = None, this conversion will not change var.value.device anyway.
                 # so that we can use var.value.device as a deploy device for stored_value
-                var.stored_value = convert_any_to_torch_tensor(var.value, device='cpu')
+                var.stored_value = convert_any_to_torch_tensor(var.value, device='cpu').clone()
         return self
 
     def dequantize(self, parameter_only: bool = False, expire_device: str = 'cpu'):
@@ -136,9 +134,9 @@ class QuantableOperation(Operation):
                 # so that we can use var.value.device as a deploy device for stored_value
                 stored_value = convert_any_to_torch_tensor(var.value, device=expire_device)
                 var.value = convert_any_to_torch_tensor(var.value, device=None)
-                var.value = convert_any_to_torch_tensor(var.stored_value, device=var.value.device)
+                var.value = convert_any_to_torch_tensor(var.stored_value, device=var.value.device if var.value is not None else None)
                 var.stored_value = stored_value
-            quant_config.state = QuantizationStates.DEQUANTIZED
+            quant_config.state = QuantizationStates.FP32
         self._dequantized = True
         return self
 
@@ -156,7 +154,7 @@ class QuantableOperation(Operation):
                     # so that we can use var.value.device as a deploy device for stored_value
                     stored_value = convert_any_to_torch_tensor(var.value, device=expire_device)
                     var.value = convert_any_to_torch_tensor(var.value, device=None)
-                    var.value = convert_any_to_torch_tensor(var.stored_value, device=var.value.device)
+                    var.value = convert_any_to_torch_tensor(var.stored_value, device=var.value.device if var.value is not None else None)
                     var.stored_value = stored_value
         self._dequantized = False
         return self
@@ -190,7 +188,9 @@ class QuantableVariable(Variable):
             dest_ops  = convert_from.dest_ops.copy(),
             source_op = convert_from.source_op,
             value     = convert_from.value,
-            is_parameter = convert_from.is_parameter)
+            is_parameter = convert_from.is_parameter,
+            shape     = convert_from.shape,
+            dtype     = convert_from.dtype)
         self._fp32_value = None
         if convert_from.value is not None:
             self._fp32_value = convert_any_to_torch_tensor(convert_from.value, device='cpu')
@@ -237,17 +237,14 @@ class QuantableVariable(Variable):
 
     def copy(self, copy_value: bool = False):
         clone = QuantableVariable(super().copy(copy_value))
-        if copy_value: clone._fp32_value = self._fp32_value.clone()
+        if copy_value and self._fp32_value is not None: 
+            clone._fp32_value = self._fp32_value.clone()
         else: clone._fp32_value = self._fp32_value
         return clone
 
 
 class DeviceSwitchOP(Operation):
-    """DeviceSwitch is a PPQ internal operation. This operation is inserted at
-    platform's boundary for transferring data between devices.
-
-    Args:
-        Operation ([type]): [description]
+    """This Class has been removed since PPQ 0.6.6
     """
     def __init__(self, name: str,
                  inputs: List[Variable] = None,
@@ -280,13 +277,7 @@ class QuantableGraph(GraphCommandProcessor):
         if operation_name not in self.graph.operations:
             raise KeyError(f'Operation {operation_name} is not in your graph, Please check your input.')
 
-        if not TargetPlatform.is_quantized_platform(target_platform):
-            raise ValueError(
-                f'You are trying to quantize a operation({operation_name})'\
-                f' to target platform {target_platform}, however it is an non-quantized platform.')
-
         operation = self._graph.operations[operation_name]
-
         quantized_operation = QuantableOperation(
             convert_from=operation,
             quantize_config=quantization_config,
@@ -320,14 +311,14 @@ class QuantableGraph(GraphCommandProcessor):
         if not isinstance(operation, QuantableOperation): return operation
         else: return operation.dequantize()
 
-    def dequantize_graph(self):
+    def dequantize_graph(self, expire_device: str = 'cpu'):
         """一个方便懒人的函数."""
         for operation in self.graph.operations.values():
             if isinstance(operation, QuantableOperation):
-                operation.dequantize()
+                operation.dequantize(expire_device=expire_device)
 
-    def restore_quantize_state(self):
+    def restore_quantize_state(self, expire_device: str = 'cpu'):
         """一个方便懒人的函数."""
         for operation in self.graph.operations.values():
             if isinstance(operation, QuantableOperation):
-                operation.restore_quantize_state()
+                operation.restore_quantize_state(expire_device=expire_device)

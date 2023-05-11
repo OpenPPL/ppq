@@ -75,23 +75,33 @@ class SSDEqualizationSetting():
 
 class ChannelSplitSetting():
     def __init__(self) -> None:
-        # 所有需要分裂的层的名字，Channel Split 会降低网络执行的性能，你必须手动指定那些层要被分裂
-        # Weight Split 和 Channel Split 都是一种以计算时间作为代价，提高量化精度的方法
-        # 这些方法主要适用于 per-tensor 的量化方案
-        # interested layer names on which channel split is desired
-        self.interested_layers = []
-        # 分裂方向 - 可以是向上分裂或者向下分裂，每个层都要给一个哦
-        # search direactions of layers in interested_layers, can be 'down' or 'up', each layer has one.
-        self.search_directions = []
-        # 要分裂多少 channel，数值越高则越多 channel 会被分裂
-        # ratio of newly added channels
-        self.expand_ratio      =  0.1
-        # https://arxiv.org/abs/1901.09504 扩充 channel，为结果不变，需要新旧 channel 数值减半。不要修改此参数
-        # value split ratio
-        self.split_ratio       =  0.5
-        # 是否添加一个小偏移项用来使得量化后的结果尽可能与浮点对齐。
-        # cancel out round effect
-        self.grid_aware        =  True
+        # channel split 优化级别，如果选成 1 则不进行多分支模式匹配，如果选成 2，则进行跨越 add, sub 的多分支模式匹配
+        # 不一定哪一个好，你自己试试
+        # optimization level of layerwise channel split
+        # 1 - single branch channel split(can not cross add, sub)
+        # 2 - multi branch channel split(channel split cross add, sub)
+        # don't know which one is better, try it by yourself.
+        self.opt_level            = 1
+
+        # channel split 迭代次数，试试 1，2，3，10，100
+        # algorithm iteration times, try 1, 2, 3, 10, 100
+        self.iterations           = 10
+
+        # channel split 权重阈值，试试 0.5, 2
+        # 这是个十分重要的属性，所有小于该值的通道不会参与运算
+        # value threshold of channel split, try 0.5 and 2
+        # it is a curical setting of channel split, value below this threshold won't get included in this optimizition.
+        self.value_threshold      = .5 # try 0.5 and 2, it matters.
+
+        # 是否在 channel split 中考虑 bias
+        # whether to equalize bias as well as weight
+        self.including_bias       = False
+        self.bias_multiplier      = 0.5
+
+        # 是否在 channel split 中考虑 activation
+        # whether to equalize activation as well as weight
+        self.including_act        = False
+        self.act_multiplier       = 0.5
 
 
 class BiasCorrectionSetting():
@@ -180,10 +190,6 @@ class EqualizationSetting():
         self.including_act        = False
         self.act_multiplier       = 0.5
 
-        # 暂时没用
-        # for now this is a useless setting.
-        self.self_check           = False
-
 
 class ActivationQuantizationSetting():
     def __init__(self) -> None:
@@ -210,10 +216,6 @@ class ParameterQuantizationSetting():
 
 class QuantizationFusionSetting():
     def __init__(self) -> None:
-        # 一个你必须要启动的 Pass，修复所有算子上的定点错误
-        # This pass is necessary and curicial, fix all quantization errors with your operation.
-        self.refine_quantization = True
-
         # 一个你必须要启动的 Pass，删除无效定点。
         # PPQ 的定点过程与硬件设备一致，每一个算子都会尝试对它的输入和输出进行定点
         # 但在网络当中，当输入已经被上游算子进行了定点，则当前算子无需再对其输入进行定点
@@ -250,7 +252,8 @@ class QuantizationFusionSetting():
         self.align_avgpooling_to     = 'None'
         self.align_elementwise_to    = 'Align to Large'
         self.align_concat_to         = 'Align to Output'
-        self.force_alignment_overlap = False
+        self.align_resize_to         = 'Align to Output'
+        self.force_alignment_overlap = True
 
 
 class LSQSetting():
@@ -310,7 +313,7 @@ class DispatchingTable():
         self.dispatchings = {
             'YOUR OEPRATION NAME' : 'TARGET PLATFORM(INT)',
             'FP32 OPERATION NAME' : TargetPlatform.FP32.value,
-            'SOI OPERATION NAME'  : TargetPlatform.SHAPE_OR_INDEX.value,
+            'SOI OPERATION NAME'  : TargetPlatform.SOI.value,
             'DSP INT8 OPERATION NAME' : TargetPlatform.PPL_DSP_INT8.value,
             'TRT INT8 OPERATION NAME' : TargetPlatform.TRT_INT8.value,
             'NXP INT8 OPERATION NAME' : TargetPlatform.NXP_INT8.value,
@@ -330,7 +333,7 @@ class DispatchingTable():
 class QuantizationSetting():
     def __init__(self) -> None:
         # 子图切分与调度算法，可从 'pointwise', 'conservative', 'pursus', 'allin', 'pplnn' 中五选一，不区分大小写
-        self.dispatcher                      = 'pursus'
+        self.dispatcher                      = 'conservative'
 
         self.graph_format_setting            = GraphFormatSetting()
 
@@ -389,10 +392,6 @@ class QuantizationSetting():
         self.version                         = PPQ_CONFIG.VERSION
         self.signature                       = PPQ_CONFIG.NAME
 
-        # Following setting will be removed.
-        self.advanced_optimization            = False
-        self.advanced_optimization_setting    = AdvancedOptimizationSetting()
-
         # 算子调度表，你可以编辑它来手动调度算子。
         self.dispatching_table               = DispatchingTable()
 
@@ -418,6 +417,12 @@ class QuantizationSettingFactory:
         default_setting.fusion = False
         return default_setting
 
+    @staticmethod
+    def mnn_setting() -> QuantizationSetting:
+        default_setting = QuantizationSetting()
+        default_setting.fusion = True
+        return default_setting
+
     @ staticmethod
     def pplcuda_setting() -> QuantizationSetting:
         default_setting = QuantizationSetting()
@@ -429,6 +434,13 @@ class QuantizationSettingFactory:
         default_setting = QuantizationSetting()
         default_setting.equalization = True
         return default_setting
+
+    @staticmethod
+    def ascend_setting() -> QuantizationSetting:
+        default_setting = QuantizationSetting()
+        default_setting.fusion = False
+        return default_setting
+
 
     @ staticmethod
     def dsp_setting() -> QuantizationSetting:

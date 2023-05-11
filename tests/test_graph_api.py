@@ -7,8 +7,8 @@ graph = BaseGraph(name='Graph', built_from=NetworkFramework.ONNX)
 graph.append_operation(operation=Operation(name='op1', op_type='Conv', attributes={}))
 graph.append_operation(operation=Operation(name='op2', op_type='Conv', attributes={}))
 graph.create_link_with_op(variable=graph.create_variable(),
-                          upstream_op=graph.operations['op1'],
-                          downstream_op=graph.operations['op2'])
+                          A=graph.operations['op1'],
+                          B=graph.operations['op2'])
 
 processor = SearchableGraph(graph)
 paths = processor.path_matching(
@@ -37,29 +37,29 @@ graph.append_operation(operation=Operation(name='op8', op_type='Conv', attribute
 graph.append_operation(operation=Operation(name='op9', op_type='Conv', attributes={}))
 graph.append_operation(operation=Operation(name='op10', op_type='Conv', attributes={}))
 graph.create_link_with_op(variable=graph.create_variable(),
-                          upstream_op=graph.operations['op1'],
-                          downstream_op=graph.operations['op2'])
+                          A=graph.operations['op1'],
+                          B=graph.operations['op2'])
 graph.create_link_with_op(variable=graph.create_variable(),
-                          upstream_op=graph.operations['op8'],
-                          downstream_op=graph.operations['op2'])
+                          A=graph.operations['op8'],
+                          B=graph.operations['op2'])
 graph.create_link_with_op(variable=graph.create_variable(),
-                          upstream_op=graph.operations['op2'],
-                          downstream_op=graph.operations['op3'])
+                          A=graph.operations['op2'],
+                          B=graph.operations['op3'])
 graph.create_link_with_op(variable=graph.create_variable(),
-                          upstream_op=graph.operations['op3'],
-                          downstream_op=graph.operations['op4'])
+                          A=graph.operations['op3'],
+                          B=graph.operations['op4'])
 graph.create_link_with_op(variable=graph.create_variable(),
-                          upstream_op=graph.operations['op9'],
-                          downstream_op=graph.operations['op5'])
+                          A=graph.operations['op9'],
+                          B=graph.operations['op5'])
 graph.create_link_with_op(variable=graph.create_variable(),
-                          upstream_op=graph.operations['op10'],
-                          downstream_op=graph.operations['op5'])
+                          A=graph.operations['op10'],
+                          B=graph.operations['op5'])
 graph.create_link_with_op(variable=graph.create_variable(),
-                          upstream_op=graph.operations['op5'],
-                          downstream_op=graph.operations['op6'])
+                          A=graph.operations['op5'],
+                          B=graph.operations['op6'])
 graph.create_link_with_op(variable=graph.create_variable(),
-                          upstream_op=graph.operations['op6'],
-                          downstream_op=graph.operations['op7'])
+                          A=graph.operations['op6'],
+                          B=graph.operations['op7'])
 processor = SearchableGraph(graph)
 paths = processor.path_matching(
     sp_expr=lambda x: x.type == 'Conv',
@@ -140,38 +140,38 @@ graph.append_operation(operation=Operation(name='op9', op_type='Conv', attribute
 graph.append_operation(operation=Operation(name='op10', op_type='Conv', attributes={}))
 graph.append_operation(operation=Operation(name='op11', op_type='Conv', attributes={}))
 graph.create_link_with_op(variable=graph.create_variable(),
-                          upstream_op=graph.operations['op1'],
-                          downstream_op=graph.operations['op2'])
+                          A=graph.operations['op1'],
+                          B=graph.operations['op2'])
 graph.create_link_with_op(variable=graph.create_variable(),
-                          upstream_op=graph.operations['op8'],
-                          downstream_op=graph.operations['op2'])
+                          A=graph.operations['op8'],
+                          B=graph.operations['op2'])
 graph.create_link_with_op(variable=graph.create_variable(),
-                          upstream_op=graph.operations['op2'],
-                          downstream_op=graph.operations['op3'])
+                          A=graph.operations['op2'],
+                          B=graph.operations['op3'])
 graph.create_link_with_op(variable=graph.create_variable(),
-                          upstream_op=graph.operations['op3'],
-                          downstream_op=graph.operations['op4'])
+                          A=graph.operations['op3'],
+                          B=graph.operations['op4'])
 graph.create_link_with_op(variable=graph.create_variable(),
-                          upstream_op=graph.operations['op9'],
-                          downstream_op=graph.operations['op5'])
+                          A=graph.operations['op9'],
+                          B=graph.operations['op5'])
 graph.create_link_with_op(variable=graph.create_variable(),
-                          upstream_op=graph.operations['op10'],
-                          downstream_op=graph.operations['op5'])
+                          A=graph.operations['op10'],
+                          B=graph.operations['op5'])
 graph.create_link_with_op(variable=graph.create_variable(),
-                          upstream_op=graph.operations['op5'],
-                          downstream_op=graph.operations['op6'])
+                          A=graph.operations['op5'],
+                          B=graph.operations['op6'])
 graph.create_link_with_op(variable=graph.create_variable(),
-                          upstream_op=graph.operations['op6'],
-                          downstream_op=graph.operations['op7'])
+                          A=graph.operations['op6'],
+                          B=graph.operations['op7'])
 graph.create_link_with_op(variable=graph.create_variable(),
-                          upstream_op=graph.operations['op6'],
-                          downstream_op=graph.operations['op7'])
+                          A=graph.operations['op6'],
+                          B=graph.operations['op7'])
 graph.create_link_with_op(variable=graph.create_variable(),
-                          upstream_op=graph.operations['op11'],
-                          downstream_op=graph.operations['op1'])
+                          A=graph.operations['op11'],
+                          B=graph.operations['op1'])
 graph.create_link_with_op(variable=graph.create_variable(),
-                          upstream_op=graph.operations['op11'],
-                          downstream_op=graph.operations['op10'])
+                          A=graph.operations['op11'],
+                          B=graph.operations['op10'])
 processor = GraphFormatter(graph)
 graph.mark_variable_as_graph_output(var=graph.operations['op6'].outputs[0])
 processor.truncate_on_var(graph.operations['op1'].outputs[0], mark_as_output=True)

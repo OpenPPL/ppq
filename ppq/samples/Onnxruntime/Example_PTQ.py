@@ -20,15 +20,15 @@ from ppq import *
 from ppq.api import *
 from tqdm import tqdm
 
-QUANT_PLATFROM = TargetPlatform.TRT_INT8
+QUANT_PLATFROM = TargetPlatform.ONNXRUNTIME
 MODEL          = 'model.onnx'
 INPUT_SHAPE    = [1, 3, 224, 224]
 SAMPLES        = [torch.rand(size=INPUT_SHAPE) for _ in range(256)] # rewirte this to use real data.
 DEVICE         = 'cuda'
-FINETUNE       = True
+FINETUNE       = False
 QS             = QuantizationSettingFactory.default_setting()
 EXECUTING_DEVICE = 'cuda'
-REQUIRE_ANALYSE  = True
+REQUIRE_ANALYZE  = True
 
 # -------------------------------------------------------------------
 # 下面向你展示了常用参数调节选项：
@@ -36,18 +36,6 @@ REQUIRE_ANALYSE  = True
 QS.lsq_optimization = FINETUNE                                  # 启动网络再训练过程，降低量化误差
 QS.lsq_optimization_setting.steps = 500                         # 再训练步数，影响训练时间，500 步大概几分钟
 QS.lsq_optimization_setting.collecting_device = 'cuda'          # 缓存数据放在那，cuda 就是放在 gpu，如果显存超了你就换成 'cpu'
-
-if QUANT_PLATFROM in {TargetPlatform.PPL_DSP_INT8,                  # 这些平台是 per tensor 量化的
-                       TargetPlatform.HEXAGON_INT8,
-                       TargetPlatform.SNPE_INT8,
-                       TargetPlatform.METAX_INT8_T,
-                       TargetPlatform.FPGA_INT8}:
-    QS.equalization = True                                          # per tensor 量化平台需要做 equalization
-
-if QUANT_PLATFROM in {TargetPlatform.ACADEMIC_INT8,                 # 把量化的不太好的算子送回 FP32
-                       TargetPlatform.PPL_CUDA_INT8,                # 注意做这件事之前你需要确保你的执行框架具有混合精度执行的能力，以及浮点计算的能力
-                       TargetPlatform.TRT_INT8}:
-    QS.dispatching_table.append(operation='OP NAME', platform=TargetPlatform.FP32)
 
 print('正准备量化你的网络，检查下列设置:')
 print(f'TARGET PLATFORM      : {QUANT_PLATFROM.name}')
@@ -75,7 +63,7 @@ with ENABLE_CUDA_KERNEL():
     for op, snr in reports.items():
         if snr > 0.1: ppq_warning(f'层 {op} 的累计量化误差显著，请考虑进行优化')
 
-    if REQUIRE_ANALYSE:
+    if REQUIRE_ANALYZE:
         print('正计算逐层量化误差(SNR)，每一层的独立量化误差应小于 0.1 以保证量化精度:')
         layerwise_error_analyse(graph=qir, running_device=EXECUTING_DEVICE,
                                 interested_outputs=None,
@@ -84,22 +72,4 @@ with ENABLE_CUDA_KERNEL():
     print('网络量化结束，正在生成目标文件:')
     export_ppq_graph(
         graph=qir, platform=QUANT_PLATFROM,
-        graph_save_to = 'model_int8.onnx')
-
-    # -------------------------------------------------------------------
-    # 记录一下输入输出的名字，onnxruntime 跑的时候需要提供这些名字
-    # 我写的只是单输出单输入的版本，多输出多输入你得自己改改
-    # -------------------------------------------------------------------
-    int8_input_names  = [name for name, _ in qir.inputs.items()]
-    int8_output_names = [name for name, _ in qir.outputs.items()]
-
-    # -------------------------------------------------------------------
-    # 启动 onnxruntime 进行推理
-    # 截止 2022.05， onnxruntime 跑 int8 很慢的，你就别期待它会很快了。
-    # 如果你知道怎么让它跑的快点，或者onnxruntime更新了，你可以随时联系我。
-    # -------------------------------------------------------------------
-    session = onnxruntime.InferenceSession('model_int8.onnx', providers=['CUDAExecutionProvider'])
-    onnxruntime_results = []
-    for sample in tqdm(SAMPLES, desc='ONNXRUNTIME GENERATEING OUTPUTS', total=len(SAMPLES)):
-        result = session.run([int8_output_names[0]], {int8_input_names[0]: convert_any_to_numpy(sample)})
-        onnxruntime_results.append(result)
+        graph_save_to = 'quantized.onnx')

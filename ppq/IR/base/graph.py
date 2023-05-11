@@ -1,129 +1,29 @@
-from abc import ABCMeta, abstractmethod, abstractproperty
+from abc import abstractmethod
 from collections import deque
 from typing import Any, Dict, List, Text, Union
 
 import torch
-from ppq.core import (CAFFE_DOMAIN, COMPUTING_OP, DEFAULT_OPSET_DOMAIN,
-                      DEFAULT_OPSET_VERSION, LINEAR_ACTIVATIONS, ONNX_DOMAIN,
-                      SOI_OP, NetworkFramework, OperationMeta, Serializable,
-                      SingletonMeta, TargetPlatform, TensorMeta,
+import numpy as np
+from ppq.core import (LINEAR_ACTIVATIONS, DataType, NetworkFramework,
+                      Serializable, SingletonMeta, TargetPlatform, TensorMeta,
                       convert_any_to_torch_tensor, ppq_warning)
 
-
-class Opset():
-    def __init__(self, domain: str = DEFAULT_OPSET_DOMAIN, version: int = DEFAULT_OPSET_VERSION) -> None:
-        """Open Neural Network Exchange (ONNX) is an open ecosystem that empowers AI developers 
-            to choose the right tools as their project evolves. 
-        
-        ONNX provides an open source format for AI models, both deep learning and traditional ML. 
-        It defines an extensible computation graph model, as well as definitions of
-            built-in operators and standard data types. 
-        Currently we focus on the capabilities needed for inferencing (scoring).
-        
-        PPQ IR is built based on ONNX defination.
-
-        Args:
-            domain (str, optional): _description_. Defaults to DEFAULT_OPSET_DOMAIN.
-            version (int, optional): _description_. Defaults to DEFAULT_OPSET_VERSION.
-        """
-        self.domain  = domain
-        self.version = version
-
-    def is_onnx_v13(self):
-        return self.domain == ONNX_DOMAIN and self.version == 13
-
-    def is_onnx_v11(self):
-        return self.domain == ONNX_DOMAIN and self.version == 11
-
-    def onnx_opset_version(self) -> int:
-        if self.domain == ONNX_DOMAIN: return self.version
-        else: return -1   
-
-    def is_onnx(self):
-        return self.domain == ONNX_DOMAIN
-    
-    def is_caffe(self):
-        return self.domain == CAFFE_DOMAIN
-
-
-class OperationBase(metaclass=ABCMeta):
-    def __init__(self,
-                 name: str, op_type: str,
-                 attributes: Dict[str, Any],
-                 opset = None,
-                 platform: TargetPlatform=TargetPlatform.UNSPECIFIED) -> None:
-        self._name = name
-        self._type = op_type
-        self._attributes = attributes
-        self._platform = platform
-        self._meta = None
-        self._detail = {}
-        if opset is None:
-            self._opset = Opset()
-        else: self._opset = opset
-
-    @ abstractproperty
-    def inputs(self) -> List[Any]: pass
-
-    @ abstractproperty
-    def outputs(self) -> List[Any]: pass
-
-    @ abstractproperty
-    def parameters(self) -> List[Any]: pass
-
-    @ property
-    def name(self) -> str:
-        return self._name
-
-    @ property
-    def type(self) -> str:
-        return self._type
-
-    @ type.setter
-    def type(self, type: str):
-        self._type = type
-
-    @ property
-    def opset(self) -> Opset:
-        return self._opset
-
-    @ opset.setter
-    def opset(self, opset: Opset):
-        self._opset = opset
-
-    @ property
-    def attributes(self) -> Dict[str, Any]:
-        return self._attributes
-
-    @ property
-    def platform(self) -> TargetPlatform:
-        return self._platform
-
-    @ platform.setter
-    def platform(self, platform: TargetPlatform):
-        self._platform = platform
-
-    @ property
-    def meta_data(self) -> OperationMeta:
-        return self._meta
-
-    @ meta_data.setter
-    def meta_data(self, meta: OperationMeta) -> OperationMeta:
-        self._meta = meta
-
-    def __hash__(self) -> int:
-        return self._name.__hash__()
+from .opdef import (DEFAULT_SOCKET_CREATOR, DEFAULT_SOCKET_TABLE,
+                    OperationBase, Opset, OpSocket)
 
 
 class Variable(Serializable):
     def __init__(self, name: str, value: Any = None, is_parameter: bool = False,
-                 dest_ops: List[OperationBase] = None, source_op: OperationBase = None) -> None:
+                 dest_ops: List[OperationBase] = None, source_op: OperationBase = None,
+                 shape: List[int] = None, dtype: DataType= DataType.FP32) -> None:
         super().__init__()
         self._name = name
         self._value = None if value is None else value
         self._dest_ops = [] if dest_ops is None else dest_ops
         self._source_op = None if source_op is None else source_op
         self._is_parameter = is_parameter
+        self.shape = shape
+        self.dtype = dtype
 
     @ property
     def is_parameter(self) -> bool:
@@ -172,24 +72,18 @@ class Variable(Serializable):
 
     @ property
     def meta(self) -> TensorMeta:
-        if self.source_op is not None:
-            if self.source_op.meta_data is None: return None
-            return self.source_op.meta_data.output_metas[self.src_idx]
-        elif len(self.dest_ops) > 0:
-            dest_op = self.dest_ops[0]
-            dest_idx = self.dest_idx[0]
-            if dest_op.meta_data is None: return None
-            return dest_op.meta_data.input_metas[dest_idx]
-        else:
-            raise RuntimeError(
-                f'Seems you got an isolated variable {self.name}, '
-                'PPQ is not able to infer its meta data yet.')
+        raise Exception('PPQ Variable.meta has been removed since 0.6.6, use Variable.shape, Variable.dtype instead.')
 
     def __hash__(self) -> int:
         return self._name.__hash__()
 
     def __str__(self) -> str:
-        return f'Variable ({self._name})'
+        return f'{self._name}'
+
+    def __repr__(self) -> str:
+        if self.shape is not None:
+            return f'{self._name}(shape={self.shape})'
+        return f'{self._name}'
 
     def __getstate__(self) -> dict:
         state = super().__getstate__()
@@ -198,37 +92,59 @@ class Variable(Serializable):
         return state
 
     @ property
-    def shape(self) -> List[int]:
+    def shape(self) -> List[Union[Text, int, None]]:
         """ Return tensor shape of this variable
         It is modifiable when current variable is not a paramter.
         """
         if self.value is not None: 
-            return self.value.shape
-        if self.meta is not None:
-            return self.meta.shape
-        else: return None
-    
+            if isinstance(self.value, torch.Tensor):
+                return list(self.value.shape)
+            else: return self._shape
+        return self._shape
+
     @ shape.setter
-    def shape(self, new_shape: List[Union[Text, int, None]]):
-        if self.meta is None:
-            raise PermissionError(f'Can not assign shape with variable {self.name}, '
-                                  'cause it is not linked within a graph.')
-        if self.is_parameter == True:
-            raise PermissionError(f'Can not assign shape with variable {self.name}, '
-                                  'cause it is a parameter varaible.')
-        # override all meta data.
-        if self.source_op is not None:
-            if self.source_op.meta_data is not None:
-                self.source_op.meta_data.output_metas[self.src_idx].shape = new_shape
+    def shape(self, shape: List[Union[Text, int, None]]):
+        if isinstance(shape, torch.Tensor):
+            shape = shape.tolist()
+        if isinstance(shape, torch.Size):
+            shape = list(shape)
+        if isinstance(shape, list):
+            for element in shape:
+                if type(element) not in {str, int}:
+                    raise TypeError(f'Shape of a variable should only contains int or str. '
+                                    f'however {type(element)} was given.')
+        self._shape = shape
+
+    @ property
+    def dtype(self) -> DataType:
+        """ Return tensor shape of this variable
+        It is modifiable when current variable is not a paramter.
+        """
+        if self.value is not None:
+            if isinstance(self.value, torch.Tensor):
+                return DataType.convert_from_torch(self.value.dtype)
+            if isinstance(self.value, np.ndarray):
+                return DataType.convert_from_numpy(self.value.dtype)
+        return self._dtype
         
-        for dest_op, dest_idx in zip(self.dest_ops, self.dest_idx):
-            if dest_op.meta_data is not None:
-                dest_op.meta_data.input_metas[dest_idx].shape = new_shape
+    @ dtype.setter
+    def dtype(self, T: DataType):
+        if isinstance(T, np.dtype):
+            self._dtype = DataType.convert_from_numpy(T)
+        elif isinstance(T, torch.dtype):
+            self._dtype = DataType.convert_from_torch(T)
+        elif isinstance(T, DataType):
+            self._dtype = T
+        else:
+            raise TypeError(f'Invalid Dtype: {T} was given.')
 
     def copy(self, copy_value: bool = False):
         if not copy_value or self.value is None:
-            return Variable(name=self.name, value=self.value, is_parameter=self.is_parameter)
-        
+            cloned = Variable(
+                name=self.name, value=self.value, 
+                is_parameter=self.is_parameter, shape=self.shape, dtype=self.dtype)
+            return cloned
+
         if not isinstance(self.value, torch.Tensor):
             ppq_warning(f'You are requiring to copy variable {self.name}, '
                         'however its value is not an instance of torch.Tensor, '
@@ -236,7 +152,8 @@ class Variable(Serializable):
             self.value = convert_any_to_torch_tensor(self.value)
         if isinstance(self.value, torch.Tensor):
             value = self.value.clone()
-        return Variable(name=self.name, value=value, is_parameter=self.is_parameter)
+        return Variable(name=self.name, value=value, 
+                        is_parameter=self.is_parameter, shape=self.shape, dtype=self.dtype)
 
 
 class Operation(OperationBase, Serializable):
@@ -248,6 +165,13 @@ class Operation(OperationBase, Serializable):
         Serializable.__init__(self)
         self._input_vars    = [] if inputs is None else inputs
         self._output_vars   = [] if outputs is None else outputs
+
+    @ property
+    def socket(self) -> OpSocket:
+        if self.type in DEFAULT_SOCKET_TABLE:
+            return DEFAULT_SOCKET_TABLE[self.type](self)
+        else: 
+            return DEFAULT_SOCKET_CREATOR(self)
 
     @ property
     def inputs(self) -> List[Variable]:
@@ -262,16 +186,12 @@ class Operation(OperationBase, Serializable):
         return [var for var in self.inputs if var.is_parameter]
 
     @ property
-    def num_of_parameters(self) -> int:
-        return len(self.parameters)
+    def is_linear_activation(self) -> bool:
+        return self.type in LINEAR_ACTIVATIONS
 
     @ property
-    def is_computing_op(self) -> bool:
-        return self.type in COMPUTING_OP
-
-    @ property
-    def is_soi_generator(self) -> bool:
-        return self.type in SOI_OP
+    def num_of_parameter(self) -> int:
+        return len([var for var in self.inputs if var.is_parameter])
 
     @ property
     def is_boundary(self) -> bool:
@@ -282,41 +202,20 @@ class Operation(OperationBase, Serializable):
             down_ops.extend(var.dest_ops)
         return all([op is None for op in up_ops]) or len(down_ops) == 0
 
-    @ property
-    def is_linear_activation(self) -> bool:
-        return self.type in LINEAR_ACTIVATIONS
-
-    @ property
-    def num_of_input(self) -> int:
-        return len(self.inputs)
-
-    @ property
-    def num_of_output(self) -> int:
-        return len(self.outputs)
-
-    @ property
-    def num_of_parameter(self) -> int:
-        return len([var for var in self.inputs if var.is_parameter])
-
     def __hash__(self) -> int:
         return self._name.__hash__()
 
     def __str__(self) -> str:
-        return f'{self._name}({self.platform}) ' \
-               f'- inputs:{[var.name for var in self.inputs]}, outputs:{[var.name for var in self.outputs]}'
+        return f'{self._name}(Type: {self.type}, Num of Input: {self.num_of_input}, Num of Output: {self.num_of_output})'
+
+    def __repr__(self) -> str:
+        return f'{self._name}(Type: {self.type}, Num of Input: {self.num_of_input}, Num of Output: {self.num_of_output})'
 
     def __getstate__(self) -> dict:
         state = super().__getstate__()
         state['_input_vars'] = [var.name for var in self.inputs]
         state['_output_vars'] = [var.name for var in self.outputs]
         return state
-
-    def set_extension_attrib(self, attrib: str, value: Any):
-        self._detail[attrib] = value
-
-    @ property
-    def extension_attrib(self):
-        return self._detail
 
     def copy(self):
         clone = Operation(
@@ -325,7 +224,7 @@ class Operation(OperationBase, Serializable):
             attributes=self.attributes.copy(), 
             platform=self.platform, 
             opset=self.opset)
-        clone.meta_data = self.meta_data.copy()
+        clone._detail = self._detail.copy()
         return clone
 
 
@@ -349,7 +248,7 @@ class BaseGraph(Serializable):
     Args:
         Serializable ([type]): [description]
     """
-    def __init__(self, name: str, built_from: NetworkFramework) -> None:
+    def __init__(self, name: str, built_from: NetworkFramework = NetworkFramework.NATIVE) -> None:
         super().__init__()
         self._operations    = {}
         self._variables     = {}
@@ -378,60 +277,19 @@ class BaseGraph(Serializable):
     def outputs(self) -> Dict[str, Variable]:
         return self._graph_outputs
 
+    def parameters(self) -> List[torch.Tensor]:
+        parameters = []
+        for var in self.variables.values():
+            if var.is_parameter: 
+                parameters.append(var.value)
+        return parameters
+
     def set_extension_attrib(self, attrib: str, value: Any):
         self._detail[attrib] = value
 
     @ property
     def extension_attrib(self):
         return self._detail
-
-    def delete_operation(self, op_name: str, cascade: bool = False, force_delete: bool = False):
-        # legacy function since ppq 0.6.4
-        # do not use, use graph.remove_variable instead.
-        if not isinstance(op_name, str):
-            raise TypeError(f'This function needs a operation name as parameter, '\
-                f'while {type(op_name)} was given')
-        if op_name not in self.operations: return
-        operation = self.operations[op_name]
-        if len(operation.outputs) != 0 and not cascade and not force_delete:
-            raise PermissionError(f'It is not safe to delete operation {op_name}, '\
-                f'cause it still has output variable(s) {[str(output_var) for output_var in operation.outputs]}')
-        for input_var in operation.inputs:
-            dest_idx = input_var.dest_ops.index(operation)
-            input_var.dest_ops.pop(dest_idx)
-            # once variable is isolated, delete it.
-            if len(input_var.dest_ops) == 0 and input_var.name not in self.outputs:
-                self.remove_variable(input_var)
-        self.operations.pop(operation.name)
-
-        if cascade:
-            for output_var in operation.outputs:
-                for cascade_op in output_var.dest_ops:
-                    self.delete_operation(cascade_op.name, cascade=True, force_delete=force_delete)
-
-    def delete_variable(self, var_name: str, force_delete: bool = False):
-        # legacy function since ppq 0.6.4
-        # do not use, use graph.remove_variable instead.
-        if not isinstance(var_name, str):
-            raise TypeError(f'This function need a variable name to delete variable from graph, '\
-                f'while {type(var_name)} was given')
-        if var_name in self.inputs or var_name in self.outputs:
-            raise PermissionError('Can not delete graph input and output variables.')
-        if var_name not in self.variables:
-            raise KeyError(f'Variable {var_name} not in current graph.')
-        variable = self.variables[var_name]
-        if len(variable.dest_ops) != 0 and not force_delete:
-            raise PermissionError(f'It is not safe to delete variable {variable}, '\
-                f'cause it still has output operation(s) {[dest_op.name for dest_op in variable.dest_ops]}')
-        if variable.source_op is not None and len(variable.source_op.outputs) != 1 and not force_delete:
-            raise PermissionError(
-                f'It is not safe to delete variable {variable}, Cause its source operation {variable.source_op.name} '
-                'has more than 1 output, this deletion will change output order.')
-        source_op = variable.source_op
-        if source_op is not None:
-            output_idx = source_op.outputs.index(variable)
-            source_op.outputs.pop(output_idx)
-        self.variables.pop(variable.name)
 
     def append_operation(self, operation: Operation):
         if not isinstance(operation, Operation):
@@ -500,8 +358,8 @@ class BaseGraph(Serializable):
             return sort_ret
         else:
             raise RuntimeError(
-                'Topological Sort failed. Some operation can not be sorted (might due to circular reference).\n' + \
-                ''.join(str(self.operations[op_name]) + '\n' for op_name in visited if visited[op_name] == False)
+                'Topological Sort failed. Some operation can not be sorted (might due to circular reference).\n' + 
+                ''.join(op_name + '\n' for op_name in visited if visited[op_name] == False)
             )
 
     def insert_op_on_var(self, inserting_op: Operation, var: str):
@@ -552,64 +410,58 @@ class BaseGraph(Serializable):
             self.outputs.pop(var)
             self.outputs[link_var.name] = link_var
 
-    def insert_op_between_ops(self, inserting_op: Operation, up_op: Operation, down_op: Operation):
-        """Insert one operation to current graph. Inserting operation will just
-        between up_op and down_op.
+    def insert_op_between(self, inserting_op: Operation, up_op: Operation, down_op: Operation):
+        raise Exception('This Function is removed from PPQ Since 0.6.6')
 
-        Example1(Insert Conv3 between Conv1 and Conv2):
-            Before insertion: Conv1 -- Conv2
-            After insertion:  Conv1 -- Conv3 -- Conv1
-
-        Example2(Insert Conv3 between Conv1 and Conv2):
-
-            Before insertion: Conv1 ----- Conv2
-                                      |
-                                      --- Conv4
-
-            After insertion:  Conv1 ----- Conv3 -- Conv2
-                                      |
-                                      --- Conv4
-
-        ATTENTION: Inserting operation must be an empty operation with no input and output variables linked to it.
+    def insert_op_before(self, A: Operation, B: Operation, input_idx: int = 0):
+        """
+        Insert an op just before given op.
+        This function will insert given op A to variable B.inputs[input_idx]
 
         Args:
-            inserting_op (Operation): [description]
-            up_op (Operation): [description]
-            down_op (Operation): [description]
+            A (Operation): Inserting Op, should has no input and output variable that links to it.
+            B (Operation): before this op.
+            input_idx (int, optional): For case that B has more than 1 input variable, 
+                user should use parameter input_idx to identify which variable is used.
         """
-        if up_op.name not in self.operations:
-            raise KeyError(f'Can not inserting operation behind {up_op.name}, operation not found.')
-        if down_op.name not in self.operations:
-            raise KeyError(f'Can not inserting operation behind {down_op.name}, operation not found.')
-        if down_op not in self.get_downstream_operations(up_op):
-            raise PermissionError(f'operation {up_op.name} and {down_op.name} are not linked,'
-                                  ' there is no way to insert an op between them.')
-        if len(inserting_op.inputs) != 0 or len(inserting_op.outputs) != 0:
-            raise PermissionError('Can only insert operation with no input and output variables.')
+        if input_idx >= B.num_of_input:
+            raise ValueError('Input index out of range.')
+        if A.num_of_input != 0 or A.num_of_output != 0:
+            raise ValueError('Can only insert op that has no input and output variable.')
+        var = B.inputs[input_idx]
+        
+        var.dest_ops[var.dest_ops.index(B)] = A
+        B.inputs[input_idx] = self.create_variable()
+        B.inputs[input_idx].source_op = A
+        B.inputs[input_idx].dest_ops.append(B)
+    
+        A.inputs.append(var)
+        A.outputs.append(B.inputs[input_idx])
 
-        variables = []
-        for var in down_op.inputs:
-            if var.source_op == up_op:
-                variables.append(var)
-        assert len(variables) == 1, (f'Can not insert operation between {up_op.name} and {down_op.name},'
-                                     ' graph is too complex.')
-        [variable] = variables
+    def insert_op_after(self, A: Operation, B: Operation, output_idx: int = 0):
+        """
+        Insert an op just after given op.
+        This function will insert given op A to variable B.outputs[output_idx]
 
-        # add to graph.
-        if inserting_op.name not in self.operations.keys():
-            self.append_operation(inserting_op)
-
-        # create all links.
-        link_var = self.create_variable(
-            name=None, value=None, is_parameter=False,
-            dest_ops=[down_op], source_op=inserting_op)
-
-        inserting_op.inputs.append(variable)
-        inserting_op.outputs.append(link_var)
-
-        assert isinstance(variable, Variable)
-        variable.dest_ops[variable.dest_ops.index(down_op)] = inserting_op
-        down_op.inputs[down_op.inputs.index(variable)] = link_var
+        Args:
+            A (Operation): Inserting Op, should has no input and output variable that links to it.
+            B (Operation): after this op.
+            output_idx (int, optional): For case that B has more than 1 output variable, 
+                user should use parameter output_idx to identify which variable is used.
+        """
+        if output_idx >= B.num_of_output:
+            raise ValueError('Output index out of range.')
+        if A.num_of_input != 0 or A.num_of_output != 0:
+            raise ValueError('Can only insert op that has no input and output variable.')
+        var = B.outputs[output_idx]
+        
+        var.source_op = A
+        B.outputs[output_idx] = self.create_variable()
+        B.outputs[output_idx].source_op = B
+        B.outputs[output_idx].dest_ops.append(A)
+        
+        A.outputs.append(var)
+        A.inputs.append(B.outputs[output_idx])
 
     def insert_op_between_var_and_op(self, inserting_op: Operation, up_var: Variable, down_op: Operation):
         """Insert one operation to current graph. Inserting operation will just
@@ -654,7 +506,7 @@ class BaseGraph(Serializable):
         up_var.dest_ops[up_var.dest_ops.index(down_op)] = inserting_op
         down_op.inputs[down_op.inputs.index(up_var)] = link_var
 
-    def create_link_with_op(self, variable: Variable, upstream_op: Operation, downstream_op: Operation):
+    def create_link_with_op(self, A: Operation, B: Operation, variable: Variable = None):
         """Create a link with given variable from upstream_op to downstream_op
         variable will be appended to upstream_op's output and downstream_op's
         input given variable must have empty source_op or its source_op ==
@@ -679,29 +531,34 @@ class BaseGraph(Serializable):
             upstream_op (Operation): _description_
             downstream_op (Operation): _description_
         """
+        if variable is None:
+            variable = self.create_variable()
         if variable.name not in self.variables:
             raise KeyError(f'Can not find your variable {variable.name} in current graph.')
-        if upstream_op is not None and upstream_op.name not in self.operations:
-            raise KeyError(f'Can not find your operation {upstream_op.name} in current graph.')
-        if downstream_op is not None and downstream_op.name not in self.operations:
-            raise KeyError(f'Can not find your operation {downstream_op.name} in current graph.')
+        if A is not None and A.name not in self.operations:
+            raise KeyError(f'Can not find your operation {A.name} in current graph.')
+        if B is not None and B.name not in self.operations:
+            raise KeyError(f'Can not find your operation {B.name} in current graph.')
 
-        if variable.source_op is None: variable.source_op = upstream_op
-        if variable.source_op != upstream_op:
+        if variable.source_op is None: variable.source_op = A
+        if variable.source_op != A:
             raise PermissionError(f'Can not create link with variable {variable}, '
-                                  f'cause its source operations != {upstream_op}')
+                                  f'cause its source operations != {A}')
 
         # For complex graph, following logic might have some error.
-        if upstream_op is not None and variable not in upstream_op.outputs:
-            upstream_op.outputs.append(variable)
-        if downstream_op is None: return
-        if downstream_op is not None and variable not in downstream_op.inputs:
-            variable.dest_ops.append(downstream_op)
-            downstream_op.inputs.append(variable)
-        else: ppq_warning(f'You are trying to link variable with operation, '
-                          f'however Variable {variable.name} has already linked with downstream op {downstream_op.name}')
+        if A is not None and variable not in A.outputs:
+            A.outputs.append(variable)
+        if B is None: return
+        if B is not None and variable not in B.inputs:
+            variable.dest_ops.append(B)
+            B.inputs.append(variable)
+        else: 
+            variable.dest_ops.append(B)
+            B.inputs.append(variable)
+            ppq_warning(f'You are trying to link variable with operation, '
+                          f'however Variable {variable.name} has already linked with downstream op {B.name}')
 
-    def create_link_with_var(self, upstream_variable: Variable, downstream_variable: Variable):
+    def create_link_with_var(self, A: Variable, B: Variable):
         """connect upstream_variable.source_op with
         downstream_variable.dest_ops, downstream variable will be eliminated by
         this function.
@@ -712,20 +569,27 @@ class BaseGraph(Serializable):
             upstream_variable (_type_): _description_
             downstream_variable (_type_): _description_
         """
-        if downstream_variable.source_op is not None:
+        if A is not None and A.name not in self.variables:
+            raise KeyError(f'Can not find your variable {A.name} in current graph.')
+        if B is not None and B.name not in self.variables:
+            raise KeyError(f'Can not find your variable {B.name} in current graph.')
+        
+        if B.source_op is not None:
             raise PermissionError(
-                f'Can not create link with variable {upstream_variable.name} & {downstream_variable.name}, '
+                f'Can not create link with variable {A.name} & {B.name}, '
                 'Cause downstream variable has a non-empty source op')
 
-        dest_ops = downstream_variable.dest_ops
+        dest_ops = B.dest_ops
         for dest_op in dest_ops:
-            dest_op.inputs[dest_op.inputs.index(downstream_variable)] = upstream_variable
-            upstream_variable.dest_ops.append(dest_op)
-        downstream_variable.dest_ops.clear()
-        self.remove_variable(downstream_variable)
+            dest_op.inputs[dest_op.inputs.index(B)] = A
+            A.dest_ops.append(dest_op)
+        B.dest_ops.clear()
+        self.remove_variable(B)
         return self
 
-    def remove_operation(self, removing_op: Operation):
+    def remove_operation(self, removing_op: Operation, 
+                         keep_coherence: bool = False, 
+                         remove_unlinked_variable: bool = False):
         """Remove operation from graph, this function will unlink removing
         operation from current graph, pop it from graph.operations, and remove
         it from all its input and output variables.
@@ -734,12 +598,17 @@ class BaseGraph(Serializable):
 
         Args:
             removing_op (Operation): [description]
+            
+            keep_coherence (bool): if keep_coherence = True, 
+                PPQ will link downstream operations of removing op to the upstream operation.
+                if there is more than 1 input and output variable, ppq will link input[0] with output[0]
         """
         if removing_op.name not in self.operations:
             raise KeyError(f'Can not remove operation {removing_op.name}, operation not found.')
 
         # removing all parameters first.
         for parameter in removing_op.inputs.copy():
+            if keep_coherence and removing_op.type in {'Constant', 'Identity'}: break
             if parameter.is_parameter:
 
                 parameter.dest_ops.clear()
@@ -748,6 +617,11 @@ class BaseGraph(Serializable):
 
                 self.variables.pop(parameter.name)
 
+        related_vars = [var for var in removing_op.inputs + removing_op.outputs]
+        input_var, output_var = (
+            removing_op.inputs[0] if removing_op.num_of_input >= 1 else None, 
+            removing_op.outputs[0] if removing_op.num_of_output >= 1 else None)
+        
         # remove operation from its output variables
         for output_var in removing_op.outputs:
             output_var.source_op = None
@@ -755,10 +629,35 @@ class BaseGraph(Serializable):
 
         # remove operation from its input variables
         for input_var in removing_op.inputs:
-            input_var.dest_ops.remove(removing_op)
+            if removing_op in input_var.dest_ops:
+                input_var.dest_ops.remove(removing_op)
         removing_op.inputs.clear()
 
+        if (input_var is not None and 
+            output_var is not None and 
+            keep_coherence):
+
+            removing_var = output_var
+            dest_ops     = removing_var.dest_ops
+            is_graph_output = removing_var.name in self.outputs
+            
+            for op in dest_ops:
+                op.inputs[op.inputs.index(removing_var)] = input_var
+                input_var.dest_ops.append(op)
+            removing_var.dest_ops.clear()
+            removing_var.source_op = None
+            self.remove_variable(removing_var)
+
+            if is_graph_output:
+                self.mark_variable_as_graph_output(input_var)
+
         self.operations.pop(removing_op.name)
+        
+        if remove_unlinked_variable:
+            for var in related_vars:
+                if var.source_op is None and len(var.dest_ops) == 0 and var.name in self.variables:
+                    self.remove_variable(var)
+
         return self
 
     def remove_variable(self, removing_var: Variable):
@@ -873,8 +772,7 @@ class BaseGraph(Serializable):
             simply create an variable via this function might cause unexpected error.
         You'd better invoke this function before running your quantizer.
 
-        Do not set dest_ops and source_op via this function,
-            to link this variable with others, use graph.create_link_with_var instead.
+        If dest_ops and source_op is not None, this function will auto link created variable with them.
 
         Args:
             name (str, optional): _description_. Defaults to None.
@@ -895,8 +793,21 @@ class BaseGraph(Serializable):
             value=value,
             is_parameter=is_parameter,
             dest_ops=dest_ops,
-            source_op=source_op,
-        )
+            source_op=source_op)
+        
+        if dest_ops is not None:
+            if not isinstance(dest_ops, list):
+                raise TypeError(f'Parameter dest ops should be a list of Operation, however {type(dest_ops)} was given.')
+            for op in dest_ops:
+                if not isinstance(op, Operation):
+                    raise TypeError(f'Parameter dest ops should be a list of Operation, however {type(op)} was given.')
+                op.inputs.append(created)
+        
+        if source_op is not None:
+            if not isinstance(source_op, Operation):
+                raise TypeError(f'Parameter dest ops should be an Operation, however {type(source_op)} was given.')
+            op.outputs.append(created)
+
         self.append_variable(created)
         return created
 
@@ -918,8 +829,6 @@ class BaseGraph(Serializable):
         if var_name not in self.variables:
             raise KeyError(f'Can not find variable {var_name} within current graph.')
         if var_name in self.outputs: return
-        if var_name in self.inputs:
-            raise KeyError(f'Can not mark variable {var_name} as graph output, cause it is graph input.')
         self.outputs[var_name] = self.variables[var_name]
 
     def __getstate__(self) -> dict:
@@ -965,9 +874,7 @@ class BaseGraph(Serializable):
                     f'Graph Copy Error, Variable {i_var.name} is not correctly cloned')
                 ci_var = cloned.variables[i_var.name]
                 cloned.create_link_with_op(
-                    variable=ci_var, 
-                    upstream_op=ci_var.source_op, 
-                    downstream_op=c_op)
+                    variable=ci_var, A=ci_var.source_op, B=c_op)
             for o_var in op.outputs:
                 assert o_var.name in cloned.variables, (
                     f'Graph Copy Error, Variable {o_var.name} is not correctly cloned')
@@ -991,7 +898,7 @@ class BaseGraph(Serializable):
                         assert isinstance(op, QuantableOperation), (
                             'Graph Copy Error, Unexpected Master Operation Type.')
                         for mcfg, mvar in op.config_with_variable:
-                            if mvar.name == var.name: cfg._father_config = mcfg
+                            if mvar.name == var.name: cfg._dominator = mcfg
 
         # recreate input, output
         for name in self.inputs:
@@ -1012,6 +919,9 @@ class BaseGraph(Serializable):
         for name in self.outputs:
             if name not in cloned.outputs:
                 raise KeyError(f'Graph Copy Error, Output {var.name} is Missing')
+        cloned._num_of_generated_op  = self._num_of_generated_op
+        cloned._num_of_generated_var = self._num_of_generated_var
+        cloned._detail = self._detail.copy()
         return cloned
 
 

@@ -20,7 +20,7 @@ from ppq.executor import (BaseGraphExecutor, TorchExecutor,
                           TorchQuantizeDelegator)
 from ppq.IR import (BaseGraph, GraphBuilder, GraphCommand, GraphExporter,
                     GraphFormatter, Operation, QuantableGraph, SearchableGraph,
-                    Variable)
+                    Variable, TrainableGraph)
 from ppq.IR.deploy import RunnableGraph
 from ppq.IR.quantize import QuantableOperation, QuantableVariable
 from ppq.IR.search import SearchableGraph
@@ -45,11 +45,13 @@ from ppq.quantization.optim import (BiasCorrectionPass, GRUSplitPass,
                                     QuantizationOptimizationPass,
                                     QuantizationOptimizationPipeline,
                                     QuantizeFusionPass, QuantizeSimplifyPass,
-                                    QuantizeRefinePass, RuntimeCalibrationPass,
-                                    SwishFusionPass)
-from ppq.quantization.qfunction import BaseQuantFunction
-from ppq.quantization.qfunction.linear import (PPQLinearQuant_toInt,
-                                               PPQLinearQuantFunction)
+                                    RuntimeCalibrationPass, SwishFusionPass)
+from ppq.quantization.qfunction import (BaseQuantFunction,
+                                        PPQDyamicLinearQuantFunction,
+                                        PPQFloatingQuantFunction,
+                                        PPQLinearQuant_toInt,
+                                        PPQLinearQuantFunction,
+                                        PPQuantFunction, PPQuantFunction_toInt)
 from ppq.quantization.quantizer import (BaseQuantizer, NXP_Quantizer,
                                         PPL_DSP_Quantizer, PPLCUDAQuantizer,
                                         TensorRTQuantizer)
@@ -58,5 +60,3 @@ from ppq.scheduler import (AggresiveDispatcher, ConservativeDispatcher,
 from ppq.scheduler.perseus import Perseus
 from ppq.utils.round import (ppq_numerical_round, ppq_round_to_power_of_2,
                              ppq_tensor_round)
-import ppq
-print("\033[1;32musing ppq: %s\033[0m" % ppq.__path__)

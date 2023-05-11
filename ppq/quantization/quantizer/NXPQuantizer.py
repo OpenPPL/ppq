@@ -1,11 +1,10 @@
 from typing import Union
 
 import torch
-from ppq.api.setting import *
-from ppq.core import (ChannelwiseTensorQuantizationConfig,
-                      OperationQuantizationConfig, QuantizationPolicy,
-                      QuantizationProperty, QuantizationStates, RoundingPolicy,
-                      TargetPlatform)
+from ppq.api.setting import QuantizationSetting
+from ppq.core import (PASSIVE_OPERATIONS, OperationQuantizationConfig,
+                      QuantizationPolicy, QuantizationProperty,
+                      QuantizationStates, RoundingPolicy, TargetPlatform)
 from ppq.IR import BaseGraph, Operation
 from ppq.quantization.optim import (NxpInputRoundingRefinePass,
                                     NXPResizeModeChangePass,
@@ -34,17 +33,17 @@ class NXP_Quantizer(BaseQuantizer):
 
         base_quant_config = self.create_default_quant_config(
             policy=self.quantize_policy, rounding=self.rounding_policy,
-            operation_meta=operation.meta_data, num_of_bits=self._num_of_bits,
+            op=operation, num_of_bits=self._num_of_bits, exponent_bits=0,
             quant_max=self._quant_max, quant_min=self._quant_min,
             observer_algorithm='percentile')
 
-        if operation.type in {'Conv', 'ConvTranspose', 'Gemm'}:
+        if operation.type in {'Conv', 'Gemm'}:
             # set all parameters within Conv, ConvTranspose, Gemm to per-channel quant-config.
             assert operation.num_of_input > 0, 'Seems you got a Conv layer with no parameters.'
 
             # first parameter must exits, for conv layer it will be conv_weight
             # layout: [out_channel, in_channel, kernel_size, kernel_size]
-            if operation.type in {'Conv', 'ConvTranspose'}:
+            if operation.type in {'Conv'}:
                 conv_weight_config = base_quant_config.input_quantization_config[1]
                 conv_weight_config.policy = QuantizationPolicy(
                     QuantizationProperty.SYMMETRICAL +
@@ -53,12 +52,8 @@ class NXP_Quantizer(BaseQuantizer):
                     QuantizationProperty.POWER_OF_2
                 )
                 conv_weight_config.rounding = RoundingPolicy.ROUND_HALF_FAR_FORM_ZERO
-                base_quant_config.input_quantization_config[1] = \
-                    ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
-                        convert_from = conv_weight_config,
-                        offset = None, scale = None, channel_axis = 0
-                    )
-                base_quant_config.input_quantization_config[1].observer_algorithm = 'Minmax'
+                conv_weight_config.channel_axis = 0
+                conv_weight_config.observer_algorithm = 'minmax'
             # first parameter must exits, for gemm layer it will be gemm_weight
             # layout: [in_dim, out_dim]
             elif operation.type in {'Gemm'}:
@@ -70,12 +65,9 @@ class NXP_Quantizer(BaseQuantizer):
                     QuantizationProperty.POWER_OF_2
                 )
                 gemm_weight_config.rounding = RoundingPolicy.ROUND_HALF_FAR_FORM_ZERO
-                base_quant_config.input_quantization_config[1] = \
-                    ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
-                        convert_from = gemm_weight_config,
-                        offset = None, scale = None, channel_axis = 0
-                    )
-                base_quant_config.input_quantization_config[1].observer_algorithm = 'Minmax'
+                gemm_weight_config.channel_axis = 0
+                gemm_weight_config.observer_algorithm = 'minmax'
+
             # if operation has bias
             if operation.num_of_input > 2:
                 bias_config = base_quant_config.input_quantization_config[-1]
@@ -89,11 +81,8 @@ class NXP_Quantizer(BaseQuantizer):
                 bias_config.quant_max = int(pow(2, 30))
                 bias_config.quant_min = - int(pow(2, 30))
                 bias_config.state = QuantizationStates.PASSIVE_INIT
-                base_quant_config.input_quantization_config[-1] = \
-                    ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
-                        convert_from = bias_config, offset = None,
-                        scale = None, channel_axis = 0)
-                base_quant_config.input_quantization_config[-1].observer_algorithm = 'Minmax'
+                bias_config.channel_axis = 0
+                bias_config.observer_algorithm = 'minmax'
 
         if operation.type in PASSIVE_OPERATIONS:
             # Those op are not active op.
@@ -112,7 +101,7 @@ class NXP_Quantizer(BaseQuantizer):
     @ property
     def quant_operation_types(self) -> set:
         return {
-            'Conv', 'ConvTranspose', 'Gemm', 'Relu', 'PRelu',
+            'Conv', 'Gemm', 'Relu', 'PRelu',
             'Clip', 'Pad', 'Resize', 'MaxPool', 'AveragePool',
             'GlobalMaxPool', 'GlobalAveragePool',
             'Mul', 'Add', 'Max', 'Sub', 'Div',

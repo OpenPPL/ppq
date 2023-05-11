@@ -223,8 +223,8 @@ class TrainingBasedPass(QuantizationOptimizationPass):
 
     def collect(
         self, graph: BaseGraph, block: TrainableBlock, executor: TorchExecutor, 
-        dataloader: Iterable, collate_fn: Callable, collecting_device: str, steps: int = None
-        ) -> Tuple[List[Dict[str, torch.Tensor]], List[Dict[str, torch.Tensor]]]:
+        dataloader: Iterable, collate_fn: Callable, collecting_device: str, steps: int = None,
+        expire_device: str = 'cpu') -> Tuple[List[Dict[str, torch.Tensor]], List[Dict[str, torch.Tensor]]]:
         """
         Collect training data for given block.
         This function will collect fp32 output and quantized input data by
@@ -273,7 +273,7 @@ class TrainingBasedPass(QuantizationOptimizationPass):
             
             cur_iter = 0
             # dequantize graph, collect fp32 outputs
-            quant_graph.dequantize_graph()
+            quant_graph.dequantize_graph(expire_device=expire_device)
             for data in dataloader:
                 if collate_fn is not None: data = collate_fn(data)
                 fp_output = executor.forward(data, [var.name for var in block.ep.outputs])
@@ -284,7 +284,7 @@ class TrainingBasedPass(QuantizationOptimizationPass):
 
             cur_iter = 0
             # restore quantization state, collect quant inputs
-            quant_graph.restore_quantize_state()
+            quant_graph.restore_quantize_state(expire_device=expire_device)
             for data in dataloader:
                 if collate_fn is not None: data = collate_fn(data)
                 # PATCH 20220829, 有些 computing op 权重并非定值
@@ -590,15 +590,21 @@ class LearnedStepSizePass(TrainingBasedPass):
     The formula of calculating the derivatives of y and scale_Y:
 
         if y > scale_Y * -128 and y < scale_Y * 127:
+        
         dQuant(y, scale_Y)/dy       = dQuant(y, scale_Y)
+        
         dQuant(y, scale_Y)/dscale_Y = Quant(y, scale_Y) - y
 
         if y < scale_Y * -128:
+        
         dQuant(y, scale_Y)/dy       = 0
+        
         dQuant(y, scale_Y)/dscale_Y = -128
 
         if y > scale_Y * 127:
+        
         dQuant(y, scale_Y)/dy       = 0
+        
         dQuant(y, scale_Y)/dscale_Y = 127
 
     ### Parameters:
@@ -690,7 +696,7 @@ class LearnedStepSizePass(TrainingBasedPass):
 
     Parameter block_size will controls the maximum size of created blocks.
 
-    If block_size = 1, then each block will contains exactly 1 layer within it, blockwise optimization will degenerate to layerwise optimization then.
+    If block_size = 1, then each block will contains exactly 1 layer within it, blockwise optimization will degenerate to layerwise optimization.
 
     If block_size is set to a large value, training progress will be unstable since batchnorm layers have been merged at first.
 
@@ -703,18 +709,21 @@ class LearnedStepSizePass(TrainingBasedPass):
     def __init__(
         self, name: str = 'PPQ LSQ Optimization', interested_layers: List[str] = [],
         steps: int = 500, gamma: float = 0.0, is_scale_trainable: bool = True,
-        lr: float = 5e-5, block_size: int = None,
+        lr: float = 5e-5, block_size: int = 5, expire_device: str = 'cpu',
         collecting_device: str = 'cuda', loss_fn: Callable = torch_mean_square_error,
+        optimizer: Any = None
     ) -> None:
         super().__init__(name=name)
         self.interested_layers  = interested_layers
         self.collecting_device  = collecting_device
+        self.expire_device      = expire_device
         self.is_scale_trainable = is_scale_trainable
         self.block_size         = block_size
         self.loss_fn            = loss_fn
         self.gamma              = gamma
         self.steps              = steps
         self.lr                 = lr
+        self.optimizer          = optimizer
 
     def finetune(
         self, steps: int, learning_rate: float, block: TrainableBlock, executor: TorchExecutor,
@@ -735,14 +744,14 @@ class LearnedStepSizePass(TrainingBasedPass):
         for op in block.rps:
             if not isinstance(op, QuantableOperation): continue
 
-            if op.is_computing_op: 
-                for var in op.inputs[1:]: 
+            if op.is_computing_op or op.type in {'Add', 'Mul'}: # 独立的 Add Mul 算子也可以训练
+                for var in op.inputs: 
                     if var.is_parameter:
                         trainable_params.append(var.value)
 
             # register quant delegator
             for cfg, var in op.config_with_variable:
-                if cfg.state in {QuantizationStates.ACTIVATED, QuantizationStates.SLAVE}:
+                if cfg.state in {QuantizationStates.ACTIVATED, QuantizationStates.PASSIVE}:
                     delegator = LSQDelegator(config=cfg, var=var)
                     trainable_scales.extend(delegator.trainable_tensors())
                     executor.register_quantize_delegate(config=cfg, delegator=delegator)
@@ -750,14 +759,16 @@ class LearnedStepSizePass(TrainingBasedPass):
 
         # check if empty.
         tensors = [tensor for tensor in trainable_params + trainable_scales if tensor.requires_grad]
+        tensors = set(tensors) # remove duplicated tensor
         if len(tensors) == 0:
             for cfg, delegator in delegators.items():
                 executor.remove_quantize_delegate(config=cfg)
             return 0, 0
 
         # initilize optimizer.
-        if optimizer is None:
+        if self.optimizer is None:
             optimizer = torch.optim.Adam(tensors, lr=learning_rate)
+        else: optimizer = self.optimizer(tensors, lr=learning_rate)
 
         dataset_length = len(qt_inputs)
         if dataset_length == 0: raise ValueError('Dataset is empty.')

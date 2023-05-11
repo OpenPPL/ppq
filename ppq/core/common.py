@@ -2,6 +2,10 @@
 # PPQ System configuration
 # You can modify following codes for your own purpose.
 
+MAX_RECURSION_DEPTH = 5000
+import sys
+sys.setrecursionlimit(MAX_RECURSION_DEPTH)
+
 # Observer 中，最小 scale 限制，所有小于该值的 scale 将被该值覆盖
 OBSERVER_MIN_SCALE = 1e-8
 # Observer 中，最小 scale 的手动覆盖属性
@@ -22,14 +26,33 @@ OBSERVER_PERCENTILE_MANUL_OVERRIDE = 'OBSERVER_PERCENTILE_MANUL_OVERRIDE'
 OBSERVER_MSE_HIST_BINS = 2048
 # Observer 中 mse 计算的间隔，间隔越小，所需时间越长
 OBSERVER_MSE_COMPUTE_INTERVAL = 8
+# Floating MSE Observer 的样本个数
+OBSERVER_FLOATING_MSE_FETCHES = 4096
+# Isotone Observer 的监听轴
+# 对于 Softmax 激活函数而言，Isotone Observer 的监听轴应该与 Softmax 操作所规约的轴相同
+# 对于 Sigmoid 激活函数而言，Isotone Observer 的监听轴应该设置为 Batch 所在的轴
+OBSERVER_ISOTONE_OBSERVER_AXIS = 'OBSERVER_ISOTONE_OBSERVER_AXIS'
+
+# 读取 Onnx 图时，将图中所有以 Constant 节点作为输入的变量转换为 Parameter Variable
+FORMATTER_FORMAT_CONSTANT_INPUT = True
+# 读取 Onnx 图时，合并图中的 Bias add 节点(Conv, ConvTranspose, Gemm)
+FORMATTER_FUSE_BIAS_ADD = True
+# 读取 Onnx 图时，合并图中的 Batchnorm 节点(Conv, ConvTranspose, Gemm)
+FORMATTER_FUSE_BN = True
+# 读取 Onnx 图时，将单独的 Batchnorm 替换为卷积
+FORMATTER_REPLACE_BN_TO_CONV = True
+# 读取 Onnx 图时，移除图中的 Identity 节点
+FORMATTER_REMOVE_IDENTITY = True
+# 读取 Onnx 图时，移除图中的孤立节点
+FORMATTER_REMOVE_ISOLATED = True
 
 # PASSIVE OPERATIONS 是那些不参与计算的 Op, 这些 op 的输入与输出将直接共享 scale
 # 同时这些 op 前后的定点过程将被直接停用
 PASSIVE_OPERATIONS = {
-    'Resize', 'MaxPool', 'GlobalMaxPool', 'Reshape', 'Flatten', 'Identity', 'Dropout'
+    'MaxPool', 'GlobalMaxPool', 'Reshape', 'Flatten', 'Identity', 'Dropout'
     'Slice', 'Pad', 'Split', 'Transpose', 'Interp', 'Squeeze', 'Unsqueeze'}
 # COPUTING OP 是所有计算层，该属性被用于联合定点和子图切分
-COMPUTING_OP = {'Conv', 'Gemm', 'ConvTranspose', 'MatMul'}
+COMPUTING_OP = {'Conv', 'Gemm', 'ConvTranspose', 'MatMul', 'Attention', 'PPQBiasFusedMatMul'}
 # SOI OP 是所有产生 SOI 输出的节点类型，该属性被用于子图切分
 SOI_OP = {'TopK', 'Shape', 'NonMaxSuppression'}
 

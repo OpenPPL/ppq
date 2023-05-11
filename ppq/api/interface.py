@@ -1,110 +1,32 @@
+import json
 import os
-from typing import Any, Callable, Iterable, List
+from typing import Any, Callable, Iterable, List, Union
 
 import torch
-from ppq.core import (NetworkFramework, TargetPlatform, empty_ppq_cache,
-                      ppq_warning)
-from ppq.executor import TorchExecutor
-from ppq.executor.base import BaseGraphExecutor, register_operation_handler
-from ppq.IR import (BaseGraph, GraphBuilder, GraphCommand, GraphCommandType,
-                    GraphExporter, GraphFormatter, GraphMerger)
-from ppq.IR.morph import GraphDeviceSwitcher
-from ppq.parser import *
-from ppq.quantization.observer import PPQ_OBSERVER_TABLE, OperationObserver
-from ppq.quantization.optim.base import QuantizationOptimizationPass
-from ppq.quantization.quantizer import (ACADEMIC_INT4_Quantizer,
-                                        ACADEMIC_Mix_Quantizer,
-                                        ACADEMICQuantizer, BaseQuantizer,
-                                        ExtQuantizer, FPGAQuantizer,
-                                        MetaxChannelwiseQuantizer,
-                                        MetaxTensorwiseQuantizer,
-                                        NCNNQuantizer, NXP_Quantizer,
-                                        OpenvinoQuantizer,
-                                        ORT_PerChannelQuantizer,
-                                        ORT_PerTensorQuantizer,
-                                        PPL_DSP_Quantizer,
-                                        PPL_DSP_TI_Quantizer, PPLCUDAQuantizer,
-                                        TensorRTQuantizer, TengineQuantizer)
-from ppq.scheduler import DISPATCHER_TABLE, GraphDispatcher
-from ppq.scheduler.perseus import Perseus
 from torch.utils.data import DataLoader
 
-from .setting import *
+import ppq.lib as PFL
+from ppq.api.setting import (DispatchingTable, QuantizationSetting,
+                             QuantizationSettingFactory)
+from ppq.core import (PPQ_CONFIG, NetworkFramework, TargetPlatform,
+                      empty_ppq_cache, ppq_warning)
+from ppq.core.common import (FORMATTER_FORMAT_CONSTANT_INPUT,
+                             FORMATTER_FUSE_BIAS_ADD, FORMATTER_FUSE_BN,
+                             FORMATTER_REPLACE_BN_TO_CONV,
+                             FORMATTER_REMOVE_IDENTITY,
+                             FORMATTER_REMOVE_ISOLATED)
+from ppq.executor import TorchExecutor
+from ppq.executor.base import BaseGraphExecutor
+from ppq.IR import (BaseGraph, GraphBuilder, GraphCommand, GraphCommandType,
+                    GraphFormatter, GraphMerger, GraphReplacer)
+from ppq.IR.quantize import QuantableOperation
+from ppq.quantization.optim.base import QuantizationOptimizationPass
+from ppq.quantization.quantizer import BaseQuantizer
+from ppq.scheduler import DISPATCHER_TABLE, GraphDispatcher
 
-QUANTIZER_COLLECTION = {
-    TargetPlatform.PPL_DSP_INT8: PPL_DSP_Quantizer,
-    TargetPlatform.PPL_DSP_TI_INT8: PPL_DSP_TI_Quantizer,
-    TargetPlatform.SNPE_INT8:    PPL_DSP_Quantizer,
-    TargetPlatform.QNN_DSP_INT8: PPL_DSP_Quantizer,
-    TargetPlatform.TRT_INT8:     TensorRTQuantizer,
-    TargetPlatform.NCNN_INT8:    NCNNQuantizer,
-    TargetPlatform.NXP_INT8:     NXP_Quantizer,
-    TargetPlatform.ORT_OOS_INT8: ORT_PerTensorQuantizer,
-    TargetPlatform.METAX_INT8_C: MetaxChannelwiseQuantizer,
-    TargetPlatform.METAX_INT8_T: MetaxTensorwiseQuantizer,
-    # TargetPlatform.ORT_OOS_INT8: ORT_PerChannelQuantizer,
-    TargetPlatform.PPL_CUDA_INT8: PPLCUDAQuantizer,
-    TargetPlatform.EXTENSION:     ExtQuantizer,
-    TargetPlatform.ACADEMIC_INT8: ACADEMICQuantizer,
-    TargetPlatform.ACADEMIC_INT4: ACADEMIC_INT4_Quantizer,
-    TargetPlatform.ACADEMIC_MIX:  ACADEMIC_Mix_Quantizer,
-    TargetPlatform.FPGA_INT8   :  FPGAQuantizer,
-    TargetPlatform.OPENVINO_INT8: OpenvinoQuantizer,
-    TargetPlatform.TENGINE_INT8:  TengineQuantizer
-}
-
-PARSERS = {
-    NetworkFramework.ONNX: OnnxParser,
-    NetworkFramework.CAFFE: CaffeParser,
-    NetworkFramework.NATIVE: NativeImporter
-}
-
-EXPORTERS = {
-    TargetPlatform.PPL_DSP_INT8:  PPLDSPCaffeExporter,
-    TargetPlatform.PPL_DSP_TI_INT8: PPLDSPTICaffeExporter,
-    TargetPlatform.QNN_DSP_INT8:  QNNDSPExporter,
-    TargetPlatform.PPL_CUDA_INT8: PPLBackendExporter,
-    TargetPlatform.SNPE_INT8:     SNPECaffeExporter,
-    TargetPlatform.NXP_INT8:      NxpExporter,
-    TargetPlatform.ONNX:          OnnxExporter,
-    TargetPlatform.ONNXRUNTIME:   ONNXRUNTIMExporter,
-    TargetPlatform.OPENVINO_INT8: ONNXRUNTIMExporter,
-    TargetPlatform.CAFFE:         CaffeExporter,
-    TargetPlatform.NATIVE:        NativeExporter,
-    TargetPlatform.EXTENSION:     ExtensionExporter,
-    # TargetPlatform.ORT_OOS_INT8:  ONNXRUNTIMExporter,
-    TargetPlatform.ORT_OOS_INT8:  ORTOOSExporter,
-    TargetPlatform.METAX_INT8_C:  ONNXRUNTIMExporter,
-    TargetPlatform.METAX_INT8_T:  ONNXRUNTIMExporter,
-    TargetPlatform.TRT_INT8:      TensorrtExporter,
-    TargetPlatform.NCNN_INT8:     NCNNExporter,
-    TargetPlatform.TENGINE_INT8:  TengineExporter
-}
-
-# 为你的导出模型取一个好听的后缀名
-# postfix for exporting model
-EXPORTING_POSTFIX = {
-    TargetPlatform.PPL_DSP_INT8:  '.caffemodel',
-    TargetPlatform.PPL_DSP_TI_INT8:'.caffemodel',
-    TargetPlatform.QNN_DSP_INT8:  '.onnx',
-    TargetPlatform.PPL_CUDA_INT8: '.onnx',
-    TargetPlatform.SNPE_INT8:     '.caffemodel',
-    TargetPlatform.NXP_INT8:      '.caffemodel',
-    TargetPlatform.ONNX:          '.onnx',
-    TargetPlatform.ONNXRUNTIME:   '.onnx',
-    TargetPlatform.CAFFE:         '.caffemodel',
-    TargetPlatform.NATIVE:        '.native',
-    TargetPlatform.EXTENSION:     '.ext',
-    TargetPlatform.ORT_OOS_INT8:  '.onnx',
-    TargetPlatform.METAX_INT8_C:  '.onnx',
-    TargetPlatform.METAX_INT8_T:  '.onnx',
-    TargetPlatform.TENGINE_INT8:  '.onnx',
-}
 
 def load_graph(file_path: str, from_framework: NetworkFramework=NetworkFramework.ONNX, **kwargs) -> BaseGraph:
-    if from_framework not in PARSERS:
-        raise KeyError(f'Requiring framework {from_framework} does not support parsing now.')
-    parser = PARSERS[from_framework]()
+    parser = PFL.Parser(from_framework)
     assert isinstance(parser, GraphBuilder), 'Unexpected Parser found.'
     if from_framework == NetworkFramework.CAFFE:
         assert 'caffemodel_path' in kwargs, ('parameter "caffemodel_path" is required here for loading caffe model from file, '
@@ -152,6 +74,67 @@ def load_native_graph(import_file: str) -> BaseGraph:
         BaseGraph: 解析获得的 ppq 计算图对象 the parsed ppq IR graph
     """
     return load_graph(import_file, from_framework=NetworkFramework.NATIVE)
+
+def load_torch_model(
+    model: torch.nn.Module, onnx_file_name: str = 'MyModel.onnx', 
+    sample: Union[dict, list, torch.Tensor] = None, device = 'cuda', 
+    verbose: bool = False, opset: int = 11, do_constant_folding: bool = None, 
+    dynamic_axes: dict = None, training: bool = False) -> BaseGraph:
+    """
+    Convert a Pytorch Module to PPQ graph, 
+        this conversation exports pytorch model to onnx first,
+        then PPQ will read from onnx file to build graph.
+
+    Args:
+        model (torch.nn.Module): Converting Model.
+    
+        onnx_file_name (str, optional): Exporting Onnx File name, by default it is 'MyModel.onnx'.
+        
+        sample (Union[dict, list, torch.Tensor], optional): 
+            A sample input for tracing your pytorch model.
+            
+            Pytorch will feed this sample input to your model,
+            recording record every layer and functions during executing.
+            
+            Each function recorded will be translated into onnx.
+            The input and output shape will also depends on this sample input.
+
+        device (str, optional): _description_. Defaults to 'cuda'.
+        
+        verbose (bool, optional): _description_. Defaults to True.
+        
+        opset (int, optional): _description_. Defaults to 11.
+        
+        do_constant_folding (bool, optional): 
+            Apply the constant-folding optimization.
+            Constant-folding will replace some of the ops that have all constant inputs
+            with pre-computed constant nodes.
+        
+        dynamic_axes (dict, optional): 
+            (dict<string, dict<int, string>> or dict<string, list(int)>, default empty dict):
+            By default the exported model will have the shapes of all input and output tensors
+            set to exactly match those given in ``args``. To specify axes of tensors as
+            dynamic (i.e. known only at run-time), set ``dynamic_axes`` to a dict with schema:
+
+    Returns:
+        BaseGraph: Converted PPQ Graph Instance.
+    """
+    
+    if opset not in {11, 13}:
+        ppq_warning(f'The Opset of Exporting Model should be 11 or 13, however {opset} was given.')
+
+    model = model.eval()
+    model = model.to(device)
+    
+    _training = torch.onnx.TrainingMode.TRAINING if training else torch.onnx.TrainingMode.EVAL
+    torch.onnx.export(
+        model=model, args=sample,
+        verbose=verbose, f=onnx_file_name, opset_version=opset,
+        do_constant_folding=do_constant_folding,
+        dynamic_axes=dynamic_axes, 
+        training=_training)
+    
+    return load_onnx_graph(onnx_import_file=onnx_file_name)
 
 def dump_torch_to_onnx(
     model: torch.nn.Module,
@@ -258,10 +241,6 @@ def quantize_onnx_model(
         BaseGraph: 量化后的IR，包含了后端量化所需的全部信息
                    The quantized IR, containing all information needed for backend execution
     """
-    if not TargetPlatform.is_quantized_platform(platform=platform):
-        raise ValueError(f'Target Platform {platform} is an non-quantable platform.')
-    if platform not in QUANTIZER_COLLECTION:
-        raise KeyError(f'Target Platform {platform} is not supported by ppq right now.')
     if do_quantize:
         if calib_dataloader is None or calib_steps is None:
             raise TypeError('Quantization needs a valid calib_dataloader and calib_steps setting.')
@@ -270,15 +249,15 @@ def quantize_onnx_model(
         setting = QuantizationSettingFactory.default_setting()
 
     ppq_ir = load_onnx_graph(onnx_import_file=onnx_import_file)
-    ppq_ir = dispatch_graph(graph=ppq_ir, platform=platform, setting=setting)
-
+    ppq_ir = dispatch_graph(graph=ppq_ir, platform=platform, 
+                            dispatcher=setting.dispatcher, 
+                            dispatching_table=setting.dispatching_table)
+    
     if inputs is None:
         dummy_input = torch.zeros(size=input_shape, device=device, dtype=input_dtype)
     else: dummy_input = inputs
 
-    quantizer = QUANTIZER_COLLECTION[platform](graph=ppq_ir)
-
-    assert isinstance(quantizer, BaseQuantizer)
+    quantizer = PFL.Quantizer(platform, ppq_ir)
     executor = TorchExecutor(graph=quantizer._graph, device=device)
     if do_quantize:
         quantizer.quantize(
@@ -432,10 +411,6 @@ def quantize_caffe_model(
         BaseGraph: 量化后的IR，包含了后端量化所需的全部信息
                    The quantized IR, containing all information needed for backend execution
     """
-    if not TargetPlatform.is_quantized_platform(platform=platform):
-        raise ValueError(f'Target Platform {platform} is an non-quantable platform.')
-    if platform not in QUANTIZER_COLLECTION:
-        raise KeyError(f'Target Platform {platform} is not supported by ppq right now.')
     if do_quantize:
         if calib_dataloader is None or calib_steps is None:
             raise TypeError('Quantization needs a valid calib_dataloader and calib_steps setting.')
@@ -448,16 +423,18 @@ def quantize_caffe_model(
                         from_framework=NetworkFramework.CAFFE)
 
     ppq_ir = format_graph(ppq_ir)
-    ppq_ir = dispatch_graph(ppq_ir, platform, setting)
+    ppq_ir = dispatch_graph(ppq_ir, platform, 
+                            dispatcher=setting.dispatcher, 
+                            dispatching_table=setting.dispatching_table)
 
     if inputs is None:
         dummy_input = torch.zeros(size=input_shape, device=device, dtype=input_dtype)
     else: dummy_input = inputs
 
-    quantizer = QUANTIZER_COLLECTION[platform](graph=ppq_ir)
-
-    assert isinstance(quantizer, BaseQuantizer)
+    quantizer = PFL.Quantizer(platform=platform, graph=ppq_ir)
     executor = TorchExecutor(graph=quantizer._graph, device=device)
+    executor.tracing_operation_meta(inputs=dummy_input)
+
     if do_quantize:
         quantizer.quantize(
             inputs=dummy_input,
@@ -470,8 +447,6 @@ def quantize_caffe_model(
         if verbose: quantizer.report()
         return quantizer._graph
     else:
-        executor = TorchExecutor(graph=ppq_ir, device=device)
-        executor.tracing_operation_meta(inputs=dummy_input)
         return quantizer._graph
 
 @ empty_ppq_cache
@@ -534,26 +509,23 @@ def quantize_native_model(
         BaseGraph: 量化后的IR，包含了后端量化所需的全部信息
                    The quantized IR, containing all information needed for backend execution
     """
-    if not TargetPlatform.is_quantized_platform(platform=platform):
-        raise ValueError(f'Target Platform {platform} is an non-quantable platform.')
-    if platform not in QUANTIZER_COLLECTION:
-        raise KeyError(f'Target Platform {platform} is not supported by ppq right now.')
     if do_quantize:
         if calib_dataloader is None or calib_steps is None:
             raise TypeError('Quantization needs a valid calib_dataloader and calib_steps setting.')
 
     if setting is None:
         setting = QuantizationSettingFactory.default_setting()
-    ppq_ir = dispatch_graph(graph=model, platform=platform, setting=setting)
+    ppq_ir = dispatch_graph(graph=model, platform=platform, 
+                            dispatcher=setting.dispatcher, 
+                            dispatching_table=setting.dispatching_table)
 
     if inputs is None:
         dummy_input = torch.zeros(size=input_shape, device=device, dtype=input_dtype)
     else: dummy_input = inputs
 
-    quantizer = QUANTIZER_COLLECTION[platform](graph=ppq_ir)
-
-    assert isinstance(quantizer, BaseQuantizer)
+    quantizer = PFL.Quantizer(platform=platform, graph=ppq_ir)
     executor = TorchExecutor(graph=quantizer._graph, device=device)
+    
     if do_quantize:
         quantizer.quantize(
             inputs=dummy_input,
@@ -576,7 +548,7 @@ def export_ppq_graph(
     platform: TargetPlatform,
     graph_save_to: str,
     config_save_to: str = None,
-    copy_graph: bool = False,
+    copy_graph: bool = True,
     **kwargs) -> None:
     """使用这个函数将 PPQ ir 保存到文件，同时导出 PPQ 的量化配置信息。 该函数可以将 PPQ ir 保存为不同格式的模型文件。 this
     func dumps ppq IR to file, and exports quantization setting information
@@ -604,13 +576,6 @@ def export_ppq_graph(
         copy_graph (bool): 导出图的时候是否需要把图复制一份
             Whether to copy graph when export.
     """
-    # 如果没有后缀名，就添加一个后缀名上来
-    postfix = ''
-    if '.'  not in str(graph_save_to):
-        if platform in EXPORTING_POSTFIX:
-            postfix = EXPORTING_POSTFIX[platform]
-        graph_save_to += postfix
-
     for save_path in [graph_save_to, config_save_to]:
         if save_path is None: continue
         if os.path.exists(save_path):
@@ -620,10 +585,7 @@ def export_ppq_graph(
                 raise FileExistsError(f'File {save_path} is already existed, and it is a directory, '
                                     'Exporter can not create file here.')
 
-    if platform not in EXPORTERS:
-        raise KeyError(f'Requiring framework {platform} does not support export now.')
-    exporter = EXPORTERS[platform]()
-    assert isinstance(exporter, GraphExporter), 'Unexpected Exporter found.'
+    exporter = PFL.Exporter(platform)
     if copy_graph: graph = graph.copy()
     exporter.export(file_path=graph_save_to, config_path=config_save_to, graph=graph, **kwargs)
 
@@ -647,22 +609,42 @@ def format_graph(graph: BaseGraph) -> BaseGraph:
     We do not expect there is any shared parameter in your network, all of them will be copied and spilted.
     We do not expect any isolated operation in your network, all of them will be removed.
     """
-
+    
     # do graph level optimization
-    formatter = GraphFormatter(GraphMerger(graph))
-
-    formatter(GraphCommand(GraphCommandType.FORMAT_CONSTANT_INPUT))
-    formatter(GraphCommand(GraphCommandType.FUSE_BN))
+    formatter = GraphReplacer(GraphFormatter(GraphMerger(graph)))
+    if FORMATTER_FORMAT_CONSTANT_INPUT:
+        formatter(GraphCommand(GraphCommandType.FORMAT_CONSTANT_INPUT))
+    formatter(GraphCommand(GraphCommandType.CONVERT_TO_TENSOR))
     formatter(GraphCommand(GraphCommandType.FORMAT_PARAMETERS))
+    
+    if FORMATTER_FUSE_BIAS_ADD:
+        formatter(GraphCommand(GraphCommandType.FUSE_BIAS_ADD))
+    
+    if FORMATTER_FUSE_BN:
+        formatter(GraphCommand(GraphCommandType.FUSE_BN))
+    
+    if FORMATTER_REPLACE_BN_TO_CONV:
+        formatter(GraphCommand(GraphCommandType.REPLACE_BATCHNORM_TO_CONV))
+
     formatter(GraphCommand(GraphCommandType.FORMAT_CAST))
     formatter(GraphCommand(GraphCommandType.FORMAT_SLICE))
     formatter(GraphCommand(GraphCommandType.FORMAT_CLIP))
-    formatter(GraphCommand(GraphCommandType.DELETE_ISOLATED))
+    formatter(GraphCommand(GraphCommandType.FORMAT_PAD))
+    formatter(GraphCommand(GraphCommandType.FORMAT_RESIZE))
+    
+    if FORMATTER_REMOVE_IDENTITY:
+        formatter(GraphCommand(GraphCommandType.REMOVE_IDENTITY))
+    
+    if FORMATTER_REMOVE_ISOLATED:
+        formatter(GraphCommand(GraphCommandType.DELETE_ISOLATED))
 
     return graph
 
 
-def dispatch_graph(graph: BaseGraph, platform: TargetPlatform, setting: QuantizationSetting) -> BaseGraph:
+def dispatch_graph(
+    graph: BaseGraph, platform: TargetPlatform, 
+    dispatcher: Union[str, GraphDispatcher] = 'conservative', 
+    dispatching_table: DispatchingTable = None) -> BaseGraph:
     """这个函数执行图切分与调度，你的计算图将被切分成一系列子图，并被调度到不同设备上。 
     调度的逻辑分为自动控制的部分以及手动覆盖的部分，你可以使用 QuantizationSetting 来向这个函数传递手动调度表 从而覆盖 PPQ 的调度逻辑。
 
@@ -673,46 +655,47 @@ def dispatch_graph(graph: BaseGraph, platform: TargetPlatform, setting: Quantiza
     A dispatching table can be passed via QuantizationSetting to override
         the default dispatching logic of ppq dispatcher manually.
     """
-    assert platform in QUANTIZER_COLLECTION, (
-        f'Platform misunderstood, except one of following platform {QUANTIZER_COLLECTION.keys()}')
-    quantizer = QUANTIZER_COLLECTION[platform](graph) # 初始化一个 quantizer 没有很大代价...
+    dispatching_override = dispatching_table
+    quantizer = PFL.Quantizer(platform=platform, graph=graph) # 初始化一个 quantizer 没有很大代价...
 
-    if str(setting.dispatcher).lower() == 'pursus':
-        dispatcher = Perseus(graph=graph)
-        dispatching_table = dispatcher.dispatch()
+    if isinstance(dispatcher, str):
+        dispatcher = dispatcher.lower()
+        if dispatcher not in DISPATCHER_TABLE:
+            raise ValueError(f'Can not found dispatcher type "{dispatcher}", check your input again.')
+        dispatcher = DISPATCHER_TABLE[dispatcher](graph)
     else:
-        if str(setting.dispatcher).lower() not in DISPATCHER_TABLE:
-            raise ValueError(f'Can not found dispatcher type "{setting.dispatcher}", check your input again.')
-        dispatcher = DISPATCHER_TABLE[str(setting.dispatcher).lower()]()
-        assert isinstance(dispatcher, GraphDispatcher)
-        assert isinstance(quantizer, BaseQuantizer)
-        quant_types = quantizer.quant_operation_types
+        if not isinstance(dispatcher, GraphDispatcher):
+            raise TypeError('Parameter "dispachter" of function ppq.api.dispatch_graph must be String or GraphDispatcher, '
+                            f'however {type(dispatcher)} was given.')
+        dispatcher = dispatcher
 
-        dispatching_table = dispatcher.dispatch(
-            graph=graph, quant_types=quant_types,
-            quant_platform=TargetPlatform.UNSPECIFIED, # MUST BE UNSPECIFIED, 这里的意思是交由 Quantizer 决定是否量化这个算子
-            fp32_platform=TargetPlatform.FP32,
-            SOI_platform=TargetPlatform.SHAPE_OR_INDEX)
+    assert isinstance(dispatcher, GraphDispatcher)
+    assert isinstance(quantizer, BaseQuantizer)
+    quant_types = quantizer.quant_operation_types
+    dispatching_table = dispatcher.dispatch(
+        graph=graph, quant_types=quant_types,
+        quant_platform=TargetPlatform.UNSPECIFIED, # MUST BE UNSPECIFIED, 这里的意思是交由 Quantizer 决定是否量化这个算子
+        fp32_platform=TargetPlatform.FP32,
+        SOI_platform=TargetPlatform.SOI)
 
-    # override dispatching result with setting
-    dispatching_override = setting.dispatching_table
-    for opname, platform in dispatching_override.dispatchings.items():
-        if opname not in graph.operations: continue
-        assert isinstance(platform, int), (
-            f'Your dispatching table contains a invalid setting of operation {opname}, '
-            'All platform setting given in dispatching table is expected given as int, '
-            f'however {type(platform)} was given.')
-        dispatching_table[opname] = TargetPlatform(platform)
+    # override dispatching result
+    if dispatching_override is not None:
+        if not isinstance(dispatching_override, DispatchingTable):
+            raise TypeError('Parameter "dispatching_table" of function ppq.api.dispatch_graph must be DispatchingTable, '
+                            f'however {type(dispatching_override)} was given.')
+
+        for opname, platform in dispatching_override.dispatchings.items():
+            if opname not in graph.operations: continue
+            assert isinstance(platform, int), (
+                f'Your dispatching table contains a invalid setting of operation {opname}, '
+                'All platform setting given in dispatching table is expected given as int, '
+                f'however {type(platform)} was given.')
+            dispatching_table[opname] = TargetPlatform(platform)
 
     for operation in graph.operations.values():
         assert operation.name in dispatching_table, (
             f'Internal Error, Can not find operation {operation.name} in dispatching table.')
         operation.platform = dispatching_table[operation.name]
-
-    # insert necessary device switchers.
-    formatter = GraphDeviceSwitcher(graph)
-    formatter(GraphCommand(GraphCommandType.INSERT_SWITCHER))
-    graph.set_extension_attrib(IS_DISPATCHED_GRAPH, True)
     return graph
 
 
@@ -973,101 +956,26 @@ class DISABLE_CUDA_KERNEL:
         PPQ_CONFIG.USING_CUDA_KERNEL = self._state
 
 
-def register_network_quantizer(quantizer: type, platform: TargetPlatform):
-    """Register a quantizer to ppq quantizer collection, once the quantizer is registered, 
-    you can invoke it by calling ppq.api.quantize_onnx_model or function like this.
-    
-    This function will override the default quantizer collection:
-        register_network_quantizer(MyQuantizer, TargetPlatform.TRT_INT8) will replace the default TRT_INT8 quantizer.
+class DEQUANTIZE_GRAPH:
+    """ A short-cut function to dequantize given graph. """
+    def __init__(self, graph: BaseGraph) -> None:
+        self._graph          = graph
+        self._state_recorder = {}
+        self._quantable_ops  = [op for op in graph.operations.values() if isinstance(op, QuantableOperation)]
 
-    Quantizer should be a subclass of BaseQuantizer, do not provide an instance here as ppq will initilize it later.
-    Your quantizer must require no initializing params.
+    def __enter__(self):
+        for op in self._quantable_ops:
+            op.dequantize()
 
-    Args:
-        quantizer (type): quantizer to be inserted.
-        platform (TargetPlatform): corresponding platfrom of your quantizer.
-    """
-    if not isinstance(quantizer, type):
-        raise TypeError(f'You can only register a class type as custimized ppq quantizer, '
-                        f'however {type(quantizer)} is given. '
-                        '(Requiring a class type here, do not provide an instance)')
-    if not issubclass(quantizer, BaseQuantizer):
-        raise TypeError('You can only register a subclass of BaseQuantizer as custimized quantizer.')
-    QUANTIZER_COLLECTION[platform] = quantizer
-
-
-def register_network_parser(parser: type, framework: NetworkFramework):
-    """Register a parser to ppq parser collection, once the parser is registered, 
-    you can invoke it by calling ppq.api.load_graph.
-    
-    This function will override the default parser collection:
-        register_network_parser(MyParser, NetworkFramework.ONNX) will replace the default ONNX parser.
-
-    Parser should be a subclass of GraphBuilder, do not provide an instance here as ppq will initilize it later.
-    Your quantizer must require no initializing params.
-
-    Args:
-        parser (type): parser to be inserted.
-        framework (NetworkFramework): corresponding NetworkFramework of your parser.
-    """
-    if not isinstance(parser, type):
-        raise TypeError(f'You can only register a class type as custimized ppq parser, '
-                        f'however {type(parser)} is given. '
-                        f'(Requiring a class type here, do not provide an instance)')
-    if not issubclass(parser, GraphBuilder):
-        raise TypeError('You can only register a subclass of GraphBuilder as custimized parser.')
-    PARSERS[framework] = parser
-
-
-def register_network_exporter(exporter: type, platform: TargetPlatform):
-    """Register an exporter to ppq exporter collection, once the exporter is registered, 
-    you can invoke it by calling ppq.api.export_ppq_graph.
-    
-    This function will override the default exporter collection:
-        register_network_quantizer(MyExporter, TargetPlatform.TRT_INT8) will replace the default TRT_INT8 exporter.
-
-    Exporter should be a subclass of GraphExporter, do not provide an instance here as ppq will initilize it later.
-    Your Exporter must require no initializing params.
-
-    Args:
-        exporter (type): exporter to be inserted.
-        platform (TargetPlatform): corresponding platfrom of your exporter.
-    """
-    if not isinstance(exporter, type):
-        raise TypeError(f'You can only register a class type as custimized ppq exporter, '
-                f'however {type(exporter)} is given. '
-                f'(Requiring a class type here, do not provide an instance)')
-    if not issubclass(exporter, GraphExporter):
-        raise TypeError('You can only register a subclass of GraphExporter as custimized exporter.')
-    EXPORTERS[platform] = exporter
-
-
-def register_calibration_observer(algorithm: str, observer: type):
-    """Register an calibration observer to  PPQ_OBSERVER_TABLE, then you can calling your own observer with 
-        ppq.quantize_onnx_model.
-
-    This function will override the existing OBSERVER_TABLE without warning.
-    
-    registed observer must be a sub class of OperationObserver.
-
-    Args:
-        exporter (type): exporter to be inserted.
-        platform (TargetPlatform): corresponding platfrom of your exporter.
-    """
-    if not isinstance(observer, type):
-        raise TypeError(
-            f'You can only register an OperationObserver as custimized ppq observer, '
-            f'however {type(observer)} is given. ')
-    if not issubclass(observer, OperationObserver):
-        raise TypeError('Regitsing observer must be a subclass of OperationObserver.')
-    PPQ_OBSERVER_TABLE[algorithm] = observer
+    def __exit__(self, *args):
+        for op in self._quantable_ops:
+            op.restore_quantize_state()
 
 
 __all__ = ['load_graph', 'load_onnx_graph', 'load_caffe_graph',
            'dispatch_graph', 'dump_torch_to_onnx', 'quantize_onnx_model',
            'quantize_torch_model', 'quantize_caffe_model', 'load_native_graph',
-           'export_ppq_graph', 'format_graph', 'quantize', 'export',
+           'export_ppq_graph', 'format_graph', 'quantize', 'export', 'load_torch_model',
            'UnbelievableUserFriendlyQuantizationSetting', 'manop',
-           'quantize_native_model', 'ENABLE_CUDA_KERNEL', 'DISABLE_CUDA_KERNEL',
-           'register_network_quantizer', 'register_network_parser', 
-           'register_network_exporter', 'register_operation_handler']
+           'quantize_native_model', 'ENABLE_CUDA_KERNEL', 'DISABLE_CUDA_KERNEL', 
+           'DEQUANTIZE_GRAPH']

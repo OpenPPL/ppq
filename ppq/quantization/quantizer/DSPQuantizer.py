@@ -1,11 +1,10 @@
 from typing import Union
 
 import torch
-from ppq.api.setting import *
-from ppq.core import (PASSIVE_OPERATIONS, ChannelwiseTensorQuantizationConfig,
-                      OperationQuantizationConfig, QuantizationPolicy,
-                      QuantizationProperty, QuantizationStates, RoundingPolicy,
-                      TargetPlatform)
+from ppq.api.setting import QuantizationSetting
+from ppq.core import (PASSIVE_OPERATIONS, OperationQuantizationConfig, QuantizationVisibility,
+                      QuantizationPolicy, QuantizationProperty,
+                      QuantizationStates, RoundingPolicy, TargetPlatform)
 from ppq.IR import BaseGraph, Operation
 from ppq.quantization.optim import (PPLDSPTIReCalibrationPass,
                                     QuantizationOptimizationPipeline)
@@ -24,9 +23,8 @@ class PPL_DSP_Quantizer(BaseQuantizer):
         self._quant_max = int(pow(2, self._num_of_bits) - 1)
 
     def init_quantize_config(self, operation: Operation) -> OperationQuantizationConfig:
-
         base_quant_config = self.create_default_quant_config(
-            operation_meta=operation.meta_data, num_of_bits=self._num_of_bits,
+            op=operation, num_of_bits=self._num_of_bits, exponent_bits=0,
             quant_max=self._quant_max, quant_min=self._quant_min,
             observer_algorithm='percentile', policy=self.quantize_policy,
             rounding=self.rounding_policy,
@@ -49,8 +47,31 @@ class PPL_DSP_Quantizer(BaseQuantizer):
                     QuantizationProperty.LINEAR +
                     QuantizationProperty.PER_TENSOR)
                 bias_config.state = QuantizationStates.PASSIVE_INIT
+                bias_config.visibility = QuantizationVisibility.INTERNAL
+
             for config in base_quant_config.input_quantization_config[1: ]:
                 config.observer_algorithm = 'minmax'
+
+        if operation.type in {'Clip', 'Pad'}:
+            # Clip min, max must be PASSIVE INIT state
+            # Padding value must be PASSIVE INIT state
+            # They will be processed with PassiveParameterQuantizationPass
+            if operation.type == 'Clip':
+                if operation.num_of_input > 1:
+                    min_cfg = base_quant_config.input_quantization_config[1]
+                    max_cfg = base_quant_config.input_quantization_config[2]
+
+                    min_cfg.state = QuantizationStates.PASSIVE_INIT
+                    max_cfg.state = QuantizationStates.PASSIVE_INIT
+
+                    min_cfg.visibility = QuantizationVisibility.INTERNAL
+                    max_cfg.visibility = QuantizationVisibility.INTERNAL
+
+            if operation.type == 'Pad':
+                if operation.num_of_input > 2:
+                    constant_cfg = base_quant_config.input_quantization_config[-1]
+                    constant_cfg = QuantizationStates.PASSIVE_INIT
+                    constant_cfg.visiblity = QuantizationVisibility.INTERNAL
 
         if operation.type in PASSIVE_OPERATIONS:
             # Those op are not active op.
@@ -73,7 +94,7 @@ class PPL_DSP_Quantizer(BaseQuantizer):
             'GlobalMaxPool', 'GlobalAveragePool', 'Softmax',
             'Mul', 'Add', 'Max', 'Sub', 'Div', 'Reshape',
             'LeakyRelu', 'Concat', 'Sigmoid', 'Slice', 'Interp',
-            'ReduceMean', 'Flatten'}
+            'ReduceMean', 'Flatten', 'Scale'}
 
     @ property
     def quantize_policy(self) -> QuantizationPolicy:
@@ -108,10 +129,9 @@ class PPL_DSP_TI_Quantizer(PPL_DSP_Quantizer):
     def init_quantize_config(self, operation: Operation) -> OperationQuantizationConfig:
         base_quant_config = self.create_default_quant_config(
             policy=self.quantize_policy, rounding=self.rounding_policy,
-            operation_meta=operation.meta_data, num_of_bits=self._num_of_bits,
+            op=operation, num_of_bits=self._num_of_bits, exponent_bits=0,
             quant_max=self._quant_max, quant_min=self._quant_min,
-            observer_algorithm='percentile'
-        )
+            observer_algorithm='percentile')
 
         if operation.type in {'Conv', 'ConvTranspose', 'Gemm'}:
             # set all parameters within Conv, ConvTranspose, Gemm to per-channel quant-config.
@@ -126,12 +146,8 @@ class PPL_DSP_TI_Quantizer(PPL_DSP_Quantizer):
                     QuantizationProperty.LINEAR +
                     QuantizationProperty.PER_CHANNEL
                 )
-                base_quant_config.input_quantization_config[1] = \
-                    ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
-                        convert_from = conv_weight_config,
-                        offset = None, scale  = None, channel_axis = 0
-                    )
-                base_quant_config.input_quantization_config[1].observer_algorithm = 'Minmax'
+                conv_weight_config.channel_axis = 0
+                conv_weight_config.observer_algorithm = 'minmax'
 
             elif operation.type == 'ConvTranspose':
                 conv_weight_config = base_quant_config.input_quantization_config[1]
@@ -140,12 +156,9 @@ class PPL_DSP_TI_Quantizer(PPL_DSP_Quantizer):
                     QuantizationProperty.LINEAR +
                     QuantizationProperty.PER_CHANNEL
                 )
-                base_quant_config.input_quantization_config[1] = \
-                    ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
-                        convert_from = conv_weight_config,
-                        offset = None, scale  = None, channel_axis = 1
-                    )
-                base_quant_config.input_quantization_config[1].observer_algorithm = 'Minmax'
+                conv_weight_config.channel_axis = 1
+                conv_weight_config.observer_algorithm = 'minmax'
+
             # first parameter must exits, for gemm layer it will be gemm_weight
             # layout: [in_dim, out_dim]
             elif operation.type == 'Gemm':
@@ -155,12 +168,9 @@ class PPL_DSP_TI_Quantizer(PPL_DSP_Quantizer):
                     QuantizationProperty.LINEAR +
                     QuantizationProperty.PER_CHANNEL
                 )
-                base_quant_config.input_quantization_config[1] = \
-                    ChannelwiseTensorQuantizationConfig.convert_from_tensor_config(
-                        convert_from = gemm_weight_config,
-                        offset = None, scale  = None, channel_axis = 0
-                    )
-                base_quant_config.input_quantization_config[1].observer_algorithm = 'Minmax'
+                gemm_weight_config.channel_axis = 0
+                gemm_weight_config.observer_algorithm = 'minmax'
+
             # if operation has bias
             # let bias be fp32 because dsp ti don't need quantization parameter of bias
             if operation.num_of_input > 2:

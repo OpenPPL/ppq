@@ -167,7 +167,9 @@ class TensorMeta:
         return f'Tensor({self.name}) meta: dtype({self.dtype}), shape({self.shape})'
     
     def copy(self):
-        return TensorMeta(dtype=self.dtype, shape=self.shape.copy(), tensor_name=self.name)
+        if self.shape is not None:
+            return TensorMeta(dtype=self.dtype, shape=self.shape.copy(), tensor_name=self.name)
+        else: return TensorMeta(dtype=self.dtype, shape=None, tensor_name=self.name)
 
 
 class OperationMeta:
@@ -254,8 +256,7 @@ def convert_any_to_numpy(
     elif isinstance(x, torch.Tensor):
         if x.numel() == 0 and accept_none: return None
         if x.numel() == 0 and not accept_none: raise ValueError('Trying to convert an empty value.')
-        if x.numel() == 1: return convert_any_to_numpy(x.detach().cpu().item())
-        if x.numel()  > 1: return x.detach().cpu().numpy()
+        if x.numel() >= 1: return x.detach().cpu().numpy()
     elif isinstance(x, list) or isinstance(x, tuple):
         return np.array(x)
     else:

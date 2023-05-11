@@ -3,7 +3,7 @@ from typing import Iterable
 from ppq.core import empty_ppq_cache
 from ppq.executor import BaseGraphExecutor
 from ppq.IR import BaseGraph, QuantableOperation
-from ppq.quantization.qfunction.linear import PPQLinearQuantFunction
+from ppq.quantization.qfunction import PPQuantFunction
 
 from .base import QuantizationOptimizationPass
 
@@ -33,14 +33,12 @@ class ParameterBakingPass(QuantizationOptimizationPass):
     """
     def __init__(self) -> None:
         super().__init__(name='PPQ Parameter Baking Pass')
-        self._quantize_function = PPQLinearQuantFunction
+        self._quantize_function = PPQuantFunction
 
     @ empty_ppq_cache
     def optimize(
         self,
         graph: BaseGraph,
-        dataloader: Iterable,
-        executor: BaseGraphExecutor,
         **kwargs
     ) -> None:
 

@@ -3,10 +3,9 @@ from typing import Iterable, Union
 
 import torch
 from ppq.api.setting import *
-from ppq.core import (OperationMeta, OperationQuantizationConfig,
-                      QuantizationPolicy, QuantizationStates, RoundingPolicy,
-                      TargetPlatform, TensorQuantizationConfig,
-                      empty_ppq_cache)
+from ppq.core import (OperationQuantizationConfig, QuantizationPolicy,
+                      QuantizationStates, RoundingPolicy, TargetPlatform,
+                      TensorQuantizationConfig, empty_ppq_cache)
 from ppq.executor import BaseGraphExecutor
 from ppq.IR import (BaseGraph, GraphReplacer, Operation, QuantableGraph,
                     QuantableOperation, QuantableVariable)
@@ -24,13 +23,9 @@ class BaseQuantizer(metaclass = ABCMeta):
             raise TypeError(f'To initialize a Quantizer, a BaseGraph instance is needed.'\
                 f' While {type(graph)} was givne, if your graph is maintained by GraphCommandProcessor, '\
                 'use GraphCommandProcessor.graph here instead.')
-        self._verbose = verbose
-        self._processor_chain = None
-        self._graph = graph
-        
-        self._quant_min = -128
-        self._quant_max = +127
-        self._num_of_bits = 8
+        self._verbose   = verbose
+        self._graph     = graph
+        self._processor = QuantableGraph(GraphReplacer(self._graph))
 
     @ empty_ppq_cache
     def quantize(
@@ -51,11 +46,19 @@ class BaseQuantizer(metaclass = ABCMeta):
             executor=executor,
             verbose=self._verbose,
             **kwargs)
-
-        # step - 2, quantize all operation(need meta data.)
+        
+        # step - 2, quantize all operations
         executor.load_graph(self._graph)
         executor.tracing_operation_meta(inputs=inputs)
-        self.quantize_operations(quantable_operation_types=self.quant_operation_types)
+        
+        for op_name, operation in self._graph.operations.items():
+            if (operation.platform == TargetPlatform.UNSPECIFIED):
+                if operation.type in self.quant_operation_types:
+                    operation.platform = self.target_platform
+                else: operation.platform = TargetPlatform.FP32
+
+            if operation.platform not in {TargetPlatform.FP32, TargetPlatform.SOI}:
+                self.quantize_operation(op_name)
 
         # quantize operation will modify network structure
         # it is necessary calling self._executor before further execution
@@ -68,142 +71,150 @@ class BaseQuantizer(metaclass = ABCMeta):
             dataloader=calib_dataloader,
             executor=executor,
             verbose=self._verbose,
-            **kwargs
-        )
+            **kwargs)
 
         if self._verbose:
             print(self.report(), end='')
             print('Network Quantization Finished.')
 
-    @ empty_ppq_cache
-    def quantize_operations(
-        self,
-        quantable_operation_types: set,
-        operation_platforms: dict = None,
-        operation_quantization_configs: dict = None,
-    ) -> None:
-        quantize_chain = QuantableGraph(GraphReplacer(self._graph))
-        if operation_platforms is None: operation_platforms = {}
-        if operation_quantization_configs is None: operation_quantization_configs = {}
+    def quantize_operation(self, op_name: str, platform: TargetPlatform=None) -> QuantableOperation:
+        if op_name not in self._graph.operations:
+            raise KeyError(f'Can not find op {op_name} in your graph, chech operation name again.')
+        converting_operation = self._graph.operations[op_name]
+        if isinstance(converting_operation, QuantableOperation):
+            ppq_warning(f'Operation {op_name} has been quantized, can not to quantize it twice.')
+            return converting_operation
 
-        # build operation_platforms
-        # every op MUST have a target platform
-        for op_name, operation in self._graph.operations.items():
-            # some operation has a predefined platform, just skip.
-            if operation.platform != TargetPlatform.UNSPECIFIED:
-                operation_platforms[op_name] = operation.platform
-            elif operation.type in quantable_operation_types:
-                operation_platforms[op_name] = self.target_platform
-            else: operation_platforms[op_name] = self.default_platform
+        # override platform with calling parameter.
+        if platform is not None: converting_operation.platform = platform
+        else: platform = converting_operation.platform
 
-            # manual override.
-            if op_name in operation_platforms:
-                operation.platform = operation_platforms[op_name]
+        if platform in {TargetPlatform.FP32, TargetPlatform.SOI}: 
+            return self._graph.operations[op_name]
 
-        # build operation_quantization_configs
-        # every quantable op MUST have a quantization config
-        # if operation.type is listed in quantable_operation_types while a operation_quantization_configs is given
-        # it will override the setting of quantable_operation_types
-        for op_name, operation in self._graph.operations.items():
-            if not TargetPlatform.is_quantized_platform(operation_platforms[op_name]): continue
-            # operation information is tracing data, which created in self.__init__
-            # it contains useful metadata from creating a Quantizable Operation object
-            if operation.meta_data is None:
-                raise ValueError(f'Operation {op_name} has no meta data yet. calling executor.tracing_meta')
+        # if platform == TargetPlatform.UNSPECIFIED we can skip its quantization when type is not supported.
+        if platform == TargetPlatform.UNSPECIFIED and converting_operation.type not in self.quant_operation_types:
+            return self._graph.operations[op_name]
 
-            if operation.type in quantable_operation_types or TargetPlatform.is_quantized_platform(operation.platform):
-                # TargetPlatform.is_quantized_platform(operation.platform) means override.
-                if op_name in operation_quantization_configs: continue
-                else: operation_quantization_configs[op_name] = (
-                    self.init_quantize_config(operation=operation)
-                )
-
-        for op_name, operation in list(self._graph.operations.items()):
-            # check whether given operation has been quantized,
-            # if operation has been quantized, that always means aonther
-            # quantizer is in charge of processing the given graph,
-            # which is not allowed in ppq.
-            if isinstance(operation, QuantableOperation):
-                raise TypeError(
-                    f'Operation {operation} has been quantized, it is not allowed to quantize a graph for multiple times.')
-
-            # operation_quantization_configs, operation_platforms defines a detailed quantization scheme
-            # it is a combination of user-written quantization config and quantizer's internal policy.
-            # once quantization_config_lookup_table was given, it will override the quantization config
-            # defined in Quantizier.default_operation_quantization_config
-            target_platform  = operation_platforms[op_name]
-
-            if TargetPlatform.is_quantized_platform(target_platform):
-                if op_name not in operation_quantization_configs:
-                    raise KeyError(f'Can not find quantization configuration for operation {op_name}, '
-                                   'if you are dispatching operations manually, '
-                                   'make sure all operations that you sent to quantized platform is '
-                                   'quantable and recognizable for your quantizer.')
-                quantization_config = operation_quantization_configs[op_name]
-                assert isinstance(quantization_config, OperationQuantizationConfig), (
-                    f'Expect an Operation Quantization Config here, however {type(quantization_config)} was given.')
-                quantize_chain(
-                    QuantizeOperationCommand(
-                        op_name=operation.name,
-                        target_platform=target_platform,
-                        config=quantization_config
-                    ))
-            else:
-                operation.platform = target_platform
-        # end for
+        # create quantize config and convert operation.
+        self._processor(QuantizeOperationCommand(
+            op_name=op_name, target_platform=platform,
+            config=self.init_quantize_config(operation=converting_operation)
+        ))
+        return self._graph.operations[op_name]
 
     @ staticmethod
     def create_default_quant_config(
-        operation_meta: OperationMeta, num_of_bits: int,
-        quant_min: int, quant_max: int, observer_algorithm: str,
-        policy: QuantizationPolicy, rounding: RoundingPolicy,
+        op: Operation, 
+        num_of_bits: int = 8,
+        quant_min: Union[int, float] = -127, 
+        quant_max: Union[int, float] = 128, 
+        observer_algorithm: str = 'percentile', 
+        policy: QuantizationPolicy = 
+            QuantizationPolicy(
+                QuantizationProperty.PER_TENSOR + 
+                QuantizationProperty.LINEAR + 
+                QuantizationProperty.SYMMETRICAL), 
+        rounding: RoundingPolicy = RoundingPolicy.ROUND_HALF_EVEN, 
+        exponent_bits: int = 0,
     ) -> OperationQuantizationConfig:
+        """
+        为你的算子创建一个默认量化信息
+        
+        对于一个 Onnx 算子而言，它总是会有几个输入和输出 Variable
+        你需要为每一个相连的 Variable 初始化量化信息 TensorQuantConfig
+        
+        这个函数就是用来帮你初始化这些信息的。
+        
+        一个麻烦的问题是：
+
+            对于很多 onnx 算子而言，他们的部分输入都是不需要量化的:
+            
+            如 Clip 算子的三个输入 value, min, max, 大部分框架不要求量化 min, max
+            如 Reshape 算子的两个输入 value, shape, 其中 shape 不能够被量化
+
+            PPQ 的算子接线器中记录了这些信息
+
+            算子接线器中记录了所有标准 onnx 的默认量化策略
+            该函数将使用预定义的算子量化策略初始化量化信息
+        
+        你可以在 Quantizer 中对默认量化策略进行进一步修改
+
+        Create a default quantization configuration for given op.
+        For each onnx op, there will be some input and output variables.
+        
+        You are required to create tensor quantization config for every
+        input and output variables.
+        
+        This function is designed for creating a default quantization config for you.
+
+            The created OQC(Op Quantization Config) is based on OpSocket.
+
+            In fact, there are some rules or templates when creating the OQC:
+            For Clip Op which has 3 input variable, namely value, min and max
+                most framework does not require a quantization config for min and max.
+            For Reshape Op which has 2 input variable, namely value and shape
+                the input shape can never be quantized.
+
+        Those rules are pre-defined within OpSocket, thus ppq will create
+        OQC based on underlying OpSocket of your Op.
+        
+        After the default OQC got created, you can overwrite its state in quantizer.
+        """
+        assert isinstance(op, Operation), (
+            f'Can only initialize OQC for PPQ.IR.Operation, however {type(op)} was given.')
         assert isinstance(policy, QuantizationPolicy), (
             f'Can not create quantization config - Quantization Policy Type Error.')
         assert isinstance(rounding, RoundingPolicy), (
             f'Can not create quantization config - Rounding Policy Type Error.')
-        num_of_related_vars = operation_meta.num_of_input + operation_meta.num_of_output
-        configs = [TensorQuantizationConfig(
-            policy=policy, rounding=rounding,
-            num_of_bits=num_of_bits, scale=None, offset=None,
-            quant_min=quant_min, quant_max=quant_max,
-            observer_algorithm=observer_algorithm,
-        ) for _ in range(num_of_related_vars)]
-        return OperationQuantizationConfig(
-            input_quantization_configs=configs[: operation_meta.num_of_input],
-            output_quantization_configs=configs[operation_meta.num_of_input: ],
-        )
+
+        socket = op.socket
+        input_cfgs, output_cfgs = [], []
+        for index in range(op.num_of_input):
+            state = QuantizationStates.INITIAL
+            # for those unexpected inputs and outputs
+            # ppq just initilize them as normal variable.
+            if index < len(socket.in_plat):
+                target_plat = socket.in_plat[index]
+                if target_plat == TargetPlatform.FP32:
+                    state = QuantizationStates.FP32
+                if target_plat == TargetPlatform.SOI:
+                    state = QuantizationStates.FP32
+            input_cfgs.append(TensorQuantizationConfig(
+                policy=policy, rounding=rounding,
+                num_of_bits=num_of_bits, scale=None, offset=None,
+                exponent_bits=exponent_bits, quant_min=quant_min, quant_max=quant_max,
+                observer_algorithm=observer_algorithm, state=state))
+
+        for index in range(op.num_of_output):
+            state = QuantizationStates.INITIAL
+            # for those unexpected inputs and outputs
+            # ppq just initilize them as normal variable.
+            if index < len(socket.out_plat):
+                target_plat = socket.out_plat[index]
+                if target_plat == TargetPlatform.FP32:
+                    state = QuantizationStates.FP32
+                if target_plat == TargetPlatform.SOI:
+                    state = QuantizationStates.FP32
+            output_cfgs.append(TensorQuantizationConfig(
+                policy=policy, rounding=rounding, num_of_bits=num_of_bits, scale=None, offset=None,
+                exponent_bits=exponent_bits, quant_min=quant_min, quant_max=quant_max,
+                observer_algorithm=observer_algorithm, state=state))
+
+        return OperationQuantizationConfig(input_cfgs, output_cfgs)
 
     @ abstractmethod
     def init_quantize_config(self, operation: Operation) -> OperationQuantizationConfig:
-        base_quant_config = self.create_default_quant_config(
-            policy=self.quantize_policy, rounding=self.rounding_policy,
-            operation_meta=operation.meta_data, num_of_bits=self._num_of_bits,
-            quant_max=self._quant_max, quant_min=self._quant_min,
-            observer_algorithm='percentile')
-        return base_quant_config
+        raise NotImplementedError('Implement this first.')
 
     @ abstractproperty
     @ property
     def quant_operation_types(self) -> set:
         raise NotImplementedError('Quantizier does not have a quantable op set yet.')
 
-    @ abstractproperty
     @ property
     def target_platform(self) -> TargetPlatform:
-        raise NotImplementedError('Quantizier does not have a default platform setting yet.')
-
-    @ property
-    def default_platform(self) -> TargetPlatform:
-        return TargetPlatform.FP32
-
-    @ property
-    def quantize_policy(self) -> QuantizationPolicy:
-        raise NotImplementedError('Quantizier does not have a default quantization policy yet.')
-
-    @ property
-    def rounding_policy(self) -> RoundingPolicy:
-        return RoundingPolicy.ROUND_HALF_EVEN
+        return TargetPlatform.INT8
 
     @ property
     def activation_fusion_types(self) -> set:
@@ -239,9 +250,7 @@ class BaseQuantizer(metaclass = ABCMeta):
         assert isinstance(setting, QuantizationSetting), (
             f'PPQ needs a OptimSetting instance to initialize optimization pipeline,'
             f' however {type(setting)} was given.')
-        if setting.advanced_optimization == True:
-            ppq_warning('PPQ Advanced optimization has been removed since 0.6.5, use setting.finetune = True instead')
-            ppq_warning('PPQ Advanced optimization 在 0.6.5 版本中已经被移除且不会起到任何效果，作为替代方案我们建议你使用 setting.lsq_optimization = True')
+
         if setting.matrix_factorization == True:
             ppq_warning('PPQ Matrix Factorization Pass has been removed from QuantizationSetting since 0.6.5, this pass must be called manually now.')
             ppq_warning('PPQ Matrix Factorization Pass 已经不能通过 QuantizationSetting 调用，现在你必须手动调用该优化过程')
@@ -257,21 +266,8 @@ class BaseQuantizer(metaclass = ABCMeta):
                 iteration            = equalization_setting.iteration
             ))
 
-        if setting.channel_split:
-            channel_split_setting = setting.channel_split_setting
-            list_of_passes.append(ChannelSplitPass(
-            interested_layers = channel_split_setting.interested_layers,
-            search_directions = channel_split_setting.search_directions,
-            expand_ratio      = channel_split_setting.expand_ratio,
-            split_ratio       = channel_split_setting.split_ratio,
-            grid_aware        = channel_split_setting.grid_aware
-            ))
-
         if setting.fusion:
             fusion_setting  = setting.fusion_setting
-            if fusion_setting.refine_quantization:
-                list_of_passes.append(QuantizeRefinePass())
-
             list_of_passes.append(QuantizeFusionPass(
                 fuse_activation=fusion_setting.fuse_activation,
                 fuse_passive_op=fusion_setting.fuse_passive_op,
@@ -294,9 +290,10 @@ class BaseQuantizer(metaclass = ABCMeta):
         if setting.fusion:
             if fusion_setting.align_quantization:
                 list_of_passes.append(QuantAlignmentPass(
-                    elementwise_merge_method = fusion_setting.align_elementwise_to,
-                    concat_merge_method = fusion_setting.align_concat_to,
-                    averagepool_method  = fusion_setting.align_avgpooling_to,
+                    elementwise_alignment = fusion_setting.align_elementwise_to,
+                    concat_alignment      = fusion_setting.align_concat_to,
+                    pooling_alignment     = fusion_setting.align_avgpooling_to,
+                    resize_alignment      = fusion_setting.align_resize_to,
                     force_overlap = fusion_setting.force_alignment_overlap
                 ))
 
@@ -326,7 +323,7 @@ class BaseQuantizer(metaclass = ABCMeta):
                 block_size         = lsq_setting.block_size
             ))
             # requant passive parameters
-            list_of_passes.append(PassiveParameterQuantizePass(override=True))
+            list_of_passes.append(PassiveParameterQuantizePass())
 
         if setting.blockwise_reconstruction:
             blockwise_reconstruction_setting = setting.blockwise_reconstruction_setting
@@ -340,7 +337,7 @@ class BaseQuantizer(metaclass = ABCMeta):
                 block_size         = blockwise_reconstruction_setting.block_size
             ))
             # requant passive parameters
-            list_of_passes.append(PassiveParameterQuantizePass(override=True))
+            list_of_passes.append(PassiveParameterQuantizePass())
 
         if setting.quantize_parameter:
             if param_setting.baking_parameter:
@@ -366,6 +363,18 @@ class BaseQuantizer(metaclass = ABCMeta):
                 interested_layers    = weight_split_setting.interested_layers,
                 method               = weight_split_setting.method,
                 value_threshold      = weight_split_setting.value_threshold,
+            ))
+
+        if setting.channel_split:
+            channel_split_setting = setting.channel_split_setting
+            list_of_passes.append(ChannelwiseSplitPass(
+                optimize_level       = channel_split_setting.opt_level,
+                iterations           = channel_split_setting.iterations,
+                threshold            = channel_split_setting.value_threshold,
+                including_bias       = channel_split_setting.including_bias,
+                including_act        = channel_split_setting.including_act,
+                bias_multiplier      = channel_split_setting.bias_multiplier,
+                act_multiplier       = channel_split_setting.act_multiplier
             ))
 
         if setting.equalization:

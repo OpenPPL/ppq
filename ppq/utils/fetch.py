@@ -42,7 +42,7 @@ def tensor_random_fetch(
     """
     tensor = tensor.flatten()
     num_of_elements = tensor.numel()
-    assert num_of_elements > 0, ('Can not fetch data from tensor with less than 1 elements.')
+    assert num_of_elements > 0, ('Can not fetch data from empty tensor(0 element).')
 
     if seed is None:
         indexer = generate_torch_indexer(num_of_fetches=num_of_fetches, num_of_elements=num_of_elements)
@@ -72,7 +72,7 @@ def channel_random_fetch(
     tensor = tensor.transpose(0, channel_axis)
     tensor = tensor.flatten(start_dim=1)
     num_of_elements = tensor.shape[-1]
-    assert num_of_elements > 0, ('Can not fetch data from tensor with less than 1 elements.')
+    assert num_of_elements > 0, ('Can not fetch data from empty tensor(0 element).')
 
     if seed is None:
         indexer = generate_torch_indexer(num_of_fetches=fetchs_per_channel, num_of_elements=num_of_elements)
@@ -82,7 +82,7 @@ def channel_random_fetch(
 
 def batch_random_fetch(
     tensor: torch.Tensor,
-    fetchs_per_batch: int = 1024,
+    fetches_per_batch: int = 1024,
     seed: int = None
     ) -> torch.Tensor:
     """Fetch some elements from each sample in a batched tensor. if a valid
@@ -100,9 +100,9 @@ def batch_random_fetch(
     """
     tensor = tensor.flatten(start_dim=1)
     num_of_elements = tensor.shape[-1]
-    assert num_of_elements > 0, ('Can not fetch data from tensor with less than 1 elements.')
+    assert num_of_elements > 0, ('Can not fetch data from empty tensor(0 element).')
 
     if seed is None:
-        indexer = generate_torch_indexer(num_of_fetches=fetchs_per_batch, num_of_elements=num_of_elements)
-    else: indexer = generate_indexer(num_of_fetches=fetchs_per_batch, num_of_elements=num_of_elements, seed=seed)
+        indexer = generate_torch_indexer(num_of_fetches=fetches_per_batch, num_of_elements=num_of_elements)
+    else: indexer = generate_indexer(num_of_fetches=fetches_per_batch, num_of_elements=num_of_elements, seed=seed)
     return tensor.index_select(dim=-1, index=indexer.to(tensor.device).long())

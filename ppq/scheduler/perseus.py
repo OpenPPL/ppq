@@ -1,11 +1,9 @@
 from typing import Dict, List, Set
 
-from ppq.core import TargetPlatform, ppq_warning
-from ppq.IR import BaseGraph, Operation, SearchableGraph
+from ppq.core import TargetPlatform
+from ppq.IR import BaseGraph, Operation, OpSocket, SearchableGraph
 
 from .base import GraphDispatcher
-from .core import (DEFAULT_SOCKET_CREATOR, DEFAULT_SOCKET_TABLE, OpSocket,
-                   VProperty, VType)
 
 
 class Perseus(GraphDispatcher):
@@ -34,8 +32,6 @@ class Perseus(GraphDispatcher):
 
     接线器模型在算子内部定义了这样的输入 - 输出关系网，从而调度器可以使用这样的关系网来划分子图。
     
-    Args:
-        GraphDispatcher (_type_): _description_
     """
 
     def __init__(self, graph: BaseGraph, verbose: bool = False) -> None:
@@ -61,34 +57,21 @@ class Perseus(GraphDispatcher):
         self._precomputed_op_fanin  = {}
 
         for op in self.graph.operations.values():
-            if op.type in DEFAULT_SOCKET_TABLE:
-                socket = DEFAULT_SOCKET_TABLE[op.type](op)
+            socket = op.socket
+            fanin, fanout = set(), set()
+            for link in socket.links:
+                source_var  = op.inputs[link.in_idx]
+                dest_var    = op.outputs[link.out_idx]
+                source_op   = source_var.source_op
+                dest_ops    = dest_var.dest_ops
+                if source_op is not None:
+                    fanin.add(source_op)
+                for dest_op in dest_ops:
+                    fanout.add(dest_op)
+            self._precomputed_op_fanin[op.name], self._precomputed_op_fanout[op.name] = fanin, fanout
+            self.sockets[op.name] = socket
 
-                fanin, fanout = set(), set()
-                for link in socket.links:
-                    source_var  = op.inputs[link.source_idx]
-                    dest_var    = op.outputs[link.dest_idx]
-                    source_op   = source_var.source_op
-                    dest_ops    = dest_var.dest_ops
-                    if source_op is not None:
-                        fanin.add(source_op)
-                    for dest_op in dest_ops:
-                        fanout.add(dest_op)
-                self._precomputed_op_fanin[op.name], self._precomputed_op_fanout[op.name] = fanin, fanout
-                self.sockets[op.name] = socket
-
-            else:
-                ppq_warning(f'Perseus Dispatcher do not konw how to dispatch op {op.name}({op.type}), '
-                            f'cause optype {op.type} is unsupported now. '
-                            f'Perseus will initialize a default socket for it, '
-                            'which might cause some error in execution. '
-                            'You are supposed to register a socket handler for this type instead.')
-                socket = DEFAULT_SOCKET_CREATOR(op)
-                self._precomputed_op_fanin[op.name]   = set(self.graph.get_upstream_operations(op))
-                self._precomputed_op_fanout[op.name]  = set(self.graph.get_downstream_operations(op))
-                self.sockets[op.name] = socket
         super().__init__()
-
 
     def solve_transitive_closure(
         self, sources: List[Operation], 
@@ -119,14 +102,7 @@ class Perseus(GraphDispatcher):
         如果从 TopK 节点 出发求传递闭包，只会寻找到其第一个输出分支上的节点。
         
         节点上的链接关系由算子接线器进行定义；算子接线器是一种 PPQ 内置的抽象数据结构，
-        参考：ppq/scheduler/core/default.py
-
-        Args:
-            sources (List[Operation]): _description_
-            recursive (bool, optional): _description_. Defaults to True.
-
-        Returns:
-            Set[Operation]: _description_
+        参考：ppq.IR.base.opdef.py
         """
         if isinstance(sources, Operation): sources = [sources]
 
@@ -148,25 +124,15 @@ class Perseus(GraphDispatcher):
         return set(closure)
 
     def mark_quantable_op(self) -> Set[Operation]:
-        """追踪图中所有可量化节点，即求解所有计算节点的传递闭包
-
-        Returns:
-            Set[Operation]: _description_
-        """
+        """追踪图中所有可量化节点，即求解所有计算节点的传递闭包"""
         sources = [op for op in self.graph.operations.values() if op.is_computing_op]
         return self.solve_transitive_closure(sources)
 
-    def mark_non_quantable_op(self) -> Set[Operation]:
+    def mark_soi_op(self) -> Set[Operation]:
         """追踪图中所有不可量化节点，即求解所有不可量化节点的传递闭包
         不可量化节点种类繁多，常见的节点包括 Shape, Topk, NMS
         有一些节点的输入不能量化，如 Reshape, Slice 等
         所有不可量化节点由 opsocket 具体定义给出
-
-        Raises:
-            KeyError: _description_
-
-        Returns:
-            Set[Operation]: _description_
         """
         # initialize non quantable group.
         sources = set()
@@ -176,14 +142,14 @@ class Perseus(GraphDispatcher):
             socket = self.sockets[op.name]
             assert isinstance(socket, OpSocket)
 
-            for ocls, ovar in zip(socket.cls_output, op.outputs):
-                if VType(ocls).non_quantable():
+            for plat, ovar in zip(socket.out_plat, op.outputs):
+                if plat != TargetPlatform.UNSPECIFIED:
                     for dop, dix in zip(ovar.dest_ops, ovar.dest_idx):
-                        if self.opsocket(dop).cls_input[dix] == VProperty.VALUE:
+                        if self.opsocket(dop).in_plat[dix] == TargetPlatform.UNSPECIFIED:
                             sources.add(dop)
 
-            for icls, ivar in zip(socket.cls_input, op.inputs):
-                if VType(icls).non_quantable() and ivar.source_op != None:
+            for plat, ivar in zip(socket.in_plat, op.inputs):
+                if plat != TargetPlatform.UNSPECIFIED and ivar.source_op != None:
                     sources.add(ivar.source_op)
         return self.solve_transitive_closure(sources)
 
@@ -219,8 +185,10 @@ class Perseus(GraphDispatcher):
             ep_expr=None, direction='up')
         return fanin
 
-    def dispatch(self, graph_input_cls: List[VProperty] = None, 
-                 graph_output_cls: List[VProperty] = None) -> Dict[str, TargetPlatform]:
+    def dispatch(self, quant_types: Set[str] = None,
+                 in_plat: List[TargetPlatform] = None, 
+                 out_plat: List[TargetPlatform] = None, 
+                 **kwargs) -> Dict[str, TargetPlatform]:
         """对当前图执行默认算子调度逻辑
 
         在 Onnx 定义的神经网络中存在两类数据：
@@ -231,47 +199,28 @@ class Perseus(GraphDispatcher):
         而后从 Shape, TopK 等节点出发，求解非计算节点的传递闭包 B
         
         集合 A - B 中的节点将被量化，也被称为量化区节点
-        集合 A * B 中的节点将被称为冲突去节点，默认不量化
+        集合 A * B 中的节点将被称为冲突区节点，默认不量化，调度到端侧执行
         集合 B 中的节点将被称为 SOI 节点，不量化且调度到 Cpu 执行
-        集合 A, B 之外的节点为未知区域节点，默认不量化
-        
+        集合 A, B 之外的节点为未知区域节点，默认不量化，调度到端侧执行
+
         PPQ 使用朴素递归求解传递闭包，对于神经网络这种稀疏图而言，
         
         其时间复杂度大约为O(n)
-
-        你可以额外指定图输入和输出的属性，如果有些输出值不想量化，你可以将其指定为
-        OType.NONQUANTABLE，则该数据流上所有的算子都不会被量化（未实现）
-
-        Returns:
-            Dict[str, OType]: _description_
         """
-        computing_ops     = self.mark_quantable_op()
-        non_quantable_ops = self.mark_non_quantable_op()
+        computing_ops = self.mark_quantable_op()
+        soi_ops       = self.mark_soi_op()
 
         dispatching_table = {}
         for op in self.graph.operations.values():
             dispatching_table[op.name] = TargetPlatform.FP32
-        
+
         for op in self.graph.operations.values():
-            if op in computing_ops:
+            if op in computing_ops and op in soi_ops:
+                dispatching_table[op.name] = TargetPlatform.FP32
+            elif op in computing_ops:
                 dispatching_table[op.name] = TargetPlatform.UNSPECIFIED
-
-        for op in self.graph.operations.values():
-            if op in non_quantable_ops:
-                if op.name in dispatching_table and dispatching_table[op.name] == TargetPlatform.UNSPECIFIED:
-                    dispatching_table[op.name] = TargetPlatform.FP32
-                else: dispatching_table[op.name] = TargetPlatform.SHAPE_OR_INDEX
-
-        # if op has an non-quantable output, force it to be non-quantable op
-        for op in self.graph.operations.values():
-            socket = self.opsocket(op)
-            for ocls in socket.cls_output:
-                if ocls in {VProperty.ATTRIB, VProperty.SOI}:
-                    dispatching_table[op.name] = TargetPlatform.SHAPE_OR_INDEX
-                    break
-                if ocls in {VProperty.LOGICAL}:
-                    dispatching_table[op.name] = TargetPlatform.FP32
-                    break
+            elif op in soi_ops:
+                dispatching_table[op.name] = TargetPlatform.SOI
 
         return dispatching_table
 

@@ -134,7 +134,8 @@ class CaffeOpBuilder(object):
         'SubpixelDown': 'SpaceToDepth',
         'ArgMax': 'CaffeArgMax',
         'HSwish': 'HardSwish',
-        'HSigmoid': 'HardSigmoid'
+        'HSigmoid': 'HardSigmoid',
+        'MatMul': 'MatMul'
     }
 
     def __init__(self,
@@ -787,4 +788,8 @@ class HSwish(CaffeOpBuilder):
 
 @register_class
 class HSigmoid(CaffeOpBuilder):
+    pass
+
+@register_class
+class MatMul(CaffeOpBuilder):
     pass

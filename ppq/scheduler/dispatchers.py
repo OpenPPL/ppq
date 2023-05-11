@@ -1,3 +1,9 @@
+"""
+This File Contains Legacy Dispatchers.
+Refer to ppq.scheduler.perseus for updated implemenation.
+"""
+
+
 from typing import Dict, Set
 
 from ppq.core import TargetPlatform
@@ -24,12 +30,15 @@ class AggresiveDispatcher(GraphDispatcher):
     ATTENTION: this dispatcher will insert necessary DeviceSwitch operations
         between shape-or-index operations and others.
     """
-    @staticmethod
+    def __init__(self, graph: BaseGraph) -> None:
+        super().__init__()
+        self.graph = graph
+        
     def dispatch(
-        graph: BaseGraph, quant_types: Set[str],
-        quant_platform: TargetPlatform,
-        fp32_platform: TargetPlatform,
-        SOI_platform: TargetPlatform,
+        self, 
+        quant_platform: TargetPlatform = TargetPlatform.UNSPECIFIED,
+        fp32_platform: TargetPlatform = TargetPlatform.FP32,
+        SOI_platform: TargetPlatform = TargetPlatform.SOI,
         **kwargs
         ) -> Dict[str, TargetPlatform]:
         """Graph Dispatcher splits a graph into parts, each part of graph will
@@ -55,16 +64,16 @@ class AggresiveDispatcher(GraphDispatcher):
             quant_platform (TargetPlatform):
                 platform object where quantable parts will goes to.
 
-            fp32_platform (TargetPlatform):
+            SOI_platform (TargetPlatform): 
                 platform object where SOI parts will goes to.
 
-            SOI_platform (TargetPlatform):
+            fp32_platform (TargetPlatform):
                 platform object where remaining parts will goes to.
 
         Returns:
             Dict[str, TargetPlatform]: [description]
         """
-
+        graph = self.graph
         recivers, generators = SOI_receivers(graph), SOI_generators(graph)
         search_engine, SOI_operations, FP32_operations = SearchableGraph(graph), set(recivers), set()
 
@@ -144,12 +153,15 @@ class ConservativeDispatcher(GraphDispatcher):
     ATTENTION: this dispatcher will insert necessary DeviceSwitch operations
         between shape-or-index operations and others.
     """
-    @staticmethod
+    def __init__(self, graph: BaseGraph) -> None:
+        super().__init__()
+        self.graph = graph
+
     def dispatch(
-        graph: BaseGraph, quant_types: Set[str],
-        quant_platform: TargetPlatform,
-        fp32_platform: TargetPlatform,
-        SOI_platform: TargetPlatform, **kwargs
+        self, quant_types: Set[str],
+        quant_platform: TargetPlatform = TargetPlatform.UNSPECIFIED,
+        fp32_platform: TargetPlatform = TargetPlatform.FP32,
+        SOI_platform: TargetPlatform = TargetPlatform.SOI, **kwargs
         ) -> Dict[str, TargetPlatform]:
         """Graph Dispatcher splits a graph into parts, each part of graph will
         be sent to a specific platform for further execution and quantization.
@@ -183,6 +195,7 @@ class ConservativeDispatcher(GraphDispatcher):
         Returns:
             Dict[str, TargetPlatform]: [description]
         """
+        graph = self.graph
         recivers, generators = SOI_receivers(graph), SOI_generators(graph)
         search_engine, SOI_operations = SearchableGraph(graph), set(recivers)
 
@@ -281,12 +294,15 @@ class PPLNNDispatcher(GraphDispatcher):
     ATTENTION: this dispatcher will insert necessary DeviceSwitch operations
         between shape-or-index operations and others.
     """
-    @staticmethod
+    def __init__(self, graph: BaseGraph) -> None:
+        super().__init__()
+        self.graph = graph
+
     def dispatch(
-        graph: BaseGraph, quant_types: Set[str],
-        quant_platform: TargetPlatform,
-        fp32_platform: TargetPlatform,
-        SOI_platform: TargetPlatform, **kwargs
+        self, quant_types: Set[str],
+        quant_platform: TargetPlatform = TargetPlatform.UNSPECIFIED,
+        fp32_platform: TargetPlatform = TargetPlatform.FP32,
+        SOI_platform: TargetPlatform = TargetPlatform.SOI, **kwargs
         ) -> Dict[str, TargetPlatform]:
         """Graph Dispatcher splits a graph into parts, each part of graph will
         be sent to a specific platform for further execution and quantization.
@@ -311,15 +327,16 @@ class PPLNNDispatcher(GraphDispatcher):
             quant_platform (TargetPlatform): =
                 platform object where quantable parts will goes to.
 
-            fp32_platform (TargetPlatform):
+            SOI_platform (TargetPlatform):
                 platform object where SOI parts will goes to.
 
-            SOI_platform (TargetPlatform):
+            fp32_platform (TargetPlatform):
                 platform object where remaining parts will goes to.
 
         Returns:
             Dict[str, TargetPlatform]: [description]
         """
+        graph = self.graph
         recivers, generators = SOI_receivers(graph), SOI_generators(graph)
         search_engine, SOI_operations = SearchableGraph(graph), set(recivers)
 
@@ -416,12 +433,15 @@ class PointDispatcher(ConservativeDispatcher):
     ATTENTION: this dispatcher will insert necessary DeviceSwitch operations
         between shape-or-index operations and others.
     """
-    @staticmethod
+    def __init__(self, graph: BaseGraph) -> None:
+        super().__init__()
+        self.graph = graph
+
     def dispatch(
-        graph: BaseGraph, quant_types: Set[str],
-        quant_platform: TargetPlatform,
-        fp32_platform: TargetPlatform,
-        SOI_platform: TargetPlatform, **kwargs
+        self, quant_types: Set[str],
+        quant_platform: TargetPlatform = TargetPlatform.UNSPECIFIED,
+        fp32_platform: TargetPlatform = TargetPlatform.FP32,
+        SOI_platform: TargetPlatform = TargetPlatform.SOI, **kwargs
         ) -> Dict[str, TargetPlatform]:
         """Graph Dispatcher splits a graph into parts, each part of graph will
         be sent to a specific platform for further execution and quantization.
@@ -446,15 +466,17 @@ class PointDispatcher(ConservativeDispatcher):
             quant_platform (TargetPlatform): =
                 platform object where quantable parts will goes to.
 
-            fp32_platform (TargetPlatform):
+            SOI_platform (TargetPlatform):
                 platform object where SOI parts will goes to.
 
-            SOI_platform (TargetPlatform):
+            fp32_platform (TargetPlatform):
                 platform object where remaining parts will goes to.
 
         Returns:
             Dict[str, TargetPlatform]: [description]
         """
+        graph = self.graph
+
         dispatch_table = ConservativeDispatcher.dispatch(
             graph=graph, quant_types=quant_types, quant_platform=quant_platform, 
             fp32_platform=fp32_platform, SOI_platform=SOI_platform, kwargs=kwargs)

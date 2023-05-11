@@ -4,18 +4,17 @@ from typing import Iterable, List, Tuple
 
 import torch
 from ppq.core import (NUM_OF_CHECKPOINT_FETCHS, PPQ_CONFIG,
-                      ChannelwiseTensorQuantizationConfig,
                       QuantizationProperty, QuantizationStates, RoundingPolicy,
                       TensorQuantizationConfig)
 from ppq.executor import TorchQuantizeDelegator
-from ppq.IR import BaseGraph, Operation, Variable
-from ppq.IR.search import SearchableGraph
+from ppq.IR import BaseGraph, Operation, SearchableGraph, Variable
+from ppq.quantization.qfunction import PPQuantFunction
 from ppq.utils.fetch import batch_random_fetch
 from ppq.utils.round import ppq_tensor_round
 from torch.autograd import Function
 
 
-class CuLSQ_T(Function):
+class CuLSQ_LT(Function):
     @ staticmethod
     def forward(ctx, tensor: torch.Tensor, scales: torch.Tensor,
                 offsets: torch.Tensor, quant_min: int, quant_max: int,
@@ -53,7 +52,7 @@ class CuLSQ_T(Function):
         return dx, ds, None, None, None, None, None
 
 
-class CuLSQ_C(Function):
+class CuLSQ_LC(Function):
     @ staticmethod
     def forward(ctx, tensor: torch.Tensor, scales: torch.Tensor,
                 offsets: torch.Tensor, channel_axis: int,
@@ -112,7 +111,7 @@ class FinetuneCheckPoint:
 
     def push(self, tensor: torch.Tensor, is_reference: bool) -> None:
         if self.random_fetch:
-            tensor = batch_random_fetch(tensor, seed=self.seed, fetchs_per_batch=self.fetchs)
+            tensor = batch_random_fetch(tensor, seed=self.seed, fetches_per_batch=self.fetchs)
         if is_reference: self.references.append(tensor)
         else: self.outputs.append(tensor)
 
@@ -258,15 +257,18 @@ class BlockBuilder:
         def _find_multi_input_ep(op: Operation):
             # 如果当前节点后继节点存在多个，层序遍历寻找阻断节点
             least_first_queue = PriorityQueue()
+            least_first_queue.push(self.depth[op], op)
+            least_first_queue.pop()
 
             for down_op in self.graph.get_downstream_operations(op):
                 least_first_queue.push(self.depth[down_op], down_op)
 
             while not least_first_queue.empty():
                 iter_operation = least_first_queue.pop()[-1]
-                if (least_first_queue.empty() and
-                    len(self.graph.get_upstream_operations(iter_operation)) > 1):
-                    return iter_operation
+                if (least_first_queue.empty()):
+                    upstream_ops = self.graph.get_upstream_operations(iter_operation)
+                    if all([op in least_first_queue._ops for op in upstream_ops]) and len(upstream_ops) > 1:
+                        return iter_operation
                 for down_op in self.graph.get_downstream_operations(iter_operation):
                     least_first_queue.push(self.depth[down_op], down_op)
 
@@ -330,22 +332,23 @@ class LSQDelegator(TorchQuantizeDelegator):
         if self.is_parameter and is_parameter_trainable:
             self.param_backup = self.var.value.clone()
 
-        # There is 4 checks for training scale:
+        # There is 4 checks for scale training:
         #   1. scale is valid
         #   2. state is active
-        #   3. do not have POWER_OF_2 policy
+        #   3. do not have POWER_OF_2 policy but Must have Linear policy
         #   4. is_scale_trainable = True
         self.scale_backup       = None
         self.is_scale_trainable = False
         if is_scale_trainable:
             policy_check = not config.policy.has_property(QuantizationProperty.POWER_OF_2)
+            linear_check = config.policy.has_property(QuantizationProperty.LINEAR)
             state_check  = ((config.state == QuantizationStates.ACTIVATED) and (config.dominated_by == config))
             value_check  = isinstance(config.scale, torch.Tensor)
-            if policy_check and state_check and value_check:
+            if policy_check and state_check and value_check and linear_check:
                 self.is_scale_trainable = True
                 self.scale_backup = self.config.scale.detach().clone()
 
-        # There is 4 checks for training offset:
+        # There is 4 checks for offset training:
         #   1. offset is valid
         #   2. state is active
         #   3. do not have SYMMETRICAL policy
@@ -383,7 +386,22 @@ class LSQDelegator(TorchQuantizeDelegator):
         pass # do nothing here.
 
     def __call__(self, tensor: torch.Tensor, config: TensorQuantizationConfig) -> torch.Tensor:
-        if not PPQ_CONFIG.USING_CUDA_KERNEL:
+        if tensor.is_cuda and PPQ_CONFIG.USING_CUDA_KERNEL:
+            if config.policy.has_property(QuantizationProperty.LINEAR):
+                if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
+                    return CuLSQ_LC.apply(
+                        tensor, config.scale, config.offset, config.channel_axis,
+                        config.quant_min, config.quant_max, config.rounding)
+                elif config.policy.has_property(QuantizationProperty.PER_TENSOR):
+                    return CuLSQ_LT.apply(
+                        tensor, config.scale, config.offset,
+                        config.quant_min, config.quant_max, config.rounding)
+
+            elif config.policy.has_property(QuantizationProperty.FLOATING):
+                # For floating quantization, scale is not trainable.
+                return PPQuantFunction(tensor=tensor, config=config)
+
+        else:
             scale, offset = config.scale, config.offset
 
             if self.is_scale_trainable:
@@ -392,7 +410,6 @@ class LSQDelegator(TorchQuantizeDelegator):
                 scale = scale * grad_scale + (scale - scale * grad_scale).detach()
 
             if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
-                assert isinstance(config, ChannelwiseTensorQuantizationConfig)
                 shape = [1 if axis != config.channel_axis else -1 for axis in range(tensor.ndim)]
                 scale = scale.view(shape)
                 offset = offset.view(shape)
@@ -402,20 +419,4 @@ class LSQDelegator(TorchQuantizeDelegator):
             quantized = (quantized - offset.detach()) * scale
             quantized = quantized
             return quantized
-
-        else:
-            if not config.policy.has_property(QuantizationProperty.LINEAR):
-                raise ValueError('Critical Quantization Error! Non-linear config detected.')
-            if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
-                assert isinstance(config, ChannelwiseTensorQuantizationConfig), (
-                    'Critical Quantization Error! Except a ChannelwiseTensorQuantizationConfig.')
-                return CuLSQ_C.apply(
-                    tensor, config.scale, config.offset, config.channel_axis,
-                    config.quant_min, config.quant_max, config.rounding)
-            elif config.policy.has_property(QuantizationProperty.PER_TENSOR):
-                return CuLSQ_T.apply(
-                    tensor, config.scale, config.offset,
-                    config.quant_min, config.quant_max, config.rounding)
-            else:
-                raise PermissionError('Oops, Unexpected Error here.')
 

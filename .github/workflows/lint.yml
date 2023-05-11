@@ -4,7 +4,7 @@ on: [push, pull_request]
 
 jobs:
   lint:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - name: Set up Python 3.7
@@ -13,9 +13,21 @@ jobs:
           python-version: 3.7
       - name: Install pre-commit hook
         run: |
-          # markdownlint requires ruby >= 2.7
-          sudo apt-add-repository ppa:brightbox/ruby-ng -y
-          sudo apt-get update
-          sudo apt-get install -y ruby2.7
+          pwd&&ls
           pip install pre-commit
-          pre-commit install
+          pre-commit --version
+      - name: pre-commit checking
+        run: |
+          git fetch
+          git branch -a
+          git diff --name-status remotes/origin/master HEAD
+          updated_files=`git diff --name-status remotes/origin/master HEAD|awk '{print$ 2}'` 
+          echo $updated_files
+          for file in $updated_files
+          do
+            if [ "${file##*.}" = "py" ]; then
+              echo $file
+              pre-commit run --files $file --show-diff-on-failure
+            fi
+          done
+

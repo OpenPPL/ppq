@@ -1,15 +1,18 @@
 import json
+import torch
+from typing import List
 
 from ppq.core import (DataType, QuantizationStates,
-                      ChannelwiseTensorQuantizationConfig)
-from ppq.IR import BaseGraph
+                      QuantizationVisibility, NetworkFramework, ppq_warning)
+from ppq.IR import BaseGraph, GraphExporter
 from ppq.IR.quantize import QuantableOperation
 
 from .onnx_exporter import OnnxExporter
+from .caffe_exporter import CaffeExporter
 from .util import convert_value
 
 
-class QNNDSPExporter(OnnxExporter):
+class QNNDSPExporter(GraphExporter):
     def export_quantization_config(self, config_path: str, graph: BaseGraph):
         activation_info, param_info = {}, {}
         topo_order =  graph.topological_sort()
@@ -23,24 +26,18 @@ class QNNDSPExporter(OnnxExporter):
                         f'Operation {operation.name} has an invalid quantization state({config.state}) '
                         f'at variable {var.name}.')
 
-                # PATCH 2021.11.25
-                # REMOVE BIAS FROM CONFIGURATION
-                if config.num_of_bits > 8: continue
-
+                if config.visibility == QuantizationVisibility.INTERNAL: continue
                 if config.state in {
-                    QuantizationStates.SOI,
-                    QuantizationStates.DEACTIVATED,
-                    QuantizationStates.DEQUANTIZED,
-                    QuantizationStates.FP32
+                    QuantizationStates.FP32,
+                    QuantizationStates.SOI
                 }: continue
-                # Simply override recorder is acceptable here,
-                # we do not support mix precision quantization for CUDA backend now.
-                # All configurations for this variable should keep identical towards each other.
 
-                if config.state == QuantizationStates.SLAVE and var.name in activation_info: continue
+                if var.source_op is not None and var.source_op.type in {"Softmax", "Sigmoid"}:
+                    if config.dominated_by == config: # changeable.
+                        # fix output range greater than 1
+                        config.scale = torch.clamp(config.scale, max=1.0 / (config.quant_max - config.quant_min))
 
-                assert not isinstance(config, ChannelwiseTensorQuantizationConfig), 'QNNExporter only support'\
-                    'per tensor quantization for now'
+                if config.state == QuantizationStates.PASSIVE and var.name in activation_info: continue
                 info =  [{
                             'bitwidth': config.num_of_bits,
                             'max'     : convert_value(config.scale * (config.quant_max - config.offset), True, DataType.FP32),
@@ -60,3 +57,14 @@ class QNNDSPExporter(OnnxExporter):
 
         with open(file=config_path, mode='w') as file:
             json.dump(exports, file, indent=4)
+
+
+    def export(self, file_path: str, graph: BaseGraph, config_path: str = None, input_shapes: List[List[int]] = [[1, 3, 224, 224]]):
+        if config_path is not None:
+            self.export_quantization_config(config_path, graph)
+        if graph._built_from == NetworkFramework.CAFFE:
+            exporter = CaffeExporter()
+            exporter.export(file_path=file_path, graph=graph, config_path=None, input_shapes=input_shapes)
+        elif graph._built_from == NetworkFramework.ONNX:
+            exporter = OnnxExporter()
+            exporter.export(file_path=file_path, graph=graph, config_path=None)

@@ -2,6 +2,7 @@
 # include "cuda/sort.h"
 # include "cuda/train.h"
 # include "cuda/train.h"
+# include "cuda/floating.h"
 # include "cpu/hist_mse.h"
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
@@ -14,6 +15,11 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("QuantizeTensor_LC", QuantizeTensor_LC, "QuantizeTensor_LC");
     m.def("QuantizeTensor_LT_B", QuantizeTensor_LT_B, "QuantizeTensor_LT_B");
     m.def("QuantizeTensor_LC_B", QuantizeTensor_LC_B, "QuantizeTensor_LC_B");
+
+    m.def("QuantizeTensor_FT", QuantizeTensor_FT, "QuantizeTensor_FT");
+    m.def("QuantizeTensor_FC", QuantizeTensor_FC, "QuantizeTensor_FC");
+    m.def("QuantizeTensor_FT_B", QuantizeTensor_FT_B, "QuantizeTensor_FT_B");
+    m.def("QuantizeTensor_FC_B", QuantizeTensor_FC_B, "QuantizeTensor_FC_B");
 
     m.def("TensorClip_T", TensorClip_T, "TensorClip_T");
     m.def("TensorClip_C", TensorClip_C, "TensorClip_C");

@@ -1,13 +1,10 @@
 from typing import Any, List
 
-import numpy as np
 import torch
-from ppq.core import (DataType, TargetPlatform,
-                      convert_any_to_python_primary_type,
+
+from ppq.core import (DataType, convert_any_to_python_primary_type,
                       convert_any_to_torch_tensor, ppq_warning)
-from ppq.IR.quantize import DeviceSwitchOP
 from ppq.IR.search import SearchableGraph
-from ppq.scheduler import value_tracing_pattern
 
 from .base.command import (GraphCommand, GraphCommandType,
                            ReplaceOperationCommand, ReplaceVariableCommand,
@@ -17,6 +14,7 @@ from .processer import GraphCommandProcessor
 
 
 class GraphReplacer(GraphCommandProcessor):
+    """ Graph Replacer offers a bunch of graph editing functions that helps replacing operation or variable in your graph. """
     def process(self, command: GraphCommand) -> Any:
         if command.command_type == GraphCommandType.REPLACE_OP:
             assert isinstance(command, ReplaceOperationCommand), \
@@ -26,6 +24,10 @@ class GraphReplacer(GraphCommandProcessor):
             assert isinstance(command, ReplaceVariableCommand), \
                 'Use ReplaceOperationCommand instead of GraphCommand'
             return self.replace_var(command.op_name, command.replace_to)
+        if command.command_type == GraphCommandType.REPLACE_BATCHNORM_TO_CONV:
+            return self.replace_batchnorm_to_conv()
+        if command.command_type == GraphCommandType.REPLACE_BATCHNORM_TO_SCALE:
+            return self.replace_batchnorm_to_scale()
 
     def replace_op(self, op_name: str, replace_to: Operation):
         if op_name not in self._graph.operations:
@@ -74,10 +76,84 @@ class GraphReplacer(GraphCommandProcessor):
         return [
             GraphCommandType.REPLACE_OP,
             GraphCommandType.REPLACE_VAR,
+            GraphCommandType.REPLACE_BATCHNORM_TO_CONV,
+            GraphCommandType.REPLACE_BATCHNORM_TO_SCALE,
         ]
+
+    def replace_batchnorm_to_conv(self, dimension: int = 2):
+        """ Replace Batchnorm to 1D Convolution. """
+        for op in self.graph.operations.values():
+            if op.type == 'BatchNormalization':
+                ppq_warning(f'Isolated BatchNormalization({op.name}) was detected, '
+                            f'PPQ will replace it to 1*1 Convolution({dimension}D).')
+
+                assert len(op.parameters) == 4, "BatchNorm should have 4 parameters, namely alpha, beta, mean, var"
+                alpha = op.parameters[0].value
+                beta  = op.parameters[1].value
+                mean  = op.parameters[2].value
+                var   = op.parameters[3].value
+                epsilon = op.attributes.get("epsilon", 1e-5)
+                
+                with torch.no_grad():
+                    w = alpha / torch.sqrt(var + epsilon)
+                    w = w.reshape([-1, 1] + [1] * dimension)
+                    b = alpha * (-mean) / torch.sqrt(var + epsilon) + beta
+
+                op.type = 'Conv'
+                op.attributes.clear()
+                op.attributes['kernel_shape'] = [1] * dimension
+                op.attributes['strides']      = [1] * dimension
+                op.attributes['dilations']    = [1] * dimension
+                op.attributes['pads']         = [0, 0] * dimension
+                op.attributes['group']        = w.numel()
+
+                # remove last 2 variable, make conv has exact 3 input
+                self.graph.remove_variable(op.inputs[-1])
+                self.graph.remove_variable(op.inputs[-1])
+
+                with torch.no_grad():
+                    op.inputs[1].value = w
+                    op.inputs[2].value = b
+
+    def replace_batchnorm_to_scale(self, dimension: int = 4):
+        """ Replace Batchnorm to Mul + Add. 
+        
+        By default this function created a 4d mul + add corresponding to NCHW layout.
+        """
+        graph = self.graph
+        for op in [_ for _ in self.graph.operations.values()]:
+
+            if op.type == 'BatchNormalization':
+                ppq_warning(f'Isolated BatchNormalization({op.name}) was detected, '
+                            f'PPQ will replace it to Mul + Add({dimension}D).')
+                
+                assert len(op.parameters) == 4, "BatchNorm should have 4 parameters, namely alpha, beta, mean, var"
+                alpha = op.parameters[0].value
+                beta  = op.parameters[1].value
+                mean  = op.parameters[2].value
+                var   = op.parameters[3].value
+                epsilon = op.attributes.get("epsilon", 1e-5)
+
+                with torch.no_grad():
+                    multiplier = alpha / torch.sqrt(var + epsilon)
+                    bias = (-mean) * multiplier + beta
+
+                for var in [_ for _ in op.parameters]: graph.remove_variable(var)
+                graph.create_variable(value=multiplier, is_parameter=True, dest_ops=[op])
+                op.type = 'Mul'
+                op.attributes.clear()
+
+                add = graph.create_operation(op_type='Add')
+                graph.insert_op_after(A=add, B=op)
+                graph.create_variable(value=bias, is_parameter=True, dest_ops=[add])
+                
+                if dimension > 1:
+                    op.parameters[0].value = op.parameters[0].value.reshape([1, -1] + [1] * (dimension - 2))
+                    add.parameters[0].value = add.parameters[0].value.reshape([1, -1] + [1] * (dimension - 2))
 
 
 class GraphFormatter(GraphCommandProcessor):
+    """ Graph Formatter offers a bunch of graph editing functions that helps modifying your graph. """
     def _acceptable_command_types(self) -> List[GraphCommandType]:
         return [
             GraphCommandType.FORMAT_CLIP,
@@ -86,11 +162,13 @@ class GraphFormatter(GraphCommandProcessor):
             GraphCommandType.FORMAT_CAST,
             GraphCommandType.FORMAT_INT64_CONSTANT,
             GraphCommandType.DELETE_ISOLATED,
-            GraphCommandType.REPLACE_SUB,
             GraphCommandType.FORMAT_PARAMETERS,
             GraphCommandType.FORMAT_CONSTANT_INPUT,
             GraphCommandType.FORMAT_SLICE,
-            GraphCommandType.TRUNCATE_ON_VAR
+            GraphCommandType.TRUNCATE_ON_VAR,
+            GraphCommandType.FORMAT_RESIZE,
+            GraphCommandType.REMOVE_IDENTITY,
+            GraphCommandType.CONVERT_TO_TENSOR,
         ]
 
     def process(self, command: GraphCommand) -> Any:
@@ -106,17 +184,21 @@ class GraphFormatter(GraphCommandProcessor):
             return self.delete_isolated()
         if command.command_type == GraphCommandType.FORMAT_INT64_CONSTANT:
             return self.format_int64_constant()
-        if command.command_type == GraphCommandType.REPLACE_SUB:
-            return self.replace_substraction()
         if command.command_type == GraphCommandType.FORMAT_PARAMETERS:
-            return self.format_parameter_variables()
+            return self.format_parameter()
         if command.command_type == GraphCommandType.FORMAT_CONSTANT_INPUT:
-            return self.format_constant_input()
+            return self.remove_constant_input()
         if command.command_type == GraphCommandType.FORMAT_SLICE:
             return self.format_slice()
+        if command.command_type == GraphCommandType.FORMAT_RESIZE:
+            return self.format_resize()
         if command.command_type == GraphCommandType.TRUNCATE_ON_VAR:
             assert isinstance(command, TruncateGraphCommand), f'Use TruncateGraphCommand here.'
             return self.truncate_on_var(command.var, command.mark_as_output)
+        if command.command_type == GraphCommandType.REMOVE_IDENTITY:
+            return self.remove_identity()
+        if command.command_type == GraphCommandType.CONVERT_TO_TENSOR:
+            return self.convert_to_tensor()
 
     def format_slice(self) -> None:
         """
@@ -154,34 +236,23 @@ class GraphFormatter(GraphCommandProcessor):
                    pads parameter is given by the second input variable
                 2. pads 参数被放置于 operation.attribute 中
                    pads parameter is set in attribute
-            此函数统一 pad 算子行为：所有 pad 算子的 pads 参数均由 operation.attribute 给出
-            this func unifies behaviors of Pad op: pads parameter will always given in
-            attribute
-            同时当 padding mode 设置为 constant 时，pads 将存在一个用来确定 padding value 的值
-            存在该值时，该函数返回 ValueError
-            when the padding mode is set to constant, its constant input will be used as
-            padding value
+            此函数统一 pad 算子行为：所有 pad 算子的 pads 参数均由第二个输入给出
         """
-        interested_ops = []
-        for _, operation in self.graph.operations.items():
-            if operation.type == 'Pad': interested_ops.append(operation)
-        for operation in interested_ops:
-            assert isinstance(operation, Operation)
-            padding_value = operation.attributes.get('pads_value', 0)
-            padding_mode = operation.attributes.get('mode', 'constant')
-            if padding_mode == 'constant' and len(operation.inputs) == 3:
-                pads_variable = operation.inputs[1]
-                pads_constant_op = pads_variable.source_op
-                padding_value = pads_constant_op.attributes['value']
-                self.__delete_constant_input(operation, 1)
-            if len(operation.inputs) > 1:
-                # here exist a pattern: constant -> pad
-                pads_variable = operation.inputs[1]
-                pads_constant_op = pads_variable.source_op
-                pads = pads_constant_op.attributes['value']
-                self.__delete_constant_input(operation, 1)
-                operation.attributes['pads'] = convert_any_to_python_primary_type(pads)
-            if padding_mode == 'constant': operation.attributes['pads_value'] = padding_value
+        for op in self.graph.operations.values():
+            if op.type == 'Pad' and 'pads' in op.attributes:
+                self.graph.create_variable(value=torch.tensor(op.attributes['pads']), is_parameter=True, dest_ops=[op])
+                op.attributes.clear()
+
+    def format_resize(self) -> None:
+        """
+            升级 opset 10 的 resize 到 opset 11
+        """
+        for op in self.graph.operations.values():
+            if op.type == 'Resize' and len(op.inputs) == 2:
+                # 创建一个空的 variable, 这个 variable 没有值与 source_op, 也不是 parameter
+                # 这种行为 Onnx 是允许的，这种变量用以传递空值，起到占位符的作用
+                self.graph.create_variable(value=None, is_parameter=False, dest_ops=[op])
+                op.inputs[1], op.inputs[2] = op.inputs[2], op.inputs[1]
 
     def format_clip(self) -> None:
         """
@@ -271,30 +342,27 @@ class GraphFormatter(GraphCommandProcessor):
 
                 if all(check): value = value.int()
 
-    def format_constant_input(self) -> None:
-        """部分部署平台不支持 Constant Op，在这种情况下我们使用这个 pass 把 Constant Op 的输入切换成
-        parameter variable 的形式 some backend platform doesn't support Constant
+    def remove_constant_input(self) -> None:
+        """部分部署平台不支持 Constant Op 作为算子的输入
+            在这种情况下我们使用这个 pass 把它们切换成 Parameter Variable
+        
+        Some backend platform doesn't support Constant
         Op, we use this pass to replace it by forcing its value to be a
         parameter variable."""
-        constant_ops = []
-        for operation in self.graph.operations.values():
-            if operation.type == 'Constant':
-                assert len(operation.outputs) == 1, (
-                    f'Constant Operation {operation.name} has more than 1 output, is there a network parsing error?')
-                constant_ops.append(operation)
+        removing_ops = []
+        for op in self.graph.operations.values():
+            if op.type == 'Constant':
+                assert len(op.outputs) == 1, (
+                    f'Constant Operation {op.name} has more than 1 output, is there a network parsing error?')
+                removing_ops.append(op)
 
-        for operation in constant_ops:
-            assert isinstance(operation, Operation)
-            output_var = operation.outputs[0]
-
-            constant_value = operation.attributes['value']
-            output_var.value = constant_value
-            # force output variable to a parameter.
+        for const_op in removing_ops:
+            assert isinstance(const_op, Operation)
+            constant_value = const_op.attributes['value']
+            output_var = const_op.outputs[0]
             output_var._is_parameter = True
-
-            operation.outputs.clear()
-            output_var.source_op = None
-            self.graph.delete_operation(op_name=operation.name)
+            output_var.value = constant_value
+            self.graph.remove_operation(removing_op=const_op)
 
     def truncate_on_var(self, var: Variable, mark_as_output: bool):
         """从一个指定位置将图截断.
@@ -331,6 +399,7 @@ class GraphFormatter(GraphCommandProcessor):
         self.delete_isolated()
 
     def delete_isolated(self):
+        """Remove Isolated Variable from Graph."""
         blacklist = [None]
         while len(blacklist) > 0:
             blacklist = []
@@ -366,74 +435,25 @@ class GraphFormatter(GraphCommandProcessor):
 
                 # 删除孤立变量
                 if var.source_op is None and var.name not in self.graph.inputs:
-                    # PATCH 20220630, onnx 使用名字为 '' 的变量占位，这些占位变量不能删除
-                    if var.name == '': continue
-                    if not var.is_parameter:
-                        var_blacklist.add(var)
+                    if len(var.dest_ops) == 0: var_blacklist.add(var)
 
                 # 没有输出的不能删...会影响算子输出顺序...
 
             for var in var_blacklist:
                 self.graph.remove_variable(var)
 
-    def format_parameter_variables(self) -> None:
-        vars = []
-        for var in self.graph.variables.values():
+    def format_parameter(self) -> None:
+        """ Split parameter that has more than 1 dest ops """
+        for var in [_ for _ in self.graph.variables.values()]:
+            var.value = convert_any_to_torch_tensor(var.value)
             if var.is_parameter and len(var.dest_ops) > 1:
-                # found parameter with multiple destination operations
-                # split parameter variable
-                vars.append(var)
-
-        for var in vars:
-            assert isinstance(var, Variable)
-            for idx, dest_op in enumerate(var.dest_ops.copy()):
-                # create variables
-                sub_var = Variable(
-                    name=var.name + '_' + str(idx),
-                    value=var.value, is_parameter=True,
-                    dest_ops=[dest_op], source_op=None)
-                self.graph.append_variable(sub_var)
-
-                # replace original variable with splited one.
-                dest_op.inputs[dest_op.inputs.index(var)] = sub_var
-                var.dest_ops.remove(dest_op)
-
-            # pop variable from graph
-            self.graph.remove_variable(var)
-
-    def replace_substraction(self) -> None:
-        substractions = []
-        for operation in self.graph.operations.values():
-            if operation.type == 'Sub':
-                substractions.append(operation)
-
-        for operation in substractions:
-            assert isinstance(operation, Operation)
-            subtractor = operation.inputs[-1].source_op
-            substractor_var = operation.inputs[-1]
-
-            # create a neg operation
-            neg_op = Operation(name=subtractor.name + '_neg', op_type='Neg', attributes={})
-            self.graph.append_operation(neg_op)
-
-            # create related variables
-            neg_var = Variable(name=subtractor.name + '_neg_1', dest_ops=[operation], source_op=neg_op)
-
-            # link var to op
-            neg_op.inputs.append(substractor_var)
-            neg_op.outputs.append(neg_var)
-
-            operation.inputs.remove(substractor_var)
-            operation.inputs.append(neg_var)
-
-            substractor_var.dest_ops.remove(operation)
-            substractor_var.dest_ops.append(neg_op)
-
-            # add var to graph
-            self.graph.append_variable(neg_var)
-
-            # replace sub to add
-            operation._type = 'Add'
+                for op in var.dest_ops:
+                    created = self.graph.create_variable(
+                        value=var.value.clone(), is_parameter=True)
+                    op.inputs[op.inputs.index(var)] = created
+                    created.dest_ops.append(op)
+                var.dest_ops.clear()
+                self.graph.remove_variable(var)
 
     def __delete_constant_input(self, op: Operation, input_idx: int):
         op_name = op.name
@@ -448,9 +468,10 @@ class GraphFormatter(GraphCommandProcessor):
                 f'Error at Operation {op_name}, inputs[{input_idx}]')
         input_var.dest_ops.pop(input_var.dest_ops.index(operation))
         operation.inputs.pop(input_idx)
+
         if len(input_var.dest_ops) == 0:
+            self.graph.remove_operation(input_var.source_op)
             self.graph.remove_variable(input_var)
-            self.graph.delete_operation(input_var.source_op.name)
 
     def __add_constant_input(self, op: Operation, value: torch.Tensor):
         op_name = op.name
@@ -462,18 +483,36 @@ class GraphFormatter(GraphCommandProcessor):
         var.dest_ops.append(operation)
         operation.inputs.append(var)
 
+    def remove_identity(self):
+        removing_ops = []
+        for op in self.graph.operations.values():
+            if op.type == 'Identity': removing_ops.append(op)
+        
+        for op in removing_ops:
+            self.graph.remove_operation(op, keep_coherence=True)
+
+    def convert_to_tensor(self):
+        """ Convert anything inside your network to torch tensor. (Usually from numpy)"""
+        for var in self.graph.variables.values():
+            if var.value is not None:
+                var.value = convert_any_to_torch_tensor(var.value)
+
 
 class GraphMerger(GraphCommandProcessor):
     """Graph Merger implements all graph fusion related functions."""
     def _acceptable_command_types(self) -> List[GraphCommandType]:
         return [
             # add more extensions in the future
-            GraphCommandType.FUSE_BN
+            GraphCommandType.FUSE_BN,
+            GraphCommandType.FUSE_BIAS_ADD
         ]
 
     def process(self, command: GraphCommand) -> Any:
         if command.command_type == GraphCommandType.FUSE_BN:
             return self.fuse_bn()
+        if command.command_type == GraphCommandType.FUSE_BIAS_ADD:
+            return self.fuse_bias_add()
+
 
     def fuse_bn(self):
         search_engine = SearchableGraph(graph=self.graph)
@@ -504,43 +543,43 @@ class GraphMerger(GraphCommandProcessor):
             var   = bn_op.parameters[3].value
             epsilon = bn_op.attributes.get('epsilon', 1e-5)
 
-            if computing_op.num_of_parameters == 1:
+            if computing_op.num_of_parameter == 1:
                 w = computing_op.parameters[0].value  # no bias.
-                assert isinstance(w, np.ndarray), 'values of parameters are assumed numpy arrays'
+                assert isinstance(w, torch.Tensor), 'values of parameters are assumed as torch Tensor'
                 if computing_op.type == 'ConvTranspose':
-                    b = np.zeros(shape=w.shape[1] * computing_op.attributes.get('group', 1), dtype=np.float32)
+                    b = torch.zeros(w.shape[1] * computing_op.attributes.get('group', 1))
                 elif computing_op.type == 'Gemm' and computing_op.attributes.get('transB', 0) == 0:
-                    b = np.zeros(shape=w.shape[1], dtype=np.float32)
+                    b = torch.zeros(w.shape[1])
                 else:
-                    b = np.zeros(shape=w.shape[0], dtype=np.float32)
+                    b = torch.zeros(w.shape[0])
             else:
                 w, b = [var.value for var in computing_op.parameters[: 2]]  # has bias.
 
             if computing_op.type == 'Conv':
 
                 # calculate new weight and bias
-                scale = alpha / np.sqrt(var + epsilon)
+                scale = alpha / torch.sqrt(var + epsilon)
                 w = w * scale.reshape([-1] + [1] * (w.ndim - 1))
-                b = alpha * (b - mean) / np.sqrt(var + epsilon) + beta
+                b = alpha * (b - mean) / torch.sqrt(var + epsilon) + beta
 
             elif computing_op.type == 'Gemm':
 
                 # calculate new weight and bias
-                scale = alpha / np.sqrt(var + epsilon)
+                scale = alpha / torch.sqrt(var + epsilon)
                 if computing_op.attributes.get('transB', 0):
                     w = w * scale.reshape([-1, 1])
                 else:
                     w = w * scale.reshape([1, -1])
-                b = alpha * (b - mean) / np.sqrt(var + epsilon) + beta
+                b = alpha * (b - mean) / torch.sqrt(var + epsilon) + beta
 
             elif computing_op.type == 'ConvTranspose':
 
-                scale = alpha / np.sqrt(var + epsilon)
+                scale = alpha / torch.sqrt(var + epsilon)
                 group = computing_op.attributes.get('group', 1)
                 scale = scale.reshape([group, 1, -1, 1, 1])
                 w = w.reshape([group, -1, w.shape[1], w.shape[2], w.shape[3]]) * scale
                 w = w.reshape([w.shape[0] * w.shape[1], w.shape[2], w.shape[3], w.shape[4]])
-                b = alpha * (b - mean) / np.sqrt(var + epsilon) + beta
+                b = alpha * (b - mean) / torch.sqrt(var + epsilon) + beta
             else:
                 raise TypeError(
                     f'Unexpected op type {computing_op.type}. '
@@ -565,6 +604,7 @@ class GraphMerger(GraphCommandProcessor):
             computing_op.inputs.pop(0)
             bn_op.outputs.clear()
             self.graph.remove_operation(computing_op)
+            self.graph.remove_operation(bn_op)
 
             # insert new
             self.graph.append_operation(merged_op)
@@ -632,16 +672,16 @@ class GraphMerger(GraphCommandProcessor):
 
                     # remove bias add, move bias to matmul
                     self.graph.remove_operation(add)
-                    self.graph.create_link_with_op(variable=bias_var, upstream_op=None, downstream_op=matmul)
-                    self.graph.create_link_with_var(upstream_variable=matmul_out, downstream_variable=add_out)
+                    self.graph.create_link_with_op(variable=bias_var, A=None, B=matmul)
+                    self.graph.create_link_with_var(A=matmul_out, B=add_out)
                 elif bias_var.value.shape[0] == matmul.parameters[0].value.shape[-2]:
 
                     bias_var.dest_ops.clear()
                     add.inputs.remove(bias_var)
                     # remove bias add, move bias to matmul
                     self.graph.remove_operation(add)
-                    self.graph.create_link_with_op(variable=bias_var, upstream_op=None, downstream_op=matmul)
-                    self.graph.create_link_with_var(upstream_variable=matmul_out, downstream_variable=add_out)
+                    self.graph.create_link_with_op(variable=bias_var, A=None, B=matmul)
+                    self.graph.create_link_with_var(A=matmul_out, B=add_out)
 
         # process single gemm
         for op in self.graph.operations.values():
@@ -649,6 +689,390 @@ class GraphMerger(GraphCommandProcessor):
                 if _is_replaceable(op) == False:
                     continue
                 op.type = "Gemm"
+
+    def fuse_layernorm(self, exclusive_search: bool = False):
+        """Fuse Layernormalization with pattern matching."""
+        
+        def _fuse(rm1: Operation, rm2: Operation, 
+                  eps: Operation, scale: torch.Tensor, 
+                  bias: torch.Tensor, layernorm_input_var: Variable, 
+                  layernorm_output_var: Variable) -> Operation:
+
+            if rm2.type == rm1.type == 'ReduceMean':
+                if 'axes' not in rm1.attributes: return None
+                if 'axes' not in rm2.attributes: return None
+                if rm1.attributes['axes'] != rm2.attributes['axes']: return None
+                layernorm_axis = rm1.attributes['axes']
+                if isinstance(layernorm_axis, list): 
+                    if len(layernorm_axis) != 1: return None
+                    layernorm_axis = layernorm_axis[0]
+                if not isinstance(layernorm_axis, int): return None
+            else: layernorm_axis = -1
+
+            if not eps.inputs[-1].is_parameter: return None
+            value = eps.inputs[-1].value
+            value = convert_any_to_torch_tensor(value).cpu()
+            if value.numel() != 1: return None
+            layernorm_eps = value.item()
+
+            layernorm_output_var.source_op.outputs.clear()
+            layernorm = self.graph.create_operation(
+                op_type = 'LayerNormalization',
+                attributes = {'axis': layernorm_axis, 'epsilon': layernorm_eps, 'stash_type': 0},
+                inputs = [layernorm_input_var, self.graph.create_variable(value=scale, is_parameter=True)],
+                outputs = [layernorm_output_var])
+
+            if bias is not None:
+                self.graph.create_link_with_op(
+                    variable=self.graph.create_variable(value=bias, is_parameter=True), 
+                    A=None, B=layernorm)
+            return layernorm
+
+        search_engine = SearchableGraph(graph=self.graph)
+        fused         = False
+        
+        # pattern 1:
+        #                                 ---     ---     ---      ---        ---       ---    ---    --
+        #                               |                                                              |
+        # ***(0) --- ReduceMean(1) --- Sub(2) --- Pow(3) --- ReduceMean(4) --- Add(5) --- Sqrt(6) --- Div(7) --- Mul(8) --- (Add)(9)
+        #      |                     |
+        #       ---   ---   ---   ---       
+        matches = search_engine.pattern_matching(
+            patterns=[lambda x: True, lambda x: x.type in {'ReduceMean', 'GlobalAveragePool'}, 'Sub', 'Pow', 
+                      lambda x: x.type in {'ReduceMean', 'GlobalAveragePool'}, 'Add', 'Sqrt', 'Div', 'Mul'],
+            edges=[[0, 1], [0, 2], [1, 2], [2, 3], [2, 7], [3, 4], [4, 5], [5, 6], [6, 7], [7, 8]], exclusive=exclusive_search)
+
+        for _, rm1, sub, pow, rm2, add, sqrt, div, mul in matches:
+            layernorm_ops = [rm1, sub, pow, rm2, add, sqrt, div, mul]
+
+            layernorm_scale = mul.inputs[-1].value
+            layernorm_output_var = div.outputs[0]
+            layernorm_input_var = sub.inputs[0]
+
+            # bias check
+            layernorm_bias = None
+            next_op = self.graph.get_downstream_operations(mul)
+            if len(next_op) == 1 and (next_op[0].type == 'Add'):
+                bias_op = next_op[0]
+                if bias_op.inputs[-1].is_parameter:
+                    layernorm_bias = bias_op.inputs[-1].value
+                    layernorm_output_var = bias_op.outputs[0]
+                    layernorm_ops.append(bias_op)
+
+            layernorm = _fuse(rm1=rm1, rm2=rm2, eps=add, scale=layernorm_scale, 
+                bias=layernorm_bias, layernorm_input_var=layernorm_input_var, 
+                layernorm_output_var=layernorm_output_var)
+            
+            if layernorm is not None:
+                # delete merged ops
+                for op in layernorm_ops:
+                    assert isinstance(op, Operation)
+                    for var in op.inputs + op.outputs:
+                        if var != layernorm_input_var and var != layernorm_output_var:
+                            self.graph.remove_variable(var)
+                    self.graph.remove_operation(op)
+                    fused = True
+
+        # pattern 2:
+        #  ---   ---  ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---  -- Mul(11)   ---   ---   Add(12) ---
+        #  ^                             |                                                                                ^                     ^
+        #  |                             v                                                                                |                     |
+        # ***(0) --- ReduceMean(1) --- Sub(2) --- Mul(3) --- ReduceMean(4) --- Add(5) --- Sqrt(6) --- Reciprocal(7) --- Mul(8) --- Mul(9) --- Sub(10)
+        #             |                                                                                                             |
+        #             v                                                                                                             ^
+        #             --   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---   ---  ---  --- --
+        matches = search_engine.pattern_matching(
+            patterns=[lambda x: True, lambda x: x.type in {'ReduceMean', 'GlobalAveragePool'}, 'Sub', 
+                      'Mul', lambda x: x.type in {'ReduceMean', 'GlobalAveragePool'}, 'Add', 'Sqrt', 
+                      'Reciprocal', 'Mul', 'Mul', 
+                      'Sub', 'Mul', 'Add'],
+            edges=[[0, 1], [0, 2], [0, 11], [1, 2], [1, 9], [2, 3], [3, 4], 
+                   [4, 5], [5, 6], [6, 7], [7, 8], [8, 9], 
+                   [8, 11], [9, 10], [11, 12], [10, 12]], exclusive=exclusive_search)
+
+        for _, rm1, sub1, mul, rm2, add1, sqrt, recipro, mul2, mul3, sub2, mul4, add2 in matches:
+            layernorm_ops = [rm1, sub1, mul, rm2, add1, sqrt, recipro, mul2, mul3, sub2, mul4, add2]
+
+            # mul check
+            if not mul2.inputs[-1].is_parameter: continue
+            layernorm_scale      = mul2.inputs[-1].value
+            layernorm_output_var = add2.outputs[0]
+            layernorm_input_var  = sub1.inputs[0]
+            layernorm_bias       = sub2.inputs[0].value
+
+            layernorm = _fuse(rm1=rm1, rm2=rm2, eps=add1, scale=layernorm_scale, 
+                bias=layernorm_bias, layernorm_input_var=layernorm_input_var, 
+                layernorm_output_var=layernorm_output_var)
+
+            if layernorm is not None:
+                # delete merged ops
+                for op in layernorm_ops:
+                    assert isinstance(op, Operation)
+                    for var in op.inputs + op.outputs:
+                        if var != layernorm_input_var and var != layernorm_output_var:
+                            self.graph.remove_variable(var)
+                    self.graph.remove_operation(op)
+                fused = True
+        
+        # final check, if no valid pattern was found, we give a warning.
+        if not fused:
+            ppq_warning('No valid layernorm pattern was found, check your graph again.')
+
+    def fuse_skiplayernorm(self):
+        """ Fuse Add + Layernorm to SkipLayernorm, SkipLayernorm is a plugin operation defined by TensorRT """
+        fused         = False
+        search_engine = SearchableGraph(graph=self.graph)
+        
+        matches = search_engine.pattern_matching(patterns=['Add', 'LayerNormalization'], edges=[[0, 1]], exclusive=True)
+        for add, layernorm in matches:
+            # Skip connection can not be constant.
+            if add.num_of_parameter == 0:
+                input_vars = add.inputs.copy()
+                output_var = add.outputs[0]
+                self.graph.remove_operation(add)
+                self.graph.remove_variable(output_var)
+                
+                for var in input_vars:
+                    var.dest_ops.append(layernorm)
+                    layernorm.inputs.append(var)
+
+                layernorm.type = 'skipLayerNormPlugin'
+                fused = True
+        # final check, if no valid pattern was found, we give a warning.
+        if not fused:
+            ppq_warning('No valid Skip Layernorm pattern was found, check your graph again.')
+
+    def fuse_gelu(self):
+        """ Fuse Gelu
+        
+        Pattern: * - Div - Erf - Add - Mul - Mul
+                   |                 |
+                   -------------------
+        """
+        fused         = False
+        search_engine = SearchableGraph(graph=self.graph)
+        
+        matches = search_engine.pattern_matching(
+            patterns=[lambda x: True, 'Div', 'Erf', 'Add', 'Mul', 'Mul'], 
+            edges=[[0, 1], [1, 2], [2, 3], [3, 4], [0, 4], [4, 5]], exclusive=True)
+        
+        for _, div, erf, add, mul1, mul2 in matches:
+            removing_var = []
+            removing_var.extend(div.outputs)
+            removing_var.extend(erf.outputs)
+            removing_var.extend(add.outputs)
+            removing_var.extend(mul1.outputs)
+
+            self.graph.remove_operation(div)
+            self.graph.remove_operation(erf)
+            self.graph.remove_operation(add)
+            self.graph.remove_operation(mul1)
+            for var in removing_var:
+                self.graph.remove_variable(var)
+
+            input_vars  = _.outputs.copy()
+            output_vars = mul2.outputs.copy()
+
+            self.graph.remove_operation(mul2)
+            self.graph.create_operation(op_type='Gelu', inputs=input_vars, outputs=output_vars)
+            assert len(input_vars) == 1, 'Fusion failed, Pattern unrecognized.'
+            fused = True
+
+        # final check, if no valid pattern was found, we give a warning.
+        if not fused:
+            ppq_warning('No valid Gelu pattern was found, check your graph again.')
+
+    def fuse_bias_add(self):
+        """ 
+        Fuse Pattern like Conv + Add, ConvTranspose + Add, Gemm + Add
+        This fusion will require a constant input as bias.
+        """
+        graph = self.graph
+        for op in [_ for _ in graph.operations.values()]:
+            if op.type in {'Conv', 'ConvTranspose', 'Gemm'}:
+                # check if current op has only 1 downstream op
+                channel_dimension = 1 # NCHW, NCHWD, NCH
+                if op.type == 'Gemm': channel_dimension
+                if len(graph.get_downstream_operations(op)) == 1:
+                    down = graph.get_downstream_operations(op)[0]
+                    
+                    if down.type == 'Add':
+                        if down.num_of_parameter != 1: continue
+                        
+                        bias = down.parameters[0]
+                        if op.type not in {'Gemm'}:
+                            # check if it is a bias add
+                            if not bias.value.dim() == op.parameters[0].value.dim(): continue
+                            if not bias.value.squeeze().dim() == 1: continue
+                            if bias.value.shape[channel_dimension] == 1: continue
+                            bias.value = bias.value.squeeze() # conv bias can only be 1d
+                        else:
+                            # Gemm bias can be any shape.
+                            # see https://github.com/onnx/onnx/blob/main/docs/Changelog.md#Gemm-11
+                            pass
+                    
+                        # ready for fusion
+                        if op.num_of_input == 3: # already has a bias
+                            pass
+                        else:
+                            graph.create_variable(is_parameter=True, value=bias.value, dest_ops=[op])
+                            graph.remove_operation(removing_op=down, keep_coherence=True)
+
+    def fuse_scale(self):
+        "Fuse Conv + Mul or Conv + Add"
+        "Fuse ConvTranspose + Mul or ConvTranspose + Add"
+        "Fuse Gemm + Mul or Gemm + Add"
+        "Fuse MatMul + Mul"
+        pass
+
+    def fuse_selfattention(self):
+        search_engine = SearchableGraph(graph=self.graph)
+        matches = search_engine.pattern_matching(
+            patterns=['MatMul', 'Add', 'Softmax', 'MatMul'], 
+            edges=[[0, 1], [1, 2], [2, 3]], exclusive=False)
+
+        for m1, add, softmax, m2 in matches:
+            trans_Q, trans_K, trans_V, trans_O = None, None, None, None
+            perm_Q, perm_K, perm_V, perm_O = None, None, None, None
+
+            # check pattern
+            if m1.num_of_parameter != 0 or m2.num_of_parameter != 0: continue
+            if m2.inputs[0].source_op != softmax: continue
+            
+            # source op of Q
+            sq = m1.inputs[0].source_op
+            if sq is not None and sq.type == 'Transpose':
+                trans_Q = sq
+                perm_Q  = trans_Q.attributes['perm']
+
+            # source op of K                
+            sk = m1.inputs[1].source_op
+            if sk is not None and sq.type == 'Transpose':
+                trans_K = sk
+                perm_K  = trans_K.attributes['perm']
+            
+            # source op of V
+            sv = m2.inputs[1].source_op
+            if sv is not None and sv.type == 'Transpose':
+                trans_V = sv
+                perm_V  = trans_V.attributes['perm']
+            
+            # output op of O
+            oo = m2.outputs[0].dest_ops
+            if len(oo) == 1 and oo[0].type == 'Transpose':
+                trans_O = oo[0]
+                perm_O  = trans_O.attributes['perm']
+
+            for op in [trans_Q, trans_K, trans_V, trans_O, softmax]:
+                if op is not None: self.graph.remove_operation(op, keep_coherence=True)
+            for var in [add.outputs[0], m1.outputs[0]]:
+                self.graph.remove_variable(var)
+
+            Q_var, K_var, V_var = m1.inputs[0], m1.inputs[1], m2.inputs[1]
+            mask_var, O_var     = add.inputs[0], m2.outputs[0]
+            
+            for op in m1, add, m2:
+                self.graph.remove_operation(op)
+            
+            op = self.graph.create_operation(op_type='SelfAttention', attributes={
+                'TransQ': perm_Q, 'TransK': perm_K, 'TransV': perm_V, 'TransO': perm_O
+            }, inputs=[Q_var, K_var, V_var, mask_var], outputs=[O_var])
+            
+            # remove empty transpose
+            non_empty_attr = {}
+            for k, v in op.attributes.values():
+                if v is not None: non_empty_attr[k] = v
+            op._attributes = non_empty_attr
+
+        matches = search_engine.pattern_matching(
+            patterns=['MatMul', 'Softmax', 'MatMul'], 
+            edges=[[0, 1], [1, 2]], exclusive=False)
+
+        # self-attention with no mask
+        for m1, softmax, m2 in matches:
+            trans_Q, trans_K, trans_V, trans_O = None, None, None, None
+            perm_Q, perm_K, perm_V, perm_O = None, None, None, None
+
+            # check pattern
+            if m1.num_of_parameter != 0 or m2.num_of_parameter != 0: continue
+            if m2.inputs[0].source_op != softmax: continue
+            
+            # source op of Q
+            sq = m1.inputs[0].source_op
+            if sq is not None and sq.type == 'Transpose':
+                trans_Q = sq
+                perm_Q  = trans_Q.attributes['perm']
+
+            # source op of K                
+            sk = m1.inputs[1].source_op
+            if sk is not None and sq.type == 'Transpose':
+                trans_K = sk
+                perm_K  = trans_K.attributes['perm']
+            
+            # source op of V
+            sv = m2.inputs[1].source_op
+            if sv is not None and sv.type == 'Transpose':
+                trans_V = sv
+                perm_V  = trans_V.attributes['perm']
+            
+            # output op of O
+            oo = m2.outputs[0].dest_ops
+            if len(oo) == 1 and oo[0].type == 'Transpose':
+                trans_O = oo[0]
+                perm_O  = trans_O.attributes['perm']
+
+            for op in [trans_Q, trans_K, trans_V, trans_O, softmax]:
+                if op is not None: self.graph.remove_operation(op, keep_coherence=True)
+            for var in [m1.outputs[0]]:
+                self.graph.remove_variable(var)
+
+            Q_var, K_var, V_var = m1.inputs[0], m1.inputs[1], m2.inputs[1]
+            O_var               = m2.outputs[0]
+            
+            for op in m1, m2:
+                self.graph.remove_operation(op)
+            
+            op = self.graph.create_operation(op_type='SelfAttention', attributes={
+                'TransQ': perm_Q, 'TransK': perm_K, 'TransV': perm_V, 'TransO': perm_O
+            }, inputs=[Q_var, K_var, V_var, self.graph.create_variable()], outputs=[O_var])
+            
+            # remove empty transpose
+            non_empty_attr = {}
+            for k, v in op.attributes.values():
+                if v is not None: non_empty_attr[k] = v
+            op._attributes = non_empty_attr
+
+    def fuse_matmul_add(self, verbose: bool = True):
+        """
+        Fuse Matmul + bias add to PPQBiasFusedMatMul
+        
+        PPQBiasFusedMatMul is a temporary operation which will be splited when exporting.
+        """
+        graph, fused = self.graph, False
+        for current_op in [_ for _ in graph.operations.values()]:
+            if current_op.type != 'MatMul': continue
+            
+            # check down-stream op is add
+            next_ops = graph.get_downstream_operations(current_op)
+            if len(next_ops) != 1: continue
+            if next_ops[0].type != 'Add': continue
+            
+            # check if is a constant add
+            fusing_op = next_ops[0]
+            if fusing_op.num_of_parameter == 1:
+
+                # do graph fusion
+                bias = fusing_op.parameters[0].value
+                graph.remove_operation(fusing_op, keep_coherence=True)
+                graph.create_variable(value=bias, is_parameter=True, dest_ops=[current_op])
+                current_op.type = 'PPQBiasFusedMatMul'
+                fused = True
+
+                if verbose:
+                    print(f'Fusing graph op: {current_op.name} + {fusing_op.name}')
+
+        if not fused:
+            ppq_warning("No suitable matmul + add was found, check your graph again.")
 
 
 class GraphDecomposer(GraphCommandProcessor):
@@ -709,14 +1133,11 @@ class GraphDecomposer(GraphCommandProcessor):
                 bias_add  = graph.create_operation(op_type='Add', platform=op.platform)
                 bias_var  = op.inputs[-1]
 
-                graph.create_link_with_op(
-                    variable=graph.create_variable(),
-                    upstream_op=op, downstream_op=bias_add)
-
+                graph.create_link_with_op(A=op, B=bias_add)
                 graph.create_link_with_op(
                     variable=graph.create_variable(
                         value=bias_var.value * op.attributes.get('beta', 1), is_parameter=True),
-                    upstream_op=None, downstream_op=bias_add)
+                    A=None, B=bias_add)
 
                 graph.remove_variable(bias_var)
                 output_var.source_op = bias_add
@@ -758,62 +1179,10 @@ class GraphDeviceSwitcher(GraphCommandProcessor):
         GraphCommandProcessor ([type]): [description]
     """
     def insert_switcher(self):
-        """Insert all necessary switchers into current graph. Before invoking
-        this function, all operations must have been dispatched by a
-        dispatcher.
-
-        THIS IS AN NOT-REENTRANT FUNCTION!
-        """
-        def can_pass_shape(from_op: Operation, to_op: Operation) -> bool:
-            if to_op.platform == TargetPlatform.SHAPE_OR_INDEX: return True
-            else: return not value_tracing_pattern(from_where=from_op, to_where=to_op)
-
-        soi_ops = []
-        for operation in self.graph.operations.values():
-            if operation.platform == TargetPlatform.SHAPE_OR_INDEX:
-                soi_ops.append(operation)
-
-        for operation in soi_ops:
-            if operation.type == 'Shape': continue
-            assert isinstance(operation, Operation)
-            for var in operation.outputs:
-                if all([can_pass_shape(operation, op) for op in var.dest_ops]): continue
-                # else there is at least one operation needs a device converter.
-
-                if all([not can_pass_shape(operation, op) for op in var.dest_ops]):
-                    boundary_op = self.graph.create_operation(op_type='PPQDeviceSwitch', platform=TargetPlatform.FP32)
-                    self._graph.insert_op_on_var(inserting_op=boundary_op, var=var.name)
-                else:
-                    for dest_op in var.dest_ops:
-                        if can_pass_shape(operation, dest_op): continue
-                        boundary_op = self.graph.create_operation(op_type='PPQDeviceSwitch', platform=TargetPlatform.FP32)
-                        self._graph.insert_op_between_ops(inserting_op=boundary_op, up_op=operation, down_op=dest_op)
-
-            for var in operation.inputs:
-                source_op = var.source_op
-
-                if source_op is None and var.name in self.graph.inputs:
-                    boundary_op = self.graph.create_operation(op_type='PPQDeviceSwitch', platform=TargetPlatform.SHAPE_OR_INDEX)
-                    self._graph.insert_op_between_var_and_op(inserting_op=boundary_op, up_var=var, down_op=operation)
-
-                elif (source_op is not None 
-                      and source_op.platform != TargetPlatform.SHAPE_OR_INDEX 
-                      and not source_op.is_soi_generator):
-                    boundary_op = self.graph.create_operation(op_type='PPQDeviceSwitch', platform=TargetPlatform.SHAPE_OR_INDEX)
-                    self._graph.insert_op_between_ops(inserting_op=boundary_op, up_op=source_op, down_op=operation)
+        ppq_warning('This function has been removed from PPQ Since 0.6.6')
 
     def remove_switcher(self):
-        """remove all switchers from current graph."""
-        removing_collection = []
-        for operation in self.graph.operations.values():
-            if operation.type == 'PPQDeviceSwitch':
-                removing_collection.append(operation)
-
-        for op in removing_collection:
-            assert isinstance(op, Operation)
-            input_var, output_var = op.inputs[0], op.outputs[0]
-            self.graph.remove_operation(removing_op=op)
-            self.graph.create_link_with_var(upstream_variable=input_var, downstream_variable=output_var)
+        ppq_warning('This function has been removed from PPQ Since 0.6.6')
 
     def _acceptable_command_types(self) -> List[GraphCommandType]:
         return [

@@ -67,7 +67,7 @@ class ExtQuantizer(BaseQuantizer):
 
         # create a basic quantization configuration.
         config = self.create_default_quant_config(
-            operation_meta=operation.meta_data, num_of_bits=self._num_of_bits,
+            op=operation, num_of_bits=self._num_of_bits, exponent_bits=0,
             quant_max=self._quant_max, quant_min=self._quant_min,
             observer_algorithm='percentile', policy=self.quantize_policy,
             rounding=self.rounding_policy,
@@ -110,15 +110,6 @@ class ExtQuantizer(BaseQuantizer):
         where your quantized operation depoly.
         """
         return TargetPlatform.EXTENSION
-
-    @ property
-    def default_platform(self) -> TargetPlatform:
-        """default_platform 属性是提供给子图切分使用的， 所有冲突区的算子将被调度到这个设备上。
-
-        Property default_platform is acquired by graph dispather.     It states
-        where non-quantable operation depoly.
-        """
-        return TargetPlatform.FP32
 
     @ property
     def quant_operation_types(self) -> set:
