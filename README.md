@@ -53,7 +53,7 @@ pip install -r requirements.txt
 python setup.py install
 ```
 
-* Install PPQ from our docker image(Optional):
+* Install PPQ from our docker image (optional):
 
 ```bash
 docker pull stephen222/ppq:ubuntu18.04_cuda11.4_cudnn8.4_trt8.4.1.5
@@ -65,7 +65,7 @@ cd ppq
 export PYTHONPATH=${PWD}:${PYTHONPATH}
 ```
 
-* Install PPQ from using pip (optional):
+* Install PPQ using pip (optional):
 
 ```bash
 python3 -m pip install ppq
@@ -201,7 +201,7 @@ PPQ is tested with models from mmlab-classification, mmlab-detection, mmlab-sega
 
 * PPQ(sim) stands for PPQ quantization simulator's result.
 * Dispatcher stands for dispatching policy of PPQ.
-* Classification models are evaluated with ImageNet, Detection and Segamentation models are evaluated with COCO dataset, Editing models are evaluated with DIV2K dataset.
+* Classification models are evaluated with ImageNet, Detection and Segamentation models are evaluated with the COCO dataset, Editing models are evaluated with DIV2K dataset.
 * All calibration datasets are randomly picked from training data.
 
 ### License
