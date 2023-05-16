@@ -212,7 +212,7 @@ def statistical_analyse(
     """
 
     class StatisticalErrorAnalyser:
-        def __init__(self, x_fp: List[torch.Tensor], x_qt: List[torch.Tensor], 
+        def __init__(self, x_fp: List[torch.Tensor], x_qt: List[torch.Tensor],
                      op: Operation, var: Variable) -> None:
             self.x_qt = torch.cat(x_qt, dim=0)
             self.x_fp = torch.cat(x_fp, dim=0)
@@ -309,7 +309,7 @@ def statistical_analyse(
             hooks[operation.name] = DetailedRecorder(
                 operation=operation)
             caches[operation.name] = {
-                'Quantized Input': [], 'Quantized Output': [], 
+                'Quantized Input': [], 'Quantized Output': [],
                 'Dequantized Input': [], 'Dequantized Output': []}
 
     # dequantize all
