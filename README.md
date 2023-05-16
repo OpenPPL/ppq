@@ -36,13 +36,13 @@ yum install ninja-build # for redhat/centos user
 
 For Windows User:
 
-  (1). Download ninja.exe from [https://github.com/ninja-build/ninja/releases](https://github.com/ninja-build/ninja/releases), add it to Windows PATH.
+  (1) Download ninja.exe from [https://github.com/ninja-build/ninja/releases](https://github.com/ninja-build/ninja/releases), add it to Windows PATH.
 
-  (2). Download&Install Visual Studio 2019 from [https://visualstudio.microsoft.com](https://visualstudio.microsoft.com/zh-hans/).
+  (2) Install Visual Studio 2019 from [https://visualstudio.microsoft.com](https://visualstudio.microsoft.com/zh-hans/).
 
-  (3). Add your c++ compiler to Windows PATH Environment, if you are using Visual Studio, it should be something like "C:\Program Files\Microsoft Visual Studio\2019\Community\VC\Tools\MSVC\14.16.27023\bin\Hostx86\x86"
+  (3) Add your C++ compiler to Windows PATH Environment, if you are using Visual Studio, it should be like "C:\Program Files\Microsoft Visual Studio\2019\Community\VC\Tools\MSVC\14.16.27023\bin\Hostx86\x86"
 
-  (4). Update pytorch to 1.10+.
+  (4) Update PyTorch version to 1.10+.
 
 3. Install PPQ
 
@@ -53,7 +53,7 @@ pip install -r requirements.txt
 python setup.py install
 ```
 
-* Install PPQ from our docker image(Optional):
+* Install PPQ from our docker image (optional):
 
 ```bash
 docker pull stephen222/ppq:ubuntu18.04_cuda11.4_cudnn8.4_trt8.4.1.5
@@ -65,7 +65,7 @@ cd ppq
 export PYTHONPATH=${PWD}:${PYTHONPATH}
 ```
 
-* Install PPQ from Pip(Optional):
+* Install PPQ using pip (optional):
 
 ```bash
 python3 -m pip install ppq
@@ -168,9 +168,9 @@ Email: openppl.ai@hotmail.com
 
 ### Contributions
 
-We appreciate all contributions. If you are planning to contribute back bug-fixes, please do so without any further discussion.
+  We appreciate all contributions. If you are planning to contribute back bug fixes, please do so without any further discussion.
 
-If you plan to contribute new features, utility functions, or extensions to the core, please first open an issue and discuss the feature with us. Sending a PR without discussion might end up resulting in a rejected PR because we might be taking the core in a different direction than you might be aware of.
+  If you plan to contribute new features, utility functions, or extensions to the core, please first open an issue and discuss the feature with us. Sending a PR without discussion might end up resulting in a rejected PR because we might be taking the core in a different direction than you might be aware of.
 
 ### Benchmark
 
@@ -201,7 +201,7 @@ PPQ is tested with models from mmlab-classification, mmlab-detection, mmlab-sega
 
 * PPQ(sim) stands for PPQ quantization simulator's result.
 * Dispatcher stands for dispatching policy of PPQ.
-* Classification models are evaluated with ImageNet, Detection and Segamentation models are evaluated with COCO dataset, Editing models are evaluated with DIV2K dataset.
+* Classification models are evaluated with ImageNet, Detection and Segamentation models are evaluated with the COCO dataset, Editing models are evaluated with DIV2K dataset.
 * All calibration datasets are randomly picked from training data.
 
 ### License

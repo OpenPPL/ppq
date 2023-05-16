@@ -1,5 +1,5 @@
 # include <vector>
-# include <stdlib.h>
+# include <cstdlib>
 
 using std::vector;
 float compute_mse_loss(

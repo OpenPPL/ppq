@@ -1,15 +1,15 @@
 # Customize Your Quantization Platform
 
 PPQ has supported many backends, you can check [quant.py](../ppq/core/quant.py) for details about all supported
-platforms, this tutorial illustrates you how to add your own quantization backend support in PPQ. For simplicity,
+platforms, this tutorial illustrates how to add your quantization backend support in PPQ. For simplicity,
 the *TargetPlatform.ACADEMIC_INT8* platform will be given as an example here.
 
 Executable Example are provided here: [MyQuantizer.py](https://github.com/openppl-public/ppq/blob/master/ppq/quantization/quantizer/MyQuantizer.py).
 
 ## Create Your Platform
 
-First thing first, you need to name and create your platform in [TargetPlatform](../ppq/core/quant.py), there are
-all PPQ suppported platforms. Don't forget to add your created platform in the *is_quantized_platform* collection
+First, you need to name and create your platform in [TargetPlatform](../ppq/core/quant.py), there are
+all PPQ supported platforms. Don't forget to add your created platform in the *is_quantized_platform* collection
 ```python
 @ classmethod
 def is_quantized_platform(cls, platform) -> bool:
@@ -24,8 +24,8 @@ def is_quantized_platform(cls, platform) -> bool:
 
 As you can see in [quantizer](../ppq/quantization/quantizer), there are many quantizers, each corresponding with
 a backend platform, and they all inherit from the basic class *BaseQuantizer*, the basic quantizer class regulates
-the basic quantization workflow and the process of applying quantization passes, which are guided by quantization
-setting designated by user in advance. So your quantizer should inherit the basic class as well. Take *ACADEMICQuantizer*
+the basic quantization workflow and the process of applying quantization passes, which are guided by the quantization
+setting designated by the user in advance. So your quantizer should inherit the basic class as well. Take *ACADEMICQuantizer*
 as an example
 ```python
 
@@ -74,10 +74,10 @@ def quant_operation_types(self) -> set:
         }
 ```
 
-To implement the whole quantizer, you should confirm the quantization scheme(per tensor/ per channel, symmetric / asymmetric)
+To implement the whole quantizer, you should confirm the quantization scheme(per tensor/per channel, symmetric/asymmetric)
 of your backend platform, and in many platforms weight parameters and activations may take different quantization schemes.
 Please see [QuantizationProperty](https://github.com/openppl-public/ppq/tree/master/ppq/core/quant.py) for all supported quantization schemes. Your quantizer class should 
-implement the funtion *quantize_policy* to identify the quantization scheme of activation 
+implement the function *quantize_policy* to identify the quantization scheme of activation 
 ```python
 @ property
 def quantize_policy(self) -> QuantizationPolicy:
@@ -87,12 +87,12 @@ def quantize_policy(self) -> QuantizationPolicy:
             QuantizationProperty.PER_TENSOR
         )
 ```
-as you can see from above, the *ACADEMICQuantizer* takes a asymmetric linear per-tensor scheme for activation quantization, the
+as you can see from above, the *ACADEMICQuantizer* takes an asymmetric linear per-tensor scheme for activation quantization, the
 most-common quantization setting in academic papers. 
 
 Similarly, you need to confirm the rounding policy of your backend platform, for example, the *TargetPlatfom.PPL_CUDA_INT8* 
 platform takes a round-to-nearest-even policy, while the *TargetPlatform.NCNN_INT8* platform takes a round-half-away-from-zero
-policy, in order to better align with your backend, you should make sure coherent rounding behavior between your quantizer
+policy, to better align with your backend, you should make sure of coherent rounding behavior between your quantizer
 and your real backend.
 ```python
 @ property
@@ -103,7 +103,7 @@ def rounding_policy(self) -> RoundingPolicy:
 
 ## Correct Quantization Details
 
-In most circumstances, weight parameters may take different quantization scheme from activation, thus we need to correct quantization scheme for weight parameter and special operations in  *init_quantize_config*, note that this func generates quantization configs for every quantable operation in your graph, you need firstly generate quantization config for common activation
+In most circumstances, weight parameters may take different quantization schemes from activation, thus we need to correct the quantization scheme for weight parameter and special operations in  *init_quantize_config*, note that this func generates quantization configs for every quantable operation in your graph, you need first generate quantization config for common activation
 ```python
 def init_quantize_config(self, operation: Operation) -> OperationQuantizationConfig:
 
