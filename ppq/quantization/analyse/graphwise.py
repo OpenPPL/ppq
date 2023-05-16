@@ -193,10 +193,10 @@ def statistical_analyse(
         that provides a in-depth study of your network.
 
     use report = statistical_analyse() to invoke this function
-    
+
     The return value of this function is a collection of statistics parameters
     You are recommended to processing them with pandas
-    
+
     from pandas import DataFrame
     report_df = DataFrame(report)
 
@@ -324,7 +324,7 @@ def statistical_analyse(
         if collate_fn is not None: batch = collate_fn(batch)
         executor.forward(inputs=batch, hooks=hooks)
         if idx >= steps: break
-    
+
     for operation in interested_op:
         hook = hooks[operation.name]
         assert isinstance(hook, DetailedRecorder)
