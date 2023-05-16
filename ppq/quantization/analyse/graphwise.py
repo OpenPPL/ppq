@@ -138,7 +138,7 @@ def graphwise_error_analyse(
 
     # run for each quantable operations:
     for idx, batch in tqdm(enumerate(dataloader),
-                           desc='Analysing Graphwise Quantization Error(Phrase 1):',
+                           desc='Analysing Graphwise Quantization Error(Phase 1):',
                            total=(min(len(dataloader), steps))):
         if collate_fn is not None: batch = collate_fn(batch)
         executor.forward(inputs=batch, hooks=hooks)
@@ -156,7 +156,7 @@ def graphwise_error_analyse(
 
     # run for each quantable operations:
     for idx, batch in tqdm(enumerate(dataloader),
-                           desc='Analysing Graphwise Quantization Error(Phrase 2):',
+                           desc='Analysing Graphwise Quantization Error(Phase 2):',
                            total=(min(len(dataloader), steps))):
         if collate_fn is not None: batch = collate_fn(batch)
         executor.forward(inputs=batch, hooks=hooks)
@@ -319,7 +319,7 @@ def statistical_analyse(
 
     # run for each quantable operations:
     for idx, batch in tqdm(enumerate(dataloader),
-                           desc='Analysing Phrase 1',
+                           desc='Analysing Phase 1',
                            total=(min(len(dataloader), steps))):
         if collate_fn is not None: batch = collate_fn(batch)
         executor.forward(inputs=batch, hooks=hooks)
@@ -339,7 +339,7 @@ def statistical_analyse(
 
     # run for each quantable operations:
     for idx, batch in tqdm(enumerate(dataloader),
-                           desc='Analysing Phrase 2',
+                           desc='Analysing Phase 2',
                            total=(min(len(dataloader), steps))):
         if collate_fn is not None: batch = collate_fn(batch)
         executor.forward(inputs=batch, hooks=hooks)

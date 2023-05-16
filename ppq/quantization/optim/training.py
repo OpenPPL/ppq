@@ -473,9 +473,9 @@ class BiasCorrectionPass(TrainingBasedPass):
                     bias_cloned[op.name] = op.inputs[-1].value.clone()
                     interested_outputs.append(op.outputs[0].name)
 
-            # Phrase 1, collect fp32 output
+            # Phase 1, collect fp32 output
             dequantize_block(block)
-            for qt_input, _ in tqdm(zip(qt_inputs, fp_outputs), '# Bias Correction Phrase 1'):
+            for qt_input, _ in tqdm(zip(qt_inputs, fp_outputs), '# Bias Correction Phase 1'):
                 feed_dict = {k: v.to(executor._device) for k, v in qt_input.items()}
 
                 outputs = executor.partial_graph_forward(
@@ -486,9 +486,9 @@ class BiasCorrectionPass(TrainingBasedPass):
                     source_op = graph.variables[name].source_op
                     fp_cache[name].append(collect_bias(value, source_op.type))
 
-            # Phrase 2, collect quant output
+            # Phase 2, collect quant output
             restore_block_quantize_state(block)
-            for qt_input, _ in tqdm(zip(qt_inputs, fp_outputs), '# Bias Correction Phrase 2'):
+            for qt_input, _ in tqdm(zip(qt_inputs, fp_outputs), '# Bias Correction Phase 2'):
                 feed_dict = {k: v.to(executor._device) for k, v in qt_input.items()}
 
                 outputs = executor.partial_graph_forward(
