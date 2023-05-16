@@ -187,7 +187,7 @@ def statistical_analyse(
     graph: BaseGraph, running_device: str,
     dataloader: Iterator, collate_fn: Callable = None,
     steps: int = 8, ) -> List[dict]:
-    """ It is time to do some statistical work.
+    """It is time to do some statistical work.
 
     statistical_analyse is a powerful analying function
         that provides a in-depth study of your network.
