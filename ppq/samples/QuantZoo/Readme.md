@@ -13,6 +13,8 @@
 
 ### 1.1 下载数据集：
 
+请注意，如果你在ubuntu下载rar格式的数据集，请先安装unrar确保能够正常解析及解压数据集。
+
 1. 图像分类: 
     * https://pan.baidu.com/s/1VdMp9fPxPwh2sVPd1ikFKQ?pwd=lebu
 2. 图像超分:
