@@ -576,9 +576,9 @@ class GraphMerger(GraphCommandProcessor):
 
                 scale = alpha / torch.sqrt(var + epsilon)
                 group = computing_op.attributes.get('group', 1)
-                scale = scale.reshape([group, 1, -1, 1, 1])
-                w = w.reshape([group, -1, w.shape[1], w.shape[2], w.shape[3]]) * scale
-                w = w.reshape([w.shape[0] * w.shape[1], w.shape[2], w.shape[3], w.shape[4]])
+                scale = scale.reshape([group, 1, -1] + [1] * (w.ndim - 2))
+                w = w.reshape([group, -1] + list(w.shape[1:])) * scale
+                w = w.reshape([w.shape[0] * w.shape[1]] + list(w.shape[2:]))
                 b = alpha * (b - mean) / torch.sqrt(var + epsilon) + beta
             else:
                 raise TypeError(
