@@ -20,13 +20,16 @@ class EqualizationMethod(Enum):
     SQUARE_MAX = 3,
     # key value = np.mean(np.square(x))
     SQUARE_MEAN = 4,
+    
+    DIRECT_MAX = 5
 
 
 class EqualizationHelper():
 
     @ staticmethod
     def key_value_from_upstream(
-        op: Operation, including_bias: bool = False, including_act: bool = False, 
+        op: Operation, including_weight: bool = True,
+        weight_multiplier: float = 1.0, including_bias: bool = False, including_act: bool = False, 
         bias_multiplier: float = 0.5, act_multiplier: float = 0.5) -> torch.Tensor:
         if op.type not in {'Gemm', 'MatMul', 'Conv', 'ConvTranspose'}:
             raise TypeError(f'Unsupported Op type {op.name}({op.type}) for Equalization Optimization.')
@@ -37,24 +40,25 @@ class EqualizationHelper():
         # ----------------------------------
         # step - 1, extract weight from op:
         # ----------------------------------
-        w = op.inputs[1].value
-        if op.type == 'ConvTranspose':
-            num_of_groups = op.attributes.get('group', 1)
-            if w.ndim == 3:
-                w = torch.reshape(w, (num_of_groups, w.shape[0] // num_of_groups) + w.shape[1: ])
-                w = torch.permute(w, (2, 0, 1, 3))
-                w = torch.reshape(w, (w.shape[0] * w.shape[1], -1))
-            elif w.ndim == 4:
-                w = torch.reshape(w, (num_of_groups, w.shape[0] // num_of_groups) + w.shape[1: ])
-                w = torch.permute(w, (2, 0, 1, 3, 4))
-                w = torch.reshape(w, (w.shape[0] * w.shape[1], -1))
-            elif w.ndim == 5:
-                w = torch.reshape(w, (num_of_groups, w.shape[0] // num_of_groups) + w.shape[1: ])
-                w = torch.permute(w, (2, 0, 1, 3, 4, 5))
-                w = torch.reshape(w, (w.shape[0] * w.shape[1], -1))
-            else:
-                raise ValueError(f'Unexpected dimension of weight of {op.name}.')
-            buffer.append(w)
+        if including_weight:
+            w = op.inputs[1].value * weight_multiplier
+            if op.type == 'ConvTranspose':
+                num_of_groups = op.attributes.get('group', 1)
+                if w.ndim == 3:
+                    w = torch.reshape(w, (num_of_groups, w.shape[0] // num_of_groups) + w.shape[1: ])
+                    w = torch.permute(w, (2, 0, 1, 3))
+                    w = torch.reshape(w, (w.shape[0] * w.shape[1], -1))
+                elif w.ndim == 4:
+                    w = torch.reshape(w, (num_of_groups, w.shape[0] // num_of_groups) + w.shape[1: ])
+                    w = torch.permute(w, (2, 0, 1, 3, 4))
+                    w = torch.reshape(w, (w.shape[0] * w.shape[1], -1))
+                elif w.ndim == 5:
+                    w = torch.reshape(w, (num_of_groups, w.shape[0] // num_of_groups) + w.shape[1: ])
+                    w = torch.permute(w, (2, 0, 1, 3, 4, 5))
+                    w = torch.reshape(w, (w.shape[0] * w.shape[1], -1))
+                else:
+                    raise ValueError(f'Unexpected dimension of weight of {op.name}.')
+                buffer.append(w)
 
         if op.type in {'MatMul', 'Gemm'}:
             assert w.ndim == 2, f'Unexpected Error, Parameter of MatMul {op.name} should be 2-d.'
@@ -90,11 +94,11 @@ class EqualizationHelper():
         return torch.cat(buffer, dim=-1)
 
     @ staticmethod
-    def key_value_from_downstream(op: Operation) -> torch.Tensor:
+    def key_value_from_downstream(op: Operation, weight_multiplier: float = 1.0) -> torch.Tensor:
         # ----------------------------------
         # step - 1, extract weight from op:
         # ----------------------------------
-        w = op.inputs[1].value
+        w = op.inputs[1].value * weight_multiplier
         if op.type == 'ConvTranspose':
             w = torch.reshape(w, (w.shape[0], -1))
 
@@ -318,6 +322,8 @@ class EqualizationPair:
     def equalize(
         self,
         value_threshold: float,
+        including_weight: bool = True,
+        weight_multiplier: float = 1.0,
         including_act: bool = False,
         act_multiplier: float = 0.5,
         including_bias: bool = False,
@@ -386,6 +392,30 @@ class EqualizationPair:
             ChannelSplitHelper.channel_split_downstream(
                 op = op, scale_factor = 1 / sqrt(2), mask = mask)
 
+    def activation_equalize(self, threshold: float = 4.0):
+        # extract key value from pair
+        upstream_key_values = []
+        for op in self.upstream_layers:
+            key_value = EqualizationHelper.key_value_from_upstream(
+                op=op, including_bias=False, including_act=True, 
+                bias_multiplier=0, act_multiplier=1, weight_multiplier=0)
+            upstream_key_values.append(key_value)
+        upstream_key_values = self.reduce_by_axis(upstream_key_values, method=EqualizationMethod.ABSOLUTE_MAX)
+
+        threshold = upstream_key_values.mean().item()
+        # calculate scale
+        scale = torch.where(
+            upstream_key_values > threshold, 
+            torch.ones_like(upstream_key_values) * 1.1, 
+            torch.ones_like(upstream_key_values) / 1.1)
+
+        # write back all params
+        for op in self.upstream_layers:
+            EqualizationHelper.scale_to_upstream(op, 1 / scale)
+
+        for op in self.downstream_layers:
+            EqualizationHelper.scale_to_downstream(op, 1 / scale)
+
     def calculate_scale(
         self, upstream_key_values: torch.Tensor,
         downstream_key_values: torch.Tensor,
@@ -413,6 +443,9 @@ class EqualizationPair:
 
         elif method is EqualizationMethod.SQUARE_MEAN:
             return torch.mean(torch.square(params), axis=axis)
+    
+        elif method is EqualizationMethod.DIRECT_MAX:
+            return torch.max(params, axis=axis)
 
         else:
             raise NotImplementedError('Equalization method %s is not support.' % str(method))

@@ -420,3 +420,171 @@ class LSQDelegator(TorchQuantizeDelegator):
             quantized = quantized
             return quantized
 
+        
+class RoundTuningDelegator(TorchQuantizeDelegator):
+    def __init__(
+        self, config: TensorQuantizationConfig, var: Variable, 
+    ) -> None:
+        self.config        = config
+        self.is_parameter  = var.is_parameter
+        self.var           = var
+        self.policy        = config.policy
+        self.tunable_round = self.var.value
+
+    def trainable_tensors(self) -> List[torch.Tensor]:
+        params = []
+        if self.is_parameter:        params.append(self.var.value)
+        return params
+
+    def withdraw(self) -> None:
+        with torch.no_grad():
+            if self.scale_backup is not None:
+                self.config.scale.copy_(self.scale_backup)
+            if self.offset_backup is not None:
+                self.config.offset.copy_(self.offset_backup)
+            if self.param_backup is not None:
+                self.var.value.copy_(self.param_backup)
+
+    def finalize(self) -> None:
+        self.scale_backup  = None
+        self.offset_backup = None
+        self.param_backup  = None
+        pass # do nothing here.
+
+    def __call__(self, tensor: torch.Tensor, config: TensorQuantizationConfig) -> torch.Tensor:
+        if tensor.is_cuda and PPQ_CONFIG.USING_CUDA_KERNEL:
+            if config.policy.has_property(QuantizationProperty.LINEAR):
+                if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
+                    return CuLSQ_LC.apply(
+                        tensor, config.scale, config.offset, config.channel_axis,
+                        config.quant_min, config.quant_max, config.rounding)
+                elif config.policy.has_property(QuantizationProperty.PER_TENSOR):
+                    return CuLSQ_LT.apply(
+                        tensor, config.scale, config.offset,
+                        config.quant_min, config.quant_max, config.rounding)
+
+            elif config.policy.has_property(QuantizationProperty.FLOATING):
+                # For floating quantization, scale is not trainable.
+                return PPQuantFunction(tensor=tensor, config=config)
+
+        else:
+            scale, offset = config.scale, config.offset
+
+            if self.is_scale_trainable:
+                scale = scale.abs()
+                grad_scale = 1 / (tensor.numel() * config.quant_max) ** 0.5
+                scale = scale * grad_scale + (scale - scale * grad_scale).detach()
+
+            if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
+                shape = [1 if axis != config.channel_axis else -1 for axis in range(tensor.ndim)]
+                scale = scale.view(shape)
+                offset = offset.view(shape)
+
+            quantized = ppq_tensor_round((tensor / scale), config.rounding) + offset.detach()
+            quantized = torch.clamp(quantized, config.quant_min, config.quant_max)
+            quantized = (quantized - offset.detach()) * scale
+            quantized = quantized
+            return quantized
+
+
+class TensorwiseRoundTuningImpl(Function):
+    @ staticmethod
+    def forward(ctx, tensor: torch.Tensor, scale: torch.Tensor,
+                offset: torch.Tensor, quant_min: int, quant_max: int,
+                rounding: torch.Tensor) -> torch.Tensor:
+
+        scale, offset = scale.to(tensor.device), offset.to(tensor.device)
+        tensor = (tensor / scale) + (rounding > .5) + offset
+        tensor = torch.clamp(tensor, quant_min, quant_max)
+        tensor = (tensor - offset) * scale
+        return tensor
+
+    @ staticmethod
+    def backward(ctx, dy: torch.Tensor):
+        return dy, None, None, None, None, dy
+
+
+class ChannelwiseRoundTuningImpl(Function):
+    @ staticmethod
+    def forward(ctx, tensor: torch.Tensor, scale: torch.Tensor,
+                offset: torch.Tensor, channel_axis: int,
+                quant_min: int, quant_max: int,
+                rounding: torch.Tensor) -> torch.Tensor:
+
+        scale, offset = scale.to(tensor.device), offset.to(tensor.device)
+        # generate a shape that likes [1, 1, -1, 1], the only -1 is at channel axe.
+        shape = [1 if axis != channel_axis else -1 for axis in range(tensor.ndim)]
+        scale, offset = scale.view(shape), offset.view(shape)
+
+        tensor = (tensor / scale) + (rounding > .5) + offset
+        tensor = torch.clamp(tensor, quant_min, quant_max)
+        tensor = (tensor - offset) * scale
+        return tensor
+
+    @ staticmethod
+    def backward(ctx, dy: torch.Tensor):
+        return dy, None, None, None, None, None, dy
+
+
+class RoundTruningDelegator(TorchQuantizeDelegator):
+    def __init__(
+        self, var: Variable,
+        config: TensorQuantizationConfig,
+    ) -> None:
+        self.config       = config
+        self.var          = var
+        self.is_parameter = self.var.is_parameter
+
+        # environment check
+        if config.policy.has_property(QuantizationProperty.FLOATING):
+            raise TypeError('Incorrect Quantization Property. Except Linear Quantization Policy.')
+        if config.policy.has_property(QuantizationProperty.DYNAMIC):
+            raise TypeError('Incorrect Quantization Property. Except Static Quantization Policy.')
+        if not self.var.is_parameter:
+            raise TypeError(f'Variable {self.var.name} is not a parameter!')
+        if self.var.value is None or not isinstance(self.var.value, torch.Tensor):
+            raise ValueError(f'Unexpected value type of {self.var.name}')
+        if self.config.scale is None:
+            raise ValueError(f'Quantization Scale has not been correctly set.')
+
+        # initialize rounding
+        self._calling_times    = 0
+        self._executing_device = self.var.value.device
+        self._param_backup = self.var.value.clone()
+
+        with torch.no_grad():
+            scale, _ = config.scale, config.offset
+            if config.policy.has_property(QuantizationProperty.PER_CHANNEL):    
+                shape = [1 if axis != config.channel_axis else -1 for axis in range(self.var.value.ndim)]
+                scale = scale.view(shape)
+
+            rounding = ((self.var.value / scale) - (self.var.value / scale).floor())
+            self.var.value = (self.var.value / scale).floor() * scale
+            self._scale = scale
+
+        # create grad.
+        self._rounding = rounding
+        self._rounding.requires_grad = True
+
+    def trainable_tensors(self) -> List[torch.Tensor]:
+        return [self._rounding]
+
+    def finalize(self) -> None:
+        with torch.no_grad():
+            self.var.value += (self._rounding > .5) * self._scale
+
+    def withdraw(self) -> None:
+        with torch.no_grad():
+            self.var.value.copy_(self._param_backup)
+
+    def __call__(self, tensor: torch.Tensor, config: TensorQuantizationConfig) -> torch.Tensor:
+        if config.policy.has_property(QuantizationProperty.PER_TENSOR):
+            return TensorwiseRoundTuningImpl.apply(
+                tensor, config.scale, config.offset, config.quant_min, 
+                config.quant_max, self._rounding)
+        elif config.policy.has_property(QuantizationProperty.PER_CHANNEL):
+            return ChannelwiseRoundTuningImpl.apply(
+                tensor, config.scale, config.offset, config.channel_axis, 
+                config.quant_min, config.quant_max, self._rounding)
+        else:
+            raise Exception('Oops, this should not happen.')

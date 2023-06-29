@@ -25,13 +25,13 @@ class TensorwiseFloatingQuantImpl(Function):
 
         scales, offsets = scales.to(tensor.device), offsets.to(tensor.device)
         if not PPQ_CONFIG.USING_CUDA_KERNEL or not tensor.is_cuda:
-            # quantization function, pytorch implmentation
+            # quantization function, pytorch implementation
             raise NotImplementedError('This Feature must run with PPQ Cuda Kernel.')
         
         else:
             from ppq.core import CUDA
 
-            # quantization function, pure cuda implmentation
+            # quantization function, pure cuda implementation
             quantized = CUDA.FloatingQuantize_T(
                 tensor=tensor,
                 scales=scales,

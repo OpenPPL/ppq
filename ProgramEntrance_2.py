@@ -162,6 +162,7 @@ class MyInt8Quantizer(BaseQuantizer):
 
         return OQC
 
+    @ property
     def quant_operation_types(self) -> set:
         return {'Conv', 'ConvTranspose', 'MatMul', 'Gemm', 
                 'Relu', 'Clip', 'Sub', 'Abs', 'Mul',
@@ -178,9 +179,8 @@ class MyOptimPass(QuantizationOptimizationPass):
     This Optimization Pass will:
         1. fuse relu - clip structure.
         2. set clip output scale in the network to 1/127.
-        3. exclude input variables in the network from quantization.
-        4. set the input and output quantization information of the abs operators to be the same.
-        5. modify calibration method for some operators.
+        3. set the input and output quantization information of the abs operators to be the same.
+        4. modify calibration method for some operators.
     """
     def __init__(self, name: str = 'My Optim Pass') -> None:
         super().__init__(name)
@@ -203,13 +203,6 @@ class MyOptimPass(QuantizationOptimizationPass):
             clip.config.output_quantization_config[0].scale = torch.tensor(1 / 127).cuda()
             clip.config.output_quantization_config[0].offset = torch.tensor(0.0).cuda()
             clip.config.output_quantization_config[0].state = QuantizationStates.ACTIVATED
-
-        # disable input quantization of this network
-        for name, var in graph.inputs.items():
-            print(f'Variable {name} has dequantized.')
-            if isinstance(var, QuantableVariable):
-                for config in var.dest_op_configs:
-                    config.state = QuantizationStates.FP32
 
         # keep input and output scale of abs as the same.
         for op in graph.operations.values():
