@@ -2,7 +2,7 @@ from typing import Callable, List, Union
 
 import torch
 
-from ppq import DataType
+from ppq.core import DataType
 
 from .base.graph import BaseGraph
 from .processer import GraphCommandProcessor
