@@ -382,7 +382,7 @@ class BaseQuantizer(metaclass = ABCMeta):
             list_of_passes.append(LayerwiseEqualizationPass(
                 optimize_level       = equalization_setting.opt_level,
                 iterations           = equalization_setting.iterations,
-                weight_threshold     = equalization_setting.value_threshold,
+                value_threshold     = equalization_setting.value_threshold,
                 including_bias       = equalization_setting.including_bias,
                 including_act        = equalization_setting.including_act,
                 bias_multiplier      = equalization_setting.bias_multiplier,

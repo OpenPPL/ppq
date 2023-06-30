@@ -20,7 +20,7 @@ PPQ 的开发与推理框架关系密切，这使得我们能够了解硬件推�
    3. 更为强大的 [图模式匹配](https://github.com/openppl-public/ppq/blob/master/ppq/IR/search.py) 与 [图融合功能](https://github.com/openppl-public/ppq/blob/master/ppq/IR/morph.py)
    4. 基于 Onnx 的模型 [QAT](https://github.com/openppl-public/ppq/blob/master/ppq/samples/QAT/imagenet.py) 功能
    5. 全新的 [TensorRT](https://github.com/openppl-public/ppq/blob/master/md_doc/deploy_trt_by_OnnxParser.md) 量化与导出逻辑
-   6. 更多正在更新的样例脚本及视频内容
+   6. 全球最大的量化模型库 [OnnxQuant](https://github.com/openppl-public/ppq/tree/master/ppq/samples/QuantZoo)
    7. 其他未知的软件特性
 
 ### Installation (安装方法)

@@ -3,7 +3,8 @@ from .base import (QuantizationOptimizationPass,
                    QuantizationOptimizationPipeline)
 from .calibration import (IsotoneCalibrationPass, PPLDSPTIReCalibrationPass,
                           RuntimeCalibrationPass)
-from .equalization import ChannelwiseSplitPass, LayerwiseEqualizationPass
+from .equalization import (ActivationEqualizationPass, ChannelwiseSplitPass,
+                           LayerwiseEqualizationPass)
 from .extension import ExtensionPass
 from .legacy import AdaroundPass
 from .morph import (GRUSplitPass, HorizontalLayerSplitPass, MetaxGemmSplitPass,
@@ -13,4 +14,4 @@ from .refine import (MishFusionPass, NxpInputRoundingRefinePass,
                      NxpQuantizeFusionPass, QuantAlignmentPass,
                      QuantizeFusionPass, QuantizeSimplifyPass, SwishFusionPass)
 from .ssd import SSDEqualizationPass
-from .training import BiasCorrectionPass, LearnedStepSizePass
+from .training import BiasCorrectionPass, LearnedStepSizePass, RoundTuningPass
