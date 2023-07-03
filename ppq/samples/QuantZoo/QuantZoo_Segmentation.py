@@ -1,4 +1,4 @@
-# Test Quantization System Performace on MMEditing models with CityScapes
+# Test Quantization System Performace on MMSegmentation models with CityScapes
 
 # Quantizer Configuration
 SYMMETRICAL = True
