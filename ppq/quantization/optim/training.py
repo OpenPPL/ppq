@@ -184,7 +184,7 @@ class TrainingBasedPass(QuantizationOptimizationPass):
 
     def split_graph_into_blocks(
         self, graph: BaseGraph, executing_order: List[Operation],
-        blocksize: int = None, overlap: bool = False, 
+        blocksize: int = None, overlap: bool = False,
         interested_layers: List[str] = None) -> List[TrainableBlock]:
         """block construction function for training-based algorithms, if
         `block_limit` is not specified, block grandularity will be controlled by
@@ -222,7 +222,7 @@ class TrainingBasedPass(QuantizationOptimizationPass):
         return ret
 
     def collect(
-        self, graph: BaseGraph, block: TrainableBlock, executor: TorchExecutor, 
+        self, graph: BaseGraph, block: TrainableBlock, executor: TorchExecutor,
         dataloader: Iterable, collate_fn: Callable, collecting_device: str, steps: int = None,
         expire_device: str = 'cpu') -> Tuple[List[Dict[str, torch.Tensor]], List[Dict[str, torch.Tensor]]]:
         """
@@ -260,7 +260,7 @@ class TrainingBasedPass(QuantizationOptimizationPass):
 
         with torch.no_grad():
             try:
-                if len(dataloader) > 1024:
+                if len(dataloader) > 1024 and steps is None:
                     ppq_warning('Large finetuning dataset detected(>1024). '
                                 'You are suppose to prepare a smaller dataset for finetuning. '
                                 'Large dataset might cause system out of memory, '
@@ -270,7 +270,7 @@ class TrainingBasedPass(QuantizationOptimizationPass):
 
             quant_graph = QuantableGraph(graph) # helper class
             fp_outputs, qt_inputs = [], []
-            
+
             cur_iter = 0
             # dequantize graph, collect fp32 outputs
             quant_graph.dequantize_graph(expire_device=expire_device)
@@ -295,7 +295,7 @@ class TrainingBasedPass(QuantizationOptimizationPass):
                 cur_iter += 1
                 if steps is not None and cur_iter > steps: break
 
-        return qt_inputs, fp_outputs 
+        return qt_inputs, fp_outputs
 
     def compute_block_loss(
         self, block: TrainableBlock,
@@ -341,9 +341,9 @@ class BiasCorrectionPass(TrainingBasedPass):
 
     Bias correction is the process of shifting quantized model outputs to account for their statistical errors.
 
-    Network quantization will bring some error(noise) to the result. To improve the accuracy of a quantized model, 
-    we can correct the network by adding an extra term on bias in order to make the output has zero expectation. 
-    
+    Network quantization will bring some error(noise) to the result. To improve the accuracy of a quantized model,
+    we can correct the network by adding an extra term on bias in order to make the output has zero expectation.
+
     Bias correction is used to eliminate bias error, generally it will take a few minutes to correct all bias terms.
 
     For those layers have no bias, Bias Correction Optimization will skip them directly.
@@ -366,18 +366,18 @@ class BiasCorrectionPass(TrainingBasedPass):
 
     * steps(int)
 
-            Forward steps for collecting bias error, 
-            a large value of this parameter means more data will be collected so 
+            Forward steps for collecting bias error,
+            a large value of this parameter means more data will be collected so
             the bias error will be estimated better, while it takes more time.
 
             Usually 8 ~ 32 step is enough in most cases.
 
     * block_size(int)
 
-            Bias Correction Optimization will split your graph into blocks, 
+            Bias Correction Optimization will split your graph into blocks,
             bias error will be collected and corrected block by block.
 
-            A large block size will greatly reduce running time of this optimization, 
+            A large block size will greatly reduce running time of this optimization,
             while it might give an unstable result when blocksize is too large.
 
             By default this value is set to 4, to have the best result of optimization, you are recommended to set blocksize = 1.
@@ -386,7 +386,7 @@ class BiasCorrectionPass(TrainingBasedPass):
 
             A function that used to measure the loss after optimization.
 
-            Bias Correction Optimization is a training-based pass, 
+            Bias Correction Optimization is a training-based pass,
             we will check the loss at the end of block optimization.
 
             If the optimization created worsen result, the optimization result will be drop.
@@ -404,7 +404,7 @@ class BiasCorrectionPass(TrainingBasedPass):
         # calling ppq.api.quantize_onnx_model function with this setting.
         ir = quantize_torch_model(
         model=model, calib_dataloader=load_calibration_dataset(), setting=setting,
-        platform=TargetPlatform.PPL_CUDA_INT8, calib_steps=8, input_shape=INPUT_SHAPE, 
+        platform=TargetPlatform.PPL_CUDA_INT8, calib_steps=8, input_shape=INPUT_SHAPE,
         collate_fn=collate_fn)
 
     You can manually create this optimization by:
@@ -419,7 +419,7 @@ class BiasCorrectionPass(TrainingBasedPass):
 
     Interface changed since PPQ 0.6.5
     """
-    def __init__(self, interested_layers: List[str] = [], 
+    def __init__(self, interested_layers: List[str] = [],
                  collecting_device: str = 'cuda',
                  steps: int = 32, block_size: int = 1) -> None:
 
@@ -446,15 +446,15 @@ class BiasCorrectionPass(TrainingBasedPass):
                 reduce_dims = [i for i in range(output.ndim) if i != (output.ndim - 1)]
                 return torch.mean(output, dim=(0, )).unsqueeze(0)
             else: raise TypeError(f'Unsupported Operation type: {op_type}')
-        
+
         def dequantize_block(block: TrainableBlock):
-            for op in block.rps: 
-                if isinstance(op, QuantableOperation): 
+            for op in block.rps:
+                if isinstance(op, QuantableOperation):
                     op.dequantize()
-    
+
         def restore_block_quantize_state(block: TrainableBlock):
-            for op in block.rps: 
-                if isinstance(op, QuantableOperation): 
+            for op in block.rps:
+                if isinstance(op, QuantableOperation):
                     op.restore_quantize_state()
 
         with torch.no_grad():
@@ -479,7 +479,7 @@ class BiasCorrectionPass(TrainingBasedPass):
                 feed_dict = {k: v.to(executor._device) for k, v in qt_input.items()}
 
                 outputs = executor.partial_graph_forward(
-                    operations=block.rps, feed_dict=feed_dict, 
+                    operations=block.rps, feed_dict=feed_dict,
                     output_names=interested_outputs)
 
                 for name, value in zip(interested_outputs, outputs):
@@ -492,7 +492,7 @@ class BiasCorrectionPass(TrainingBasedPass):
                 feed_dict = {k: v.to(executor._device) for k, v in qt_input.items()}
 
                 outputs = executor.partial_graph_forward(
-                    operations=block.rps, feed_dict=feed_dict, 
+                    operations=block.rps, feed_dict=feed_dict,
                     output_names=interested_outputs)
 
                 for name, value in zip(interested_outputs, outputs):
@@ -517,7 +517,7 @@ class BiasCorrectionPass(TrainingBasedPass):
             post_loss = self.compute_block_loss(
                 block=block, qt_inputs=qt_inputs, fp_outputs=fp_outputs,
                 executor=executor, loss_fn=self.loss_fn)
-            
+
             # loss check
             if post_loss > pre_loss:
                 for name, value in bias_cloned.items():
@@ -553,9 +553,9 @@ class BiasCorrectionPass(TrainingBasedPass):
         # do per-block finetune
         for block_idx, block in enumerate(blocks):
             qt_inputs, fp_outputs = self.collect(
-                graph=graph, block=block, executor=executor, 
-                dataloader=dataloader, collate_fn=collate_fn, 
-                collecting_device=self.collecting_device)
+                graph=graph, block=block, executor=executor,
+                dataloader=dataloader, collate_fn=collate_fn,
+                collecting_device=self.collecting_device, steps=self.steps)
 
             print(f'# Block [{block_idx + 1} / {len(blocks)}]: '
                   f'[{block.sp.name} -> {block.ep.name}]')
@@ -575,7 +575,7 @@ class LearnedStepSizePass(TrainingBasedPass):
     [This method is proposed by Steven K. Esser] (https://arxiv.org/pdf/1902.08153.pdf)
 
     This is an alternative version of LSQ, this pass will split your graph into multiple trainable blocks, each blocks will be trained separately.
-    Warning: PPQ Learned Step Size minimize only the output loss of each block, which means after training the internal results probably goes far away from original. 
+    Warning: PPQ Learned Step Size minimize only the output loss of each block, which means after training the internal results probably goes far away from original.
 
     PPQ Learned Step Size optimization requires 256 ~ 2048 samples for finetuning your network, while the data label is not necessary. All training data are cache in GPU memory or CPU memory for acceleration.
 
@@ -590,21 +590,21 @@ class LearnedStepSizePass(TrainingBasedPass):
     The formula of calculating the derivatives of y and scale_Y:
 
         if y > scale_Y * -128 and y < scale_Y * 127:
-        
+
         dQuant(y, scale_Y)/dy       = dQuant(y, scale_Y)
-        
+
         dQuant(y, scale_Y)/dscale_Y = Quant(y, scale_Y) - y
 
         if y < scale_Y * -128:
-        
+
         dQuant(y, scale_Y)/dy       = 0
-        
+
         dQuant(y, scale_Y)/dscale_Y = -128
 
         if y > scale_Y * 127:
-        
+
         dQuant(y, scale_Y)/dy       = 0
-        
+
         dQuant(y, scale_Y)/dscale_Y = 127
 
     ### Parameters:
@@ -621,7 +621,7 @@ class LearnedStepSizePass(TrainingBasedPass):
 
     * block_size(int)
 
-            PPQ Learned Step Size optimization split your graph into blocks at first, 
+            PPQ Learned Step Size optimization split your graph into blocks at first,
             each block will be finetuned separately.
 
             A large block size will greatly reduce running time of this optimization,
@@ -662,7 +662,7 @@ class LearnedStepSizePass(TrainingBasedPass):
 
             A function that used to measure the loss after optimization.
 
-            LSQ is a training-based pass, 
+            LSQ is a training-based pass,
             we will check the loss at the end of block optimization.
 
             If the result goes worsen, optimized weights and scales will be drop.
@@ -680,7 +680,7 @@ class LearnedStepSizePass(TrainingBasedPass):
         # calling ppq.api.quantize_onnx_model function with this setting.
         ir = quantize_torch_model(
         model=model, calib_dataloader=load_calibration_dataset(), setting=setting,
-        platform=TargetPlatform.PPL_CUDA_INT8, calib_steps=8, input_shape=INPUT_SHAPE, 
+        platform=TargetPlatform.PPL_CUDA_INT8, calib_steps=8, input_shape=INPUT_SHAPE,
         collate_fn=collate_fn)
 
     You can manually create this optimization by:
@@ -727,7 +727,7 @@ class LearnedStepSizePass(TrainingBasedPass):
 
     def finetune(
         self, steps: int, learning_rate: float, block: TrainableBlock, executor: TorchExecutor,
-        qt_inputs: List[Dict[str, torch.Tensor]], fp_outputs: List[Dict[str, torch.Tensor]], 
+        qt_inputs: List[Dict[str, torch.Tensor]], fp_outputs: List[Dict[str, torch.Tensor]],
         optimizer: torch.optim.Optimizer=None, scheduler: object=None) -> Tuple[float, float]:
 
         # step - 1: enable gradient for training.
@@ -745,7 +745,7 @@ class LearnedStepSizePass(TrainingBasedPass):
             if not isinstance(op, QuantableOperation): continue
 
             if op.is_computing_op or op.type in {'Add', 'Mul'}: # 独立的 Add Mul 算子也可以训练
-                for var in op.inputs: 
+                for var in op.inputs:
                     if var.is_parameter:
                         trainable_params.append(var.value)
 
@@ -783,7 +783,7 @@ class LearnedStepSizePass(TrainingBasedPass):
             output_names = [name for name in fp_output]
 
             qt_output = executor.partial_graph_forward(
-                operations=block.rps, feed_dict=feed_dict, 
+                operations=block.rps, feed_dict=feed_dict,
                 output_names=output_names)
 
             # compute loss
@@ -820,7 +820,7 @@ class LearnedStepSizePass(TrainingBasedPass):
 
         # disable gradient for evaluation.
         self.disable_block_gradient(block)
-        
+
         # clear cache
         torch.cuda.empty_cache()
         return pre_loss, post_loss
@@ -850,14 +850,14 @@ class LearnedStepSizePass(TrainingBasedPass):
         for block_idx, block in enumerate(blocks):
             # collect data for training
             qt_inputs, fp_outputs = self.collect(
-                graph=graph, block=block, executor=executor, 
-                dataloader=dataloader, collate_fn=collate_fn, 
+                graph=graph, block=block, executor=executor,
+                dataloader=dataloader, collate_fn=collate_fn,
                 collecting_device=self.collecting_device)
 
             print(f'# Block [{block_idx + 1} / {len(blocks)}]: '
                   f'[{block.sp.name} -> {block.ep.name}]')
             pre_loss, post_loss = self.finetune(
-                steps=self.steps, learning_rate=self.lr, block=block, 
+                steps=self.steps, learning_rate=self.lr, block=block,
                 qt_inputs=qt_inputs, fp_outputs=fp_outputs, executor=executor)
             print(f'# Tuning Finished  : ({pre_loss:.4f} -> {min(pre_loss, post_loss):.4f}) [Block Loss]')
             print('') # blank line
@@ -868,33 +868,33 @@ class RoundTuningPass(TrainingBasedPass):
     def __init__(
         self, interested_layers: List[str] = [],
         steps: int = 500, lr: float = 1e-4, block_size: int = 5,
-        expire_device: str = 'cpu', collecting_device: str = 'cuda', 
+        expire_device: str = 'cpu', collecting_device: str = 'cuda',
         optimizer: Any = None
     ) -> None:
-        """ This method trains the weights of neural networks to make them more suitable for quantization compression. 
-        Similar to Adaround, this method restricts the range of weight training within one scale [-scale, +scale], 
-        so this method can also be called round mode adjustment. 
-        
-        Compared to Adaround, this method uses a more direct and simple way to train weights, 
-        and its training effect is similar to Adaround. 
-        
+        """ This method trains the weights of neural networks to make them more suitable for quantization compression.
+        Similar to Adaround, this method restricts the range of weight training within one scale [-scale, +scale],
+        so this method can also be called round mode adjustment.
+
+        Compared to Adaround, this method uses a more direct and simple way to train weights,
+        and its training effect is similar to Adaround.
+
         Reference: Up or Down? Adaptive Rounding for Post-Training Quantization
-        
+
         Parameter:
-            interested_layers: specifies which layers of the neural network need to be trained. 
+            interested_layers: specifies which layers of the neural network need to be trained.
                 It is a list containing the names of all the layers that need to be trained.
 
-            collecting_device: specifies where the data cache is stored during training, 
+            collecting_device: specifies where the data cache is stored during training,
                 supporting caching to main memory (CPU) or caching to graphics memory (CUDA).
                 Note that the dataset used for training will be fully cached.
 
-            block_size: used to determine the maximum depth of the subgraph 
+            block_size: used to determine the maximum depth of the subgraph
                 during the training process of the neural network.
 
             steps: training steps.
-            
+
             lr: learning rate.
-            
+
             optimizer: training optimizer(default: Adam).
         """
         super().__init__(name='PPQ Rounding Tuning Pass')
@@ -909,7 +909,7 @@ class RoundTuningPass(TrainingBasedPass):
 
     def finetune(
         self, steps: int, learning_rate: float, block: TrainableBlock, executor: TorchExecutor,
-        qt_inputs: List[Dict[str, torch.Tensor]], fp_outputs: List[Dict[str, torch.Tensor]], 
+        qt_inputs: List[Dict[str, torch.Tensor]], fp_outputs: List[Dict[str, torch.Tensor]],
         optimizer: torch.optim.Optimizer=None, scheduler: object=None) -> float:
 
         # step - 1: enable gradient for training.
@@ -917,7 +917,7 @@ class RoundTuningPass(TrainingBasedPass):
 
         # record pre training loss.
         pre_loss = self.compute_block_loss(
-            block=block, qt_inputs=qt_inputs, 
+            block=block, qt_inputs=qt_inputs,
             fp_outputs=fp_outputs, executor=executor)
 
         # collect trainable params
@@ -964,7 +964,7 @@ class RoundTuningPass(TrainingBasedPass):
             output_names = [name for name in fp_output]
 
             qt_output = executor.partial_graph_forward(
-                operations=block.rps, feed_dict=feed_dict, 
+                operations=block.rps, feed_dict=feed_dict,
                 output_names=output_names)
 
             # compute loss
@@ -993,7 +993,7 @@ class RoundTuningPass(TrainingBasedPass):
 
         # disable gradient for evaluation.
         self.disable_block_gradient(block)
-        
+
         # clear cache
         torch.cuda.empty_cache()
         return pre_loss, post_loss
@@ -1021,14 +1021,14 @@ class RoundTuningPass(TrainingBasedPass):
         for block_idx, block in enumerate(blocks):
             # collect data for training
             qt_inputs, fp_outputs = self.collect(
-                graph=graph, block=block, executor=executor, 
-                dataloader=dataloader, collate_fn=collate_fn, 
+                graph=graph, block=block, executor=executor,
+                dataloader=dataloader, collate_fn=collate_fn,
                 collecting_device=self.collecting_device)
 
             print(f'# Block [{block_idx + 1} / {len(blocks)}]: '
                   f'[{block.sp.name} -> {block.ep.name}]')
             pre_loss, post_loss = self.finetune(
-                steps=self.steps, learning_rate=self.lr, block=block, 
+                steps=self.steps, learning_rate=self.lr, block=block,
                 qt_inputs=qt_inputs, fp_outputs=fp_outputs, executor=executor)
             print(f'# Tuning Finished  : ({pre_loss:.4f} -> {min(pre_loss, post_loss):.4f}) [Block Loss]')
             print('') # blank line
