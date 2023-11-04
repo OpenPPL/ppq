@@ -6,6 +6,7 @@ Copyright Wenyi Tang 2023
 
 Changelist:
 - Fix: build variables with correct data type.
+- Feat: set known shape on building variables.
 """
 import os
 
@@ -52,9 +53,13 @@ class OnnxParser(GraphBuilder):
         for var_name in set(var_list):
             if var_name in value_info:
                 var_dtype = DataType.convert_from_numpy(value_info[var_name].dtype)
+                var_shape = list(value_info[var_name].shape)
             else:
                 var_dtype = DataType.FP32
-            graph.variables[var_name] = Variable(name=var_name, dtype=var_dtype)
+                var_shape = None
+            graph.variables[var_name] = Variable(
+                name=var_name, dtype=var_dtype, shape=var_shape
+            )
 
         # build graph's input, output variables.
         try:
