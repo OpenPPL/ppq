@@ -40,7 +40,7 @@ def convert_onnx_pads_to_torch(onnx_pads: List[int], mode: str=None) -> List[int
     middle = len(onnx_pads) // 2
     onnx_pad_begin, onnx_pad_end = onnx_pads[:middle], onnx_pads[middle:]
     onnx_pad_begin, onnx_pad_end = onnx_pad_begin[::-1], onnx_pad_end[::-1]
-    
+
     torch_pads = []
     for begin, end in zip(onnx_pad_begin, onnx_pad_end):
         torch_pads.extend([begin, end])
@@ -49,27 +49,27 @@ def convert_onnx_pads_to_torch(onnx_pads: List[int], mode: str=None) -> List[int
     # check if we can merge torch pads
     if len(torch_pads) == 2:
         p1, p2 = torch_pads
-        if p1 == p2: 
+        if p1 == p2:
             torch_pads = [p1]
     if len(torch_pads) == 4:
         p1, p2, p3, p4 = torch_pads
-        if p1==p2 and p3==p4: 
+        if p1==p2 and p3==p4:
             torch_pads=[p1, p3]
     if len(torch_pads) == 6:
         p1, p2, p3, p4, p5, p6 = torch_pads
-        if p1==p2 and p3==p4 and p5==p6: 
+        if p1==p2 and p3==p4 and p5==p6:
             torch_pads=[p1, p3, p5]
     return torch_pads
 
 
 def Abs_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    """Absolute takes one input data (Tensor) and produces one output data (Tensor) 
+    """Absolute takes one input data (Tensor) and produces one output data (Tensor)
     where the absolute is, y = abs(x), is applied to the tensor elementwise.
 
     Inputs
         X (differentiable) : T
             Input tensor
-    
+
     Outputs
         Y (differentiable) : T
             Output tensor
@@ -90,17 +90,17 @@ def Abs_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
 def Attention_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
     """
     com.microsoft.Attention
-        Multi-Head Self Attention that can be either unidirectional (like GPT-2) or bidirectional (like BERT). 
-        The mask_index input is optional. Besides raw attention mask with shape 
-        (batch_size, past_sequence_length + sequence_length) or 
-        (batch_size, sequence_length, past_sequence_length + sequence_length) with value 0 for masked and 1 otherwise, 
-        
-        we also support other two formats: When input has right-side padding, 
-        mask_index is one dimension with shape (batch_size), where value of each element is the end position, 
-        or valid length of actual sequence excluding padding. When input has left-side padding, mask_index has shape (2 * batch_size), 
-        where the values are the exclusive end positions followed by the inclusive start positions. When unidirectional is 1, 
-        and each token only attend to previous tokens. For GPT-2, both past and present state are optional. 
-        
+        Multi-Head Self Attention that can be either unidirectional (like GPT-2) or bidirectional (like BERT).
+        The mask_index input is optional. Besides raw attention mask with shape
+        (batch_size, past_sequence_length + sequence_length) or
+        (batch_size, sequence_length, past_sequence_length + sequence_length) with value 0 for masked and 1 otherwise,
+
+        we also support other two formats: When input has right-side padding,
+        mask_index is one dimension with shape (batch_size), where value of each element is the end position,
+        or valid length of actual sequence excluding padding. When input has left-side padding, mask_index has shape (2 * batch_size),
+        where the values are the exclusive end positions followed by the inclusive start positions. When unidirectional is 1,
+        and each token only attend to previous tokens. For GPT-2, both past and present state are optional.
+
         Present state could appear in output even when past state is not in input.
 
     Version
@@ -109,41 +109,41 @@ def Attention_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
     Attributes
         num_heads : int (required)
             Number of attention heads
-    
+
         qkv_hidden_sizes : list of ints
             Hidden layer sizes of Q, K, V paths in Attention
-        
+
         unidirectional : int
             Whether every token can only attend to previous tokens. Default value is 0.
-    
+
     Inputs (3 - 6)
         input : T
             3D input tensor with shape (batch_size, sequence_length, input_hidden_size)
-    
+
         weight : T
             2D input tensor with shape (input_hidden_size, 3 * hidden_size), where hidden_size = num_heads * head_size
-    
+
         bias : T
             1D input tensor with shape (3 * hidden_size)
-    
+
         mask_index (optional) : M
-            Attention mask with shape (batch_size, 1, max_sequence_length, max_sequence_length), 
-            (batch_size, past_sequence_length + sequence_length)  
-            or (batch_size, sequence_length, past_sequence_length + sequence_length), 
+            Attention mask with shape (batch_size, 1, max_sequence_length, max_sequence_length),
+            (batch_size, past_sequence_length + sequence_length)
+            or (batch_size, sequence_length, past_sequence_length + sequence_length),
             or index with shape (batch_size) or (2 * batch_size).
 
         past (optional) : T
             past state for key and value with shape (2, batch_size, num_heads, past_sequence_length, head_size).
-    
+
         extra_add (optional) : T
             additional add to QxK' with shape (batch_size, num_heads, sequence_length, sequence_length).
-    
+
     Outputs (1 - 2)
         output : T
             3D output tensor with shape (batch_size, sequence_length, hidden_size)
-    
+
         present (optional) : T
-            present state for key and value with shape 
+            present state for key and value with shape
             (2, batch_size, num_heads, past_sequence_length + sequence_length, head_size)
     """
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=3, max_num_of_input=6)
@@ -152,7 +152,7 @@ def Attention_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
     unidirectional   = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='unidirectional', default=0)
     if unidirectional != 0:
         raise NotImplementedError('Attention Layer with unidirectional != 0 is not implemented.')
-    
+
     input, weight, bias = values[:3]
     mask_index          = values[3] if len(values) >= 4 else None
     past                = values[4] if len(values) >= 5 else None
@@ -267,7 +267,7 @@ def Conv_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
     """
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=2, max_num_of_input=3)
     values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
-    
+
     groups    = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='group', default=1)
     onnx_pads = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='pads', default=0)
     dilation  = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='dilations', default=1)
@@ -287,12 +287,13 @@ def Conv_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
             x = F.pad(x, torch_pads)
             torch_pads = 0
         output = F.conv1d(
-            input=x, weight=w, bias=b, groups=groups, 
+            input=x, weight=w, bias=b, groups=groups,
             padding=torch_pads, dilation=dilation, stride=stride)
 
     # conv - 2d
     elif ndim == 4:
         process_attribute(op.attributes, values[0].shape[2:], values[1].shape[2:])
+        onnx_pads = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='pads', default=0)
         # onnx pads format[top, left, bottom, right] to torch pads format[left, right, top, bottom]
         if isinstance(onnx_pads, list) and len(onnx_pads) == 4:
             p_left, p_right, p_top, p_bottom = onnx_pads[1], onnx_pads[3], onnx_pads[0], onnx_pads[2]
@@ -315,9 +316,9 @@ def Conv_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
             x = F.pad(x, torch_pads)
             torch_pads = 0
         output = F.conv3d(
-            input=x, weight=w, bias=b, groups=groups, 
+            input=x, weight=w, bias=b, groups=groups,
             padding=torch_pads, dilation=dilation, stride=stride)
-    
+
     else:
         raise ValueError(f'Operation {op.name} is invalid, {ndim}-d input is not supported.')
     return output
@@ -422,7 +423,7 @@ def ConvTranspose_forward(op: Operation, values: List[torch.Tensor], ctx: TorchB
     """
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=2, max_num_of_input=3)
     values = VALUE_TO_EXECUTING_DEVICE(op=op, ctx=ctx, values=values)
-    
+
     process_attribute(op.attributes, values[0].shape[2:], values[1].shape[2:], 'ConvTranspose')
     groups    = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='group', default=1)
     onnx_pads = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='pads', default=0)
@@ -617,9 +618,9 @@ def MultiHeadAttention_forward(op: Operation, values: List[torch.Tensor], ctx: T
     xq = F.linear(q_in, q_w, q_b)
     xk = F.linear(k_in, k_w, k_b)
     xv = F.linear(v_in, v_w, v_b)
-    
+
     B, N, _ = xq.shape
-    
+
     q = xq.reshape(B, N, num_heads, head_dim).permute(0, 2, 1, 3)
     k = xk.reshape(B, N, num_heads, head_dim).permute(0, 2, 1, 3)
     v = xv.reshape(B, N, num_heads, head_dim).permute(0, 2, 1, 3)
@@ -629,7 +630,7 @@ def MultiHeadAttention_forward(op: Operation, values: List[torch.Tensor], ctx: T
 
     feat = (attn @ v).transpose(1, 2).reshape(batch_size, -1, embed_dim)
     out = F.linear(feat, o_w, o_b)
-    
+
     return out
 
 
@@ -687,7 +688,7 @@ def Eltwise_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackend
         assert len(values) == 2
         version = torch.__version__
         if version < '1.5.0' or version >= '1.7.0':
-            if (values[0].dtype in [torch.int32, torch.int64] and 
+            if (values[0].dtype in [torch.int32, torch.int64] and
                 values[1].dtype in [torch.int32, torch.int64]):
                 if values[0].dtype == torch.int64 or values[1].dtype[1] == torch.int64:
                     output = torch.floor_divide(*values).long()
@@ -1019,7 +1020,7 @@ def Squeeze_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackend
     else:
         ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
         [squeezing_tensor], axes = values, GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='axes', compulsive=False, default=None)
-    
+
     # common part
     if axes is None:
         axes = []
@@ -1098,13 +1099,13 @@ def Unsqueeze_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
 
 
 def Gather_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
-    """Given data tensor of rank r >= 1, and indices tensor of rank q, 
-    gather entries of the axis dimension of data (by default outer-most one as axis=0) indexed by indices, 
+    """Given data tensor of rank r >= 1, and indices tensor of rank q,
+    gather entries of the axis dimension of data (by default outer-most one as axis=0) indexed by indices,
     and concatenates them in an output tensor of rank q + (r - 1).
 
     axis = 0 :
 
-    Let k = indices[i_{0}, ..., i_{q-1}] 
+    Let k = indices[i_{0}, ..., i_{q-1}]
         Then output[i_{0}, ..., i_{q-1}, j_{0}, ..., j_{r-2}] = input[k , j_{0}, ..., j_{r-2}]
 
         data = [
@@ -1126,10 +1127,10 @@ def Gather_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendC
                 [4.5, 5.7],
             ],
         ]
-    
+
     axis = 1 :
 
-    Let k = indices[i_{0}, ..., i_{q-1}] 
+    Let k = indices[i_{0}, ..., i_{q-1}]
         Then output[j_{0}, i_{0}, ..., i_{q-1}, j_{1}, ..., j_{r-2}] = input[j_{0}, k, j_{1}, ..., j_{r-2}]
 
         data = [
@@ -1146,7 +1147,7 @@ def Gather_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendC
                 [[2.3, 3.9]],
                 [[4.5, 5.9]],
         ]
-    
+
     Version
         This version of the operator has been available since version 13 of the default ONNX operator set.
 
@@ -1154,19 +1155,19 @@ def Gather_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendC
 
     Attributes
         axis : int (default is 0)
-            Which axis to gather on. Negative value means counting dimensions from the back. 
+            Which axis to gather on. Negative value means counting dimensions from the back.
             Accepted range is [-r, r-1] where r = rank(data).
-    
+
     Inputs
         data (differentiable) : T
             Tensor of rank r >= 1.
-    
+
         indices (non-differentiable) : Tind
-            Tensor of int32/int64 indices, of any rank q. All index values are expected to be 
-            within bounds [-s, s-1] along axis of size s. 
-            
+            Tensor of int32/int64 indices, of any rank q. All index values are expected to be
+            within bounds [-s, s-1] along axis of size s.
+
             It is an error if any of the index values are out of bounds.
-    
+
     Outputs
         output (differentiable) : T
             Tensor of rank q + (r - 1).
@@ -1828,7 +1829,7 @@ def Flatten_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackend
 
 def Range_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
     """
-    Generate a tensor containing a sequence of numbers that 
+    Generate a tensor containing a sequence of numbers that
         begin at start and extends by increments of delta up to limit (exclusive).
 
     The number of elements in the output of range is computed as below-
@@ -1852,13 +1853,13 @@ def Range_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCo
     Inputs
         start : T
             Scalar. First entry for the range of output values.
-    
+
         limit : T
             Scalar. Exclusive upper limit for the range of output values.
-    
+
         delta : T
             Scalar. Value to step by.
-    
+
     Outputs
         output : T
             A 1-D tensor with same type as the inputs containing generated range of values.
@@ -1880,24 +1881,24 @@ def Where_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCo
 
 def ScatterElements_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
     """
-    ScatterElements takes three inputs data, updates, 
-    and indices of the same rank r >= 1 and an optional attribute axis that identifies an axis of data 
-    (by default, the outer-most axis, that is axis 0). 
-    
-    The output of the operation is produced by creating a copy of the input data, 
-    and then updating its value to values specified by updates at specific index positions specified by indices. 
+    ScatterElements takes three inputs data, updates,
+    and indices of the same rank r >= 1 and an optional attribute axis that identifies an axis of data
+    (by default, the outer-most axis, that is axis 0).
+
+    The output of the operation is produced by creating a copy of the input data,
+    and then updating its value to values specified by updates at specific index positions specified by indices.
     Its output shape is the same as the shape of data.
 
-    For each entry in updates, 
-    the target index in data is obtained by combining the corresponding entry in indices with the index of the entry itself: 
-        the index-value for dimension = axis is obtained from the value of the corresponding entry in indices and the index-value 
+    For each entry in updates,
+    the target index in data is obtained by combining the corresponding entry in indices with the index of the entry itself:
+        the index-value for dimension = axis is obtained from the value of the corresponding entry in indices and the index-value
     for dimension != axis is obtained from the index of the entry itself.
 
-    reduction allows specification of an optional reduction operation, 
+    reduction allows specification of an optional reduction operation,
         which is applied to all values in updates tensor into output at the specified indices.
-    In cases where reduction is set to "none", indices should not have duplicate entries: that is, 
-        if idx1 != idx2, then indices[idx1] != indices[idx2]. 
-    
+    In cases where reduction is set to "none", indices should not have duplicate entries: that is,
+        if idx1 != idx2, then indices[idx1] != indices[idx2].
+
     For instance, in a 2-D tensor case, the update corresponding to the [i][j] entry is performed as below:
 
     output[indices[i][j]][j] = updates[i][j] if axis = 0,
@@ -1917,10 +1918,10 @@ def ScatterElements_forward(op: Operation, values: List[torch.Tensor], ctx: Torc
             Which axis to scatter on. Negative value means counting dimensions from the back.
                 Accepted range is [-r, r-1] where r = rank(data).
             reduction : string (default is none)
-            Type of reduction to apply: none (default), add, mul. 
+            Type of reduction to apply: none (default), add, mul.
 
-            'none': no reduction applied. 
-            'add': reduction using the addition operation. 
+            'none': no reduction applied.
+            'add': reduction using the addition operation.
             'mul': reduction using the multiplication operation.
 
     Inputs
@@ -1928,8 +1929,8 @@ def ScatterElements_forward(op: Operation, values: List[torch.Tensor], ctx: Torc
             Tensor of rank r >= 1.
 
         indices (non-differentiable) : Tind
-            Tensor of int32/int64 indices, of r >= 1 (same rank as input). 
-            All index values are expected to be within bounds [-s, s-1] along axis of size s. 
+            Tensor of int32/int64 indices, of r >= 1 (same rank as input).
+            All index values are expected to be within bounds [-s, s-1] along axis of size s.
             It is an error if any of the index values are out of bounds.
 
         updates (differentiable) : T
@@ -2057,7 +2058,7 @@ def Gemm_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
 
 def MatMul_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
     """
-    Matrix product that behaves like numpy.matmul: 
+    Matrix product that behaves like numpy.matmul:
         https://docs.scipy.org/doc/numpy-1.13.0/reference/generated/numpy.matmul.html
 
     Version
@@ -2068,10 +2069,10 @@ def MatMul_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendC
     Inputs
         A (differentiable) : T
             N-dimensional matrix A
-    
+
         B (differentiable) : T
             N-dimensional matrix B
-    
+
     Outputs
         Y (differentiable) : T
             Matrix multiply results from A * B
@@ -2146,29 +2147,29 @@ def LeakyRelu_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
 
 def LayerNorm_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
     """
-    This is layer normalization defined in ONNX as function. 
-    The overall computation can be split into two stages. 
-    The first stage is standardization, which makes the normalized elements have zero mean and unit variances. 
-    The computation required by standardization can be described by the following equations. 
-    Mean = ReduceMean<axes=normalized_axes>(X) D = Sub(X, Mean) DD = Mul(Diff, Diff) 
-    Var = ReduceMean<axes=normalized_axes>(DD) VarEps = Add(Var, epsilon) 
-    StdDev = Sqrt(VarEps) InvStdDev = Reciprocal(StdDev) 
-    Normalized = Mul(D, InvStdDev) where normalized_axes is [axis, ..., rank of X - 1]. 
-    
-    The variables Var and StdDev stand for variance and standard deviation, respectively. 
-    The second output is Mean and the last one is InvStdDev. Depending on stash_type attribute, 
-    the actual computation must happen in different floating-point precision. 
-    
-    For example, if stash_type is 1, this operator casts all input variables to 32-bit float, perform the computation, 
-    and finally cast Normalized back to the original type of X. 
-    
+    This is layer normalization defined in ONNX as function.
+    The overall computation can be split into two stages.
+    The first stage is standardization, which makes the normalized elements have zero mean and unit variances.
+    The computation required by standardization can be described by the following equations.
+    Mean = ReduceMean<axes=normalized_axes>(X) D = Sub(X, Mean) DD = Mul(Diff, Diff)
+    Var = ReduceMean<axes=normalized_axes>(DD) VarEps = Add(Var, epsilon)
+    StdDev = Sqrt(VarEps) InvStdDev = Reciprocal(StdDev)
+    Normalized = Mul(D, InvStdDev) where normalized_axes is [axis, ..., rank of X - 1].
+
+    The variables Var and StdDev stand for variance and standard deviation, respectively.
+    The second output is Mean and the last one is InvStdDev. Depending on stash_type attribute,
+    the actual computation must happen in different floating-point precision.
+
+    For example, if stash_type is 1, this operator casts all input variables to 32-bit float, perform the computation,
+    and finally cast Normalized back to the original type of X.
+
     The second stage then scales and shifts the outcome of the first stage using
-        NormalizedScaled = Mul(Normalized, Scale) 
-        Y = Add(NormalizedScaled, B) 
-    The second stage doesn't depends on stash_type. All equations are in this syntax. 
-    
-    The same variable (i.e., input, output, and attribute) uses the same name in the equations above and this operator's definition. 
-    Let d[i] indicate the i-th dimension of X. If X's shape is [d[0], ..., d[axis-1], d[axis], ..., d[rank-1]], 
+        NormalizedScaled = Mul(Normalized, Scale)
+        Y = Add(NormalizedScaled, B)
+    The second stage doesn't depends on stash_type. All equations are in this syntax.
+
+    The same variable (i.e., input, output, and attribute) uses the same name in the equations above and this operator's definition.
+    Let d[i] indicate the i-th dimension of X. If X's shape is [d[0], ..., d[axis-1], d[axis], ..., d[rank-1]],
     the shape of Mean and InvStdDev is [d[0], ..., d[axis-1], 1, ..., 1]. Y and X have the same shape.
 
     Version
@@ -2176,33 +2177,33 @@ def LayerNorm_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
 
     Attributes
         axis : int (default is -1)
-            The first normalization dimension. If rank(X) is r, axis' allowed range is [-r, r]. 
+            The first normalization dimension. If rank(X) is r, axis' allowed range is [-r, r].
             Negative value means counting dimensions from the back.
 
         epsilon : float (default is 1e-05)
             The epsilon value to use to avoid division by zero.
 
         stash_type : int (default is 1)
-            Type of Mean and InvStdDev. 
+            Type of Mean and InvStdDev.
             This also specifies stage one's computation precision.
 
     Inputs (2 - 3)
         X : T
             Tensor to be normalized.
-        
+
         Scale : T
             Scale tensor.
-        
+
         B (optional) : T
             Bias tensor.
-    
+
     Outputs (1 - 3)
         Y : T
             Normalized tensor.
-    
+
         Mean (optional) : U
             Saved mean used during training to speed up gradient computation
-        
+
         InvStdDev (optional) : U
             Saved inverse standard deviation used during training to speed up gradient computation.
 
@@ -2219,7 +2220,7 @@ def LayerNorm_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
 
     if axis != -1 and axis != x.ndim - 1:
         raise ValueError('Unsupported Layernorm axis. We will implement it soon.')
-    
+
     normalized_shape = weight.shape
     output = F.layer_norm(x, normalized_shape, weight, bias, eps)
     return output
@@ -2282,21 +2283,21 @@ def skipLayerNormPlugin_forward(op: Operation, values: List[torch.Tensor], ctx: 
 
     if axis != -1 and axis != x.ndim - 1:
         raise ValueError('Unsupported Layernorm axis. We will implement it soon.')
-    
+
     normalized_shape = gamma.shape
     output = F.layer_norm(x + skip, normalized_shape, gamma, bias, eps)
     return output
-    
+
 
 def Pad_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
     """
-    Given a tensor containing the data to be padded (data), 
-        a tensor containing the number of start and end pad values for axis (pads), 
+    Given a tensor containing the data to be padded (data),
+        a tensor containing the number of start and end pad values for axis (pads),
         (optionally) a mode, and (optionally) constant_value, a padded tensor (output) is generated.
 
     The three supported modes are (similar to corresponding modes supported by numpy.pad):
 
-        constant(default) - pads with a given constant value as specified by constant_value 
+        constant(default) - pads with a given constant value as specified by constant_value
             (which defaults to 0, empty string, or False)
 
         reflect - pads with the reflection of the vector mirrored on the first and last values of the vector along each axis
@@ -2311,29 +2312,29 @@ def Pad_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
     Attributes
         mode : string (default is constant)
         Supported modes: `constant`(default), `reflect`, `edge`
-    
+
     Inputs (2 - 4)
         data (differentiable) : T
             Input tensor.
-    
+
         pads (non-differentiable) : tensor(int64)
-            Tensor of integers indicating the number of padding elements to add or remove 
-            (if negative) at the beginning and end of each axis. For 2D input tensor, it is the number of pixels. 
-            `pads` should be a 1D tensor of shape [2 * num_axes] where `num_axes` refers to the number of elements 
-            in the `axes` input or the input rank if `axes` are not provided explicitly. 
-            
-            `pads` format should be: [x1_begin, x2_begin, ..., x1_end, x2_end,...], 
-            where xi_begin is the number of pad values added at the beginning of 
+            Tensor of integers indicating the number of padding elements to add or remove
+            (if negative) at the beginning and end of each axis. For 2D input tensor, it is the number of pixels.
+            `pads` should be a 1D tensor of shape [2 * num_axes] where `num_axes` refers to the number of elements
+            in the `axes` input or the input rank if `axes` are not provided explicitly.
+
+            `pads` format should be: [x1_begin, x2_begin, ..., x1_end, x2_end,...],
+            where xi_begin is the number of pad values added at the beginning of
             axis `axes[i]` and xi_end, the number of pad values added at the end of axis `axes[i]`.
-    
+
         constant_value (optional, non-differentiable) : T
             (Optional) A scalar value to be used if the mode chosen is `constant` (by default it is 0, empty string or False).
-        
+
         axes (optional, non-differentiable) : Tind
-            1-D tensor of axes that `pads` apply to. Negative value means counting dimensions from the back. 
-            Accepted range is [-r, r-1] where r = rank(data). Behavior is undefined if an axis is repeated. 
+            1-D tensor of axes that `pads` apply to. Negative value means counting dimensions from the back.
+            Accepted range is [-r, r-1] where r = rank(data). Behavior is undefined if an axis is repeated.
             If not provided, all axes are assumed (`[0, 1, ..., input_rank-1]`).
-    
+
     Outputs
         output (differentiable) : T
             Tensor after padding.
@@ -2619,47 +2620,47 @@ def CaffeArgMax_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBac
 
 def GridSampler_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
     """
-    Given an input and a flow-field grid, computes the output using input values and pixel locations from grid. 
-    Currently, only spatial (4-D) inputs are supported. 
-    For input with shape (N, C, H, W) and grid with shape (N, H_out, W_out, 2), 
-    the output will have shape (N, C, H_out, W_out). 
-    For each output location output[N, C, H_out, W_out], 
-    the size-2 vector grid[N, H_out, W_out] specifies input pixel locations x and y, 
+    Given an input and a flow-field grid, computes the output using input values and pixel locations from grid.
+    Currently, only spatial (4-D) inputs are supported.
+    For input with shape (N, C, H, W) and grid with shape (N, H_out, W_out, 2),
+    the output will have shape (N, C, H_out, W_out).
+    For each output location output[N, C, H_out, W_out],
+    the size-2 vector grid[N, H_out, W_out] specifies input pixel locations x and y,
     which are used to interpolate the output value output[N, C, H_out, W_out].
 
-    The GridSample operator is often used in doing grid generator and sampler in the Spatial Transformer Networks. 
+    The GridSample operator is often used in doing grid generator and sampler in the Spatial Transformer Networks.
     See also in torch.nn.functional.grid_sample.
 
     Attributes
         align_corners : int (default is 0)
-            If align_corners=1, the extrema (-1 and 1) are considered as referring to the center points of the input's corner pixels. 
+            If align_corners=1, the extrema (-1 and 1) are considered as referring to the center points of the input's corner pixels.
             If align_corners=0, they are instead considered as referring to the corner points of the input's corner pixels,
             making the sampling more resolution agnostic.
 
         mode : string (default is bilinear)
             Three interpolation modes: bilinear (default), nearest and bicubic.
-    
+
         padding_mode : string (default is zeros)
-            Support padding modes for outside grid values: `zeros`(default), `border`, `reflection`. 
-            zeros: use 0 for out-of-bound grid locations, border: use border values for out-of-bound grid locations, 
+            Support padding modes for outside grid values: `zeros`(default), `border`, `reflection`.
+            zeros: use 0 for out-of-bound grid locations, border: use border values for out-of-bound grid locations,
             reflection: use values at locations reflected by the border for out-of-bound grid locations.
-            If index 0 represents the margin pixel, the reflected value at index -1 will be the same as the value at index 1. 
-            For location far away from the border, it will keep being reflected until becoming in bound. 
+            If index 0 represents the margin pixel, the reflected value at index -1 will be the same as the value at index 1.
+            For location far away from the border, it will keep being reflected until becoming in bound.
             If pixel location x = -3.5 reflects by border -1 and becomes x' = 1.5, then reflects by border 1 and becomes x'' = 0.5.
-    
+
     Inputs
         X (differentiable) : T1
-            4-D tensor of shape (N, C, H, W), where N is the batch size, C is the numbers of channels, 
+            4-D tensor of shape (N, C, H, W), where N is the batch size, C is the numbers of channels,
             H and W are the height and width of the input data.
-        
+
         grid (non-differentiable) : T1
-            Input offset, 4-D tensor of shape (N, H_out, W_out, 2), 
-            where H_out and W_out are the height and width of grid and output, 
+            Input offset, 4-D tensor of shape (N, H_out, W_out, 2),
+            where H_out and W_out are the height and width of grid and output,
             Grid specifies the sampling pixel locations normalized by the input spatial dimensions. Therefore,
-            it should have most values in the range of [-1, 1]. 
-            If grid has values outside the range of [-1, 1], 
+            it should have most values in the range of [-1, 1].
+            If grid has values outside the range of [-1, 1],
             the corresponding outputs will be handled as defined by padding_mode.
-    
+
     Outputs
         Y (differentiable) : T2
             4-D tensor of shape (N, C, H_out, W_out).
@@ -2680,20 +2681,20 @@ def Not_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
 
 def HardSigmoid_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
     """
-    HardSigmoid takes one input data (Tensor) and produces one output data (Tensor) where the HardSigmoid function, 
+    HardSigmoid takes one input data (Tensor) and produces one output data (Tensor) where the HardSigmoid function,
     y = max(0, min(1, alpha * x + beta)), is applied to the tensor elementwise.
 
     Attributes
         alpha : float (default is 0.2)
             Value of alpha.
-    
+
         beta : float (default is 0.5)
             Value of beta.
-    
+
     Inputs
         X (differentiable) : T
             Input tensor
-    
+
     Outputs
         Y (differentiable) : T
             Output tensor
@@ -2708,14 +2709,14 @@ def HardSigmoid_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBac
 
 def HardSwish_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
     """
-    HardSwish takes one input data (Tensor) and produces one output data (Tensor) where the HardSwish function, 
-        y = x * max(0, min(1, alpha * x + beta)) = x * HardSigmoid<alpha, beta>(x), 
+    HardSwish takes one input data (Tensor) and produces one output data (Tensor) where the HardSwish function,
+        y = x * max(0, min(1, alpha * x + beta)) = x * HardSigmoid<alpha, beta>(x),
         where alpha = 1/6 and beta = 0.5, is applied to the tensor elementwise.
 
     Inputs
         X (differentiable) : T
             Input tensor
-    
+
     Outputs
         Y (differentiable) : T
         Output tensor
@@ -2852,10 +2853,10 @@ def GRU_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
     b         = GET_VALUE_FROM_INPUTS(values, 3)
     seq_len   = GET_VALUE_FROM_INPUTS(values, 4)
     initial_h = GET_VALUE_FROM_INPUTS(values, 5)
-    
+
     # sequence length will be dropped without warrning.
     # if seq_len is not None: raise NotImplementedError('PPQ do not support LSTM with explicite length.')
-    
+
     # check attributes
     activation_alpha = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='activation_alpha', default=None)
     activation_beta  = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='activation_beta', default=None)
@@ -2917,11 +2918,11 @@ def GRU_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
         if bidirectional and has_bias: flatten_weight = [
             forward_w, forward_r, forward_bias_1, forward_bias_2, reverse_w, reverse_r, reverse_bias_1, reverse_bias_2]
         op.set_extension_attrib(GRU_FLATTEN_WEIGHT_ATTRIB, flatten_weight)
-    
+
     s = 2 if bidirectional else 1
     if initial_h is None:
         initial_h = torch.zeros(
-            size=[s, x.shape[1], x.shape[2]], 
+            size=[s, x.shape[1], x.shape[2]],
             device=x.device, dtype=torch.float32)
 
     result = _VF.gru(
@@ -3023,9 +3024,9 @@ def LSTM_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
     - ot = f(Xt*(Wo^T) + Ht-1*(Ro^T) + Po (.) Ct + Wbo + Rbo)
 
     - Ht = ot (.) h(Ct)
-    This operator has optional inputs/outputs. 
-    See the doc for more details about the representation of optional arguments. 
-    An empty string may be used in the place of an actual argument's name to indicate a missing argument. 
+    This operator has optional inputs/outputs.
+    See the doc for more details about the representation of optional arguments.
+    An empty string may be used in the place of an actual argument's name to indicate a missing argument.
     Trailing optional arguments (those not followed by an argument that is present) may also be simply omitted.
 
     Version
@@ -3033,92 +3034,92 @@ def LSTM_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
 
     Attributes
         activation_alpha : list of floats
-            Optional scaling values used by some activation functions. 
-            The values are consumed in the order of activation functions, 
-                for example (f, g, h) in LSTM. 
-    
+            Optional scaling values used by some activation functions.
+            The values are consumed in the order of activation functions,
+                for example (f, g, h) in LSTM.
+
             Default values are the same as of corresponding ONNX operators.For example with LeakyRelu, the default alpha is 0.01.
-    
+
         activation_beta : list of floats
-            Optional scaling values used by some activation functions. 
-            The values are consumed in the order of activation functions, 
-            for example (f, g, h) in LSTM. 
-            
+            Optional scaling values used by some activation functions.
+            The values are consumed in the order of activation functions,
+            for example (f, g, h) in LSTM.
+
             Default values are the same as of corresponding ONNX operators.
-    
+
         activations : list of strings
-            A list of 3 (or 6 if bidirectional) activation functions for input, 
-            output, forget, cell, and hidden. 
-            
-            The activation functions must be one of the activation functions specified above. 
+            A list of 3 (or 6 if bidirectional) activation functions for input,
+            output, forget, cell, and hidden.
+
+            The activation functions must be one of the activation functions specified above.
             Optional: See the equations for default if not specified.
-    
+
         clip : float
-            Cell clip threshold. Clipping bounds the elements of a tensor in the range of 
+            Cell clip threshold. Clipping bounds the elements of a tensor in the range of
             [-threshold, +threshold] and is applied to the input of activations.
             No clip if not specified.
-        
+
         direction : string (default is forward)
-            Specify if the RNN is forward, reverse, or bidirectional. 
+            Specify if the RNN is forward, reverse, or bidirectional.
             Must be one of forward (default), reverse, or bidirectional.
 
         hidden_size : int
             Number of neurons in the hidden layer
-    
+
         input_forget : int (default is 0)
             Couple the input and forget gates if 1.
-    
+
     Inputs (3 - 8)
         X : T
-            The input sequences packed (and potentially padded) into one 3-D tensor 
+            The input sequences packed (and potentially padded) into one 3-D tensor
                 with the shape of `[seq_length, batch_size, input_size]`.
-   
+
         W : T
-            The weight tensor for the gates. Concatenation of `W[iofc]` and `WB[iofc]` 
+            The weight tensor for the gates. Concatenation of `W[iofc]` and `WB[iofc]`
             (if bidirectional) along dimension 0. The tensor has shape `[num_directions, 4*hidden_size, input_size]`.
-    
+
         R : T
-            The recurrence weight tensor. Concatenation of `R[iofc]` and `RB[iofc]` (if bidirectional) along dimension 0. 
+            The recurrence weight tensor. Concatenation of `R[iofc]` and `RB[iofc]` (if bidirectional) along dimension 0.
             This tensor has shape `[num_directions, 4*hidden_size, hidden_size]`.
-    
+
         B (optional) : T
-            The bias tensor for input gate. Concatenation of `[Wb[iofc], Rb[iofc]]`, 
-            and `[WBb[iofc], RBb[iofc]]` (if bidirectional) along dimension 0. 
-            
-            This tensor has shape `[num_directions, 8*hidden_size]`. 
+            The bias tensor for input gate. Concatenation of `[Wb[iofc], Rb[iofc]]`,
+            and `[WBb[iofc], RBb[iofc]]` (if bidirectional) along dimension 0.
+
+            This tensor has shape `[num_directions, 8*hidden_size]`.
             Optional: If not specified - assumed to be 0.
-    
+
         sequence_lens (optional) : T1
-            Optional tensor specifying lengths of the sequences in a batch. 
-            If not specified - assumed all sequences in the batch to have length `seq_length`. 
+            Optional tensor specifying lengths of the sequences in a batch.
+            If not specified - assumed all sequences in the batch to have length `seq_length`.
             It has shape `[batch_size]`.
-        
+
         initial_h (optional) : T
-            Optional initial value of the hidden. 
-            If not specified - assumed to be 0. 
+            Optional initial value of the hidden.
+            If not specified - assumed to be 0.
             It has shape `[num_directions, batch_size, hidden_size]`.
-    
+
         initial_c (optional) : T
-            Optional initial value of the cell. 
-            If not specified - assumed to be 0. 
+            Optional initial value of the cell.
+            If not specified - assumed to be 0.
             It has shape `[num_directions, batch_size, hidden_size]`.
-    
+
         P (optional) : T
             The weight tensor for peepholes.
-            Concatenation of `P[iof]` and `PB[iof]` (if bidirectional) along dimension 0. 
+            Concatenation of `P[iof]` and `PB[iof]` (if bidirectional) along dimension 0.
             It has shape `[num_directions, 3*hidde_size]`. Optional: If not specified - assumed to be 0.
-    
+
     Outputs (0 - 3)
         Y (optional) : T
-            A tensor that concats all the intermediate output values of the hidden. 
+            A tensor that concats all the intermediate output values of the hidden.
             It has shape `[seq_length, num_directions, batch_size, hidden_size]`.
-    
+
         Y_h (optional) : T
-            The last output value of the hidden. 
+            The last output value of the hidden.
             It has shape `[num_directions, batch_size, hidden_size]`.
-    
+
         Y_c (optional) : T
-            The last output value of the cell. 
+            The last output value of the cell.
             It has shape `[num_directions, batch_size, hidden_size]`.
     """
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=3, max_num_of_input=8)
@@ -3131,7 +3132,7 @@ def LSTM_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
     initial_c = GET_VALUE_FROM_INPUTS(values, 6)
     p         = GET_VALUE_FROM_INPUTS(values, 7)
     if p is not None: raise NotImplementedError('PPQ do not support LSTM with peepholes.')
-    
+
     # sequence length will be dropped without warrning.
     # if seq_len is not None: raise NotImplementedError('PPQ do not support LSTM with explicite length.')
 
@@ -3200,7 +3201,7 @@ def LSTM_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
                     b[1, hidden_size * 6: hidden_size * 7],
                     b[1, hidden_size * 7: hidden_size * 8],
                     b[1, hidden_size * 5: hidden_size * 6]]).contiguous()
-        
+
         flatten_weight = [forward_w, forward_r]
         if has_bias:                   flatten_weight = [forward_w, forward_r, forward_bias_1, forward_bias_2]
         if bidirectional:              flatten_weight = [forward_w, forward_r, reverse_w, reverse_r]
@@ -3208,16 +3209,16 @@ def LSTM_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCon
             forward_w, forward_r, forward_bias_1, forward_bias_2, reverse_w, reverse_r, reverse_bias_1, reverse_bias_2]
         op.set_extension_attrib(LSTM_FLATTEN_WEIGHT_ATTRIB, flatten_weight)
     # end if
-    
+
     s = 2 if bidirectional else 1
     if initial_h is None:
         initial_h = torch.zeros(
-            size=[s, x.shape[1], hidden_size], 
+            size=[s, x.shape[1], hidden_size],
             device=x.device, dtype=torch.float32)
 
     if initial_c is None:
         initial_c = torch.zeros(
-            size=[s, x.shape[1], hidden_size], 
+            size=[s, x.shape[1], hidden_size],
             device=x.device, dtype=torch.float32)
 
     result = _VF.lstm(
@@ -3394,7 +3395,7 @@ def Reciprocal_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBack
 
 def LogSoftmax_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
- 
+
     x = Softmax_forward(op=op, values=values, ctx=ctx, kwargs=kwargs)
     x = Log_forward(op=op, values=[x], ctx=ctx, kwargs=kwargs)
     return x
@@ -3406,11 +3407,11 @@ def Sin_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
     Inputs
         input (differentiable) : T
             Input tensor
-    
+
     Outputs
         output (differentiable) : T
             The sine of the input tensor computed element-wise
-    
+
     Type Constraints
     T : tensor(float16), tensor(float), tensor(double)
     Constrain input and output types to float tensors.
@@ -3434,11 +3435,11 @@ def Cos_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
     Inputs
         input (differentiable) : T
             Input tensor
-    
+
     Outputs
         output (differentiable) : T
             The cosine of the input tensor computed element-wise
-    
+
     Type Constraints
     T : tensor(float16), tensor(float), tensor(double)
     Constrain input and output types to float tensors.
@@ -3462,11 +3463,11 @@ def Cos_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
     Inputs
         input (differentiable) : T
             Input tensor
-    
+
     Outputs
         output (differentiable) : T
             The cosine of the input tensor computed element-wise
-    
+
     Type Constraints
     T : tensor(float16), tensor(float), tensor(double)
     Constrain input and output types to float tensors.
@@ -3486,9 +3487,9 @@ def Cos_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
 
 def Sum_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
     """
-    Element-wise sum of each of the input tensors (with Numpy-style broadcasting support). 
-    All inputs and outputs must have the same data type. 
-    This operator supports multidirectional (i.e., Numpy-style) broadcasting; 
+    Element-wise sum of each of the input tensors (with Numpy-style broadcasting support).
+    All inputs and outputs must have the same data type.
+    This operator supports multidirectional (i.e., Numpy-style) broadcasting;
     for more details please check the doc.
 
     Version
@@ -3502,7 +3503,7 @@ def Sum_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
     Outputs
         sum (differentiable) : Tq
             Output tensor.
-    
+
     Type Constraints
         T : tensor(float16), tensor(float), tensor(double), tensor(bfloat16)
     Constrain input and output types to float tensors.
@@ -3527,8 +3528,8 @@ def Sum_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
 
 def Elu_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
     """
-    Elu takes one input data (Tensor) and produces one output data (Tensor) 
-    where the function f(x) = alpha * (exp(x) - 1.) for x < 0, f(x) = x for x >= 0., 
+    Elu takes one input data (Tensor) and produces one output data (Tensor)
+    where the function f(x) = alpha * (exp(x) - 1.) for x < 0, f(x) = x for x >= 0.,
     is applied to the tensor elementwise.
 
     Version
@@ -3539,15 +3540,15 @@ def Elu_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
     Attributes
         alpha : float (default is 1.0)
             Coefficient of ELU.
-    
+
     Inputs
         X (differentiable) : T
             1D input tensor
-    
+
     Outputs
         Y (differentiable) : T
             1D output tensor
-    
+
     Type Constraints
     T : tensor(float16), tensor(float), tensor(double)
     Constrain input and output types to float tensors.
@@ -3560,8 +3561,8 @@ def Elu_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
 
 def Erf_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
     """
-    Elu takes one input data (Tensor) and produces one output data (Tensor) 
-    where the function f(x) = alpha * (exp(x) - 1.) for x < 0, f(x) = x for x >= 0., 
+    Elu takes one input data (Tensor) and produces one output data (Tensor)
+    where the function f(x) = alpha * (exp(x) - 1.) for x < 0, f(x) = x for x >= 0.,
     is applied to the tensor elementwise.
 
     Version
@@ -3572,15 +3573,15 @@ def Erf_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
     Attributes
         alpha : float (default is 1.0)
             Coefficient of ELU.
-    
+
     Inputs
         X (differentiable) : T
             1D input tensor
-    
+
     Outputs
         Y (differentiable) : T
             1D output tensor
-    
+
     Type Constraints
     T : tensor(float16), tensor(float), tensor(double)
     Constrain input and output types to float tensors.
@@ -3593,7 +3594,7 @@ def Erf_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendCont
 def PPQBiasFusedMatMul_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
     """
     PPQ Special Edition of MatMul
-        Matrix product that behaves like numpy.matmul: 
+        Matrix product that behaves like numpy.matmul:
         https://docs.scipy.org/doc/numpy-1.13.0/reference/generated/numpy.matmul.html
 
     Version
@@ -3604,13 +3605,13 @@ def PPQBiasFusedMatMul_forward(op: Operation, values: List[torch.Tensor], ctx: T
     Inputs
         A (differentiable) : T
             N-dimensional matrix A
-    
+
         B (differentiable) : T
             N-dimensional matrix B
-            
+
         C (Optional) (differentiable) : T
             Bias Tensor Of MatMul
-    
+
     Outputs
         Y (differentiable) : T
             Matrix multiply results from A * B

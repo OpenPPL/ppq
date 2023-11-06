@@ -25,6 +25,7 @@ def process_attribute(attr, input_shape, kernel_shape=None, op_type=None):
             logger.warning('auto_pad is conflict with pads attribute. Use pads here.')
         elif auto_pad == 'VALID':
             attr['pads'] = [0, 0, 0, 0]
+            attr.pop('auto_pad')
         elif auto_pad in ('SAME_UPPER', 'SAME_LOWER'):
             if op_type == 'ConvTranspose':
                 # `output_padding` is only used to find output shape, but does not actually add zero-padding to output
