@@ -73,7 +73,7 @@ class TorchQuantizeDelegator(Callable):
         raise NotImplementedError('Implement this function first.')
 
 
-class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
+class TorchExecutor(BaseGraphExecutor):
     def __init__(
         self, graph: BaseGraph, fp16_mode: bool = True,
         device: str = 'cuda') -> None:
@@ -106,14 +106,14 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
                 if platform not in GLOBAL_DISPATCHING_TABLE:
                     raise ValueError('Unknown Platform detected, Please check your platform setting.')
                 GLOBAL_DISPATCHING_TABLE[platform][operation_type] = handler
-                
+
         该函数位于 ppq.api, 你可以使用语句 from ppq.api import register_operation_handler 来引入它。
-        
+
         ### PPQ Executor(PPQ 执行引擎)
         接下来我们向你介绍 PPQ 执行引擎 TorchExecutor，你可以使用语句 from ppq import TorchExecutor 导入执行引擎。初始化执行引擎则需要传入一个 PPQ 计算图实例对象，
         在这里我们假设已经获取到了一个量化后的计算图对象 ppq_quant_ir，并使用下面的语句初始化计算引擎
 
-            
+
             executor = TorchExecutor(graph=ppq_quant_ir)
             executor.forward(inputs=..., output_names=..., hooks=...)
 
@@ -152,11 +152,11 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
 
             if operation.type == 'Conv':
                 config = self.create_default_quant_config(
-                    op                 = operation, 
+                    op                 = operation,
                     num_of_bits        = 8,
-                    quant_max          = 127, 
+                    quant_max          = 127,
                     quant_min          = -128,
-                    observer_algorithm = 'percentile', 
+                    observer_algorithm = 'percentile',
                     policy             = QuantizationPolicy(
                         QuantizationProperty.PER_TENSOR +
                         QuantizationProperty.LINEAR +
@@ -195,7 +195,7 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
 
         使用 executor.register_quantize_delegate(config, function) 完成函数注册，被注册的函数必须满足 TorchQuantizeDelegator 所定义的接口。
         下面我们给出一个简单的量化代理函数例子：
-            
+
             class MyQuantDelegator(TorchQuantizeDelegator):
                 def __call__(self, tensor: torch.Tensor, config: TensorQuantizationConfig) -> torch.Tensor:
                     if config.policy.has_property(QuantizationProperty.ASYMMETRICAL):
@@ -208,7 +208,7 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
             def quantize_function(self, tensor: torch.Tensor, config: TensorQuantizationConfig = None) -> torch.Tensor:
                 if config is None or not QuantizationStates.is_activated(config.state): return tensor
                 elif config in self._delegates: return self._delegates[config](tensor, config)
-                else: 
+                else:
                     if config.policy.has_property(QuantizationProperty.DYNAMIC):
                         return self._dynamic_quant_fn(tensor, config)
                     else:
@@ -231,16 +231,16 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
 
             # 传入三个变量 a, b, c 作为输入
             executor.forward(inputs=[a, b, c], output_names=..., hooks=...)
-            
+
             # 分别对图中 input, var 1 两个变量传入 a, b 作为输入
             executor.forward(inputs={'input': a, 'var 1': b}, output_names=..., hooks=...)
-            
+
             # 传入一个完整的 tensor 作为输入
             executor.forward(inputs=torch.zeros(shape=[1,3,224,224]), output_names=..., hooks=...)
-            
+
             # 要求网络输出 output, Var 1 的值
             executor.forward(inputs=..., output_names=['output 1', 'Var 1'], hooks=...)
-            
+
         executor.forward 函数默认不需要梯度，如果希望执行带有梯度的网络，需要使用 executor.forward_with_gradient 函数。 forward 函数的返回值永远是一个 torch.Tensor 数组，其中元素的顺序由 output_names 参数决定。
 
 
@@ -259,7 +259,7 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
 
                 def post_forward_hook(self, outputs: list, **kwargs) -> list:
                     return outputs
-        
+
             TorchExecutor - executor object which use torch as its backend.
                 torch backend is used to graph simulating & training(QAT)
 
@@ -285,7 +285,7 @@ class TorchExecutor(BaseGraphExecutor, torch.nn.Module):
         self._device = device
         self._executing_context = TorchBackendContext(executing_device=self._device)
         super().__init__(graph)
-        
+
         self._runnable_graph = RunnableGraph(self._graph)
         self._delegates = {}
 
