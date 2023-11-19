@@ -358,7 +358,7 @@ class TorchExecutor(BaseGraphExecutor):
 
     def to(self, device: str):
         # just keep TorchExecutor behaving like torch.nn.Module
-        self._device = torch.device(device)
+        self._device = device
         self.deploy()
         return self
 
