@@ -852,7 +852,7 @@ class LearnedStepSizePass(TrainingBasedPass):
             qt_inputs, fp_outputs = self.collect(
                 graph=graph, block=block, executor=executor,
                 dataloader=dataloader, collate_fn=collate_fn,
-                collecting_device=self.collecting_device)
+                collecting_device=self.collecting_device, steps=self.steps)
 
             print(f'# Block [{block_idx + 1} / {len(blocks)}]: '
                   f'[{block.sp.name} -> {block.ep.name}]')
