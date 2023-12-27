@@ -217,7 +217,8 @@ class OnnxParser(GraphBuilder):
         value_info = {}
         for value in chain(graph_pb.input, graph_pb.output, graph_pb.value_info):
             if value.name in value_info:
-                raise KeyError(f"oops, duplicated value info {value.name} found.")
+                # this is not an error since input/output can be appeared in value info
+                continue
             value_shape = [i.dim_value for i in value.type.tensor_type.shape.dim]
             value_dtype = mapping.TENSOR_TYPE_MAP[value.type.tensor_type.elem_type]
             value_info[value.name] = SimpleNamespace(
