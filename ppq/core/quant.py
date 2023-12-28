@@ -87,9 +87,12 @@ class TargetPlatform(Enum):
 
     METAX_INT8_C = 701 # channel wise
     METAX_INT8_T = 702 # tensor wise
-    
+
     HEXAGON_INT8  = 801
     GRAPHCORE_FP8 = 901
+
+    INT8_FP16 = 1000  # Mixed INT8 as inputs and FP16 as outputs
+    INT8_INT4 = 1001  # Mixed INT8 as features and INT4 as weights
 
     FP32 = 0
     FP16 = 1
@@ -109,15 +112,6 @@ class TargetPlatform(Enum):
     ONNXRUNTIME   = -7
     # THIS IS A DUUMY PLATFORM JUST FOR CREATING YOUR OWN EXTENSION.
     EXTENSION     = -10086
-
-    @ classmethod
-    def is_quantized_platform(cls, platform) -> bool:
-        # removed since PPQ 0.6.6
-        return platform in {
-            cls.PPL_DSP_INT8, cls.PPL_DSP_TI_INT8, cls.QNN_DSP_INT8, cls.TRT_INT8, cls.NCNN_INT8, cls.NXP_INT8,
-            cls.SNPE_INT8, cls.PPL_CUDA_INT8, cls.PPL_CUDA_INT4, cls.EXTENSION, cls.PPL_CUDA_MIX, cls.RKNN_INT8,
-            cls.METAX_INT8_C, cls.METAX_INT8_T, cls.OPENVINO_INT8, cls.FPGA_INT8, cls.TENGINE_INT8, 
-            cls.FP8, cls.GRAPHCORE_FP8, cls.TRT_FP8, cls.ASC_INT8, cls.UNSPECIFIED, cls.INT8, cls.MNN_INT8}
 
 
 class RoundingPolicy(Enum):
@@ -273,7 +267,7 @@ class QuantizationPolicy:
             QuantizationProperty.SYMMETRICAL | QuantizationProperty.LINEAR | QuantizationProperty.PER_TENSOR | QuantizationProperty.POWER_OF_2,
             QuantizationProperty.ASYMMETRICAL | QuantizationProperty.LINEAR | QuantizationProperty.PER_CHANNEL | QuantizationProperty.POWER_OF_2,
             QuantizationProperty.SYMMETRICAL | QuantizationProperty.LINEAR | QuantizationProperty.PER_CHANNEL | QuantizationProperty.POWER_OF_2,
-            
+
             # Low Precision Float Quantization
             # QuantizationProperty.SYMMETRICAL | QuantizationProperty.FLOATING | QuantizationProperty.PER_CHANNEL,
             # QuantizationProperty.SYMMETRICAL | QuantizationProperty.FLOATING | QuantizationProperty.PER_TENSOR,
@@ -349,7 +343,7 @@ class QuantizationStates(Enum):
     PASSIVE       = 5 # 表示这一路输入被动量化，如 bias, clip value 等，被动量化参数使用其他 TQC 的量化信息完成量化
     PASSIVE_BAKED = 7 # 被动量化且静态量化，当前config不生效，数据可以直接使用
     FP32          = 8 # 表示这一路输入不量化
-    
+
     SOI           = -1 # Legacy State
     DEQUANTIZED   = -2 # Legacy State
     DEACTIVED     = -3 # Legacy State
@@ -360,7 +354,7 @@ class QuantizationStates(Enum):
 
     @ classmethod
     def can_export(cls, state) -> bool:
-        return state not in {QuantizationStates.INITIAL, QuantizationStates.PASSIVE_INIT, 
+        return state not in {QuantizationStates.INITIAL, QuantizationStates.PASSIVE_INIT,
                              QuantizationStates.DEQUANTIZED, QuantizationStates.DEACTIVED}
 
 
@@ -540,7 +534,7 @@ TensorQuantizationConfig 是 PPQ 中的核心数据结构，它总是由 Quantiz
             rounding (RoundingPolicy): Rounding policy used in quantization.
 
             num_of_bits (int): Quantization fraction bits. (2 < num_of_bits < 32)
-            
+
             exponent_bits (int): Quantization exponent bits. (0 < num_of_bits < 8)
                 For Int8 Quantization, num_of_bits = 8 and exponent_bits = 0
                 For FP8 Quantization, num_of_bits = 4 and exponent_bits = 4
@@ -563,11 +557,11 @@ TensorQuantizationConfig 是 PPQ 中的核心数据结构，它总是由 Quantiz
                 you are not supposed to use it.
 
             channel_axis (int, optional): Only used in PER_CHANNEL quantization, channel index.
-        
+
             visiblity (Visiblity): visiblity is the attribute that controls export logic.
 
             Currently, there are 3 Visiblity level in PPQ:
-            if Visiblity == FORCE_EXPORT, ppq exporter will export this TQC 
+            if Visiblity == FORCE_EXPORT, ppq exporter will export this TQC
                 ignoring state check(even if current TQC has been overrlapped).
             if Visiblity == EXPORT_WHEN_ACTIVD, ppq exporter will export this TQC only when it has been actived.
             if Visiblity == INTERNAL, This TQC will not be exported.
@@ -580,7 +574,7 @@ TensorQuantizationConfig 是 PPQ 中的核心数据结构，它总是由 Quantiz
         assert num_of_bits >= 2, 'Cannot quantize a tensor with less than 2 bits.'
         assert exponent_bits <= 8, 'Cannot quantize a tensor with more than 8 bits exponent(fp32 overflow).'
         assert exponent_bits >= 0, 'Cannot quantize a tensor with less than 0 bits exponent.'
-        
+
         self._policy = policy
         self._exponent_bits = exponent_bits
         self._num_of_bits = num_of_bits
@@ -599,12 +593,12 @@ TensorQuantizationConfig 是 PPQ 中的核心数据结构，它总是由 Quantiz
         super().__init__()
 
     def can_export(self, export_overlapped: bool = EXPORT_OVERLAPPED_CONFIG) -> bool:
-        if self.visibility == QuantizationVisibility.INTERNAL: 
+        if self.visibility == QuantizationVisibility.INTERNAL:
             return False
         type_check  = isinstance(self.scale, torch.Tensor) and isinstance(self.offset, torch.Tensor)
         valid_states = {QuantizationStates.BAKED, QuantizationStates.PASSIVE_BAKED}
 
-        if export_overlapped: 
+        if export_overlapped:
             valid_states.add(QuantizationStates.OVERLAPPED)
         state_check = QuantizationStates.is_activated(self.state) or self.state in valid_states
 
@@ -635,9 +629,9 @@ TensorQuantizationConfig 是 PPQ 中的核心数据结构，它总是由 Quantiz
         if not isinstance(o, TensorQuantizationConfig):
             raise TypeError('Can only compare TensorQuantizationConfig object '
                             'with another TensorQuantizationConfig object.')
-        return (self.quant_max == o.quant_max and 
-                self.quant_min == o.quant_min and 
-                self.policy == o.policy and 
+        return (self.quant_max == o.quant_max and
+                self.quant_min == o.quant_min and
+                self.policy == o.policy and
                 self.num_of_bits == o.num_of_bits and
                 self.exponent_bits == o.exponent_bits and
                 self.channel_axis == o.channel_axis and
@@ -725,13 +719,13 @@ TensorQuantizationConfig 是 PPQ 中的核心数据结构，它总是由 Quantiz
     @ property
     def visibility(self) -> QuantizationVisibility:
         """ Export Visibility of this TQC.
-        
+
         * QuantizationVisibility.EXPORT_WHEN_ACTIVE - Export this TQC when it is active.
-        
+
         * QuantizationVisibility.FORCE_EXPORT - Force Export this TQC.
-        
+
         * QuantizationVisibility.INTERNAL - Never Export this TQC.
-        
+
         """
         return self._visibility
 
@@ -742,7 +736,7 @@ TensorQuantizationConfig 是 PPQ 中的核心数据结构，它总是由 Quantiz
     @ property
     def scale(self) -> torch.Tensor:
         """ Get Quantization Scale of this TQC.
-        
+
         If current TQC is dominated by other, return father TQC's scale instead.
         """
         if self.dominated_by == self: return self._scale
@@ -751,7 +745,7 @@ TensorQuantizationConfig 是 PPQ 中的核心数据结构，它总是由 Quantiz
     @ property
     def offset(self) -> torch.Tensor:
         """ Get Quantization Offset of this TQC.
-        
+
         If current TQC is dominated by other, return father TQC's offset instead.
         """
         if self.dominated_by == self: return self._offset
@@ -784,21 +778,21 @@ TensorQuantizationConfig 是 PPQ 中的核心数据结构，它总是由 Quantiz
 
     @ property
     def exponent_bits(self) -> int:
-        """ Get exponent bit-width of current TQC. 
-        
+        """ Get exponent bit-width of current TQC.
+
         num_of_bits = exponent_bits + mantissa_bits
         """
         return self._exponent_bits
 
     @ property
     def mantissa_bits(self) -> int:
-        """ Get mantissa bit-width of current TQC. 
-        
+        """ Get mantissa bit-width of current TQC.
+
         num_of_bits = exponent_bits + mantissa_bits
         """
         # there is one bit for sign.
         return self.num_of_bits - self._exponent_bits - 1
-    
+
     @ property
     def channel_axis(self) -> int:
         """ Get Quantization Axis, For Per-tensor Quantization, it returns None. """
@@ -900,7 +894,7 @@ class ChannelwiseTensorQuantizationConfig(TensorQuantizationConfig):
     """ Legacy Class Since PPQ 0.6.6, Use TensorQuantizationConfig Instead. """
     def __init__(self,
         policy: QuantizationPolicy, rounding:RoundingPolicy,
-        num_of_bits: int, exponent_bits: int, 
+        num_of_bits: int, exponent_bits: int,
         quant_min: int, quant_max: int,
         scale: Any, offset: Any, observer_algorithm: str,
         state: QuantizationStates, channel_axis: int, detail: dict = {}
