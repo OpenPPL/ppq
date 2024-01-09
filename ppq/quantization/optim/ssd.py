@@ -10,8 +10,7 @@ from ppq.IR import BaseGraph, Operation, QuantableOperation, Variable
 from ppq.IR.search import Path, SearchableGraph, TraversalCommand
 from ppq.log import NaiveLogger
 from ppq.quantization.measure import torch_mean_square_error
-from ppq.quantization.observer import CalibrationHook, OperationObserver
-from ppq.quantization.observer.range import TorchHistObserver
+from ppq.quantization.observer import CalibrationHook, OperationObserver, OBSERVER_TABLE
 from ppq.quantization.qfunction import (BaseQuantFunction,
                                         PPQLinearQuantFunction)
 from tqdm import tqdm
@@ -442,7 +441,7 @@ class SSDEqualizationPass(QuantizationOptimizationPass):
             observer.render_quantization_config()
         pop_list = []
         for op, observer in observers.items():
-            if all([type(var_observer) not in {TorchHistObserver}
+            if all([type(var_observer) not in {OBSERVER_TABLE['kl']}
                 for var_observer in observer._hook._observer_table.values()]):
                     pop_list.append(op)
         for op in pop_list:
