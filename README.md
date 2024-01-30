@@ -12,7 +12,7 @@ PPQ 是一个可扩展的、高性能的、面向工业应用的神经网络量�
 
 这是一个为处理复杂量化任务而生的框架 —— PPQ 的执行引擎是专为量化设计的，截止 PPQ 0.6.6 版本，软件一共内置 99 种常见的 Onnx 算子执行逻辑，并原生支持执行过程中的量化模拟操作。PPQ 可以脱离 Onnxruntime 完成 Onnx 模型的推理与量化。作为架构设计一部分，我们允许用户使用 Python + Pytorch 或 C++ / Cuda 为 PPQ 注册新的算子实现，新的逻辑亦可替换现有的算子实现逻辑。PPQ 允许相同的算子在不同平台上有不同的执行逻辑，从而支撑不同硬件平台的运行模拟。借助定制化的执行引擎与 PPQ Cuda Kernel 的高性能实现，使得 PPQ 具有极其显著的性能优势，往往能以惊人的效率完成量化任务。
 
-PPQ 的开发与推理框架关系密切，这使得我们能够了解硬件推理的诸多细节，从而严格控制硬件模拟误差。在国内外众多开源工作者共同努力之下，目前 PPQ 支持与 TensorRT, OpenPPL, Openvino, ncnn, mnn, Onnxruntime, Tengine, Snpe, GraphCore, Metax 等多个推理框架协同工作，并预制了对应量化器与导出逻辑。PPQ 是一个高度可扩展的模型量化框架，借助 ppq.lib 中的函数功能，您能够将 PPQ 的量化能力扩展到其他可能的硬件与推理库上。我们期待与您一起把人工智慧带到千家万户之间。
+PPQ 的开发与推理框架关系密切，这使得我们能够了解硬件推理的诸多细节，从而严格控制硬件模拟误差。在国内外众多开源工作者共同努力之下，目前 PPQ 支持与 TensorRT, OpenPPL, Openvino, ncnn, mnn, Onnxruntime, Tengine, Snpe, GraphCore, Metax 等多个推理框架协同工作，并预制了对应量化器与导出逻辑。PPQ 是一个高度可扩展的模型量化框架，借助 ppq.lib 中的函数功能，您能够将 PPQ 的量化能力扩展到其他可能的硬件与推理库上。我们期待与您一起把人工智能带到千家万户之间。
 
 #### 在 0.6.6 的版本更新中，我们为你带来了这些功能：
    1. [FP8 量化规范](https://zhuanlan.zhihu.com/p/574825662)，PPQ 现在支持 E4M3, E5M2 等多种规范的 FP8 [量化模拟与训练](https://github.com/openppl-public/ppq/blob/master/ppq/samples/fp8_sample.py)
