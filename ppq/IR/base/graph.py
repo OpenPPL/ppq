@@ -85,12 +85,6 @@ class Variable(Serializable):
             return f'{self._name}(shape={self.shape})'
         return f'{self._name}'
 
-    def __getstate__(self) -> dict:
-        state = super().__getstate__()
-        state['_dest_ops'] = [op.name for op in self.dest_ops]
-        state['_source_op'] = self.source_op.name if self.source_op is not None else None
-        return state
-
     @ property
     def shape(self) -> List[Union[Text, int, None]]:
         """Return tensor shape of this variable It is modifiable when current
@@ -208,12 +202,6 @@ class Operation(OperationBase, Serializable):
 
     def __repr__(self) -> str:
         return f'{self._name}(Type: {self.type}, Num of Input: {self.num_of_input}, Num of Output: {self.num_of_output})'
-
-    def __getstate__(self) -> dict:
-        state = super().__getstate__()
-        state['_input_vars'] = [var.name for var in self.inputs]
-        state['_output_vars'] = [var.name for var in self.outputs]
-        return state
 
     def copy(self):
         clone = Operation(
@@ -826,12 +814,6 @@ class BaseGraph(Serializable):
             raise KeyError(f'Can not find variable {var_name} within current graph.')
         if var_name in self.outputs: return
         self.outputs[var_name] = self.variables[var_name]
-
-    def __getstate__(self) -> dict:
-        state = super().__getstate__()
-        state['_graph_inputs'] = [var for var in self.inputs]
-        state['_graph_outputs'] = [var for var in self.outputs]
-        return state
 
     def copy(self, copy_value: bool = False):
         """Clone current graph. Use parameter copy_value to control whether to
