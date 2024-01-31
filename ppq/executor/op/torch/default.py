@@ -1456,11 +1456,14 @@ def Resize_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendC
     # roi  = input_value[1] if len(input_value) > 1 else None
     # PATCH 20240131
     # IF RESIZE HAS ONLY 2 INPUT, THEN MARK SECOND INPUT AS SCALES
-    if len(values) == 2:
+    if len(values) == 3:
         scale_factor = values[-1].cpu()
+    elif len(values) == 4:
+        if values[2] is not None:
+            scale_factor = values[2].cpu()
     else:
-        scale_factor = values[2].cpu() if len(values) > 2 else None
-        size = values[-1].cpu().tolist() if (len(values) == 4 and values[-1] != None) else None
+        raise Exception("Resize Operator is Excepted to have at least 3 inputs.")
+    size = values[-1].cpu().tolist() if (len(values) == 4 and values[-1] != None) else None
 
     mode = op.attributes.get('mode', 'nearest')
     if mode == 'cubic':
