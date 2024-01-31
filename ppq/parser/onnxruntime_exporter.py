@@ -587,7 +587,11 @@ class ONNXRUNTIMExporter(OnnxExporter):
 
         for key, value in extra_opsets.items():
             op = onnx.OperatorSetIdProto()
-            op.domain = key
+            # PATCH 2024.01.30
+            # 我也不知道为什么 onnx checker 会对 ai.onnx 这个 domain 报错
+            # 按照规范 ai.onnx 与 "" 是等价的写法
+            if key == 'ai.onnx': key = "" 
+            op.domain  = key
             op.version = value
             opsets.append(op)
 
