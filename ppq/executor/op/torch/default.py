@@ -1454,8 +1454,14 @@ def Resize_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendC
     value = values[0]
     # Not used roi
     # roi  = input_value[1] if len(input_value) > 1 else None
-    scale_factor = values[2].cpu() if len(values) > 2 else None
-    size = values[-1].cpu().tolist() if (len(values) == 4 and values[-1] != None) else None
+    # PATCH 20240131
+    # IF RESIZE HAS ONLY 2 INPUT, THEN MARK SECOND INPUT AS SCALES
+    if len(values) == 2:
+        scale_factor = values[-1].cpu()
+    else:
+        scale_factor = values[2].cpu() if len(values) > 2 else None
+        size = values[-1].cpu().tolist() if (len(values) == 4 and values[-1] != None) else None
+
     mode = op.attributes.get('mode', 'nearest')
     if mode == 'cubic':
         mode = 'bicubic'
@@ -2133,7 +2139,7 @@ def ReduceL2_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacken
 
 def PRelu_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs):
     input_data, weight = values
-    output = F.prelu(input_data, weight)
+    output = F.prelu(input_data, weight.squeeze())
     return output
 
 
