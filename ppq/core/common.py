@@ -7,7 +7,7 @@ import sys
 sys.setrecursionlimit(MAX_RECURSION_DEPTH)
 
 # Observer 中，最小 scale 限制，所有小于该值的 scale 将被该值覆盖
-OBSERVER_MIN_SCALE = 1e-8
+OBSERVER_MIN_SCALE = 1e-4
 # Observer 中，最小 scale 的手动覆盖属性
 OBSERVER_MIN_SCALE_MANUL_OVERRIDE = 'OBSERVER_MIN_SCALE_MANUL_OVERRIDE'
 # 当出现 scale < min_scale 的情况时，是否给出警报 

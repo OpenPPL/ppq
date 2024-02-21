@@ -131,13 +131,13 @@ class RuntimeCalibrationPass(QuantizationOptimizationPass):
         if collate_fn is not None: self._collate_fn = collate_fn
         if calib_steps is not None: self._calib_steps = calib_steps
 
-        assert calib_steps >= 8, ('Insufficient Calibration Detected, to get a better quantization performance, '
-            'more calibration steps is required, we strongly recommend you to prepare more calibration data '
-            'and more calibration steps is preferred here. (at least 8)')
+        # assert calib_steps >= 8, ('Insufficient Calibration Detected, to get a better quantization performance, '
+        #     'more calibration steps is required, we strongly recommend you to prepare more calibration data '
+        #     'and more calibration steps is preferred here. (at least 8)')
 
-        assert calib_steps <= 512, ('Calibration steps is too large, ppq can quantize your network within 8-512 '
-            'calibration steps. More calibration steps will greatly delay ppq\'s calibration procedure. '
-            'Reset your calib_steps parameter please.')
+        # assert calib_steps <= 512, ('Calibration steps is too large, ppq can quantize your network within 8-512 '
+        #     'calibration steps. More calibration steps will greatly delay ppq\'s calibration procedure. '
+        #     'Reset your calib_steps parameter please.')
 
         # -------------------------------------------------
         # Override existing quantization configurations
