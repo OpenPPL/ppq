@@ -763,7 +763,6 @@ def Reshape_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackend
 def AveragePool_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendContext = None, **kwargs) -> torch.Tensor:
     ASSERT_NUM_OF_INPUT(op=op, values=values, min_num_of_input=1, max_num_of_input=1)
     process_attribute(op.attributes, values[0].shape[2:])
-
     [x] = values
     onnx_pads    = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='pads', default=0)
     stride       = GET_ATTRIBUTE_FROM_OPERATION(op=op, attribute='strides', default=None)
@@ -1455,7 +1454,7 @@ def Resize_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBackendC
     value = values[0]
     # Not used roi
     # roi  = input_value[1] if len(input_value) > 1 else None
-    scale_factor = values[2].cpu() if len(values) > 2 else None
+    scale_factor = values[2].cpu() if (len(values) > 2 and values[2] != None) else None
     size = values[-1].cpu().tolist() if (len(values) == 4 and values[-1] != None) else None
     mode = op.attributes.get('mode', 'nearest')
     if mode == 'cubic':
@@ -3659,6 +3658,7 @@ DEFAULT_BACKEND_TABLE = {
     'Gelu': Gelu_forward,
     'Gemm': Gemm_forward,
     'grid_sampler': GridSampler_forward,
+    'GridSample': GridSampler_forward,
     'GlobalAveragePool': AveragePool_forward,
     'GlobalMaxPool': MaxPool2d_forward,
     'Greater': Greater_forward,
