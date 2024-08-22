@@ -1619,7 +1619,7 @@ def ReduceMax_forward(op: Operation, values: List[torch.Tensor], ctx: TorchBacke
             if keepdim:
                 output = output.reshape([1] * input_value.dim())
         else:
-            output, _ = torch.max(input_value, dim=dim[0], keepdim=keepdim)
+            output = torch.amax(input_value, dim=dim, keepdim=keepdim)
     return output
 
 
