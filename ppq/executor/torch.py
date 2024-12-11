@@ -654,7 +654,8 @@ class TorchExecutor(BaseGraphExecutor):
     def partial_graph_forward(
         self, operations: List[Operation],
         feed_dict: Dict[str, torch.Tensor],
-        output_names:List[str]) -> List[torch.Tensor]:
+        output_names:List[str], 
+        hooks: Dict[str, RuntimeHook] = None) -> List[torch.Tensor]:
         """This forward function allows you to execute a series operations in
         your graph. (only operations list in your params will be executed with
         this function) Which serves as a great feature for quantization aware
@@ -678,5 +679,6 @@ class TorchExecutor(BaseGraphExecutor):
         return self.__forward(
             inputs=feed_dict,
             output_names=output_names,
-            executing_order=operations
+            executing_order=operations,
+            hooks=hooks,
         )
