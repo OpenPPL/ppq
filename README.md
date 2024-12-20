@@ -83,7 +83,6 @@ python3 -m pip install ppq
 | 05 | 网络微调 | [finetune](https://github.com/openppl-public/ppq/blob/master/ppq/samples/Tutorial/finetune.py) |
 | 06 | 网络调度 | [dispatch](https://github.com/openppl-public/ppq/blob/master/ppq/samples/Tutorial/dispatch.py) |
 | 07 | 最佳实践 | [Best Practice](https://github.com/openppl-public/ppq/blob/master/ppq/samples/Tutorial/bestPractice.py) |
-|  |  | |
 | 08 | 目标平台 | [platform](https://github.com/openppl-public/ppq/blob/master/ppq/samples/Tutorial/targetPlatform.py) |
 | 09 | 优化过程 | [Optim](https://github.com/openppl-public/ppq/blob/master/ppq/samples/Tutorial/optimization.py) |
 | 10 | 图融合 | [Fusion](https://github.com/openppl-public/ppq/blob/master/ppq/samples/Tutorial/fusion.py) |
