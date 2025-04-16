@@ -104,6 +104,8 @@ class BaseQuantizer(metaclass=ABCMeta):
             graph=self._graph,
             dataloader=calib_dataloader,
             executor=executor,
+            collate_fn=collate_fn,
+            calib_steps=calib_steps,
             verbose=self._verbose,
         )
 

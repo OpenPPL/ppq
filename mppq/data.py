@@ -58,7 +58,7 @@ class DataType(IntEnum):
             np_type("float16"): DataType.FP16,
             np_type("float32"): DataType.FP32,
             np_type("float64"): DataType.FP64,
-            np.bool: DataType.BOOL,
+            np.bool_: DataType.BOOL,
             np.uint8: DataType.UINT8,
             np.int8: DataType.INT8,
             np.int16: DataType.INT16,

@@ -169,7 +169,7 @@ def dispatch_graph(
     quantize_operations: Collection[str] = DEFAULT_QUANTIZE_OP,
     dispatcher: Optional[str | GraphDispatcher] = None,
     dispatching_override: Optional[Dict[str, TargetPrecision]] = None,
-    ignored_scope: Optional[list | IgnoredScope] = None,
+    ignored_scope: Optional[dict | list | IgnoredScope] = None,
     quant_precision: TargetPrecision = TargetPrecision.INT8,
     **kwargs,
 ) -> BaseGraph:
@@ -216,6 +216,8 @@ def dispatch_graph(
     )
 
     if ignored_scope is not None:
+        if isinstance(ignored_scope, dict):
+            ignored_scope = IgnoredScope(**ignored_scope.pop("type"))
         if isinstance(ignored_scope, list):
             ignored_scope = IgnoredScope(operations=ignored_scope)
         assert isinstance(ignored_scope, IgnoredScope)

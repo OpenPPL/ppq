@@ -310,10 +310,18 @@ class TorchExecutor(BaseGraphExecutor):
             you can not select gpu to executing yet,
             graph will always be send to the very first visible cuda device.
         ]. Defaults to 'cuda'.
+
+        feedback_tensors=[('output_1', 'input_2')]
+        # iter 1, executor({input_2: init_tensor_2})
+        # iter 2, input_2 will be omitted and use output_1's value.
     """
 
     def __init__(
-        self, graph: BaseGraph, fp16_mode: bool = True, device: str = "cuda"
+        self,
+        graph: BaseGraph,
+        fp16_mode: bool = True,
+        device: str = "cuda",
+        feedback_tensors: dict | None = None,
     ) -> None:
         self._default_quant_fn = ppq_fake_quant
         self._deployed = False
@@ -325,6 +333,16 @@ class TorchExecutor(BaseGraphExecutor):
         # fp16 is not available for now.
         self.fp16_mode = fp16_mode
         self.deploy()
+        if feedback_tensors:
+            self.feedback_tensors = {}
+            self.feedback_dict = {}
+            for src, dst in feedback_tensors:
+                if src not in graph.outputs:
+                    raise ValueError(f"{src} is not an output of the graph.")
+                if dst not in graph.inputs:
+                    raise ValueError(f"{dst} is not an input of the graph.")
+                self.feedback_tensors[src] = None
+                self.feedback_dict[dst] = src
 
     def register_quantize_delegate(
         self, config: TensorQuantizationConfig, delegator: TorchQuantizeDelegator
@@ -505,6 +523,11 @@ class TorchExecutor(BaseGraphExecutor):
         hooks: Optional[Mapping[str, RuntimeHook]] = None,
     ) -> List[torch.Tensor]:
         for key, value in inputs.items():
+            if value is None:
+                assert key in self.feedback_dict
+                feedback_value = self.feedback_tensors[self.feedback_dict[key]]
+                self._graph.inputs[key].value = feedback_value
+                continue
             if not isinstance(value, torch.Tensor):
                 raise TypeError(
                     "TorchExecutor can only accept tensor as its input, "
@@ -622,6 +645,12 @@ class TorchExecutor(BaseGraphExecutor):
                         result_collector[output_names.index(output_var.name)] = outputs[
                             output_idx
                         ]
+                    # collect feedback tensors
+                    if (
+                        hasattr(self, "feedback_dict")
+                        and output_var.name in self.feedback_dict.values()
+                    ):
+                        self.feedback_tensors[output_var.name] = outputs[output_idx]
             except Exception as e:
                 raise RuntimeError(f"Op Execution Error: {str(operation)}") from e
 
