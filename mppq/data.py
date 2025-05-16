@@ -34,7 +34,10 @@ class DataType(IntEnum):
     INT64 = TensorProto.INT64
     UINT64 = TensorProto.UINT64
 
+    FP8_E4M3FN = TensorProto.FLOAT8E4M3FN
+    FP8_E4M3FNUZ = TensorProto.FLOAT8E4M3FNUZ
     FP8_E5M2 = TensorProto.FLOAT8E5M2
+    FP8_E5M2FNUZ = TensorProto.FLOAT8E5M2FNUZ
     BF16 = TensorProto.BFLOAT16
     FP16 = TensorProto.FLOAT16
     FP32 = TensorProto.FLOAT
@@ -89,7 +92,10 @@ class DataType(IntEnum):
             torch.float16: DataType.FP16,
             torch.float32: DataType.FP32,
             torch.float64: DataType.FP64,
+            torch.float8_e4m3fn: DataType.FP8_E4M3FN,
+            torch.float8_e4m3fnuz: DataType.FP8_E4M3FNUZ,
             torch.float8_e5m2: DataType.FP8_E5M2,
+            torch.float8_e5m2fnuz: DataType.FP8_E5M2FNUZ,
         }
         if dtype not in torch_converting_dict:
             raise TypeError(
@@ -129,7 +135,10 @@ class DataType(IntEnum):
             DataType.FP16: torch.float16,
             DataType.FP32: torch.float32,
             DataType.FP64: torch.float64,
+            DataType.FP8_E4M3FN: torch.float8_e4m3fn,
+            DataType.FP8_E4M3FNUZ: torch.float8_e4m3fnuz,
             DataType.FP8_E5M2: torch.float8_e5m2,
+            DataType.FP8_E5M2FNUZ: torch.float8_e5m2fnuz,
         }
         assert isinstance(dtype, int)
         return torch_converting_dict[DataType(dtype)]
@@ -211,6 +220,10 @@ def convert_any_to_numpy(x: Any, accept_none: bool = True) -> None | np.ndarray:
             raise ValueError("Trying to convert an empty value.")
         return x
     elif isinstance(x, torch.Tensor):
+        if "float8" in str(x.dtype):
+            return convert_any_to_numpy(
+                x.cpu().to(torch.float32).numpy(), accept_none=accept_none
+            )
         return convert_any_to_numpy(x.cpu().numpy(), accept_none=accept_none)
     elif isinstance(x, Number):
         return np.array([x])

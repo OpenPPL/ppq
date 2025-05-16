@@ -6,7 +6,7 @@ from mppq.quant import (
     QuantizationStates,
     TensorQuantizationConfig,
 )
-from mppq.utils.qfunction.floating import floating_quant
+from mppq.utils.qfunction.floating import floating_quant, floating_quant_tofloat
 from mppq.utils.qfunction.linear import (
     dynamic_linear_quant,
     linear_fake_quant,
@@ -78,10 +78,30 @@ def ppq_quant_toint(
         "Unexpected Quantization Property Found in ppq_quant_toint. "
         "Do not know how to quantize your config yet."
     )
+    
+def ppq_quant_tofloat(
+    tensor: torch.Tensor, config: TensorQuantizationConfig
+) -> torch.Tensor:
+    """
+    ## PPQ 核心量化函数
+
+    根据 config 中描述的策略，这个函数将会执行线性量化，动态量化
+
+    但是结果直接出来是float8类型
+    """
+    if config.policy.has_property(QuantizationProperty.FLOATING):
+        if not config.policy.has_property(QuantizationProperty.DYNAMIC):
+            return floating_quant_tofloat(tensor, config)
+
+    raise ValueError(
+        "Unexpected Quantization Property Found in ppq_quant_tofp8. "
+        "Do not know how to quantize your config yet."
+    )
 
 
 __all__ = [
     "ppq_fake_quant",
     "ppq_quant_toint",
+    "ppq_quant_tofloat",
     "BaseQuantFunction",
 ]

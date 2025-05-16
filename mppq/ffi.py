@@ -152,7 +152,7 @@ def dummy_locator():
 class ENABLE_CUDA_KERNEL:
     """Auto config compiler path before entering compiling CUDA context"""
 
-    USING_CUDA_KERNEL = False
+    USING_CUDA_KERNEL = True
 
     def __init__(self) -> None:
         self._state = True

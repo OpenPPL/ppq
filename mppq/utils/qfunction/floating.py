@@ -137,3 +137,25 @@ def floating_quant(
         )
     assert isinstance(qtensor, torch.Tensor)
     return qtensor
+
+
+def floating_quant_tofloat(
+    tensor: torch.Tensor, config: TensorQuantizationConfig
+) -> torch.Tensor:
+    """PPQ 核心量化函数，没啥好说的了吧，这个玩意只做 quant 不做 dequant"""
+    if not config.policy.has_property(QuantizationProperty.FLOATING):
+        raise ValueError("Critical Quantization Error! Non-floating config detected.")
+
+    if config.policy.has_property(QuantizationProperty.PER_CHANNEL):
+        shape = [
+            1 if axis != config.channel_axis else -1 for axis in range(tensor.ndim)
+        ]
+        scale = config.scale.view(shape)
+        offset = config.offset.view(shape).to(tensor.device)
+        tensor = (tensor / scale) + offset
+    else:  # QuantizationProperty.PER_TENSOR
+        tensor = (tensor / config.scale.to(tensor.device)) + config.offset.to(
+            tensor.device
+        )
+    tensor = torch.clamp(tensor, config.quant_min, config.quant_max)
+    return tensor.to(torch.float8_e4m3fn)
